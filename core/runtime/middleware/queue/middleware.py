@@ -3,7 +3,7 @@ import logging
 from collections.abc import Awaitable, Callable
 from typing import Any
 
-from langchain_core.messages import HumanMessage, SystemMessage, ToolMessage
+from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_core.runnables import RunnableConfig
 
 from core.runtime.middleware import (
@@ -11,7 +11,6 @@ from core.runtime.middleware import (
     ModelCallResult,
     ModelRequest,
     ModelResponse,
-    ToolCallRequest,
 )
 from core.runtime.notifications import is_terminal_background_notification
 
@@ -69,22 +68,6 @@ class SteeringMiddleware(AgentMiddleware):
         self._queue_manager = queue_manager
         self._agent_runtime = agent_runtime  # our AgentRuntime, not LangGraph's Runtime
 
-    def wrap_tool_call(
-        self,
-        request: ToolCallRequest,
-        handler: Callable[[ToolCallRequest], ToolMessage],
-    ) -> ToolMessage:
-        """Pure passthrough — never skip tool calls."""
-        return handler(request)
-
-    async def awrap_tool_call(
-        self,
-        request: ToolCallRequest,
-        handler: Callable[[ToolCallRequest], Awaitable[ToolMessage]],
-    ) -> ToolMessage:
-        """Async pure passthrough — never skip tool calls."""
-        return await handler(request)
-
     def wrap_model_call(
         self,
         request: ModelRequest,
@@ -105,7 +88,6 @@ class SteeringMiddleware(AgentMiddleware):
         runtime: Any,
         config: RunnableConfig | None = None,
     ) -> dict[str, Any] | None:
-        """Drain all pending messages from unified queue and inject before model call."""
         thread_id = (config or {}).get("configurable", {}).get("thread_id")
         if not thread_id:
             logger.debug("SteeringMiddleware: no thread_id in config, skipping steer injection")
@@ -185,5 +167,4 @@ class SteeringMiddleware(AgentMiddleware):
         runtime: Any,
         config: RunnableConfig | None = None,
     ) -> dict[str, Any] | None:
-        """Async version of before_model."""
         return self.before_model(state, runtime, config)

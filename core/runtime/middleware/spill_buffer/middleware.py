@@ -9,7 +9,7 @@ from typing import Any
 
 from langchain_core.messages import ToolMessage
 
-from core.runtime.middleware import AgentMiddleware, ModelRequest, ModelResponse, ToolCallRequest
+from core.runtime.middleware import AgentMiddleware, ToolCallRequest
 from sandbox.interfaces.filesystem import FileSystemBackend
 
 from .spill import spill_if_needed
@@ -90,26 +90,7 @@ class SpillBufferMiddleware(AgentMiddleware):
             return text_only or content
         return "\n".join(line for line in lines if line)
 
-    # -- model call: pass-through ------------------------------------------
-
-    def wrap_model_call(
-        self,
-        request: ModelRequest,
-        handler: Callable[[ModelRequest], ModelResponse],
-    ) -> ModelResponse:
-        return handler(request)
-
-    async def awrap_model_call(
-        self,
-        request: ModelRequest,
-        handler: Callable[[ModelRequest], Awaitable[ModelResponse]],
-    ) -> ModelResponse:
-        return await handler(request)
-
-    # -- tool call: spill if needed ----------------------------------------
-
     def _maybe_spill(self, request: ToolCallRequest, result: ToolMessage) -> ToolMessage:
-        """Shared logic for sync/async tool-call wrappers."""
         tool_name = request.tool_call.get("name", "")
         if tool_name in SKIP_TOOLS:
             return result
