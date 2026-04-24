@@ -1,9 +1,4 @@
-"""File operation recorder."""
-
-
 class FileOperationRecorder:
-    """Records file operations."""
-
     def __init__(self, repo=None):
         self._repo = repo
 
@@ -17,7 +12,6 @@ class FileOperationRecorder:
         after_content: str,
         changes: list[dict] | None = None,
     ) -> str:
-        """Record a file operation. Noop if no repo configured."""
         if self._repo is None:
             return ""
         return self._repo.record(
@@ -31,12 +25,10 @@ class FileOperationRecorder:
         )
 
 
-# Global recorder instance (initialized lazily)
 _recorder: FileOperationRecorder | None = None
 
 
 def get_recorder() -> FileOperationRecorder:
-    """Get or create the global recorder instance"""
     global _recorder
     if _recorder is None:
         _recorder = FileOperationRecorder()
@@ -44,6 +36,5 @@ def get_recorder() -> FileOperationRecorder:
 
 
 def set_recorder(recorder: FileOperationRecorder) -> None:
-    """Set the global recorder instance"""
     global _recorder
     _recorder = recorder

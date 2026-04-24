@@ -625,7 +625,6 @@ class SandboxManager:
           2) close chat session runtime + mark session closed
         - Local sandbox is exempt from idle timeout (no cost to keep running)
         """
-        # Skip idle timeout for local sandbox
         if self.provider.name == "local":
             return 0
 

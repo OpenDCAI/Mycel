@@ -1163,7 +1163,6 @@ class LeonAgent:
         # Skills tools
         bundle_skills = self._agent_bundle.skills if hasattr(self, "_agent_bundle") and self._agent_bundle else []
         if self.config.skills.enabled and (self.config.skills.paths or bundle_skills):
-            # Use the agent bundle's skills enabled/disabled state if available.
             enabled_skills = self.config.skills.skills
             if hasattr(self, "_agent_bundle") and self._agent_bundle:
                 bundle_skill_entries = {k.split(":", 1)[1]: v for k, v in self._agent_bundle.runtime.items() if k.startswith("skills:")}
