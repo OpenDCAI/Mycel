@@ -42,12 +42,6 @@ class _ToolSpecificValidationError(Exception):
 
 
 class ToolRunner(AgentMiddleware):
-    """Innermost middleware: routes all registered tool calls.
-
-    - wrap_model_call: injects inline tool schemas
-    - wrap_tool_call: validates, dispatches, normalizes errors
-    """
-
     def __init__(self, registry: ToolRegistry, validator: ToolValidator | None = None):
         self._registry = registry
         self._validator = validator or ToolValidator()

@@ -58,8 +58,6 @@ class ValidationResult:
 
 
 class ToolValidator:
-    """Three-phase tool argument validation."""
-
     def validate(self, schema: dict, args: dict) -> ValidationResult:
         parameters = schema.get("parameters", {})
         properties = parameters.get("properties", {})

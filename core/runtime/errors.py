@@ -1,6 +1,4 @@
 class InputValidationError(Exception):
-    """Tool parameter validation failed."""
-
     def __init__(
         self,
         message: str,
