@@ -1,5 +1,3 @@
-"""Shared auth bootstrap helpers for backend app lifecycles."""
-
 from __future__ import annotations
 
 from collections.abc import Callable
