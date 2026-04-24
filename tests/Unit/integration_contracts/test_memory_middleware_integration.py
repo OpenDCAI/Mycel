@@ -425,7 +425,3 @@ class TestSummaryUpdateOnSecondCompaction:
         active_summaries = [s for s in all_summaries if s["is_active"]]
         assert len(active_summaries) == 1
         assert active_summaries[0]["summary_id"] == summary2.summary_id
-
-
-if __name__ == "__main__":
-    pytest.main([__file__, "-v"])
