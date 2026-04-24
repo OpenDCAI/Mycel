@@ -100,12 +100,6 @@ def make_tool_schema(
 
 
 class ToolRegistry:
-    """Central registry for all tools.
-
-    Tools with INLINE mode are injected into every model call.
-    Tools with DEFERRED mode are only discoverable via tool_search.
-    """
-
     def __init__(
         self,
         allowed_tools: set[str] | None = None,

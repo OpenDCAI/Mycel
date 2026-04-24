@@ -109,15 +109,6 @@ TASK_UPDATE_SCHEMA = make_tool_schema(
 
 
 class TaskService:
-    """Task management service providing DEFERRED tools.
-
-    Tasks are stored in SQLite and partitioned by thread_id so all agents
-    in the same thread/team share the same task list.
-
-    thread_id is resolved at call time from sandbox.thread_context;
-    falls back to a fixed thread_id if provided at construction (for tests).
-    """
-
     def __init__(
         self,
         registry: ToolRegistry,
