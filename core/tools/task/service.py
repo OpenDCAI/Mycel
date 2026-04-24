@@ -1,10 +1,3 @@
-"""TaskService - repository-backed task management tools.
-
-Provides TaskCreate/TaskGet/TaskList/TaskUpdate as DEFERRED tools.
-Tasks are partitioned by thread_id so all agents in the same thread share
-the same task list. Thread ID is read from sandbox.thread_context at runtime.
-"""
-
 from __future__ import annotations
 
 import json

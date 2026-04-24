@@ -1,10 +1,3 @@
-"""Web Service - registers WebSearch and WebFetch tools with ToolRegistry.
-
-Tools:
-- WebSearch: Web search provider chain (Tavily -> Exa -> Firecrawl)
-- WebFetch: Fetch web content and extract information using AI
-"""
-
 from __future__ import annotations
 
 import asyncio
@@ -20,8 +13,6 @@ from core.tools.web.types import FetchLimits, FetchResult, SearchResult
 
 
 class WebService:
-    """Registers WebSearch and WebFetch tools into ToolRegistry."""
-
     def __init__(
         self,
         registry: ToolRegistry,

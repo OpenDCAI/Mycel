@@ -1,9 +1,3 @@
-"""ToolSearchService - Discover available tools via search.
-
-Registers a single INLINE tool (tool_search) that queries ToolRegistry
-to find matching tools by name or description.
-"""
-
 from __future__ import annotations
 
 import json
@@ -32,8 +26,6 @@ TOOL_SEARCH_SCHEMA = make_tool_schema(
 
 
 class ToolSearchService:
-    """Provides tool_search as an INLINE tool for discovering DEFERRED tools."""
-
     def __init__(self, registry: ToolRegistry):
         self._registry = registry
         registry.register(

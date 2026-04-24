@@ -1,11 +1,3 @@
-"""Skills Service - registers load_skill tool with ToolRegistry.
-
-Tools:
-- load_skill: Progressive disclosure of specialized capabilities
-
-Uses dynamic schema (callable) to reflect current skill index on each call.
-"""
-
 from __future__ import annotations
 
 import logging
@@ -19,8 +11,6 @@ logger = logging.getLogger(__name__)
 
 
 class SkillsService:
-    """Registers load_skill tool into ToolRegistry with dynamic schema."""
-
     def __init__(
         self,
         registry: ToolRegistry,
