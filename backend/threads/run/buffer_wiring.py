@@ -1,5 +1,3 @@
-"""Thread buffer lifecycle and runtime handler wiring helpers."""
-
 from __future__ import annotations
 
 import json
@@ -17,7 +15,6 @@ _append_event: Callable[[str, str, dict[str, Any]], Awaitable[int]] | None = Non
 
 
 def get_or_create_thread_buffer(app: Any, thread_id: str) -> ThreadEventBuffer:
-    """Get existing or create new ThreadEventBuffer for a thread."""
     buf = app.state.thread_event_buffers.get(thread_id)
     if isinstance(buf, ThreadEventBuffer):
         return buf
@@ -27,7 +24,6 @@ def get_or_create_thread_buffer(app: Any, thread_id: str) -> ThreadEventBuffer:
 
 
 def ensure_thread_handlers(agent: Any, thread_id: str, app: Any) -> None:
-    """Bind per-thread handlers (activity_sink, wake_handler) if not already set."""
     runtime = getattr(agent, "runtime", None)
     if not runtime:
         return
@@ -74,7 +70,6 @@ def ensure_thread_handlers(agent: Any, thread_id: str, app: Any) -> None:
     loop = getattr(runtime_state, "event_loop", None)
 
     def wake_handler(item: Any) -> None:
-        """Called by enqueue() with the newly-enqueued QueueItem — may run in any thread."""
         if not (hasattr(agent, "runtime") and agent.runtime.transition(AgentState.ACTIVE)):
             source = getattr(item, "source", None)
             if loop and not loop.is_closed():

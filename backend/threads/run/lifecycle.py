@@ -1,5 +1,3 @@
-"""Run lifecycle helpers for thread runtime streaming."""
-
 from __future__ import annotations
 
 import asyncio
@@ -10,8 +8,6 @@ logger = logging.getLogger(__name__)
 
 
 async def prime_sandbox(agent: Any, thread_id: str) -> None:
-    """Prime sandbox runtime before tool calls to avoid race conditions."""
-
     def _prime_sandbox() -> None:
         mgr = agent._sandbox.manager
         mgr.enforce_idle_timeouts()
@@ -30,7 +26,6 @@ async def write_cancellation_markers(
     config: dict[str, Any],
     pending_tool_calls: dict[str, dict],
 ) -> list[str]:
-    """Write cancellation markers to checkpoint for pending tool calls."""
     cancelled_tool_call_ids = []
     if not pending_tool_calls or not agent:
         return cancelled_tool_call_ids
@@ -98,7 +93,6 @@ async def write_cancellation_markers(
 
 
 async def repair_incomplete_tool_calls(agent: Any, config: dict[str, Any]) -> None:
-    """Detect and repair incomplete tool_call history in checkpoint."""
     try:
         from langchain_core.messages import RemoveMessage, ToolMessage
 

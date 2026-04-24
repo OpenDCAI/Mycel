@@ -1,5 +1,3 @@
-"""Runtime activity-event bridge helpers for thread runs."""
-
 from __future__ import annotations
 
 import asyncio
@@ -16,7 +14,6 @@ def build_activity_bridge(
     emit: Callable[[dict[str, Any]], Awaitable[None]],
     maxsize: int = 1000,
 ) -> tuple[Callable[[], Awaitable[None]], Callable[[], None], Callable[[], None]]:
-    """Build queue-backed runtime event attach/drain/detach helpers."""
     activity_queue: asyncio.Queue[dict[str, Any]] = asyncio.Queue(maxsize=maxsize)
 
     def on_activity_event(event: dict[str, Any]) -> None:

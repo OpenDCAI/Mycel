@@ -1,5 +1,3 @@
-"""Observation provider setup/flush helpers for thread runtime runs."""
-
 from __future__ import annotations
 
 import logging
@@ -10,7 +8,6 @@ logger = logging.getLogger(__name__)
 
 
 def build_observation(app: Any, thread_id: str, config: dict[str, Any]) -> Callable[[], None]:
-    """Build an observation handler and its flush callback."""
     obs_handler = None
     obs_active = None
     obs_provider = None
