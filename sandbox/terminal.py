@@ -34,13 +34,6 @@ def _connect(db_path: Path) -> sqlite3.Connection:
 
 @dataclass
 class TerminalState:
-    """Terminal state snapshot.
-
-    Represents the current state of a terminal that needs to persist
-    across session boundaries. This is the "continuity" layer that
-    makes terminals feel persistent even when physical processes die.
-    """
-
     cwd: str
     env_delta: dict[str, str] = field(default_factory=dict)
     state_version: int = 0
@@ -65,23 +58,6 @@ class TerminalState:
 
 
 class AbstractTerminal(ABC):
-    """Durable terminal identity + state snapshot.
-
-    This is the logical terminal that persists across ChatSession boundaries.
-    It does NOT own the physical process - that's owned by PhysicalTerminalRuntime.
-
-    Responsibilities:
-    - Store terminal identity (terminal_id, thread_id, sandbox_runtime_id)
-    - Maintain state snapshot (cwd, env_delta, state_version)
-    - Persist state to database
-    - Provide state to PhysicalTerminalRuntime for hydration
-
-    Does NOT:
-    - Own physical shell/pty process
-    - Execute commands directly
-    - Manage process lifecycle
-    """
-
     def __init__(
         self,
         terminal_id: str,
@@ -98,24 +74,15 @@ class AbstractTerminal(ABC):
         return self._state
 
     def update_state(self, state: TerminalState) -> None:
-        """Update terminal state snapshot.
-
-        This should be called after each command execution to persist
-        the new cwd/env state.
-        """
         state.state_version = self._state.state_version + 1
         self._state = state
         self._persist_state()
 
     @abstractmethod
-    def _persist_state(self) -> None:
-        """Persist state to storage backend."""
-        ...
+    def _persist_state(self) -> None: ...
 
 
 class SQLiteTerminal(AbstractTerminal):
-    """SQLite-backed terminal implementation."""
-
     def __init__(
         self,
         terminal_id: str,
@@ -128,7 +95,6 @@ class SQLiteTerminal(AbstractTerminal):
         self.db_path = db_path or resolve_role_db_path(SQLiteDBRole.SANDBOX)
 
     def _persist_state(self) -> None:
-        """Persist state to SQLite."""
         with _connect(self.db_path) as conn:
             conn.execute(
                 """
@@ -148,7 +114,6 @@ class SQLiteTerminal(AbstractTerminal):
 
 
 def terminal_from_row(row: dict, db_path: Path) -> AbstractTerminal:
-    """Construct a terminal domain object from a repo dict."""
     state = TerminalState(
         cwd=row.get("cwd", "/root"),
         env_delta=json.loads(row.get("env_delta_json", "{}")),
