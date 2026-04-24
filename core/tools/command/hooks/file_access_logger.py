@@ -1,5 +1,3 @@
-"""File access logger hook - logs all file operations for audit purposes."""
-
 from datetime import datetime
 from pathlib import Path
 

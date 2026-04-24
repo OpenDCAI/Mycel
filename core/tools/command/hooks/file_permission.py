@@ -1,5 +1,3 @@
-"""File permission control hook - supports file type restrictions and path blacklists."""
-
 from pathlib import Path
 
 from .base import HookResult

@@ -1,5 +1,3 @@
-"""Type definitions for Todo middleware."""
-
 from enum import StrEnum
 from typing import Any
 
