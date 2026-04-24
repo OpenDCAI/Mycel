@@ -48,9 +48,6 @@ class MonitorMiddleware(AgentMiddleware):
             state_monitor=self._state_monitor,
         )
 
-        if verbose:
-            print("[MonitorMiddleware] Initialized")
-
     def add_monitor(self, monitor: BaseMonitor) -> None:
         self._monitors.append(monitor)
 

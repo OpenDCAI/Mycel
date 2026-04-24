@@ -86,11 +86,6 @@ class MemoryMiddleware(AgentMiddleware):
         self._compaction_failure_counts_by_thread: dict[str, int] = {}
         self._compaction_breaker_open_by_thread: dict[str, bool] = {}
 
-        if verbose:
-            print("[MemoryMiddleware] Initialized")
-            if self.summary_store:
-                print(f"[MemoryMiddleware] SummaryStore enabled at {db_path}")
-
     def set_model(self, model: Any, model_config: dict[str, Any] | None = None) -> None:
         self._model = model
         self._model_config = model_config
