@@ -56,7 +56,6 @@ def _resolve_requester_user_id(user_repo: Any, current_user_id: str, requester_u
 
 
 def _resolve_parties(existing: dict, viewer_user_id: str) -> tuple[str, str]:
-    """Return (requester_id, other_id) from a relationship row and current user."""
     requester_id = existing["initiator_user_id"]
     other_id = existing["user_high"] if viewer_user_id == existing["user_low"] else existing["user_low"]
     return requester_id, other_id

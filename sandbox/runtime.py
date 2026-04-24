@@ -826,11 +826,9 @@ class PhysicalTerminalRuntime(ABC):
         ...
 
     def get_terminal_state(self) -> TerminalState:
-        """Get current terminal state."""
         return self.terminal.get_state()
 
     def update_terminal_state(self, state: TerminalState) -> None:
-        """Update terminal state after command execution."""
         self.terminal.update_state(state)
 
 

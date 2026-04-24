@@ -30,17 +30,11 @@ logger = logging.getLogger(__name__)
 
 
 def _connect(db_path: Path) -> sqlite3.Connection:
-    """Create SQLite connection with proper timeout settings."""
     return connect_sqlite(db_path)
 
 
 @dataclass
 class SummaryData:
-    """Summary data snapshot.
-
-    Represents a conversation summary that persists across sessions.
-    """
-
     summary_id: str
     thread_id: str
     summary_text: str
@@ -75,7 +69,6 @@ class SummaryStore:
         self._ensure_tables()
 
     def _ensure_tables(self) -> None:
-        """Ensure summaries table exists."""
         self._repo.ensure_tables()
 
     def save_summary(
@@ -182,14 +175,6 @@ class SummaryStore:
         return None
 
     def list_summaries(self, thread_id: str) -> list[dict[str, Any]]:
-        """List all summaries for a thread (for audit purposes).
-
-        Args:
-            thread_id: Thread identifier
-
-        Returns:
-            List of summary records as dictionaries
-        """
         return self._repo.list_summaries(thread_id)
 
     def delete_thread_summaries(self, thread_id: str) -> None:

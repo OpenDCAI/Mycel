@@ -8,7 +8,6 @@ from storage.runtime import build_thread_repo, build_user_repo
 
 
 def canonical_owner_threads(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Return one user-visible thread per agent user, preserving first agent order."""
     order: list[str] = []
     by_agent: dict[str, dict[str, Any]] = {}
     for row in rows:
