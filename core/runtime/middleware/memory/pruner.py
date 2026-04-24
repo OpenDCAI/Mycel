@@ -1,8 +1,3 @@
-"""SessionPruner — Layer 1: trim/clear old ToolMessage content.
-
-Pure string operations, no LLM calls. Protects recent tool results.
-"""
-
 from __future__ import annotations
 
 import copy
@@ -10,13 +5,6 @@ from typing import Any
 
 
 class SessionPruner:
-    """Prune old ToolMessage content to reduce context size.
-
-    Two levels:
-    - soft-trim: keep head + tail, replace middle with [...trimmed...]
-    - hard-clear: replace entire content with placeholder
-    """
-
     def __init__(
         self,
         soft_trim_chars: int = 3000,

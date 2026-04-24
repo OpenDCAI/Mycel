@@ -1,10 +1,3 @@
-"""Steering Middleware - injects queued messages before model calls (non-preemptive)
-
-Tool calls are never skipped. All pending messages are drained from the unified
-SQLite queue and injected as HumanMessage(metadata={"source": "system"}) before
-the next LLM call.
-"""
-
 import json
 import logging
 from collections.abc import Awaitable, Callable
@@ -72,15 +65,6 @@ def _apply_steer_contract(request: ModelRequest) -> ModelRequest:
 
 
 class SteeringMiddleware(AgentMiddleware):
-    """Non-preemptive steering: let all tool calls finish, inject before next LLM call.
-
-    Flow:
-    1. Tool calls execute normally (no skipping)
-    2. Before next model call, drain ALL pending messages from SQLite queue
-    3. Inject as HumanMessage with metadata source="system"
-    4. Update runtime.visibility_context so streaming tags events correctly
-    """
-
     def __init__(self, queue_manager: MessageQueueManager, agent_runtime: Any = None) -> None:
         self._queue_manager = queue_manager
         self._agent_runtime = agent_runtime  # our AgentRuntime, not LangGraph's Runtime

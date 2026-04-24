@@ -1,9 +1,3 @@
-"""ContextCompactor — Layer 2: LLM-based conversation summarization.
-
-Generates summaries of old messages, caches them in memory.
-Does NOT modify LangGraph state.
-"""
-
 from __future__ import annotations
 
 from typing import Any
@@ -35,8 +29,6 @@ Provide a concise summary that captures the essential context."""
 
 
 class ContextCompactor:
-    """Summarize old messages via LLM call. Stateless — caller manages cache."""
-
     def __init__(
         self,
         reserve_tokens: int = 16384,
