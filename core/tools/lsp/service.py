@@ -70,7 +70,6 @@ LSP_SCHEMA = make_tool_schema(
     required=["operation"],
 )
 
-# File extension → multilspy language identifier
 _EXT_TO_LANG: dict[str, str] = {
     ".py": "python",
     ".ts": "typescript",
@@ -87,7 +86,6 @@ _EXT_TO_LANG: dict[str, str] = {
 
 
 def _find_pyright() -> str | None:
-    """Locate pyright-langserver: venv-local first, then PATH."""
     for name in ("pyright-langserver", "pyright_langserver"):
         # prefer the binary in the same venv as the current interpreter
         venv_bin = Path(os.__file__).parent.parent.parent / "bin" / name
@@ -100,14 +98,6 @@ def _find_pyright() -> str | None:
 
 
 class _PyrightSession:
-    """Minimal asyncio LSP client for pyright-langserver (stdio).
-
-    Used for Python operations not supported by Jedi:
-    goToImplementation, prepareCallHierarchy, incomingCalls, outgoingCalls.
-
-    Requires pyright in the active venv: pip install pyright
-    """
-
     def __init__(self, workspace_root: str) -> None:
         self._workspace_root = workspace_root
         self._proc: asyncio.subprocess.Process | None = None
@@ -146,8 +136,6 @@ class _PyrightSession:
             },
         )
         self._notify("initialized", {})
-
-    # ── I/O ───────────────────────────────────────────────────────────
 
     async def _read_loop(self) -> None:
         try:
@@ -188,7 +176,6 @@ class _PyrightSession:
                     fut.set_exception(exc)
 
     def _write(self, msg: dict) -> None:
-        """Encode and buffer one LSP message (call drain() to flush)."""
         assert self._proc and self._proc.stdin
         body = json.dumps(msg, separators=(",", ":")).encode()
         header = f"Content-Length: {len(body)}\r\n\r\n".encode()
@@ -211,8 +198,6 @@ class _PyrightSession:
         await self._drain()
         return await asyncio.wait_for(fut, timeout=timeout)
 
-    # ── file lifecycle ────────────────────────────────────────────────
-
     def _open_file(self, abs_path: str) -> None:
         uri = Path(abs_path).as_uri()
         if uri in self._open_files:
@@ -226,8 +211,6 @@ class _PyrightSession:
 
     def _abs(self, rel_path: str) -> str:
         return str(Path(self._workspace_root) / rel_path)
-
-    # ── LSP operations ────────────────────────────────────────────────
 
     async def request_implementation(self, rel_path: str, line: int, col: int) -> list:
         abs_path = self._abs(rel_path)
@@ -279,8 +262,6 @@ class _PyrightSession:
             out.append({"uri": uri, "absolutePath": uri.replace("file://", ""), "range": rng})
         return out
 
-    # ── shutdown ──────────────────────────────────────────────────────
-
     async def stop(self) -> None:
         if self._proc:
             try:
@@ -302,14 +283,6 @@ class _PyrightSession:
 
 
 class _LSPSession:
-    """Holds a multilspy LanguageServer alive in a background asyncio task.
-
-    Pattern: start_server() is an async context manager that must stay open
-    for the lifetime of the session. We enter it inside a background Task and
-    use an Event to signal readiness. Stopping sets a second Event that causes
-    the background task to exit the context and shut down the server process.
-    """
-
     def __init__(self, language: str, workspace_root: str) -> None:
         self.language = language
         self._workspace_root = workspace_root
@@ -357,8 +330,6 @@ class _LSPSession:
                 except asyncio.CancelledError:
                     pass
 
-    # ── request methods ───────────────────────────────────────────────
-
     async def request_definition(self, rel_path: str, line: int, col: int) -> list:
         try:
             return await self._lsp.request_definition(rel_path, line, col) or []
@@ -386,8 +357,6 @@ class _LSPSession:
 
     async def request_workspace_symbol(self, query: str) -> list:
         return await self._lsp.request_workspace_symbol(query) or []
-
-    # ── advanced ops (direct server.send, for servers that support them) ──
 
     async def request_implementation(self, rel_path: str, line: int, col: int) -> list:
         abs_uri = Path(self._workspace_root, rel_path).as_uri()
@@ -432,12 +401,6 @@ class _LSPSession:
 
 
 class _LSPSessionPool:
-    """Process-level singleton managing LSP sessions across all agent instances.
-
-    Sessions are keyed by (language, workspace_root) and survive agent restarts.
-    Call close_all() once at process exit (e.g. from backend lifespan shutdown).
-    """
-
     def __init__(self) -> None:
         # (language, workspace_root) → _LSPSession
         self._sessions: dict[tuple[str, str], _LSPSession] = {}
@@ -483,7 +446,6 @@ class _LSPSessionPool:
         return await self._starting_pyright[workspace_root]
 
     async def close_all(self) -> None:
-        """Stop all running language server processes. Call once at process exit."""
         for (lang, ws), session in list(self._sessions.items()):
             try:
                 await session.stop()
@@ -504,12 +466,6 @@ lsp_pool = _LSPSessionPool()
 
 
 class LSPService:
-    """Registers the LSP tool (DEFERRED) into ToolRegistry.
-
-    Delegates all session management to the process-level lsp_pool singleton.
-    Language servers start lazily on first use and persist across agent restarts.
-    """
-
     # Operations that Jedi doesn't support — routed to pyright for Python,
     # or to the native server.send.* for other languages.
     _ADVANCED_OPS: frozenset[str] = frozenset({"goToImplementation", "prepareCallHierarchy", "incomingCalls", "outgoingCalls"})
@@ -530,8 +486,6 @@ class LSPService:
         )
         logger.debug("[LSPService] registered (workspace=%s)", self._workspace_root)
 
-    # ── session management (delegates to process-level pool) ──────────
-
     async def _get_session(self, language: str) -> _LSPSession:
         return await lsp_pool.get_session(language, self._workspace_root)
 
@@ -546,8 +500,6 @@ class LSPService:
             return str(Path(file_path).relative_to(self._workspace_root))
         except ValueError:
             return file_path
-
-    # ── pre-flight checks ─────────────────────────────────────────────
 
     @staticmethod
     def _check_file(file_path: str) -> str | None:
@@ -587,8 +539,6 @@ class LSPService:
 
     async def _filter_gitignored_batched_async(self, locations: list) -> list:
         return await asyncio.to_thread(self._filter_gitignored_batched, locations)
-
-    # ── output formatters ─────────────────────────────────────────────
 
     @staticmethod
     def _fmt_location(loc: Any) -> dict:
@@ -657,8 +607,6 @@ class LSPService:
             "call_sites": [{"line": r.get("line"), "column": r.get("character")} for r in ranges],
             "item": caller,  # pass-through for chaining
         }
-
-    # ── tool handler ──────────────────────────────────────────────────
 
     async def _handle(
         self,
