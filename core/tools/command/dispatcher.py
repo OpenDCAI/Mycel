@@ -10,19 +10,6 @@ from .zsh import ZshExecutor
 
 
 def get_executor(default_cwd: str | None = None) -> BaseExecutor:
-    """
-    Get the appropriate executor for the current OS.
-
-    - macOS → ZshExecutor
-    - Windows → PowerShellExecutor
-    - Linux/other → BashExecutor
-
-    Args:
-        default_cwd: Default working directory for commands
-
-    Returns:
-        Appropriate executor instance
-    """
     system = platform.system()
 
     if system == "Darwin":

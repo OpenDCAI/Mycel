@@ -2,8 +2,6 @@ from pydantic import BaseModel, Field
 
 from backend.hub.versioning import BumpType
 
-# ── Agents ──
-
 
 class CompactConfigPayload(BaseModel):
     trigger_tokens: int | None = Field(default=None, gt=0)
@@ -35,9 +33,6 @@ class PublishAgentRequest(BaseModel):
     notes: str = ""
 
 
-# ── Library ──
-
-
 class CreateResourceRequest(BaseModel):
     name: str
     desc: str = ""
@@ -54,9 +49,6 @@ class UpdateResourceRequest(BaseModel):
 
 class UpdateResourceContentRequest(BaseModel):
     content: str
-
-
-# ── Profile ──
 
 
 class UpdateProfileRequest(BaseModel):

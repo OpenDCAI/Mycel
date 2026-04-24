@@ -10,8 +10,6 @@ _RUNNING_COMMANDS: dict[str, AsyncCommand] = {}
 
 
 class PowerShellExecutor(BaseExecutor):
-    """Executor for PowerShell (Windows default)."""
-
     shell_name = "powershell"
     shell_command = ("powershell.exe", "-Command")
 
@@ -115,7 +113,6 @@ class PowerShellExecutor(BaseExecutor):
         return async_cmd
 
     async def _monitor_process(self, async_cmd: AsyncCommand) -> None:
-        """Background task to monitor process and collect output."""
         proc = async_cmd.process
         if proc is None:
             return
