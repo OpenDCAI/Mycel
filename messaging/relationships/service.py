@@ -19,21 +19,21 @@ class RelationshipService:
 
     def apply_event(
         self,
-        actor_id: str,
+        requester_id: str,
         target_id: str,
         event: RelationshipEvent,
     ) -> RelationshipRow:
-        """Apply an event to the relationship between actor and target.
+        """Apply an event to the relationship between requester and target.
 
         Returns the updated RelationshipRow.
         Raises TransitionError on invalid transition.
         """
-        user_low, user_high = sorted((actor_id, target_id))
+        user_low, user_high = sorted((requester_id, target_id))
 
-        existing = self._repo.get(actor_id, target_id)
+        existing = self._repo.get(requester_id, target_id)
         if existing is None:
             current_state: RelationshipState = "none"
-            initiator_user_id = actor_id if event == "request" else None
+            initiator_user_id = requester_id if event == "request" else None
         else:
             current_state = existing["state"]
             initiator_user_id = existing.get("initiator_user_id")
@@ -41,18 +41,18 @@ class RelationshipService:
         new_state = transition(
             current_state,
             event,
-            actor_is_initiator=initiator_user_id is not None and actor_id == initiator_user_id,
+            requester_is_initiator=initiator_user_id is not None and requester_id == initiator_user_id,
         )
         logger.info(
-            "[relationship] %s + %s → %s (actor=%s event=%s)",
+            "[relationship] %s + %s → %s (requester=%s event=%s)",
             current_state,
             event,
             new_state,
-            actor_id[:15],
+            requester_id[:15],
             event,
         )
 
-        row = self._repo.upsert(actor_id, target_id, state=new_state, initiator_user_id=initiator_user_id)
+        row = self._repo.upsert(requester_id, target_id, state=new_state, initiator_user_id=initiator_user_id)
         return RelationshipRow.model_validate(row)
 
     def request(self, requester_id: str, target_id: str) -> RelationshipRow:

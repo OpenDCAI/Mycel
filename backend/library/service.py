@@ -13,6 +13,8 @@ from backend.sandboxes.recipe_bootstrap import seed_default_recipes as seed_buil
 from sandbox.recipes import FEATURE_CATALOG, default_recipe_snapshot, normalize_recipe_snapshot, provider_type_from_name
 from storage.contracts import RecipeRepo
 
+MCP_META_KEYS = {"desc", "category", "created_at", "updated_at", "name"}
+
 
 def _read_json(path: Path, default: Any = None) -> Any:
     if not path.exists():
@@ -206,7 +208,11 @@ def create_resource(
         content_path.parent.mkdir(parents=True, exist_ok=True)
         meta = {"name": name, "desc": desc, "category": cat, "created_at": now, "updated_at": now}
         _write_json(meta_path, meta)
-        content = f"# {name}\n\n{desc}\n" if resource_type == "skill" else f"---\nname: {rid}\ndescription: {desc}\n---\n\n# {name}\n"
+        content = (
+            f"---\nname: {name}\ndescription: {desc}\n---\n\n{desc}\n"
+            if resource_type == "skill"
+            else f"---\nname: {rid}\ndescription: {desc}\n---\n\n# {name}\n"
+        )
         content_path.write_text(content, encoding="utf-8")
         return _library_resource_item(resource_type, rid, meta)
     if resource_type == "mcp":
@@ -358,6 +364,23 @@ def get_library_skill_desc(name: str) -> str:
     return next((item["desc"] for item in list_library("skill") if item["name"] == name), "")
 
 
+def get_skill_content_by_name(name: str) -> str | None:
+    for item in list_library("skill"):
+        if item["name"] == name:
+            return get_resource_content("skill", item["id"])
+    return None
+
+
+def get_mcp_config_by_name(name: str) -> dict[str, Any] | None:
+    mcp_data = _read_json(LIBRARY_DIR / ".mcp.json", {"mcpServers": {}})
+    cfg = mcp_data.get("mcpServers", {}).get(name)
+    if cfg is None:
+        return None
+    if not isinstance(cfg, dict):
+        raise RuntimeError(f"Library MCP config must be a JSON object: {name}")
+    return {key: value for key, value in cfg.items() if key not in MCP_META_KEYS}
+
+
 def get_resource_used_by(
     resource_type: str,
     resource_name: str,
@@ -399,13 +422,9 @@ def get_resource_content(
             return content_path.read_text(encoding="utf-8")
         return ""
     if resource_type == "mcp":
-        mcp_data = _read_json(LIBRARY_DIR / ".mcp.json", {"mcpServers": {}})
-        cfg = mcp_data.get("mcpServers", {}).get(resource_id)
-        if cfg is None:
+        config_only = get_mcp_config_by_name(resource_id)
+        if config_only is None:
             return None
-        # Only return MCP config fields, not metadata
-        meta_keys = {"desc", "category", "created_at", "updated_at", "name"}
-        config_only = {k: v for k, v in cfg.items() if k not in meta_keys}
         if not config_only:
             # Return a template if no config exists yet
             config_only = {"command": "", "args": [], "env": {}}
@@ -441,8 +460,7 @@ def update_resource_content(resource_type: str, resource_id: str, content: str) 
             return False
         # Preserve metadata before overwriting with parsed config
         existing = mcp_data["mcpServers"][resource_id]
-        meta_keys = {"desc", "category", "created_at", "name"}
-        preserved = {k: existing[k] for k in meta_keys if k in existing}
+        preserved = {k: existing[k] for k in MCP_META_KEYS if k in existing and k != "updated_at"}
         mcp_data["mcpServers"][resource_id] = {**parsed, **preserved, "updated_at": now}
         _write_json(mcp_path, mcp_data)
         return True

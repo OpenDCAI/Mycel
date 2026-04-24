@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from messaging.actor_ownership import access_scope_targets
+from messaging.user_ownership import access_scope_targets
 
 ACTIVE_CHAT_RELATIONSHIP_STATES = {"visit", "hire"}
 
@@ -55,7 +55,7 @@ def can_group_chat_with_participant(
     contact_repo: Any,
     relationship_service: Any,
 ) -> bool:
-    targets = access_scope_targets(participant_user, actor_user_id=participant_user_id)
+    targets = access_scope_targets(participant_user, user_id=participant_user_id)
     if any(has_active_contact(contact_repo, viewer_user_id, target_id) for target_id in targets):
         return True
     return any(relationship_service.get_state(viewer_user_id, target_id) in ACTIVE_CHAT_RELATIONSHIP_STATES for target_id in targets)

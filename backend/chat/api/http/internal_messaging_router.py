@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 from backend.chat.api.http.dependencies import get_messaging_service
 
@@ -13,7 +13,9 @@ router = APIRouter(prefix="/api/internal/messaging", tags=["chat-internal"])
 
 
 class DirectChatLookupBody(BaseModel):
-    actor_id: str
+    model_config = ConfigDict(extra="forbid")
+
+    user_id: str
     target_id: str
 
 
@@ -72,7 +74,7 @@ def find_direct_chat_id(
     body: DirectChatLookupBody,
     messaging_service: Annotated[Any, Depends(get_messaging_service)],
 ) -> dict[str, Any]:
-    return {"chat_id": messaging_service.find_direct_chat_id(body.actor_id, body.target_id)}
+    return {"chat_id": messaging_service.find_direct_chat_id(body.user_id, body.target_id)}
 
 
 @router.post("/chats/find-or-create")
@@ -80,7 +82,10 @@ def find_or_create_chat(
     body: FindOrCreateChatBody,
     messaging_service: Annotated[Any, Depends(get_messaging_service)],
 ) -> dict[str, Any]:
-    return messaging_service.find_or_create_chat(body.user_ids, body.title)
+    try:
+        return messaging_service.find_or_create_chat(body.user_ids, body.title)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
 
 
 @router.get("/chats/{chat_id}/messages")

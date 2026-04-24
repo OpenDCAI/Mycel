@@ -23,14 +23,14 @@ def transition(
     current_state: RelationshipState,
     event: RelationshipEvent,
     *,
-    actor_is_initiator: bool,
+    requester_is_initiator: bool,
 ) -> RelationshipState:
     """Apply an event and return the new state.
 
     Args:
         current_state: The current relationship state.
         event: The event to apply.
-        actor_is_initiator: True if the actor originally created the pending request.
+        requester_is_initiator: True if the requester originally created the pending request.
 
     Returns:
         new_state
@@ -42,14 +42,14 @@ def transition(
         case ("none", "request"):
             return "pending"
 
-        case ("pending", "approve") if not actor_is_initiator:
+        case ("pending", "approve") if not requester_is_initiator:
             return "visit"
 
-        case ("pending", "reject") if not actor_is_initiator:
+        case ("pending", "reject") if not requester_is_initiator:
             return "none"
 
         # Requester can cancel their own pending request
-        case ("pending", "revoke") if actor_is_initiator:
+        case ("pending", "revoke") if requester_is_initiator:
             return "none"
 
         case (("visit" | "hire"), "revoke"):
@@ -62,4 +62,6 @@ def transition(
             return "visit"
 
         case _:
-            raise TransitionError(f"Invalid transition: state={current_state!r} event={event!r} actor_is_initiator={actor_is_initiator}")
+            raise TransitionError(
+                f"Invalid transition: state={current_state!r} event={event!r} requester_is_initiator={requester_is_initiator}"
+            )

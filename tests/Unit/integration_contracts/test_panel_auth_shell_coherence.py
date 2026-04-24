@@ -267,6 +267,235 @@ def test_create_agent_user_persists_owner_contact_edge():
     ]
 
 
+def test_repo_backed_tools_star_keeps_panel_and_runtime_tool_state_aligned() -> None:
+    from config.types import AgentBundle, AgentConfig
+    from core.runtime.agent import LeonAgent
+
+    config = {"tools": ["*"], "runtime": {}}
+
+    panel_lsp = next(item for item in agent_user_service._tools_from_repo(config) if item["name"] == "LSP")
+
+    agent = LeonAgent.__new__(LeonAgent)
+    agent._agent_bundle = AgentBundle(agent=AgentConfig(name="Toad", tools=["*"]), runtime={})
+
+    assert panel_lsp["enabled"] is True
+    assert "LSP" not in agent._get_agent_blocked_tools()
+
+
+def test_assigning_library_skill_to_agent_copies_skill_content_into_repo(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    saved_skills: list[tuple[str, str, str, dict[str, object] | None]] = []
+    monkeypatch.setattr(library_service, "LIBRARY_DIR", tmp_path / "library")
+    skill = library_service.create_resource("skill", "Loadable Skill", "Use this skill.")
+    expected_content = library_service.get_resource_content("skill", skill["id"])
+
+    class _AgentConfigRepo:
+        def get_config(self, _agent_config_id: str):
+            return {
+                "name": "Toad",
+                "description": "",
+                "tools": ["*"],
+                "runtime": {},
+                "mcp": {},
+                "system_prompt": "",
+                "status": "draft",
+            }
+
+        def save_config(self, _agent_config_id: str, _data: dict[str, object]) -> None:
+            return None
+
+        def list_rules(self, _agent_config_id: str):
+            return []
+
+        def list_skills(self, _agent_config_id: str):
+            return []
+
+        def delete_skill(self, _skill_id: str) -> None:
+            return None
+
+        def save_skill(self, agent_config_id: str, name: str, content: str, meta: dict[str, object] | None = None) -> None:
+            saved_skills.append((agent_config_id, name, content, meta))
+
+        def list_sub_agents(self, _agent_config_id: str):
+            return []
+
+    result = agent_user_service.update_agent_user_config(
+        "agent-1",
+        {"skills": [{"name": "Loadable Skill", "desc": "loadable", "enabled": True}]},
+        user_repo=SimpleNamespace(
+            get_by_id=lambda _agent_id: UserRow(
+                id="agent-1",
+                type=UserType.AGENT,
+                display_name="Toad",
+                owner_user_id="owner-1",
+                agent_config_id="cfg-1",
+                created_at=1,
+            )
+        ),
+        agent_config_repo=_AgentConfigRepo(),
+    )
+
+    assert result is not None
+    assert saved_skills == [
+        (
+            "cfg-1",
+            "Loadable Skill",
+            expected_content,
+            {"desc": "loadable"},
+        )
+    ]
+
+
+def test_created_library_skill_is_loadable_skill_document(monkeypatch: pytest.MonkeyPatch, tmp_path) -> None:
+    from backend.library import service as library_service
+
+    monkeypatch.setattr(library_service, "LIBRARY_DIR", tmp_path / "library")
+
+    item = library_service.create_resource("skill", "Loadable Skill", "Use this skill")
+    content = library_service.get_resource_content("skill", item["id"])
+
+    assert content == "---\nname: Loadable Skill\ndescription: Use this skill\n---\n\nUse this skill\n"
+
+
+def test_assigning_library_mcp_to_agent_copies_mcp_config_into_repo(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    saved_configs: list[tuple[str, dict[str, object]]] = []
+    monkeypatch.setattr(library_service, "LIBRARY_DIR", tmp_path / "library")
+    library_service.create_resource("mcp", "demo-mcp", "Demo MCP")
+    assert library_service.update_resource_content(
+        "mcp",
+        "demo-mcp",
+        (
+            '{"transport":"stdio","command":"uv","args":["run","python","/tmp/demo_mcp.py"],'
+            '"env":{"DEMO":"1"},"allowed_tools":["read"],"instructions":"Use demo resources."}'
+        ),
+    )
+
+    class _AgentConfigRepo:
+        def get_config(self, _agent_config_id: str):
+            return {
+                "name": "Toad",
+                "description": "",
+                "tools": ["*"],
+                "runtime": {},
+                "mcp": {},
+                "system_prompt": "",
+                "status": "draft",
+            }
+
+        def save_config(self, agent_config_id: str, data: dict[str, object]) -> None:
+            saved_configs.append((agent_config_id, data))
+
+        def list_rules(self, _agent_config_id: str):
+            return []
+
+        def list_skills(self, _agent_config_id: str):
+            return []
+
+        def list_sub_agents(self, _agent_config_id: str):
+            return []
+
+    result = agent_user_service.update_agent_user_config(
+        "agent-1",
+        {
+            "mcps": [
+                {
+                    "name": "demo-mcp",
+                    "command": "Demo MCP",
+                    "args": [],
+                    "env": {},
+                    "disabled": False,
+                }
+            ]
+        },
+        user_repo=SimpleNamespace(
+            get_by_id=lambda _agent_id: UserRow(
+                id="agent-1",
+                type=UserType.AGENT,
+                display_name="Toad",
+                owner_user_id="owner-1",
+                agent_config_id="cfg-1",
+                created_at=1,
+            )
+        ),
+        agent_config_repo=_AgentConfigRepo(),
+    )
+
+    assert result is not None
+    assert saved_configs[-1][1]["mcp"] == {
+        "demo-mcp": {
+            "transport": "stdio",
+            "command": "uv",
+            "args": ["run", "python", "/tmp/demo_mcp.py"],
+            "env": {"DEMO": "1"},
+            "allowed_tools": ["read"],
+            "instructions": "Use demo resources.",
+            "disabled": False,
+        }
+    }
+
+
+def test_agent_config_exposes_mcp_config_fields_for_lossless_toggle() -> None:
+    agent = UserRow(
+        id="agent-1",
+        type=UserType.AGENT,
+        display_name="Toad",
+        owner_user_id="user-1",
+        agent_config_id="cfg-1",
+        created_at=1.0,
+    )
+
+    class _AgentConfigRepo:
+        def get_config(self, _agent_config_id: str):
+            return {
+                "agent_user_id": "agent-1",
+                "name": "Toad",
+                "description": "probe",
+                "model": "leon:large",
+                "tools": ["*"],
+                "system_prompt": "",
+                "status": "draft",
+                "version": "0.1.0",
+                "runtime": {},
+                "mcp": {
+                    "demo-mcp": {
+                        "transport": "streamable_http",
+                        "url": "http://127.0.0.1:8765/mcp",
+                        "env": {"DEMO": "1"},
+                        "allowed_tools": ["read"],
+                        "instructions": "Use demo resources.",
+                        "disabled": False,
+                    }
+                },
+            }
+
+        def list_rules(self, _agent_config_id: str):
+            return []
+
+        def list_skills(self, _agent_config_id: str):
+            return []
+
+        def list_sub_agents(self, _agent_config_id: str):
+            return []
+
+    result = agent_user_service.get_agent_user(
+        "agent-1",
+        user_repo=SimpleNamespace(get_by_id=lambda user_id: agent if user_id == "agent-1" else None),
+        agent_config_repo=_AgentConfigRepo(),
+    )
+
+    assert result is not None
+    assert result["config"]["mcps"] == [
+        {
+            "name": "demo-mcp",
+            "transport": "streamable_http",
+            "url": "http://127.0.0.1:8765/mcp",
+            "env": {"DEMO": "1"},
+            "allowed_tools": ["read"],
+            "instructions": "Use demo resources.",
+            "disabled": False,
+        }
+    ]
+
+
 def test_agent_config_exposes_and_persists_compaction_trigger_tokens():
     agent = UserRow(
         id="agent-1",

@@ -485,23 +485,15 @@ class LeonAgent:
         if not hasattr(self, "_agent_bundle") or not self._agent_bundle:
             return set()
 
-        from config.defaults.tool_catalog import TOOLS_BY_NAME
+        from config.defaults.tool_catalog import TOOLS_BY_NAME, tool_enabled_for_agent
 
         runtime = self._agent_bundle.runtime
-
-        # Tools explicitly disabled in runtime.json
-        blocked = {k.split(":", 1)[1] for k, v in runtime.items() if k.startswith("tools:") and not v.enabled}
-
-        # Also block catalog tools with default=False that aren't explicitly enabled
-        for tool_name, tool_def in TOOLS_BY_NAME.items():
-            if tool_def.default:
-                continue  # default=True: enabled unless explicitly blocked above
-            runtime_key = f"tools:{tool_name}"
-            if runtime_key not in runtime:
-                blocked.add(tool_name)  # default=False and no explicit enable
-            # If runtime_key exists with enabled=True, it's already excluded from blocked above
-
-        return blocked
+        configured_tools = list(self._agent_bundle.agent.tools or ["*"])
+        return {
+            tool_name
+            for tool_name in TOOLS_BY_NAME
+            if not tool_enabled_for_agent(tool_name, configured_tools=configured_tools, runtime=runtime)
+        }
 
     def _get_mcp_server_configs(self) -> dict[str, Any]:
         if hasattr(self, "_agent_bundle") and self._agent_bundle and self._agent_bundle.mcp:
