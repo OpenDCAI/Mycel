@@ -155,7 +155,6 @@ class SummaryStore:
                 if not row:
                     return None
 
-                # Validate data integrity
                 try:
                     return SummaryData(
                         summary_id=row["summary_id"],

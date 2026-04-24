@@ -223,7 +223,6 @@ class TaskService:
 
         status = args.get("status")
 
-        # Handle deletion — clean up dependency refs
         if status == "deleted":
             all_tasks = self._repo.list_all(thread_id)
             for other in all_tasks:

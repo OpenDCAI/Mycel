@@ -796,7 +796,6 @@ def _create_owned_thread(
         current_workspace_id=current_workspace_id,
     )
 
-    # Set thread state
     app.state.thread_sandbox[new_thread_id] = sandbox_type
     if payload.cwd:
         app.state.thread_cwd[new_thread_id] = payload.cwd
@@ -826,7 +825,6 @@ async def create_thread(
     provider_error = _validate_sandbox_provider_gate(app, user_id, payload)
     if provider_error is not None:
         return provider_error
-    # Validate bind_mounts capability before creating thread
     sandbox_type = payload.sandbox or "local"
     requested_mounts = payload.bind_mounts or []
     capability_error = await _validate_mount_capability_gate(sandbox_type, requested_mounts)
@@ -962,13 +960,11 @@ async def delete_thread(
         # Also delete from threads table.
         app.state.thread_repo.delete(thread_id)
 
-    # Clean up thread-specific state
     app.state.thread_sandbox.pop(thread_id, None)
     app.state.thread_cwd.pop(thread_id, None)
     app.state.thread_event_buffers.pop(thread_id, None)
     app.state.queue_manager.clear_all(thread_id)
 
-    # Remove per-thread Agent from pool
     app.state.agent_pool.pop(pool_key, None)
     _invalidate_resource_overview_cache()
 
