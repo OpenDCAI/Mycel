@@ -346,7 +346,6 @@ class QueryLoop:
         input: dict,
         config: dict | None = None,
     ) -> AsyncGenerator[dict[str, Any], None]:
-        """Raw loop generator with an explicit final terminal event."""
         config = config or {}
         thread_id = config.get("configurable", {}).get("thread_id", "default")
 
@@ -660,7 +659,6 @@ class QueryLoop:
         config: dict | None = None,
         stream_mode: str = "updates",
     ) -> dict[str, Any]:
-        """Drain query and return messages plus explicit terminal state."""
         drained_messages: list[Any] = []
         terminal: TerminalState | None = None
         transition: ContinueState | None = None
@@ -684,7 +682,6 @@ class QueryLoop:
         }
 
     async def aget_state(self, config: dict | None = None) -> Any:
-        """Minimal graph-state view for backend/web callers."""
         config = config or {}
         thread_id = config.get("configurable", {}).get("thread_id", "default")
         if self._is_runtime_active():
@@ -702,7 +699,6 @@ class QueryLoop:
         input_data: dict[str, Any] | None,
         as_node: str | None = None,
     ) -> Any:
-        """Minimal graph-state update path for resumed-thread callers."""
         config = config or {}
         input_data = input_data or {}
         thread_id = config.get("configurable", {}).get("thread_id", "default")
@@ -729,7 +725,6 @@ class QueryLoop:
         return await self.aget_state(config)
 
     async def apersist_state(self, thread_id: str) -> None:
-        """Persist the current thread-scoped loop/app state to the checkpointer."""
         messages = list(self._app_state.messages) if self._app_state is not None else await self._load_messages(thread_id)
         await self._save_messages(thread_id, messages)
 
@@ -743,10 +738,7 @@ class QueryLoop:
         thread_id: str = "default",
         max_output_tokens_override: int | None = None,
     ) -> ModelResponse:
-        """Call model through the full middleware chain (awrap_model_call)."""
-
         async def innermost_handler(request: ModelRequest) -> ModelResponse:
-            """Actual model call — innermost of the chain."""
             tools = request.tools or []
             model = request.model
             bound = self._bind_model(model, tools, max_output_tokens_override=max_output_tokens_override)
@@ -935,7 +927,6 @@ class QueryLoop:
         return await self._apply_before_model(list(messages), config)
 
     async def _apply_before_model(self, messages: list, config: dict) -> tuple[list, list]:
-        """Run middleware before_model/abefore_model hooks on the live path."""
         current_messages = list(messages)
         injected_messages: list[Any] = []
         state = {"messages": current_messages}
@@ -968,7 +959,6 @@ class QueryLoop:
         return current_messages, injected_messages
 
     def _sync_app_state(self, messages: list, turn_count: int) -> None:
-        """Keep runtime AppState aligned with the loop's live state."""
         if self._app_state is None:
             return
 
@@ -1534,7 +1524,6 @@ class QueryLoop:
         model_response: ModelResponse,
         tool_context: ToolUseContext | None,
     ) -> list[ToolMessage]:
-        """Execute tool calls respecting concurrency safety, via middleware chain."""
         results: dict[int, ToolMessage] = {}
 
         async def execute_batch(batch: list[tuple[int, dict]]) -> None:
@@ -1736,7 +1725,6 @@ class QueryLoop:
     # Checkpointer persistence
 
     async def _load_messages(self, thread_id: str) -> list:
-        """Load message history from checkpointer (if available)."""
         state = await self._load_thread_checkpoint_state(thread_id)
         return list(state.messages) if state is not None else []
 
@@ -1750,7 +1738,6 @@ class QueryLoop:
             return None
 
     async def _load_checkpoint_channel_values(self, thread_id: str) -> dict[str, Any]:
-        """State snapshot helper for tests and state callers that inspect channel_values."""
         state = await self._load_thread_checkpoint_state(thread_id)
         if state is None:
             return {}
@@ -1908,7 +1895,6 @@ class QueryLoop:
         }
 
     async def _save_messages(self, thread_id: str, messages: list) -> None:
-        """Persist message history to checkpointer."""
         if self._checkpoint_store is None:
             return
         try:
@@ -1997,7 +1983,6 @@ class QueryLoop:
         return AIMessage(content=f"Error: {error_text}")
 
     async def aclear(self, thread_id: str) -> None:
-        """Clear turn-scoped state for a thread while preserving session accumulators."""
         await self._save_messages(thread_id, [])
 
         self._tool_read_file_state.clear()
@@ -2059,7 +2044,6 @@ class QueryLoop:
 
     @staticmethod
     def _parse_input(input: dict | None) -> list:
-        """Convert input dict to list of LangChain message objects."""
         if input is None:
             return []
         raw_messages = input.get("messages", [])

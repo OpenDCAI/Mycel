@@ -577,13 +577,11 @@ class LeonAgent:
         return config.model_copy(update={"memory": type(config.memory)(**memory_data)})
 
     def _resolve_workspace_root(self) -> Path:
-        """Resolve workspace root from config or current directory."""
         if self.config.workspace_root:
             return Path(self.config.workspace_root).expanduser().resolve()
         return Path.cwd()
 
     def _init_config_attributes(self) -> None:
-        """Initialize configuration attributes from config."""
         self.allowed_file_extensions = self.config.runtime.allowed_extensions
         self.block_dangerous_commands = self.config.runtime.block_dangerous_commands
         self.block_network_commands = self.config.runtime.block_network_commands
@@ -599,7 +597,6 @@ class LeonAgent:
         self.sandbox_db_path.parent.mkdir(parents=True, exist_ok=True)
 
     def _init_sandbox(self, sandbox: Any) -> Any:
-        """Initialize sandbox infrastructure layer."""
         from sandbox import Sandbox as SandboxBase
         from sandbox import SandboxConfig, create_sandbox, resolve_sandbox_name
 
@@ -618,7 +615,6 @@ class LeonAgent:
         raise TypeError(f"sandbox must be Sandbox, str, or None, got {type(sandbox)}")
 
     def _resolve_provider_name(self, model_name: str, overrides: dict | None = None) -> str | None:
-        """Resolve provider: overrides → active config → infer from model name → configured default."""
         if overrides and overrides.get("model_provider"):
             return overrides["model_provider"]
         if self.models_config.active and self.models_config.active.provider:
@@ -694,7 +690,6 @@ class LeonAgent:
         }
 
     def _create_extraction_model(self):
-        """Create a small model for WebFetch AI extraction (leon:mini)."""
         model_name, overrides = self.models_config.resolve_model("leon:mini")
         provider = self._resolve_provider_name(model_name, overrides)
         kwargs: dict = {}
@@ -713,7 +708,6 @@ class LeonAgent:
         return init_chat_model(model_name, **kwargs)
 
     def _build_model_kwargs(self) -> dict:
-        """Build model parameters for model initialization and sub-agents."""
         kwargs = {}
 
         if hasattr(self, "_model_overrides"):
@@ -803,7 +797,6 @@ class LeonAgent:
 
     @property
     def observation_config(self) -> ObservationConfig:
-        """Current observation provider configuration."""
         return self._observation_config
 
     def update_observation(self, **overrides) -> None:
@@ -901,7 +894,6 @@ class LeonAgent:
                 await result
 
     def _cleanup_sandbox(self) -> None:
-        """Clean up sandbox resources."""
         if hasattr(self, "_sandbox") and self._sandbox:
             try:
                 self._sandbox.close()
@@ -909,7 +901,6 @@ class LeonAgent:
                 print(f"[LeonAgent] Sandbox cleanup error: {e}")
 
     def _mark_terminated(self) -> None:
-        """Mark agent as terminated."""
         if hasattr(self, "_monitor_middleware"):
             self._monitor_middleware.mark_terminated()
 
@@ -938,7 +929,6 @@ class LeonAgent:
                 raise RuntimeError(f"{label} cleanup failed: {exc}") from exc
 
     def _cleanup_mcp_client(self) -> None:
-        """Clean up MCP client."""
         if not hasattr(self, "_mcp_client") or not self._mcp_client:
             return
 
@@ -1032,7 +1022,6 @@ class LeonAgent:
         return middleware
 
     def _add_memory_middleware(self, middleware: list) -> None:
-        """Add memory middleware to stack."""
         # @@@context-limit-default - prefer mapping override (e.g. leon:tiny -> 8000),
         # then Monitor's resolved value (model API or its 128000 default).
         context_limit = self._model_overrides.get("context_limit") or self._monitor_middleware._context_monitor.context_limit
@@ -1314,7 +1303,6 @@ class LeonAgent:
         return True
 
     def _build_system_prompt(self) -> str:
-        """Build system prompt based on sandbox mode."""
         # If agent override is set, use its system_prompt + rules.
         if hasattr(self, "_agent_override") and self._agent_override:
             prompt = self._agent_override.system_prompt
@@ -1497,7 +1485,6 @@ class LeonAgent:
         stream_mode: str | list[str] = "updates",
         max_budget_usd: float | None = None,
     ):
-        """Stream agent output through a caller-owned LeonAgent surface."""
         try:
             async for chunk in self.agent.astream(
                 {"messages": [{"role": "user", "content": message}]},
@@ -1512,7 +1499,6 @@ class LeonAgent:
             raise
 
     async def aclear_thread(self, thread_id: str = "default") -> None:
-        """Clear turn-scoped state for a thread while preserving session accumulators."""
         try:
             await self.agent.aclear(thread_id)
             self._invalidate_system_prompt_cache()
@@ -1523,7 +1509,6 @@ class LeonAgent:
             raise
 
     def clear_thread(self, thread_id: str = "default") -> None:
-        """Sync wrapper for aclear_thread()."""
         import asyncio
 
         async def _aclear():
