@@ -17,7 +17,6 @@ class ExecuteResult:
 
     @property
     def output(self) -> str:
-        """Combined output (stdout + stderr if present)."""
         if self.stderr:
             return f"{self.stdout}\n[stderr]\n{self.stderr}".strip()
         return self.stdout.strip()
@@ -44,8 +43,6 @@ class AsyncCommand:
 
 
 class BaseExecutor(ABC):
-    """Base class for shell executors."""
-
     shell_name: str = "unknown"
     shell_command: tuple[str, ...] = ()
     is_remote: bool = False
@@ -61,20 +58,7 @@ class BaseExecutor(ABC):
         cwd: str | None = None,
         timeout: float | None = None,
         env: dict[str, str] | None = None,
-    ) -> ExecuteResult:
-        """
-        Execute a command and wait for completion.
-
-        Args:
-            command: Command to execute
-            cwd: Working directory (uses default if not specified)
-            timeout: Timeout in seconds (None = no timeout)
-            env: Environment variables to set
-
-        Returns:
-            ExecuteResult with exit code, stdout, stderr
-        """
-        ...
+    ) -> ExecuteResult: ...
 
     @abstractmethod
     async def execute_async(
@@ -82,47 +66,14 @@ class BaseExecutor(ABC):
         command: str,
         cwd: str | None = None,
         env: dict[str, str] | None = None,
-    ) -> AsyncCommand:
-        """
-        Start a command without waiting for completion.
-
-        Args:
-            command: Command to execute
-            cwd: Working directory
-            env: Environment variables
-
-        Returns:
-            AsyncCommand with command_id for status queries
-        """
-        ...
+    ) -> AsyncCommand: ...
 
     @abstractmethod
-    async def get_status(self, command_id: str) -> AsyncCommand | None:
-        """
-        Get status of an async command.
-
-        Args:
-            command_id: ID returned by execute_async
-
-        Returns:
-            AsyncCommand with current status, or None if not found
-        """
-        ...
+    async def get_status(self, command_id: str) -> AsyncCommand | None: ...
 
     @abstractmethod
     async def wait_for(
         self,
         command_id: str,
         timeout: float | None = None,
-    ) -> ExecuteResult | None:
-        """
-        Wait for an async command to complete.
-
-        Args:
-            command_id: ID returned by execute_async
-            timeout: Max seconds to wait
-
-        Returns:
-            ExecuteResult if command finished, None if not found
-        """
-        ...
+    ) -> ExecuteResult | None: ...
