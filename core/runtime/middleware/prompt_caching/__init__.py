@@ -5,20 +5,12 @@ from warnings import warn
 from langchain_anthropic.chat_models import ChatAnthropic
 from langchain_core.messages import SystemMessage
 
-try:
-    from core.runtime.middleware import (
-        AgentMiddleware,
-        ModelCallResult,
-        ModelRequest,
-        ModelResponse,
-    )
-except ImportError as e:
-    msg = (
-        "AnthropicPromptCachingMiddleware requires the local "
-        "'core.runtime.middleware' protocol definitions and "
-        "'langchain-anthropic' to be importable."
-    )
-    raise ImportError(msg) from e
+from core.runtime.middleware import (
+    AgentMiddleware,
+    ModelCallResult,
+    ModelRequest,
+    ModelResponse,
+)
 
 
 class PromptCachingMiddleware(AgentMiddleware):
@@ -29,36 +21,12 @@ class PromptCachingMiddleware(AgentMiddleware):
         min_messages_to_cache: int = 0,
         unsupported_model_behavior: Literal["ignore", "warn", "raise"] = "warn",
     ) -> None:
-        """Initialize the middleware with cache control settings.
-
-        Args:
-            type: The type of cache to use, only `'ephemeral'` is supported.
-            ttl: The time to live for the cache, only `'5m'` and `'1h'` are
-                supported.
-            min_messages_to_cache: The minimum number of messages until the
-                cache is used.
-            unsupported_model_behavior: The behavior to take when an
-                unsupported model is used.
-
-                `'ignore'` will ignore the unsupported model and continue without
-                caching.
-
-                `'warn'` will warn the user and continue without caching.
-
-                `'raise'` will raise an error and stop the agent.
-        """
         self.type = type
         self.ttl = ttl
         self.min_messages_to_cache = min_messages_to_cache
         self.unsupported_model_behavior = unsupported_model_behavior
 
     def _apply_system_cache(self, request: ModelRequest) -> ModelRequest:
-        """Add cache_control to the first (static) block of system_message.
-
-        Anthropic prompt caching requires cache_control on the system content
-        blocks, not on messages. Marking the first block caches the entire
-        static system prefix (identity + tool rules) across sessions.
-        """
         sm = request.system_message
         if sm is None:
             return request
@@ -73,17 +41,6 @@ class PromptCachingMiddleware(AgentMiddleware):
         return request.override(system_message=SystemMessage(content=new_content))
 
     def _should_apply_caching(self, request: ModelRequest) -> bool:
-        """Check if caching should be applied to the request.
-
-        Args:
-            request: The model request to check.
-
-        Returns:
-            `True` if caching should be applied, `False` otherwise.
-
-        Raises:
-            ValueError: If model is unsupported and behavior is set to `'raise'`.
-        """
         if not isinstance(request.model, ChatAnthropic):
             msg = (
                 "AnthropicPromptCachingMiddleware caching middleware only supports "
@@ -105,15 +62,6 @@ class PromptCachingMiddleware(AgentMiddleware):
         request: ModelRequest,
         handler: Callable[[ModelRequest], ModelResponse],
     ) -> ModelCallResult:
-        """Modify the model request to add cache control blocks.
-
-        Args:
-            request: The model request to potentially modify.
-            handler: The handler to execute the model request.
-
-        Returns:
-            The model response from the handler.
-        """
         if not self._should_apply_caching(request):
             return handler(request)
         return handler(self._apply_system_cache(request))
@@ -123,15 +71,6 @@ class PromptCachingMiddleware(AgentMiddleware):
         request: ModelRequest,
         handler: Callable[[ModelRequest], Awaitable[ModelResponse]],
     ) -> ModelCallResult:
-        """Modify the model request to add cache control blocks (async version).
-
-        Args:
-            request: The model request to potentially modify.
-            handler: The async handler to execute the model request.
-
-        Returns:
-            The model response from the handler.
-        """
         if not self._should_apply_caching(request):
             return await handler(request)
         return await handler(self._apply_system_cache(request))
