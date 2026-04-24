@@ -1,5 +1,3 @@
-"""Queue middleware for message routing during agent execution."""
-
 from storage.contracts import QueueItem
 
 from .formatters import (
