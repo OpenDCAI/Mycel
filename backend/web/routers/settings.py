@@ -20,11 +20,6 @@ router = APIRouter(prefix="/api/settings", tags=["settings"])
 CurrentUserId = Annotated[str, Depends(get_current_user_id)]
 
 
-# ============================================================================
-# User preferences (preferences.json)
-# ============================================================================
-
-
 class WorkspaceSettings(BaseModel):
     default_workspace: str | None = None
     recent_workspaces: list[str] = []
@@ -76,9 +71,6 @@ def _load_workspace_settings(repo: Any, user_id: str) -> WorkspaceSettings:
     )
 
 
-# Models config (models.json)
-
-
 def _load_merged_models_for_storage(repo: Any, user_id: str) -> ModelsConfig:
     loader = ModelsLoader()
     return loader.load_with_user_config(repo.get_models_config(user_id) or {})
@@ -125,11 +117,6 @@ async def _run_streaming_model_probe(model: Any) -> str:
         if content:
             return content[:100]
     raise RuntimeError("settings model probe produced no streaming content")
-
-
-# ============================================================================
-# Settings endpoint (returns workspace + models as one frontend settings bundle)
-# ============================================================================
 
 
 class ProviderConfig(BaseModel):
@@ -293,11 +280,6 @@ async def set_default_model(
     return {"success": True, "default_model": request.model}
 
 
-# ============================================================================
-# Model config hot-reload
-# ============================================================================
-
-
 class ModelConfigRequest(BaseModel):
     model: str
     thread_id: str | None = None
@@ -323,11 +305,6 @@ async def update_model_config(request: ModelConfigRequest, req: Request) -> dict
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to update config: {str(e)}")
-
-
-# ============================================================================
-# Available models
-# ============================================================================
 
 
 @router.get("/available-models")
@@ -391,11 +368,6 @@ async def get_available_models(req: Request, user_id: CurrentUserId) -> dict[str
         raise HTTPException(status_code=500, detail=f"Failed to load available models: {str(e)}")
 
 
-# ============================================================================
-# Model mapping
-# ============================================================================
-
-
 class ModelMappingRequest(BaseModel):
     mapping: dict[str, dict[str, Any]]
 
@@ -419,11 +391,6 @@ async def update_model_mapping(
     data["mapping"] = mapping
     repo.set_models_config(user_id, data)
     return {"success": True, "model_mapping": request.mapping}
-
-
-# ============================================================================
-# Model pool (enable/disable, custom)
-# ============================================================================
 
 
 class ModelToggleRequest(BaseModel):
@@ -606,11 +573,6 @@ async def update_custom_model_config(request: CustomModelConfigRequest, req: Req
         custom_providers[request.model_id] = request.provider
     repo.set_models_config(user_id, data)
     return {"success": True, "custom_config": custom_config}
-
-
-# ============================================================================
-# Providers
-# ============================================================================
 
 
 class ProviderRequest(BaseModel):

@@ -55,11 +55,6 @@ def _spill(content: Any, *, threshold_bytes: int, tool_call_id: str = "call", fs
     )
 
 
-# ===========================================================================
-# spill_if_needed()
-# ===========================================================================
-
-
 class TestSpillIfNeeded:
     """Unit tests for the core spill function."""
 
@@ -205,11 +200,6 @@ class TestSpillIfNeeded:
         assert "caption" in result.content
         assert expected_path in result.content
         assert "QUJD" not in result.content
-
-
-# ===========================================================================
-# SpillBufferMiddleware
-# ===========================================================================
 
 
 class TestSpillBufferMiddleware:

@@ -4,10 +4,6 @@ from __future__ import annotations
 
 from enum import Enum
 
-# ============================================================================
-# Sandbox State Models
-# ============================================================================
-
 
 class SandboxObservedState(Enum):
     """Sandbox actual state reported by the provider.
@@ -15,10 +11,9 @@ class SandboxObservedState(Enum):
     These are the actual states reported by sandbox providers.
     """
 
-    RUNNING = "running"  # Running with bound instance
-    DETACHED = "detached"  # Running but detached from terminal
-    PAUSED = "paused"  # Paused
-    # None means destroyed
+    RUNNING = "running"
+    DETACHED = "detached"
+    PAUSED = "paused"
 
 
 class SandboxDesiredState(Enum):
@@ -35,10 +30,10 @@ class SandboxDisplayStatus(Enum):
     These are the status values that frontend expects and displays.
     """
 
-    RUNNING = "running"  # Currently running
-    PAUSED = "paused"  # Paused
-    STOPPED = "stopped"  # Stopped/destroyed
-    DESTROYING = "destroying"  # Being destroyed
+    RUNNING = "running"
+    PAUSED = "paused"
+    STOPPED = "stopped"
+    DESTROYING = "destroying"
 
 
 def map_sandbox_state_to_display_status(observed_state: str | None, desired_state: str | None) -> str:
@@ -66,7 +61,6 @@ def map_sandbox_state_to_display_status(observed_state: str | None, desired_stat
     observed = observed_state.strip().lower()
     desired = (desired_state or "").strip().lower()
 
-    # Being destroyed
     if desired == SandboxDesiredState.DESTROYED.value:
         return SandboxDisplayStatus.DESTROYING.value
 
@@ -80,13 +74,10 @@ def map_sandbox_state_to_display_status(observed_state: str | None, desired_stat
             return SandboxDisplayStatus.PAUSED.value
         return SandboxDisplayStatus.STOPPED.value
 
-    # Running — only "running" means the sandbox is up with bound instance
     if observed == SandboxObservedState.RUNNING.value:
         return SandboxDisplayStatus.RUNNING.value
 
-    # Paused
     if observed == SandboxObservedState.PAUSED.value:
         return SandboxDisplayStatus.PAUSED.value
 
-    # Unknown state, treat as stopped
     return SandboxDisplayStatus.STOPPED.value

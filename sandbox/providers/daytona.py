@@ -136,8 +136,6 @@ class DaytonaProvider(SandboxProvider):
         """Set thread-specific bind mounts that will be applied when creating sessions."""
         self._thread_bind_mounts[thread_id] = [MountSpec.model_validate(m) if isinstance(m, dict) else m for m in mounts]
 
-    # ==================== Managed Volume ====================
-
     def create_managed_volume(self, managed_ref: str, mount_path: str) -> str:
         """Create a Daytona managed volume. Returns volume name as backend_ref."""
         volume_name = f"leon-volume-{managed_ref}"
@@ -171,8 +169,6 @@ class DaytonaProvider(SandboxProvider):
                 return
             raise
         self.client.volume.delete(vol)
-
-    # ==================== Session Lifecycle ====================
 
     def create_session(self, context_id: str | None = None, thread_id: str | None = None) -> SessionInfo:
         from daytona_sdk import CreateSandboxFromSnapshotParams, VolumeMount
@@ -277,8 +273,6 @@ class DaytonaProvider(SandboxProvider):
             logger.exception("[DaytonaProvider] get_session_status failed for %s", session_id)
             return "unknown"
 
-    # ==================== Execution ====================
-
     def execute(
         self,
         session_id: str,
@@ -289,8 +283,6 @@ class DaytonaProvider(SandboxProvider):
         sb = self._get_sandbox(session_id)
         result = sb.process.exec(command, cwd=cwd or self.default_cwd, timeout=timeout_ms // 1000)
         return ProviderExecResult(output=result.result or "", exit_code=int(result.exit_code or 0))
-
-    # ==================== Filesystem ====================
 
     def read_file(self, session_id: str, path: str) -> str:
         sb = self._get_sandbox(session_id)
@@ -319,16 +311,12 @@ class DaytonaProvider(SandboxProvider):
         content = sb.fs.download_file(remote_path)
         return content if isinstance(content, bytes) else content.encode("utf-8")
 
-    # ==================== Batch Status ====================
-
     def list_provider_runtimes(self) -> list[SessionInfo]:
         result = self.client.list()
         return [
             SessionInfo(session_id=sb.id, provider=self.name, status=_daytona_state_to_status(_daytona_state_value(sb) or ""))
             for sb in result.items
         ]
-
-    # ==================== Inspection ====================
 
     def get_metrics(self, session_id: str) -> Metrics | None:
         # @@@daytona-metrics - SDK gives static limits (memory/disk quota).
@@ -415,8 +403,6 @@ class DaytonaProvider(SandboxProvider):
             disk_used_gb=disk_used_gb,
             disk_total_gb=disk_total_gb,
         )
-
-    # ==================== Internal ====================
 
     def _get_sandbox(self, session_id: str):
         if session_id not in self._sandboxes:

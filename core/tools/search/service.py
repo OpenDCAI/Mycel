@@ -159,8 +159,6 @@ class SearchService:
             )
         )
 
-    # Path validation
-
     def _validate_path(self, path: str | None) -> tuple[bool, str, Path]:
         if not path:
             return True, "", self.workspace_root
@@ -183,8 +181,6 @@ class SearchService:
             )
 
         return True, "", resolved
-
-    # Grep
 
     def _grep(
         self,
@@ -345,8 +341,6 @@ class SearchService:
 
         return self._paginate("\n".join(lines), head_limit, offset)
 
-    # Glob
-
     def _glob(self, pattern: str, path: str | None = None) -> str:
         ok, error, resolved = self._validate_path(path)
         if not ok:
@@ -375,8 +369,6 @@ class SearchService:
 
         matches.sort(key=lambda x: x[0], reverse=True)
         return "\n".join(filepath for _, filepath in matches)
-
-    # Helpers
 
     @staticmethod
     def _is_excluded(p: Path) -> bool:

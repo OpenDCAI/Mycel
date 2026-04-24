@@ -21,8 +21,6 @@ from backend.threads.message_content import strip_system_tags as _strip_system_t
 
 logger = logging.getLogger(__name__)
 
-# Types — mirror frontend/app/src/api/types.ts
-
 DeltaType = Literal[
     "append_entry",
     "append_segment",
@@ -31,8 +29,6 @@ DeltaType = Literal[
     "full_state",
 ]
 
-
-# Helpers — ported from message-mapper.ts
 
 _TASK_NOTIFICATION_RUN_ID_RE = re.compile(r"<run-id>(.*?)</run-id>", re.IGNORECASE | re.DOTALL)
 _TASK_NOTIFICATION_STATUS_RE = re.compile(r"<status>(.*?)</status>", re.IGNORECASE | re.DOTALL)
@@ -72,9 +68,6 @@ def _reconcile_subagent_stream_status(
             if seg.get("type") == "tool" and stream and stream.get("task_id") == task_id:
                 stream["status"] = status
                 return
-
-
-# Entry builders
 
 
 def _build_tool_segments(tool_calls: list, msg_index: int, now: int) -> list[dict]:
@@ -184,9 +177,6 @@ def _build_hidden_ask_user_answer_entry(
     }
 
 
-# ThreadDisplay — per-thread in-memory state
-
-
 @dataclass
 class ThreadDisplay:
     entries: list[dict] = field(default_factory=list)
@@ -195,16 +185,11 @@ class ThreadDisplay:
     display_seq: int = 0  # monotonic counter for display_delta dedup
 
 
-# DisplayBuilder — owns all display computation
-
-
 class DisplayBuilder:
     """Single source of truth for per-thread ChatEntry[] display state."""
 
     def __init__(self) -> None:
         self._threads: dict[str, ThreadDisplay] = {}
-
-    # --- Public API ---
 
     def get_entries(self, thread_id: str) -> list[dict] | None:
         """Return in-memory entries, or None if not cached (cold start)."""
@@ -303,8 +288,6 @@ class DisplayBuilder:
         """Remove cached display state for a thread."""
         self._threads.pop(thread_id, None)
 
-    # --- Checkpoint handlers (port of message-mapper.ts) ---
-
     def _handle_human(
         self,
         msg: dict,
@@ -317,7 +300,6 @@ class DisplayBuilder:
         display = msg.get("display") or {}
         meta = msg.get("metadata") or {}
 
-        # Hidden
         if display.get("showing") is False:
             ask_answered = meta.get("ask_user_question_answered")
             if isinstance(ask_answered, dict):
@@ -340,7 +322,6 @@ class DisplayBuilder:
             if task_id and task_status:
                 _reconcile_subagent_stream_status(entries, current_turn, task_id, task_status)
 
-            # Fold into current turn if same run
             if current_turn and (not msg_run_id or msg_run_id == current_run_id):
                 current_turn["segments"].append(
                     {
@@ -351,7 +332,6 @@ class DisplayBuilder:
                 )
                 return current_turn, current_run_id
 
-            # Standalone notice
             entries.append(
                 {
                     "id": msg.get("id") or f"hist-notice-{i}",
@@ -487,7 +467,6 @@ def _handle_run_start(td: ThreadDisplay, data: dict) -> dict | None:
     run_id = data.get("run_id")
     now = int(time.time() * 1000)
 
-    # External notification run: reopen last assistant turn (fold into it)
     if source and source != "owner":
         for entry in reversed(td.entries):
             if entry.get("role") == "assistant":
@@ -497,7 +476,6 @@ def _handle_run_start(td: ThreadDisplay, data: dict) -> dict | None:
                 # No delta — the turn already exists in the frontend's entries.
                 # Subsequent deltas (append_segment) will target this turn.
                 return None
-        # No previous turn — fall through to create new
 
     turn_id = _make_id("turn")
     turn = _create_streaming_turn(turn_id, now)
@@ -518,7 +496,6 @@ def _handle_text(td: ThreadDisplay, data: dict) -> dict | None:
 
     segments = turn["segments"]
     if segments and segments[-1].get("type") == "text":
-        # Append to existing text segment
         segments[-1]["content"] += content
         return {
             "type": "update_segment",
@@ -526,7 +503,6 @@ def _handle_text(td: ThreadDisplay, data: dict) -> dict | None:
             "patch": {"append_content": content},
         }
 
-    # New text segment
     seg = {"type": "text", "content": content}
     segments.append(seg)
     return {"type": "append_segment", "segment": seg}
@@ -607,12 +583,10 @@ def _handle_notice(td: ThreadDisplay, data: dict) -> dict | None:
         # instead of waiting for a later cold rebuild from checkpoint.
         _reconcile_subagent_stream_status(td.entries, turn, task_id, task_status)
     if turn:
-        # Fold into current turn
         seg = {"type": "notice", "content": content, "notification_type": ntype}
         turn["segments"].append(seg)
         return {"type": "append_segment", "segment": seg}
 
-    # Standalone notice
     entry: dict = {
         "id": _make_id("notice"),
         "role": "notice",
@@ -633,7 +607,6 @@ def _handle_finalize(td: ThreadDisplay, _data: dict | None = None) -> dict | Non
     now = int(time.time() * 1000)
     turn["streaming"] = False
     turn["endTimestamp"] = now
-    # Remove retry segments
     turn["segments"] = [s for s in turn["segments"] if s.get("type") != "retry"]
     td.current_turn_id = None
     return {"type": "finalize_turn", "timestamp": now}
@@ -689,7 +662,6 @@ def _handle_retry(td: ThreadDisplay, data: dict) -> dict | None:
         "maxAttempts": data.get("max_attempts", 10),
         "waitSeconds": data.get("wait_seconds", 0),
     }
-    # Replace existing retry
     turn["segments"] = [s for s in turn["segments"] if s.get("type") != "retry"]
     turn["segments"].append(seg)
     return {"type": "append_segment", "segment": seg}
