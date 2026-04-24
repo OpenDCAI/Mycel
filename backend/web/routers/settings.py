@@ -76,9 +76,7 @@ def _load_workspace_settings(repo: Any, user_id: str) -> WorkspaceSettings:
     )
 
 
-# ============================================================================
 # Models config (models.json)
-# ============================================================================
 
 
 def _load_merged_models_for_storage(repo: Any, user_id: str) -> ModelsConfig:

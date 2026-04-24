@@ -40,10 +40,6 @@ from core.tools.tool_search.service import ToolSearchService
 from core.tools.web.service import WebService
 from sandbox.interfaces.filesystem import DirListResult, FileReadResult, FileSystemBackend, FileWriteResult
 
-# ---------------------------------------------------------------------------
-# ToolRegistry
-# ---------------------------------------------------------------------------
-
 
 class TestToolRegistry:
     def _make_entry(self, name: str, mode: ToolMode = ToolMode.INLINE) -> ToolEntry:
@@ -166,11 +162,6 @@ def test_inline_schemas_strip_runtime_only_schema_metadata():
     [schema] = reg.get_inline_schemas()
 
     assert "x-leon-required-any-of" not in schema["parameters"]
-
-
-# ---------------------------------------------------------------------------
-# ToolValidator
-# ---------------------------------------------------------------------------
 
 
 class TestToolValidator:
@@ -351,11 +342,6 @@ class TestToolValidator:
         assert "at most" in str(exc_info.value)
         assert exc_info.value.error_code == "NUMBER_TOO_LARGE"
         assert exc_info.value.details[0]["field"] == "timeout"
-
-
-# ---------------------------------------------------------------------------
-# ToolRunner — P0 error normalization
-# ---------------------------------------------------------------------------
 
 
 def _make_runner(entries: list[ToolEntry]) -> ToolRunner:
@@ -2184,11 +2170,6 @@ class TestToolRunnerInlineInjection:
         runner = _make_runner([deferred])
         schemas = runner._registry.get_inline_schemas()
         assert all(s["name"] != "TaskCreate" for s in schemas)
-
-
-# ---------------------------------------------------------------------------
-# P1: service-declared tool modes
-# ---------------------------------------------------------------------------
 
 
 class TestServiceDeclaredToolModes:

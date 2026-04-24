@@ -121,11 +121,6 @@ async def delete_avatar(
     return {"status": "ok"}
 
 
-# ---------------------------------------------------------------------------
-# User chat candidates
-# ---------------------------------------------------------------------------
-
-
 def _relationship_states_for_user(relationship_service: Any, user_id: str) -> dict[str, str]:
     if relationship_service is None:
         raise HTTPException(503, "chat bootstrap not attached: relationship_service")

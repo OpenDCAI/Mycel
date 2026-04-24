@@ -12,10 +12,6 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from langchain_core.messages import AIMessage, AIMessageChunk, HumanMessage, SystemMessage, ToolMessage
 
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-
 
 def _mock_model(text="Integration test response"):
     """Create a mock LangChain model that returns a plain AIMessage."""
@@ -298,11 +294,6 @@ def test_create_leon_agent_defaults_to_process_local_agent_registry(monkeypatch,
         assert "agent_registry" not in captured
     finally:
         agent.close()
-
-
-# ---------------------------------------------------------------------------
-# Integration Tests
-# ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio

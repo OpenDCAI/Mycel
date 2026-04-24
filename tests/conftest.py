@@ -54,7 +54,6 @@ def _unlink_db(db_path: Path) -> None:
 
 @pytest.fixture
 def temp_db(tmp_path):
-    """Provide a temporary SQLite database path with Windows-safe cleanup."""
     db_path = tmp_path / "test.db"
     yield db_path
     _unlink_db(db_path)
