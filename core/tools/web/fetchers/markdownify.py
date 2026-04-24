@@ -106,7 +106,6 @@ class MarkdownifyFetcher(BaseFetcher):
         return result
 
     def _process_html(self, html: str, result: FetchResult) -> str:
-        """Process HTML content to Markdown or plain text."""
         if self.has_markdownify:
             return self._markdownify_html(html, result)
         if self.has_bs4:
@@ -114,7 +113,6 @@ class MarkdownifyFetcher(BaseFetcher):
         return self._basic_extract(html, result)
 
     def _markdownify_html(self, html: str, result: FetchResult) -> str:
-        """Convert HTML to Markdown using markdownify."""
         if md is None:
             raise RuntimeError("markdownify import unexpectedly unavailable")
         if self.has_bs4:
@@ -149,7 +147,6 @@ class MarkdownifyFetcher(BaseFetcher):
         return content.strip()
 
     def _bs4_extract(self, html: str, result: FetchResult) -> str:
-        """Extract text using BeautifulSoup."""
         if BeautifulSoup is None:
             raise RuntimeError("BeautifulSoup import unexpectedly unavailable")
         soup = BeautifulSoup(html, "html.parser")

@@ -91,7 +91,6 @@ def _read_image(path: Path, size: int, mime_type: str) -> ReadResult:
 
 
 def _format_size(size: int) -> str:
-    """Format file size in human-readable form."""
     for unit in ("B", "KB", "MB", "GB"):
         if size < 1024:
             return f"{size:.1f} {unit}" if unit != "B" else f"{size} {unit}"

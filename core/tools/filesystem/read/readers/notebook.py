@@ -96,7 +96,6 @@ def read_notebook(
 
 
 def _format_cell(cell: dict, cell_num: int, total_cells: int) -> str:
-    """Format a single notebook cell."""
     cell_type = cell.get("cell_type", "unknown")
     source = cell.get("source", [])
 
@@ -134,7 +133,6 @@ def _format_cell(cell: dict, cell_num: int, total_cells: int) -> str:
 
 
 def _format_output(output: dict) -> str:
-    """Format a cell output."""
     output_type = output.get("output_type", "")
 
     if output_type == "stream":
