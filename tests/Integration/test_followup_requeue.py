@@ -16,7 +16,6 @@ from core.runtime.middleware.queue.manager import MessageQueueManager
 
 @pytest.fixture()
 def queue_manager(tmp_path):
-    """Real MessageQueueManager backed by a temp SQLite DB."""
     qm = MessageQueueManager(db_path=str(tmp_path / "queue.db"))
     yield qm
 

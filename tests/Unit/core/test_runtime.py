@@ -29,7 +29,6 @@ from storage.providers.sqlite.terminal_repo import SQLiteTerminalRepo
 
 @pytest.fixture
 def terminal_store(temp_db):
-    """Create SQLiteTerminalRepo with temp database."""
     repo = SQLiteTerminalRepo(db_path=temp_db)
     yield repo
     repo.close()

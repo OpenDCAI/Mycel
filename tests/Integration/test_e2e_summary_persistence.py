@@ -31,14 +31,12 @@ def _memory_middleware(agent):
 
 @pytest.fixture
 def test_db_path(tmp_path):
-    """Create a temporary database for testing."""
     db_path = tmp_path / "test_e2e_summary.db"
     return str(db_path)
 
 
 @pytest.fixture
 def temp_workspace(tmp_path):
-    """Create a temporary workspace."""
     workspace = tmp_path / "workspace"
     workspace.mkdir()
     return str(workspace)

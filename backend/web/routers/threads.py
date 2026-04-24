@@ -1310,9 +1310,7 @@ SSE_HEADERS = {
 }
 
 
-# ---------------------------------------------------------------------------
 # Persistent thread event stream (replaces /runs/events + /activity/events)
-# ---------------------------------------------------------------------------
 
 
 @router.get("/{thread_id}/events")
@@ -1386,9 +1384,7 @@ async def cancel_run(
     return {"ok": True, "message": "Run cancellation requested"}
 
 
-# ---------------------------------------------------------------------------
 # Background Run API - exposes agent._background_runs to the frontend
-# ---------------------------------------------------------------------------
 
 
 def _get_background_runs(app: Any, thread_id: str) -> dict:
