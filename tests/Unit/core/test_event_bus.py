@@ -1,5 +1,3 @@
-"""Tests for backend/web/event_bus.py (P2 multi-agent event routing)."""
-
 from __future__ import annotations
 
 import asyncio

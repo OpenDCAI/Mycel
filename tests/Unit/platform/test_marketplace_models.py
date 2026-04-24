@@ -1,5 +1,3 @@
-"""Tests for Marketplace Pydantic models."""
-
 import pytest
 from pydantic import ValidationError
 

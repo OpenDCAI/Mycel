@@ -1,5 +1,3 @@
-"""Tests for model config enrichment (based_on + context_limit)."""
-
 import importlib
 
 import pytest
@@ -10,7 +8,6 @@ from core.runtime.middleware.monitor import cost as cost_module
 from core.runtime.middleware.monitor.cost import fetch_openrouter_pricing, get_model_context_limit
 from core.runtime.middleware.monitor.middleware import MonitorMiddleware
 
-# Ensure OpenRouter cache is populated (same as MonitorMiddleware.__init__)
 fetch_openrouter_pricing()
 SONNET_LIMIT = get_model_context_limit("claude-sonnet-4.5")
 DEFAULT_LIMIT = 128000

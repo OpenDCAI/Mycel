@@ -1,5 +1,3 @@
-"""Unit tests for core.runtime.loop QueryLoop."""
-
 import asyncio
 import importlib
 import json
@@ -1014,9 +1012,6 @@ async def test_tool_call_yields_agent_then_tools():
     async for chunk in loop.astream({"messages": [{"role": "user", "content": "call echo"}]}):
         chunks.append(chunk)
 
-    # First chunk: agent (with tool_calls)
-    # Second chunk: tools (ToolMessage results)
-    # Third chunk: agent (final text response)
     agent_chunks = [c for c in chunks if "agent" in c]
     tools_chunks = [c for c in chunks if "tools" in c]
 
@@ -1086,7 +1081,6 @@ async def test_max_turns_stops_loop():
         is_concurrency_safe=True,
     )
 
-    # Build a model that always returns a tool call
     tool_call_msg = AIMessage(
         content="",
         tool_calls=[{"name": "noop", "args": {}, "id": "tc-1"}],

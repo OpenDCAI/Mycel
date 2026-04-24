@@ -1,5 +1,3 @@
-"""End-to-end tests for Daytona sandbox."""
-
 import asyncio
 import os
 import tempfile
@@ -18,7 +16,6 @@ pytestmark = pytest.mark.skipif(
 
 @pytest.fixture
 def daytona_sandbox():
-    """Create a Daytona sandbox for testing."""
     config = SandboxConfig(
         provider="daytona",
         on_exit="destroy",
@@ -34,8 +31,6 @@ def daytona_sandbox():
 
 
 class TestDaytonaSandboxE2E:
-    """End-to-end tests for Daytona sandbox."""
-
     def test_file_operations(self, daytona_sandbox):
         thread_id = "test-daytona-files"
         set_current_thread_id(thread_id)

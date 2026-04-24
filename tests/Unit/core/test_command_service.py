@@ -1,5 +1,3 @@
-"""Tests for command executors, hooks, and CommandService."""
-
 import asyncio
 from unittest.mock import MagicMock
 

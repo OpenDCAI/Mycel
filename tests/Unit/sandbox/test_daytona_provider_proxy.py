@@ -1,5 +1,3 @@
-"""Unit tests for Daytona local toolbox URL normalization."""
-
 import sys
 from types import ModuleType
 from typing import Any, cast
