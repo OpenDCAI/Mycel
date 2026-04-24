@@ -365,9 +365,7 @@ class QueryLoop:
         self.last_terminal: TerminalState | None = None
         self.last_continue: ContinueState | None = None
 
-    # -------------------------------------------------------------------------
     # Public streaming interface (LangGraph-compatible)
-    # -------------------------------------------------------------------------
 
     async def query(
         self,
@@ -764,9 +762,7 @@ class QueryLoop:
         messages = list(self._app_state.messages) if self._app_state is not None else await self._load_messages(thread_id)
         await self._save_messages(thread_id, messages)
 
-    # -------------------------------------------------------------------------
     # Model invocation through middleware chain
-    # -------------------------------------------------------------------------
 
     async def _invoke_model(
         self,
@@ -1561,9 +1557,7 @@ class QueryLoop:
         )
         return finish_reason in {"length", "max_tokens", "max_output_tokens"}
 
-    # -------------------------------------------------------------------------
     # Tool execution through middleware chain
-    # -------------------------------------------------------------------------
 
     async def _execute_tools(
         self,
@@ -1770,9 +1764,7 @@ class QueryLoop:
             return None
         return normalized
 
-    # -------------------------------------------------------------------------
     # Checkpointer persistence
-    # -------------------------------------------------------------------------
 
     async def _load_messages(self, thread_id: str) -> list:
         """Load message history from checkpointer (if available)."""
@@ -2094,9 +2086,7 @@ class QueryLoop:
             self._bootstrap.parent_session_id = old_session_id
             self._bootstrap.session_id = uuid.uuid4().hex
 
-    # -------------------------------------------------------------------------
     # Input parsing
-    # -------------------------------------------------------------------------
 
     @staticmethod
     def _parse_input(input: dict | None) -> list:
@@ -2216,9 +2206,7 @@ class QueryLoop:
         return AIMessage(content=reply)
 
 
-# -------------------------------------------------------------------------
 # Closure helpers (avoid late-binding bugs in loop-built lambdas)
-# -------------------------------------------------------------------------
 
 
 def _make_model_wrapper(mw: AgentMiddleware, next_handler):
@@ -2239,7 +2227,6 @@ def _make_tool_wrapper(mw: AgentMiddleware, next_handler):
     return wrapper
 
 
-# -------------------------------------------------------------------------
 # Middleware override detection helpers
 def _mw_overrides_model_call(mw: AgentMiddleware) -> bool:
     """True if mw actually overrides awrap_model_call (not just inherits the base stub)."""

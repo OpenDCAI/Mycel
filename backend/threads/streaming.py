@@ -86,9 +86,6 @@ async def _emit_queued_terminal_followups(
     )
 
 
-# Producer: runs agent, writes events to ThreadEventBuffer
-
-
 async def _run_agent_to_buffer(  # pyright: ignore[reportGeneralTypeIssues]  # @@@nu59-complexity-honesty
     agent: Any,
     thread_id: str,
@@ -132,15 +129,9 @@ async def _run_agent_to_buffer(  # pyright: ignore[reportGeneralTypeIssues]  # @
     )
 
 
-# Followup queue consumption (extracted for testability)
-
-
 async def _consume_followup_queue(agent: Any, thread_id: str, app: Any) -> None:
     _run_followups._start_agent_run = start_agent_run
     await _run_followups.consume_followup_queue(agent, thread_id, app)
-
-
-# Orchestrator: creates run on persistent ThreadEventBuffer
 
 
 def start_agent_run(

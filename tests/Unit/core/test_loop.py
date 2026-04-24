@@ -23,10 +23,6 @@ from core.runtime.registry import ToolEntry, ToolMode, ToolRegistry
 from core.runtime.state import AppState, BootstrapConfig, ToolPermissionState
 from storage.providers.sqlite.kernel import connect_sqlite_async
 
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-
 
 def make_registry(*entries):
     reg = ToolRegistry()
@@ -425,11 +421,6 @@ async def test_query_loop_rebuilds_turn_local_tool_context_each_tool_turn():
     assert len(capture.turn_ids) == 2
     assert capture.turn_ids[0] != capture.turn_ids[1]
     assert capture.trigger_snapshots == [set(), set()]
-
-
-# ---------------------------------------------------------------------------
-# Tests: no tool calls → single agent chunk
-# ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
@@ -1000,11 +991,6 @@ async def test_query_loop_aclear_deletes_persisted_summary_for_thread():
     assert mm.summary_store.get_latest_summary("clear-summary-thread") is None
 
 
-# ---------------------------------------------------------------------------
-# Tests: with tool calls → agent chunk + tools chunk
-# ---------------------------------------------------------------------------
-
-
 @pytest.mark.asyncio
 async def test_tool_call_yields_agent_then_tools():
     model = mock_model_with_tool_call()
@@ -1084,11 +1070,6 @@ def test_tool_concurrency_safety_does_not_infer_from_read_only():
     assert loop._tool_is_concurrency_safe({"name": "readonly_serial", "args": {}}) is False
 
 
-# ---------------------------------------------------------------------------
-# Tests: max_turns guard
-# ---------------------------------------------------------------------------
-
-
 @pytest.mark.asyncio
 async def test_max_turns_stops_loop():
     """Agent that hits max_turns should fail loudly on the caller-facing astream surface."""
@@ -1121,11 +1102,6 @@ async def test_max_turns_stops_loop():
             pass
 
     assert model.ainvoke.call_count == 3
-
-
-# ---------------------------------------------------------------------------
-# Tests: input parsing
-# ---------------------------------------------------------------------------
 
 
 def test_parse_input_dict_messages():

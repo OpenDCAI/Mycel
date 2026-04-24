@@ -41,12 +41,10 @@ class AuthService:
         self._contact_repo = contact_repo
         self._recipe_repo = recipe_repo
 
-    # ------------------------------------------------------------------
     # Registration flow (standard Supabase signUp)
     # Step 1: send_otp(email, password) → signUp creates user, GoTrue sends OTP
     # Step 2: verify_register_otp(...)  → verifyOtp(type:signup), returns temp_token
     # Step 3: complete_register(...)    → validate invite, create user + agent records
-    # ------------------------------------------------------------------
 
     def send_otp(self, email: str, password: str, invite_code: str) -> None:
         """Validate invite code, create user via signUp (sends confirmation OTP to email)."""
@@ -209,9 +207,7 @@ class AuthService:
         except jwt.InvalidTokenError as e:
             raise ValueError(f"Token 无效: {e}")
 
-    # ------------------------------------------------------------------
     # Internal helpers
-    # ------------------------------------------------------------------
 
     def _resolve_email(self, identifier: str) -> str:
         """Turn mycel_id (numeric string) or email into email address."""

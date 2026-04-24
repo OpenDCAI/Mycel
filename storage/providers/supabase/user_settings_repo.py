@@ -63,8 +63,6 @@ class SupabaseUserSettingsRepo:
     def set_default_model(self, user_id: str, model: str) -> None:
         self._upsert(user_id, {"default_model": model})
 
-    # Models config (JSONB)
-
     def get_models_config(self, user_id: str) -> dict[str, Any] | None:
         rows = q.rows(self._table().select("models_config").eq("user_id", user_id).execute(), _REPO, "get_models_config")
         if not rows:

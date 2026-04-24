@@ -35,8 +35,6 @@ class MessageQueueManager:
         self._wake_handlers: dict[str, Callable[[QueueItem], None]] = {}
         self._wake_lock = threading.Lock()
 
-    # Core operations
-
     def enqueue(
         self,
         content: str,
@@ -91,8 +89,6 @@ class MessageQueueManager:
         """List all pending messages (for API queries)."""
         return self._repo.list_queue(thread_id)
 
-    # Wake handler registration
-
     def register_wake(self, thread_id: str, handler: Callable[[QueueItem], None]) -> None:
         """Register a wake handler for a thread.
 
@@ -107,8 +103,6 @@ class MessageQueueManager:
         with self._wake_lock:
             self._wake_handlers.pop(thread_id, None)
 
-    # Cleanup
-
     def clear_queue(self, thread_id: str) -> None:
         """Clear persisted queue for a thread."""
         self._repo.clear_queue(thread_id)
@@ -117,8 +111,6 @@ class MessageQueueManager:
         """Clear queue and unregister wake handler for a thread."""
         self.clear_queue(thread_id)
         self.unregister_wake(thread_id)
-
-    # Diagnostics
 
     def queue_sizes(self, thread_id: str) -> dict[str, int]:
         """Return persisted queue sizes."""
