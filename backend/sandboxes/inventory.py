@@ -1,5 +1,3 @@
-"""Shared sandbox inventory helpers."""
-
 from __future__ import annotations
 
 import logging

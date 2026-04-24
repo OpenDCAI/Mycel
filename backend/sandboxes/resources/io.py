@@ -1,5 +1,3 @@
-"""Shared resource refresh and sandbox file IO helpers."""
-
 from __future__ import annotations
 
 from typing import Any
@@ -89,7 +87,6 @@ def read_sandbox(
     make_sandbox_monitor_repo_fn=make_sandbox_monitor_repo,
     build_provider_from_config_name_fn=build_provider_from_config_name,
 ) -> dict[str, Any]:
-    """Read a file from a sandbox via its provider."""
     provider, instance_id = _resolve_sandbox_provider(
         sandbox_id,
         make_sandbox_monitor_repo_fn=make_sandbox_monitor_repo_fn,
