@@ -7,15 +7,6 @@ from core.tools.web.types import SearchItem, SearchResult
 
 
 class ExaSearcher(BaseSearcher):
-    """
-    Searcher using Exa API.
-
-    Features:
-    - Semantic AI-powered search
-    - Good for academic/deep content
-    - Neural search capabilities
-    """
-
     API_URL = "https://api.exa.ai/search"
 
     def __init__(
@@ -34,7 +25,6 @@ class ExaSearcher(BaseSearcher):
         include_domains: list[str] | None = None,
         exclude_domains: list[str] | None = None,
     ) -> SearchResult:
-        """Search using Exa API."""
         result = SearchResult(query=query)
 
         try:
@@ -83,7 +73,5 @@ class ExaSearcher(BaseSearcher):
             result.error = f"Exa API error {e.response.status_code}"
         except httpx.RequestError as e:
             result.error = f"Search error: {e}"
-        except Exception as e:
-            result.error = f"Unexpected error: {e}"
 
         return result
