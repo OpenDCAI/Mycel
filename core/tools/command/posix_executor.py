@@ -1,5 +1,3 @@
-"""Shared persistent-shell executor for POSIX shells."""
-
 from __future__ import annotations
 
 import asyncio

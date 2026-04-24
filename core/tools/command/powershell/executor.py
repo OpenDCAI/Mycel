@@ -1,5 +1,3 @@
-"""PowerShell executor implementation for Windows."""
-
 from __future__ import annotations
 
 import asyncio

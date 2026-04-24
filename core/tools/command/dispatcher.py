@@ -1,5 +1,3 @@
-"""Dispatcher to select appropriate executor based on OS."""
-
 from __future__ import annotations
 
 import platform

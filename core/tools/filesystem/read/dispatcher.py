@@ -1,5 +1,3 @@
-"""Dispatcher for file reading based on file type."""
-
 from __future__ import annotations
 
 from pathlib import Path

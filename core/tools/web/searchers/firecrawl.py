@@ -1,5 +1,3 @@
-"""Firecrawl searcher - web crawling and search."""
-
 from __future__ import annotations
 
 import httpx

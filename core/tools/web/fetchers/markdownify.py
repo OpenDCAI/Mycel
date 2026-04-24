@@ -1,5 +1,3 @@
-"""Markdownify fetcher - local HTML to Markdown conversion."""
-
 from __future__ import annotations
 
 import re

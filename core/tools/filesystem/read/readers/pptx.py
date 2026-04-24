@@ -1,5 +1,3 @@
-"""PowerPoint file reader using python-pptx (optional dependency)."""
-
 from __future__ import annotations
 
 from pathlib import Path
