@@ -1,15 +1,3 @@
-"""Sandbox — infrastructure layer for execution environments.
-
-Usage:
-    from sandbox import create_sandbox, Sandbox, SandboxConfig
-
-    config = SandboxConfig.load("agentbay")
-    sbx = create_sandbox(config, db_path=db_path)
-
-    FileSystemService(backend=sbx.fs())
-    CommandService(executor=sbx.shell())
-"""
-
 from __future__ import annotations
 
 import logging

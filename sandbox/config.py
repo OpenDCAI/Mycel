@@ -1,8 +1,3 @@
-"""Sandbox configuration.
-
-Priority: --sandbox <name> > LEON_SANDBOX env > "local" (default)
-"""
-
 from __future__ import annotations
 
 import json

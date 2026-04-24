@@ -1,9 +1,3 @@
-"""CleanupRegistry — priority-ordered async cleanup executor for LeonAgent lifecycle.
-
-Aligned with CC Pattern 5: Lifecycle & Cleanup.
-Priority numbers: lower = runs first.
-"""
-
 from __future__ import annotations
 
 import asyncio
@@ -25,7 +19,6 @@ class CleanupRegistry:
     """
 
     def __init__(self):
-        # List of (priority, fn) — not a dict because same priority can have multiple fns
         self._entries: list[tuple[int, Callable[[], Awaitable[None] | None]]] = []
         self._timeout_s = 2.0
         self._cleanup_task: asyncio.Task[None] | None = None

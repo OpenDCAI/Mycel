@@ -1,11 +1,3 @@
-"""ChatSession - lifecycle/policy envelope for PhysicalTerminalRuntime.
-
-Architecture:
-    Thread (durable) -> ChatSession (policy window) -> PhysicalTerminalRuntime (ephemeral)
-                     -> AbstractTerminal (reference)
-                     -> SandboxRuntimeHandle (reference)
-"""
-
 from __future__ import annotations
 
 import asyncio

@@ -1,9 +1,3 @@
-"""Sandbox runtime time helpers.
-
-Current mainline runtime storage is Supabase-backed and returns timestamptz.
-Keep sandbox/session math in one UTC-aware domain instead of mixing naive and aware datetimes.
-"""
-
 from __future__ import annotations
 
 from datetime import UTC, datetime

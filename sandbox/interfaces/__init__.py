@@ -1,8 +1,3 @@
-"""Sandbox interfaces — ABC + data classes for executor and filesystem.
-
-Re-exports everything from executor and filesystem submodules.
-"""
-
 from sandbox.interfaces.executor import (
     AsyncCommand,
     BaseExecutor,
@@ -17,11 +12,9 @@ from sandbox.interfaces.filesystem import (
 )
 
 __all__ = [
-    # Executor
     "BaseExecutor",
     "ExecuteResult",
     "AsyncCommand",
-    # Filesystem
     "FileSystemBackend",
     "FileReadResult",
     "FileWriteResult",

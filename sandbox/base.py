@@ -1,10 +1,3 @@
-"""Sandbox ABC, LocalSandbox, and RemoteSandbox — unified interface for execution environments.
-
-A Sandbox bundles sub-capabilities by interaction surface:
-- fs()    → FileSystemBackend  (consumed by FileSystemService)
-- shell() → BaseExecutor       (consumed by CommandService)
-"""
-
 from __future__ import annotations
 
 import asyncio
