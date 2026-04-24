@@ -8,12 +8,6 @@ from .state import BootstrapConfig, ToolUseContext
 
 
 def fork_context(parent: BootstrapConfig) -> BootstrapConfig:
-    """Create a child BootstrapConfig for a sub-agent.
-
-    Inherits all workspace identity, model settings, and security flags
-    from parent. Generates a fresh session_id and sets parent_session_id.
-    Messages, cost, and turn_count live in AppState — not here.
-    """
     return BootstrapConfig(
         workspace_root=parent.workspace_root,
         original_cwd=parent.original_cwd,
@@ -46,15 +40,6 @@ def create_subagent_context(
     *,
     share_set_app_state: bool = False,
 ) -> ToolUseContext:
-    """Create a minimally isolated ToolUseContext for sub-agents.
-
-    Default contract:
-    - bootstrap: fresh fork
-    - set_app_state: NO-OP
-    - set_app_state_for_tasks: always reaches the root/session store
-    - turn-local refs: fresh
-    - file cache/messages: cloned snapshots
-    """
     read_file_state = parent.read_file_state
     if hasattr(read_file_state, "clone") and callable(read_file_state.clone):
         cloned_read_file_state = read_file_state.clone()

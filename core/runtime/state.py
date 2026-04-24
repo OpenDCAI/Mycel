@@ -20,12 +20,6 @@ class ToolPermissionState(BaseModel):
 
 
 class BootstrapConfig(BaseModel):
-    """Process-level configuration that survives /clear.
-
-    Analogous to CC Bootstrap State (~85 fields). Contains workspace
-    identity, model config, security flags, and API credentials.
-    """
-
     workspace_root: Path
     original_cwd: Path | None = None
     project_root: Path | None = None
@@ -71,12 +65,6 @@ class BootstrapConfig(BaseModel):
 
 
 class AppState(BaseModel):
-    """Per-session mutable state. Analogous to CC AppState store.
-
-    Implements a minimal Zustand-style store with getState/setState.
-    Not reactive — no subscriptions needed for Python backend.
-    """
-
     messages: list = Field(default_factory=list)
     turn_count: int = 0
     total_cost: float = 0.0
@@ -138,12 +126,6 @@ PermissionResolutionConsumer = Callable[
 
 
 class ToolUseContext(BaseModel):
-    """Per-turn context bag. Analogous to CC ToolUseContext.
-
-    Carries live closures to AppState so tools can read/mutate session state.
-    Sub-agents receive a NO-OP set_app_state to prevent write-through.
-    """
-
     bootstrap: BootstrapConfig
     get_app_state: AppStateGetter = Field(exclude=True)
     set_app_state: AppStateSetter = Field(exclude=True)
