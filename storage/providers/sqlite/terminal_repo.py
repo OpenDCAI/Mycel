@@ -1,5 +1,3 @@
-"""SQLite repository for abstract terminal persistence."""
-
 from __future__ import annotations
 
 import sqlite3

@@ -1,5 +1,3 @@
-"""SQLite repository for message queue persistence."""
-
 from __future__ import annotations
 
 import sqlite3

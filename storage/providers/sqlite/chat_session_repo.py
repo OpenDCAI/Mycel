@@ -1,5 +1,3 @@
-"""SQLite repository for chat session persistence."""
-
 from __future__ import annotations
 
 import sqlite3
