@@ -21,18 +21,6 @@ def read_pdf(
     start_page: int | None = None,
     limit_pages: int | None = None,
 ) -> ReadResult:
-    """
-    Read PDF file with page-based pagination.
-
-    Args:
-        path: Absolute path to PDF file
-        limits: ReadLimits configuration (max_chars applies to total output)
-        start_page: Start page (1-indexed, None = start from page 1)
-        limit_pages: Number of pages to read (None = default 10 pages)
-
-    Returns:
-        ReadResult with extracted text and metadata
-    """
     if not HAS_PYMUPDF:
         return _no_pymupdf_result(path)
     if _pymupdf is None:

@@ -12,18 +12,6 @@ def read_notebook(
     start_cell: int | None = None,
     limit_cells: int | None = None,
 ) -> ReadResult:
-    """
-    Read Jupyter Notebook with cell-based pagination.
-
-    Args:
-        path: Absolute path to .ipynb file
-        limits: ReadLimits configuration (max_chars applies to total output)
-        start_cell: Start cell (0-indexed, None = start from cell 0)
-        limit_cells: Number of cells to read (None = default 50 cells)
-
-    Returns:
-        ReadResult with formatted cells and metadata
-    """
     stat = path.stat()
     result = ReadResult(
         file_path=str(path),

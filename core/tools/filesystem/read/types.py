@@ -15,13 +15,6 @@ class FileType(Enum):
 
 @dataclass
 class ReadLimits:
-    """Limits for file reading to prevent excessive token usage.
-
-    Two layers of limits:
-    - max_size_bytes / max_tokens: Hard-reject when no offset/limit specified (bypassed with offset/limit)
-    - max_lines / max_chars: Per-read limits (always enforced)
-    """
-
     max_lines: int = 2000
     max_chars: int = 200_000
     max_line_length: int = 2000

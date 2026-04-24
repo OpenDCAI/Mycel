@@ -22,26 +22,6 @@ def read_file(
     limit: int | None = None,
     pages: str | None = None,
 ) -> ReadResult:
-    """
-    Read file with type-specific handling.
-
-    Dispatches to appropriate reader based on file type:
-    - TEXT: read_text with triple limits
-    - BINARY: read_binary (metadata only)
-    - DOCUMENT: PDF/PPTX readers, unsupported summary for other documents
-    - NOTEBOOK: notebook reader
-    - ARCHIVE: unsupported summary
-
-    Args:
-        path: Absolute path to file
-        limits: ReadLimits configuration (uses defaults if None)
-        offset: Start line for text files (1-indexed)
-        limit: Number of lines for text files
-        pages: Optional page range for document files, e.g. "1" or "3-5"
-
-    Returns:
-        ReadResult with content and metadata
-    """
     if limits is None:
         limits = ReadLimits()
 
@@ -125,7 +105,6 @@ def _read_document(
     start_page: int | None = None,
     limit_pages: int | None = None,
 ) -> ReadResult:
-    """Dispatch document reading based on extension."""
     ext = path.suffix.lstrip(".").lower()
 
     if ext == "pdf":

@@ -19,18 +19,6 @@ def read_pptx(
     start_slide: int | None = None,
     limit_slides: int | None = None,
 ) -> ReadResult:
-    """
-    Read PowerPoint file with slide-based pagination.
-
-    Args:
-        path: Absolute path to PPTX file
-        limits: ReadLimits configuration (max_chars applies to total output)
-        start_slide: Start slide (1-indexed, None = start from slide 1)
-        limit_slides: Number of slides to read (None = default 20 slides)
-
-    Returns:
-        ReadResult with extracted text and metadata
-    """
     if not HAS_PPTX:
         return _no_pptx_result(path)
 
