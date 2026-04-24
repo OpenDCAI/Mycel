@@ -1,5 +1,3 @@
-"""Profile CRUD — config.json based, with auth-user override for signed-in shell."""
-
 import json
 from pathlib import Path
 from typing import Any

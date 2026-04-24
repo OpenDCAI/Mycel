@@ -1,5 +1,3 @@
-"""Shared library path owner."""
-
 from __future__ import annotations
 
 from pathlib import Path

@@ -1,5 +1,3 @@
-"""Authentication service — Supabase Auth backed register, login, JWT verify."""
-
 from __future__ import annotations
 
 import logging

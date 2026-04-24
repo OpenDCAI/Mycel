@@ -1,5 +1,3 @@
-"""User-visible resource projection over shared resource facts."""
-
 from __future__ import annotations
 
 from datetime import UTC, datetime

@@ -1,5 +1,3 @@
-"""Shared provider display and row payload contracts."""
-
 from __future__ import annotations
 
 from typing import Any

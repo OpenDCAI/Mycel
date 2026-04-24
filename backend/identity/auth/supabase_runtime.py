@@ -1,5 +1,3 @@
-"""Neutral Supabase runtime client factories for storage and auth wiring."""
-
 from __future__ import annotations
 
 import os

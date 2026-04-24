@@ -1,5 +1,3 @@
-"""Library CRUD for file-backed assets and DB-backed sandbox templates."""
-
 import json
 import shutil
 import time
