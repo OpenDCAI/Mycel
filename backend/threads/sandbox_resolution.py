@@ -6,7 +6,6 @@ from sandbox.manager import lookup_sandbox_for_thread
 
 
 def resolve_thread_sandbox(app_obj: Any, thread_id: str) -> str:
-    """Look up sandbox type for a thread: memory cache -> repo -> sandbox DB -> default local."""
     mapping = app_obj.state.thread_sandbox
     if thread_id in mapping:
         return mapping[thread_id]

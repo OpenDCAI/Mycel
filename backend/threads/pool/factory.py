@@ -24,7 +24,6 @@ def create_agent_sync(
     models_config_override: dict[str, Any] | None = None,
     memory_config_override: dict[str, Any] | None = None,
 ) -> Any:
-    """Create a LeonAgent with the given sandbox. Runs in a thread."""
     storage_container = build_storage_container()
     # @@@web-file-ops-repo - inject storage-backed repo so file_operations route to correct provider.
     from core.operations import FileOperationRecorder, set_recorder

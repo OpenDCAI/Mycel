@@ -10,7 +10,6 @@ AVATARS_DIR = avatars_dir()
 
 
 def process_and_save_avatar(source: Path | bytes, user_id: str) -> str:
-    """Process image through PIL pipeline and save as 256x256 PNG."""
     from PIL import Image, ImageOps
 
     if isinstance(source, (bytes, bytearray)):
