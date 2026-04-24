@@ -1,5 +1,3 @@
-"""Comprehensive tests for config.loader module."""
-
 import json
 import os
 import sys
@@ -12,8 +10,6 @@ from config.schema import LeonSettings
 
 
 class TestAgentLoader:
-    """Tests for AgentLoader."""
-
     def test_init(self, tmp_path):
         loader = AgentLoader(workspace_root=str(tmp_path))
         assert loader.workspace_root == tmp_path
@@ -180,8 +176,6 @@ class TestAgentLoader:
 
 
 class TestLoadConfigFunction:
-    """Tests for load_config convenience function."""
-
     def test_load_config_with_workspace(self, tmp_path, monkeypatch):
         monkeypatch.setenv("HOME", str(tmp_path))
 

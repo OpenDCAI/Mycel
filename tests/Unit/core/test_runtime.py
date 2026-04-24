@@ -1,5 +1,3 @@
-"""Unit tests for PhysicalTerminalRuntime."""
-
 import asyncio
 import re
 import sqlite3
@@ -54,7 +52,6 @@ class _DomainSandboxRuntimeStore:
 
 @pytest.fixture
 def sandbox_runtime_store(temp_db):
-    """Create SQLiteSandboxRuntimeRepo with domain-object conversion for tests."""
     repo = SQLiteSandboxRuntimeRepo(db_path=temp_db)
     store = _DomainSandboxRuntimeStore(repo)
     yield store
@@ -63,7 +60,6 @@ def sandbox_runtime_store(temp_db):
 
 @pytest.fixture
 def mock_provider():
-    """Create mock SandboxProvider."""
     provider = MagicMock()
     provider.name = "test-provider"
     return provider
@@ -168,11 +164,8 @@ def test_terminal_repo_schema_uses_sandbox_runtime_id_column(tmp_path):
 
 @pytest.mark.skipif(sys.platform == "win32", reason="LocalPersistentShellRuntime requires a Unix shell")
 class TestLocalPersistentShellRuntime:
-    """Test LocalPersistentShellRuntime."""
-
     @pytest.mark.asyncio
     async def test_execute_simple_command(self, terminal_store, sandbox_runtime_store):
-        """Test executing a simple command."""
         terminal = terminal_from_row(terminal_store.create("term-1", "thread-1", "runtime-1", "/tmp"), terminal_store.db_path)
         sandbox_runtime = sandbox_runtime_store.create("runtime-1", "local")
 
@@ -186,7 +179,6 @@ class TestLocalPersistentShellRuntime:
 
     @pytest.mark.asyncio
     async def test_execute_updates_cwd(self, terminal_store, sandbox_runtime_store):
-        """Test that cwd is updated after command execution."""
         terminal = terminal_from_row(terminal_store.create("term-1", "thread-1", "runtime-1", "/tmp"), terminal_store.db_path)
         sandbox_runtime = sandbox_runtime_store.create("runtime-1", "local")
 
@@ -199,7 +191,6 @@ class TestLocalPersistentShellRuntime:
 
     @pytest.mark.asyncio
     async def test_state_persists_across_commands(self, terminal_store, sandbox_runtime_store):
-        """Test that state persists across multiple commands."""
         terminal = terminal_from_row(terminal_store.create("term-1", "thread-1", "runtime-1", "/tmp"), terminal_store.db_path)
         sandbox_runtime = sandbox_runtime_store.create("runtime-1", "local")
 
@@ -213,7 +204,6 @@ class TestLocalPersistentShellRuntime:
 
     @pytest.mark.asyncio
     async def test_execute_with_timeout(self, terminal_store, sandbox_runtime_store):
-        """Test command timeout."""
         terminal = terminal_from_row(terminal_store.create("term-1", "thread-1", "runtime-1", "/tmp"), terminal_store.db_path)
         sandbox_runtime = sandbox_runtime_store.create("runtime-1", "local")
 
@@ -226,7 +216,6 @@ class TestLocalPersistentShellRuntime:
 
     @pytest.mark.asyncio
     async def test_close_terminates_session(self, terminal_store, sandbox_runtime_store):
-        """Test that close terminates the shell session."""
         terminal = terminal_from_row(terminal_store.create("term-1", "thread-1", "runtime-1", "/tmp"), terminal_store.db_path)
         sandbox_runtime = sandbox_runtime_store.create("runtime-1", "local")
 
@@ -242,7 +231,6 @@ class TestLocalPersistentShellRuntime:
 
     @pytest.mark.asyncio
     async def test_state_version_increments(self, terminal_store, sandbox_runtime_store):
-        """Test that state version increments after updates."""
         terminal = terminal_from_row(terminal_store.create("term-1", "thread-1", "runtime-1", "/tmp"), terminal_store.db_path)
         sandbox_runtime = sandbox_runtime_store.create("runtime-1", "local")
 
@@ -258,15 +246,11 @@ class TestLocalPersistentShellRuntime:
 
 
 class TestRemoteWrappedRuntime:
-    """Test RemoteWrappedRuntime."""
-
     @pytest.mark.asyncio
     async def test_execute_simple_command(self, terminal_store, sandbox_runtime_store, mock_provider):
-        """Test executing a simple command via provider."""
         terminal = terminal_from_row(terminal_store.create("term-1", "thread-1", "runtime-1", "/root"), terminal_store.db_path)
         sandbox_runtime = sandbox_runtime_store.create("runtime-1", "test-provider")
 
-        # Mock sandbox_runtime to return instance
         instance = _make_instance()
         sandbox_runtime.ensure_active_instance = MagicMock(return_value=instance)
 
@@ -286,11 +270,9 @@ class TestRemoteWrappedRuntime:
 
     @pytest.mark.asyncio
     async def test_hydrate_state_on_first_execution(self, terminal_store, sandbox_runtime_store, mock_provider):
-        """Test that state is hydrated on first execution."""
         terminal = terminal_from_row(terminal_store.create("term-1", "thread-1", "runtime-1", "/home/user"), terminal_store.db_path)
         sandbox_runtime = sandbox_runtime_store.create("runtime-1", "test-provider")
 
-        # Mock sandbox_runtime to return instance
         instance = _make_instance()
         sandbox_runtime.ensure_active_instance = MagicMock(return_value=instance)
 
@@ -309,7 +291,6 @@ class TestRemoteWrappedRuntime:
 
     @pytest.mark.asyncio
     async def test_execute_updates_cwd(self, terminal_store, sandbox_runtime_store, mock_provider):
-        """Test that cwd is updated after command execution."""
         terminal = terminal_from_row(terminal_store.create("term-1", "thread-1", "runtime-1", "/root"), terminal_store.db_path)
         sandbox_runtime = sandbox_runtime_store.create("runtime-1", "test-provider")
 
@@ -335,7 +316,6 @@ class TestRemoteWrappedRuntime:
 
     @pytest.mark.asyncio
     async def test_close_is_noop(self, terminal_store, sandbox_runtime_store, mock_provider):
-        """Test that close is a no-op for remote runtime."""
         terminal = terminal_from_row(terminal_store.create("term-1", "thread-1", "runtime-1", "/root"), terminal_store.db_path)
         sandbox_runtime = sandbox_runtime_store.create("runtime-1", "test-provider")
 
@@ -432,11 +412,8 @@ class TestRemoteWrappedRuntime:
 
 @pytest.mark.skipif(sys.platform == "win32", reason="LocalPersistentShellRuntime requires a Unix shell")
 class TestRuntimeIntegration:
-    """Integration tests for runtime lifecycle."""
-
     @pytest.mark.asyncio
     async def test_local_runtime_full_lifecycle(self, terminal_store, sandbox_runtime_store):
-        """Test complete local runtime lifecycle."""
         terminal = terminal_from_row(terminal_store.create("term-1", "thread-1", "runtime-1", "/tmp"), terminal_store.db_path)
         sandbox_runtime = sandbox_runtime_store.create("runtime-1", "local")
 
@@ -460,7 +437,6 @@ class TestRuntimeIntegration:
 
     @pytest.mark.asyncio
     async def test_state_persists_across_runtime_instances(self, terminal_store, sandbox_runtime_store):
-        """Test that terminal state persists when runtime is recreated."""
         terminal = terminal_from_row(terminal_store.create("term-1", "thread-1", "runtime-1", "/tmp"), terminal_store.db_path)
         sandbox_runtime = sandbox_runtime_store.create("runtime-1", "local")
 

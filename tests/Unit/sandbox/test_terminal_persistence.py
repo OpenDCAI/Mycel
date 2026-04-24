@@ -1,5 +1,3 @@
-"""Tests for terminal persistence (env/cwd across commands)."""
-
 import asyncio
 import shutil
 import sys
@@ -12,8 +10,6 @@ from core.tools.command.zsh.executor import ZshExecutor
 
 @pytest.mark.skipif(sys.platform == "win32" or shutil.which("bash") is None, reason="bash persistence tests require a Unix shell")
 def test_bash_env_persistence():
-    """Test that environment variables persist across commands in bash."""
-
     async def run():
         executor = BashExecutor()
 
@@ -29,8 +25,6 @@ def test_bash_env_persistence():
 
 @pytest.mark.skipif(sys.platform == "win32" or shutil.which("bash") is None, reason="bash persistence tests require a Unix shell")
 def test_bash_cwd_persistence():
-    """Test that working directory persists across commands in bash."""
-
     async def run():
         executor = BashExecutor()
 
@@ -49,8 +43,6 @@ def test_bash_cwd_persistence():
 
 @pytest.mark.skipif(sys.platform == "win32" or shutil.which("zsh") is None, reason="zsh persistence tests require a Unix shell")
 def test_zsh_env_persistence():
-    """Test that environment variables persist across commands in zsh."""
-
     async def run():
         executor = ZshExecutor()
 
@@ -66,8 +58,6 @@ def test_zsh_env_persistence():
 
 @pytest.mark.skipif(sys.platform == "win32" or shutil.which("zsh") is None, reason="zsh persistence tests require a Unix shell")
 def test_zsh_cwd_persistence():
-    """Test that working directory persists across commands in zsh."""
-
     async def run():
         executor = ZshExecutor()
 
