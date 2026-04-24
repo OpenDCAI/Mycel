@@ -167,7 +167,6 @@ class _PyrightSession:
         try:
             while True:
                 assert self._proc and self._proc.stdout
-                # Read headers until blank line
                 content_length = 0
                 while True:
                     raw = await self._proc.stdout.readline()

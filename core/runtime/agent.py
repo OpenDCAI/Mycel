@@ -730,7 +730,6 @@ class LeonAgent:
         if hasattr(self, "_model_overrides"):
             kwargs.update({k: v for k, v in self._model_overrides.items() if k not in ("context_limit", "based_on")})
 
-        # Use provider from model overrides (mapping) first, then infer
         provider = self._resolve_provider_name(self.model_name, kwargs or None)
         if provider:
             kwargs["model_provider"] = provider
@@ -1483,7 +1482,6 @@ class LeonAgent:
             # Reuse the event loop created during initialization
             if hasattr(self, "_event_loop") and self._event_loop:
                 return self._event_loop.run_until_complete(_ainvoke())
-            # Use asyncio.run() if no loop exists
             return asyncio.run(_ainvoke())
         except Exception as e:
             self._monitor_middleware.mark_error(e)

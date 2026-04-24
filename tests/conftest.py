@@ -1,8 +1,3 @@
-"""Pytest configuration for Leon tests.
-
-Ensures the project root is in sys.path so imports work correctly.
-"""
-
 import gc
 import sys
 import time
@@ -12,7 +7,6 @@ import pytest
 
 from sandbox.thread_context import set_current_messages, set_current_run_id, set_current_thread_id
 
-# Add project root to sys.path
 project_root = Path(__file__).parent.parent
 if str(project_root) not in sys.path:
     sys.path.insert(0, str(project_root))

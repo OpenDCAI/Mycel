@@ -254,7 +254,6 @@ class TaskService:
         if "owner" in args:
             task.owner = args["owner"]
 
-        # Add dependency edges (bidirectional)
         if "add_blocks" in args:
             for blocked_id in args["add_blocks"]:
                 if blocked_id not in task.blocks:
