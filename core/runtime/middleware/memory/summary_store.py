@@ -160,11 +160,6 @@ class SummaryStore:
         return self._repo.list_summaries(thread_id)
 
     def delete_thread_summaries(self, thread_id: str) -> None:
-        """Delete all summaries for a thread.
-
-        Args:
-            thread_id: Thread identifier
-        """
         self._repo.delete_thread_summaries(thread_id)
 
         logger.info(f"[SummaryStore] Deleted all summaries for thread {thread_id}")
