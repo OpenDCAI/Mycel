@@ -48,15 +48,11 @@ def _require_row_text(row: dict[str, object], key: str) -> str:
 
 @dataclass
 class ChatSessionPolicy:
-    """Policy configuration for ChatSession lifecycle."""
-
     idle_ttl_sec: int = 600
     max_duration_sec: int = 86400
 
 
 class ChatSession:
-    """Policy/lifecycle window for PhysicalTerminalRuntime."""
-
     def __init__(
         self,
         session_id: str,
@@ -125,8 +121,6 @@ class ChatSession:
 
 
 class ChatSessionManager:
-    """Manager for ChatSession lifecycle."""
-
     def __init__(
         self,
         provider: SandboxProvider,
