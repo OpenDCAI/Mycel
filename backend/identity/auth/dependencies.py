@@ -1,5 +1,3 @@
-"""Neutral auth dependency helpers."""
-
 from fastapi import FastAPI, HTTPException
 
 

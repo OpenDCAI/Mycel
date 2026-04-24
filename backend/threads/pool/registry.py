@@ -1,5 +1,3 @@
-"""Thread runtime pool lifecycle helpers."""
-
 import asyncio
 import logging
 from pathlib import Path

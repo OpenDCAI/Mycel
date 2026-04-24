@@ -1,5 +1,3 @@
-"""Neutral avatar file processing helpers."""
-
 from __future__ import annotations
 
 import io

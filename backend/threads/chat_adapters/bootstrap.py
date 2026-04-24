@@ -1,5 +1,3 @@
-"""Bootstrap helpers for binding the Agent Runtime Gateway to app-backed handlers."""
-
 from __future__ import annotations
 
 from dataclasses import dataclass

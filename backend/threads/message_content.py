@@ -1,5 +1,3 @@
-"""Neutral message-content helpers shared across backend owners."""
-
 import re
 from typing import Any
 

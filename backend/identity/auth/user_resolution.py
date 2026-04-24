@@ -1,5 +1,3 @@
-"""Neutral current-user resolution helpers."""
-
 from __future__ import annotations
 
 import asyncio
