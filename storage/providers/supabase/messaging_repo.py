@@ -16,8 +16,6 @@ _SCHEMA = "chat"
 
 
 class SupabaseChatMemberRepo:
-    """chat_members table for Supabase messaging."""
-
     def __init__(self, client: Any) -> None:
         self._client = client
 
@@ -54,8 +52,6 @@ class SupabaseChatMemberRepo:
         return bool(res.data)
 
     def find_chat_between(self, user_a: str, user_b: str) -> str | None:
-        """Find the 1:1 chat between two users (exactly 2 members)."""
-        # Fetch all chats for user_a, then find which has user_b as only other member
         chats_a = set(self.list_chats_for_user(user_a))
         chats_b = set(self.list_chats_for_user(user_b))
         common = chats_a & chats_b
@@ -82,8 +78,6 @@ class SupabaseChatMemberRepo:
 
 
 class SupabaseMessagesRepo:
-    """messages table — rich message model for Supabase backend."""
-
     def __init__(self, client: Any) -> None:
         self._client = client
 
@@ -91,7 +85,6 @@ class SupabaseMessagesRepo:
         pass
 
     def create(self, row: dict[str, Any], expected_read_seq: int | None = None) -> dict[str, Any]:
-        """Insert a new message. Returns the created row."""
         now = time.time()
         if expected_read_seq is None:
             seq_response = q.schema_rpc(
@@ -171,7 +164,6 @@ class SupabaseMessagesRepo:
         return latest_by_chat
 
     def list_unread(self, chat_id: str, user_id: str) -> list[dict[str, Any]]:
-        """Messages after user's last_read_seq, excluding own, not deleted."""
         last_read_seq = self._last_read_seq(chat_id, user_id)
 
         q = self._t().select("*").eq("chat_id", chat_id).neq("sender_user_id", user_id).is_("deleted_at", "null")
@@ -182,7 +174,6 @@ class SupabaseMessagesRepo:
         return [r for r in rows if user_id not in (r.get("deleted_for") or [])]
 
     def count_unread(self, chat_id: str, user_id: str) -> int:
-        """Count unread messages using a COUNT query to avoid materializing rows."""
         last_read_seq = self._last_read_seq(chat_id, user_id)
 
         q = self._t().select("id", count="exact").eq("chat_id", chat_id).neq("sender_user_id", user_id).is_("deleted_at", "null")
@@ -217,8 +208,6 @@ class SupabaseMessagesRepo:
         return int(member_res.data[0].get("last_read_seq") or 0)
 
     def retract(self, message_id: str, sender_id: str) -> bool:
-        """Retract a message within 2-minute window."""
-
         msg = self.get_by_id(message_id)
         if not msg or msg.get("sender_user_id") != sender_id:
             return False
@@ -234,7 +223,6 @@ class SupabaseMessagesRepo:
         return True
 
     def delete_for(self, message_id: str, user_id: str) -> None:
-        """Soft-delete for a specific user."""
         msg = self.get_by_id(message_id)
         if not msg:
             return
@@ -271,8 +259,6 @@ class SupabaseMessagesRepo:
 
 
 class SupabaseRelationshipRepo:
-    """relationships table — Hire/Visit state machine persistence."""
-
     def __init__(self, client: Any) -> None:
         self._client = client
 
