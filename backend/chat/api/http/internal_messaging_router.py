@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, ConfigDict
 
 from backend.chat.api.http.dependencies import get_messaging_service
+from messaging.errors import ChatNotCaughtUpError
 
 router = APIRouter(prefix="/api/internal/messaging", tags=["chat-internal"])
 
@@ -124,18 +125,21 @@ def send_message(
     body: InternalSendMessageBody,
     messaging_service: Annotated[Any, Depends(get_messaging_service)],
 ) -> dict[str, Any]:
-    return messaging_service.send(
-        chat_id,
-        body.sender_id,
-        body.content,
-        message_type=body.message_type,
-        content_type=body.content_type,
-        mentions=body.mentions,
-        signal=body.signal,
-        reply_to=body.reply_to,
-        ai_metadata=body.ai_metadata,
-        enforce_caught_up=body.enforce_caught_up,
-    )
+    try:
+        return messaging_service.send(
+            chat_id,
+            body.sender_id,
+            body.content,
+            message_type=body.message_type,
+            content_type=body.content_type,
+            mentions=body.mentions,
+            signal=body.signal,
+            reply_to=body.reply_to,
+            ai_metadata=body.ai_metadata,
+            enforce_caught_up=body.enforce_caught_up,
+        )
+    except ChatNotCaughtUpError as exc:
+        raise HTTPException(409, str(exc)) from exc
 
 
 @router.post("/chats/{chat_id}/read")

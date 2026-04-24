@@ -9,6 +9,7 @@ from typing import Any
 
 from messaging._utils import now_iso
 from messaging.contracts import RelationshipState
+from storage.errors import StorageConflictError
 from storage.providers.supabase import _query as q
 
 logger = logging.getLogger(__name__)
@@ -123,7 +124,7 @@ class SupabaseMessagesRepo:
                 .execute()
             )
             if not update_res.data:
-                raise RuntimeError(f"Chat advanced after your last read. Call read_messages(chat_id='{row['chat_id']}') first.")
+                raise StorageConflictError(f"Chat advanced after your last read. Call read_messages(chat_id='{row['chat_id']}') first.")
             seq = next_seq
         payload = {**row, "seq": int(seq)}
         res = self._t().insert(payload).execute()

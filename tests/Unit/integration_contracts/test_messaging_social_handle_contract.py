@@ -867,6 +867,38 @@ def test_messaging_service_agent_send_passes_expected_read_seq_to_messages_repo(
     assert expected_read_seq == 7
 
 
+def test_messaging_service_agent_send_maps_storage_conflict_to_not_caught_up_error() -> None:
+    from messaging.errors import ChatNotCaughtUpError
+    from storage.errors import StorageConflictError
+
+    class _StatefulChatMemberRepo:
+        def list_members(self, _chat_id: str) -> list[dict[str, Any]]:
+            return []
+
+        def last_read_seq(self, chat_id: str, user_id: str) -> int:
+            assert chat_id == "chat-1"
+            assert user_id == "agent-user-1"
+            return 7
+
+    class _MessagesRepo:
+        def create(self, row: dict[str, Any], expected_read_seq: int | None = None) -> dict[str, Any]:
+            raise StorageConflictError("Chat advanced after your last read.")
+
+    service = MessagingService(
+        chat_repo=SimpleNamespace(),
+        chat_member_repo=_StatefulChatMemberRepo(),
+        messages_repo=_MessagesRepo(),
+        user_repo=SimpleNamespace(
+            get_by_id=lambda uid: SimpleNamespace(id=uid, display_name="Toad", type="agent", avatar=None) if uid == "agent-user-1" else None
+        ),
+    )
+
+    with pytest.raises(ChatNotCaughtUpError) as excinfo:
+        service.send("chat-1", "agent-user-1", "hello", enforce_caught_up=True)
+
+    assert str(excinfo.value) == "Chat advanced after your last read."
+
+
 def test_messaging_service_list_chats_exposes_agent_user_participant_id() -> None:
     service = MessagingService(
         chat_repo=SimpleNamespace(

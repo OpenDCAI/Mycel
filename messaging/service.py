@@ -20,6 +20,8 @@ from messaging.avatars import AvatarUrlBuilder
 from messaging.contracts import ContentType, MessageType
 from messaging.delivery.dispatcher import ChatDeliveryDispatcher, ChatDeliveryFn
 from messaging.display_user import resolve_messaging_display_user
+from messaging.errors import ChatNotCaughtUpError
+from storage.errors import StorageConflictError
 
 logger = logging.getLogger(__name__)
 
@@ -212,7 +214,10 @@ class MessagingService:
             last_read_seq = getattr(self._chat_members_repo, "last_read_seq", None)
             if last_read_seq is None:
                 raise RuntimeError("chat_member_repo must expose last_read_seq for caught-up sends")
-            created_row = self._messages.create(row, expected_read_seq=int(last_read_seq(chat_id, sender_id)))
+            try:
+                created_row = self._messages.create(row, expected_read_seq=int(last_read_seq(chat_id, sender_id)))
+            except StorageConflictError as exc:
+                raise ChatNotCaughtUpError(str(exc)) from exc
         else:
             created_row = self._messages.create(row)
         created = self._normalize_message_row(created_row)
