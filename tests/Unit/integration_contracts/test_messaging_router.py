@@ -7,7 +7,7 @@ import pytest
 from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
 
-from backend.chat.api.http import chats_router
+from backend.chat.api.http import chats_router, internal_messaging_router
 from backend.identity.avatar.urls import avatar_url
 from backend.web.core.dependencies import get_current_user_id
 from storage.contracts import ContactEdgeRow
@@ -118,6 +118,23 @@ def test_messaging_crud_routes_are_sync_threadpool_boundaries() -> None:
     ]
 
     assert [fn.__name__ for fn in sync_routes if inspect.iscoroutinefunction(fn)] == []
+
+
+def test_internal_find_or_create_chat_maps_invalid_participants_to_400() -> None:
+    messaging_service = SimpleNamespace(
+        find_or_create_chat=lambda _user_ids, _title: (_ for _ in ()).throw(
+            ValueError("Chat participant missing-user is not a resolvable user row")
+        )
+    )
+
+    with pytest.raises(HTTPException) as excinfo:
+        internal_messaging_router.find_or_create_chat(
+            internal_messaging_router.FindOrCreateChatBody(user_ids=["human-user-1", "missing-user"]),
+            messaging_service=messaging_service,
+        )
+
+    assert excinfo.value.status_code == 400
+    assert excinfo.value.detail == "Chat participant missing-user is not a resolvable user row"
     assert inspect.iscoroutinefunction(chats_router.stream_chat_events)
 
 

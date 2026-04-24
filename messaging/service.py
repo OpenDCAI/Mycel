@@ -127,6 +127,7 @@ class MessagingService:
     def find_or_create_chat(self, user_ids: list[str], title: str | None = None) -> dict[str, Any]:
         if len(user_ids) != 2:
             raise ValueError("Use create_group_chat() for 3+ users")
+        self._require_resolvable_chat_users(user_ids)
         existing_id = self._chat_members_repo.find_chat_between(user_ids[0], user_ids[1])
         if existing_id:
             chat = self._chats.get_by_id(existing_id)
@@ -137,7 +138,16 @@ class MessagingService:
     def create_group_chat(self, user_ids: list[str], title: str | None = None) -> dict[str, Any]:
         if len(user_ids) < 3:
             raise ValueError("Group chat requires 3+ users")
+        self._require_resolvable_chat_users(user_ids)
         return self._create_chat(user_ids, chat_type="group", title=title)
+
+    def _require_resolvable_chat_users(self, user_ids: list[str]) -> None:
+        # @@@chat-member-user-integrity - chat membership is user-level state;
+        # never let internal routes create rows that later conversation reads cannot project.
+        for uid in user_ids:
+            social_user_id = str(uid or "")
+            if not social_user_id or self._resolve_display_user(social_user_id) is None:
+                raise ValueError(f"Chat participant {social_user_id or '<missing>'} is not a resolvable user row")
 
     def _create_chat(self, user_ids: list[str], *, chat_type: str, title: str | None) -> dict[str, Any]:
         from storage.contracts import ChatRow

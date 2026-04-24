@@ -959,6 +959,35 @@ def test_messaging_service_chat_detail_fails_on_unknown_member_identity() -> Non
     assert str(excinfo.value) == "Chat member missing-user is not a resolvable user row"
 
 
+def test_messaging_service_rejects_unknown_direct_chat_participant_before_writing() -> None:
+    writes: list[tuple[str, str] | str] = []
+
+    service = MessagingService(
+        chat_repo=SimpleNamespace(
+            create=lambda _row: writes.append("chat"),
+            get_by_id=lambda _chat_id: (_ for _ in ()).throw(AssertionError("unknown participant must fail before lookup")),
+        ),
+        chat_member_repo=SimpleNamespace(
+            find_chat_between=lambda _actor_id, _target_id: (_ for _ in ()).throw(
+                AssertionError("unknown participant must fail before member lookup")
+            ),
+            add_member=lambda chat_id, user_id: writes.append((chat_id, user_id)),
+        ),
+        messages_repo=SimpleNamespace(),
+        user_repo=SimpleNamespace(
+            get_by_id=lambda uid: (
+                SimpleNamespace(id=uid, display_name="Human", type="human", avatar=None) if uid == "human-user-1" else None
+            ),
+        ),
+    )
+
+    with pytest.raises(ValueError) as excinfo:
+        service.find_or_create_chat(["human-user-1", "missing-user"])
+
+    assert str(excinfo.value) == "Chat participant missing-user is not a resolvable user row"
+    assert writes == []
+
+
 def test_messaging_service_list_chats_ignores_blank_other_names_in_title_default() -> None:
     service = MessagingService(
         chat_repo=SimpleNamespace(

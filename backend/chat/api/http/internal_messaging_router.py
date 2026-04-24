@@ -80,7 +80,10 @@ def find_or_create_chat(
     body: FindOrCreateChatBody,
     messaging_service: Annotated[Any, Depends(get_messaging_service)],
 ) -> dict[str, Any]:
-    return messaging_service.find_or_create_chat(body.user_ids, body.title)
+    try:
+        return messaging_service.find_or_create_chat(body.user_ids, body.title)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
 
 
 @router.get("/chats/{chat_id}/messages")
