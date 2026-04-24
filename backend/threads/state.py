@@ -1,5 +1,3 @@
-"""Thread state query service for sandbox status."""
-
 import asyncio
 from typing import Any
 

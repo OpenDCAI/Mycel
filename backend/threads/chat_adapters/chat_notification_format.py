@@ -1,5 +1,3 @@
-"""Native runtime formatting for Chat delivery notifications."""
-
 from __future__ import annotations
 
 

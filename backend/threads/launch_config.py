@@ -1,5 +1,3 @@
-"""Resolve + persist per-agent new-thread config defaults."""
-
 from __future__ import annotations
 
 from typing import Any

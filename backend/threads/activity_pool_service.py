@@ -1,5 +1,3 @@
-"""Agent pool management service."""
-
 from backend.threads.file_channel import get_file_channel_binding
 from backend.threads.pool import registry as _registry
 from backend.threads.pool.factory import create_agent_sync

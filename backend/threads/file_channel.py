@@ -1,5 +1,3 @@
-"""File channel service for workspace-owned user↔agent file transfer."""
-
 from __future__ import annotations
 
 import logging

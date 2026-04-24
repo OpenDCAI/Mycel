@@ -1,5 +1,3 @@
-"""In-memory event buffer for decoupling agent execution from SSE consumers."""
-
 import asyncio
 from collections import deque
 from dataclasses import dataclass, field

@@ -1,5 +1,3 @@
-"""Chat delivery inlet from messaging into Agent Runtime."""
-
 from __future__ import annotations
 
 import logging

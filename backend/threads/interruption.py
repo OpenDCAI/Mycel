@@ -1,5 +1,3 @@
-"""Shared message-level interruption repair for cold thread reads."""
-
 from __future__ import annotations
 
 from typing import Any

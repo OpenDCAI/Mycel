@@ -1,5 +1,3 @@
-"""Native Chat delivery handler for the Agent runtime."""
-
 from __future__ import annotations
 
 import logging

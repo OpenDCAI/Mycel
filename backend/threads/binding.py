@@ -1,5 +1,3 @@
-"""Target-style thread runtime binding read model."""
-
 from __future__ import annotations
 
 from dataclasses import dataclass, field

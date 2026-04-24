@@ -1,5 +1,3 @@
-"""Trajectory tracing scope for thread runtime runs."""
-
 from __future__ import annotations
 
 from dataclasses import dataclass

@@ -1,5 +1,3 @@
-"""App-backed services for native Agent Runtime chat delivery."""
-
 from __future__ import annotations
 
 from typing import Any, Protocol

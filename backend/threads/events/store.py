@@ -1,5 +1,3 @@
-"""Persistent run-event write service via storage repository boundary."""
-
 import asyncio
 import json
 from typing import Any

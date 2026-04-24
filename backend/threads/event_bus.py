@@ -1,5 +1,3 @@
-"""Process-level EventBus for multi-agent event routing."""
-
 from __future__ import annotations
 
 import logging

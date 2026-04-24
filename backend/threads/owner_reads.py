@@ -1,5 +1,3 @@
-"""Shared owner-thread reads for bursty authenticated surfaces."""
-
 from __future__ import annotations
 
 import asyncio
