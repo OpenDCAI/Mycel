@@ -320,9 +320,6 @@ class LeonAgent:
             self._memory_middleware.set_model(self.model, self._current_model_config)
 
         if self.verbose:
-            print("[LeonAgent] Initialized successfully")
-            print(f"[LeonAgent] Workspace: {self.workspace_root}")
-            print(f"[LeonAgent] Audit log: {self.enable_audit_log}")
             if self.checkpointer is None:
                 print("[LeonAgent] Note: Async components need initialization via ainit()")
 
@@ -1172,12 +1169,6 @@ class LeonAgent:
             )
         except Exception as e:
             logger.debug("[LeonAgent] LSPService init skipped: %s", e)
-
-        if self.verbose:
-            all_tools = self._tool_registry.list_all()
-            inline = [t for t in all_tools if t.mode.value == "inline"]
-            deferred = [t for t in all_tools if t.mode.value == "deferred"]
-            print(f"[LeonAgent] ToolRegistry: {len(inline)} inline, {len(deferred)} deferred tools")
 
     async def _init_mcp_tools(self) -> list:
         mcp_enabled = self.config.mcp.enabled
