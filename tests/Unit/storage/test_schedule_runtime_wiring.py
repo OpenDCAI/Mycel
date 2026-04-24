@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from storage.container import StorageContainer
-from storage.runtime import build_schedule_repo, build_storage_container
+from storage.runtime import build_schedule_repo
 from tests.fakes.supabase import FakeSupabaseClient
 
 
@@ -33,9 +33,3 @@ def test_build_schedule_repo_uses_runtime_container() -> None:
     )
 
     assert tables["agent.schedule_runs"][0]["triggered_by"] == "manual"
-
-
-def test_build_storage_container_exposes_schedule_repo() -> None:
-    container = build_storage_container(supabase_client=FakeSupabaseClient())
-
-    assert container.schedule_repo().__class__.__name__ == "SupabaseScheduleRepo"

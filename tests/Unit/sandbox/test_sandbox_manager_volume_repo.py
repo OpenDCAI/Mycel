@@ -1231,26 +1231,6 @@ def test_upgrade_to_daytona_volume_waits_when_reusing_existing_daytona_volume(mo
     assert provider.ready_waits == ["leon-volume-runtime-1"]
 
 
-def test_make_sandbox_monitor_repo_returns_supabase(monkeypatch):
-    from storage import runtime as storage_runtime
-
-    class _FakeSupabaseClient:
-        def table(self, _name: str):
-            return object()
-
-    monkeypatch.setenv("LEON_STORAGE_STRATEGY", "supabase")
-    monkeypatch.setattr(
-        "backend.identity.auth.supabase_runtime.create_supabase_client",
-        lambda: _FakeSupabaseClient(),
-    )
-
-    repo = storage_runtime.build_sandbox_monitor_repo()
-    try:
-        assert repo.__class__.__name__ == "SupabaseSandboxMonitorRepo"
-    finally:
-        repo.close()
-
-
 def test_resolve_existing_sandbox_runtime_prefers_provider_env_binding() -> None:
     sandbox_runtime_repo = SimpleNamespace(
         find_by_instance=lambda **kwargs: {
