@@ -19,7 +19,6 @@ def _unbound_get_file_channel_binding(*_args, **_kwargs):
 
 get_file_channel_binding = _unbound_get_file_channel_binding
 
-# Thread lock for config updates
 _config_update_locks: dict[str, asyncio.Lock] = {}
 _agent_create_locks: dict[str, asyncio.Lock] = {}
 
@@ -32,12 +31,9 @@ async def get_or_create_agent(
     *,
     messaging_service: Any | None = None,
 ) -> Any:
-    """Lazy agent pool — one agent per thread, created on demand."""
     if thread_id:
         set_current_thread_id(thread_id)
 
-    # Per-thread Agent instance: pool key = thread_id:sandbox_type
-    # This ensures complete isolation of middleware state (memory, todo, runtime, filesystem, etc.)
     if not thread_id:
         raise ValueError("thread_id is required for agent creation")
 

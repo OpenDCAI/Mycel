@@ -150,7 +150,6 @@ class DaytonaProvider(SandboxProvider):
         self._managed_mounts[thread_id] = (backend_ref, mount_path)
 
     def delete_managed_volume(self, backend_ref: str) -> None:
-        """Delete provider-managed volume. backend_ref is the volume name."""
         logger.info("Deleting managed volume: %s", backend_ref)
         try:
             vol = self.client.volume.get(backend_ref)

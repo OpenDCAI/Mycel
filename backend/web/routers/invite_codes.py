@@ -37,9 +37,6 @@ async def _call_invite_code_repo(error_prefix: str, call: Callable[[], Any]) -> 
         raise HTTPException(500, f"{error_prefix}{e}") from e
 
 
-# ── List all invite codes ────────────────────────────────────────────────────
-
-
 @router.get("")
 async def list_invite_codes(
     request: Request,
@@ -48,9 +45,6 @@ async def list_invite_codes(
     repo = _invite_code_repo(request)
     codes = await _call_invite_code_repo("获取邀请码列表失败：", repo.list_all)
     return {"codes": [_invite_code_payload(code) for code in codes]}
-
-
-# ── Generate a new invite code ───────────────────────────────────────────────
 
 
 class GenerateInviteCodeRequest(BaseModel):
@@ -71,9 +65,6 @@ async def generate_invite_code(
     return _invite_code_payload(code)
 
 
-# ── Revoke (delete) an invite code ──────────────────────────────────────────
-
-
 @router.delete("/{code}")
 async def revoke_invite_code(
     code: str,
@@ -85,9 +76,6 @@ async def revoke_invite_code(
     if not ok:
         raise HTTPException(404, "邀请码不存在")
     return {"ok": True}
-
-
-# ── Validate an invite code (no auth required) ───────────────────────────────
 
 
 @router.get("/validate/{code}")
