@@ -606,8 +606,7 @@ class FileSystemService:
             if callable(download_bytes) and file_type in {FileType.BINARY, FileType.DOCUMENT}:
                 # @@@dt-02-remote-special-file-download
                 # Remote providers expose raw-byte download hooks. Reuse the
-                # same local dispatcher for binary/document reads instead of
-                # degrading special files into placeholder text.
+                # same local dispatcher for binary/document reads.
                 raw_bytes = download_bytes(str(resolved))
                 if not isinstance(raw_bytes, (bytes, bytearray)):
                     raise TypeError(f"Remote special-file download returned {type(raw_bytes).__name__}, expected bytes.")
