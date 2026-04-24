@@ -1,5 +1,3 @@
-"""Zsh executor for macOS systems."""
-
 from __future__ import annotations
 
 from typing import ClassVar

@@ -1,5 +1,3 @@
-"""Binary file reader - returns metadata or image content blocks."""
-
 from __future__ import annotations
 
 import base64

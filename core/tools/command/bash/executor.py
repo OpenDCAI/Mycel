@@ -1,5 +1,3 @@
-"""Bash executor for Linux systems."""
-
 from __future__ import annotations
 
 from typing import ClassVar

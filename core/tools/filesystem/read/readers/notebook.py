@@ -1,5 +1,3 @@
-"""Jupyter Notebook reader - parses .ipynb cell by cell."""
-
 from __future__ import annotations
 
 import json

@@ -1,5 +1,3 @@
-"""Text file reader with triple limits: lines, chars, line length."""
-
 from __future__ import annotations
 
 from pathlib import Path

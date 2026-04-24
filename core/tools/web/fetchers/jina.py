@@ -1,5 +1,3 @@
-"""Jina Reader fetcher - best quality content extraction."""
-
 from __future__ import annotations
 
 import httpx

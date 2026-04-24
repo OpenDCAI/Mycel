@@ -1,5 +1,3 @@
-"""Command Service - registers the Bash tool with ToolRegistry."""
-
 from __future__ import annotations
 
 import asyncio

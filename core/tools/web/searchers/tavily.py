@@ -1,5 +1,3 @@
-"""Tavily searcher - AI-optimized search."""
-
 from __future__ import annotations
 
 import httpx
