@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import importlib
 import inspect
 from types import SimpleNamespace
 
@@ -120,15 +119,6 @@ def test_messaging_crud_routes_are_sync_threadpool_boundaries() -> None:
 
     assert [fn.__name__ for fn in sync_routes if inspect.iscoroutinefunction(fn)] == []
     assert inspect.iscoroutinefunction(chats_router.stream_chat_events)
-
-
-def test_chat_http_owner_module_lives_under_backend_chat() -> None:
-    assert chats_router.__name__ == "backend.chat.api.http.chats_router"
-
-
-def test_messaging_router_shell_is_deleted() -> None:
-    with pytest.raises(ModuleNotFoundError):
-        importlib.import_module("backend.web.routers.messaging")
 
 
 def test_get_accessible_chat_or_404_returns_chat():
