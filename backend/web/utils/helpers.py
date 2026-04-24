@@ -1,5 +1,3 @@
-"""General helper utilities."""
-
 from pathlib import Path
 from typing import Any
 
@@ -13,7 +11,6 @@ _cached_thread_repo = None
 
 
 def load_thread_row(thread_id: str, thread_repo=None) -> dict[str, Any] | None:
-    """Load the current thread row. Returns dict or None."""
     if thread_repo is None:
         global _cached_thread_repo
         if _cached_thread_repo is None:
@@ -28,7 +25,6 @@ def resolve_local_workspace_path(
     thread_cwd_map: dict[str, str] | None = None,
     local_workspace_root: Path | None = None,
 ) -> Path:
-    """Resolve a workspace path relative to thread-specific or global workspace root."""
     from backend.web.core.config import LOCAL_WORKSPACE_ROOT
 
     if local_workspace_root is None:

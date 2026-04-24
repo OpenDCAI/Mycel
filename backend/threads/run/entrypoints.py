@@ -1,5 +1,3 @@
-"""Run entrypoint helpers for thread runtime streaming."""
-
 from __future__ import annotations
 
 import asyncio
@@ -29,7 +27,6 @@ def start_agent_run(
     message_metadata: dict[str, Any] | None = None,
     input_messages: list[Any] | None = None,
 ) -> str:
-    """Launch agent producer on the persistent ThreadEventBuffer. Returns run_id."""
     thread_buf = _get_or_create_thread_buffer(app, thread_id)
     run_id = str(_uuid.uuid4())
     if _run_agent_to_buffer is None:
@@ -62,7 +59,6 @@ async def run_child_thread_live(
     *,
     input_messages: list[Any],
 ) -> str:
-    """Run a spawned child agent through the normal web thread path."""
     sandbox_type = _resolve_thread_sandbox(app, thread_id)
     pool_key = f"{thread_id}:{sandbox_type}"
     app.state.agent_pool[pool_key] = agent
