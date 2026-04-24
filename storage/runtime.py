@@ -1,5 +1,3 @@
-"""Runtime wiring helpers for storage (Supabase-only)."""
-
 from __future__ import annotations
 
 import importlib
@@ -28,7 +26,6 @@ def build_storage_container(
     supabase_client: Any | None = None,
     supabase_client_factory: str | None = None,
 ) -> StorageContainer:
-    """Build a runtime storage container (Supabase-only)."""
     client = _resolve_supabase_client(supabase_client, supabase_client_factory)
     return StorageContainer(supabase_client=client)
 
