@@ -53,59 +53,36 @@ def test_e2b_create_session_bootstraps_workspace_files_dir(monkeypatch):
 def test_e2b_provider():
     api_key = os.getenv("E2B_API_KEY")
     if not api_key or not api_key.startswith("e2b_"):
-        print("E2B_API_KEY not set, skipping")
         return
 
     provider = E2BProvider(api_key=api_key, timeout=60)
 
-    print("Creating session...")
     info = provider.create_session()
-    print(f"  session_id: {info.session_id}")
     sid = info.session_id
 
-    print("\nExecuting command...")
     result = provider.execute(sid, "echo hello && uname -a")
-    print(f"  output: {result.output}")
     assert result.exit_code == 0
 
-    print("\nWriting file...")
     provider.write_file(sid, "/home/user/test.txt", "hello from leon")
 
-    print("\nReading file...")
     content = provider.read_file(sid, "/home/user/test.txt")
-    print(f"  content: {content}")
     assert content == "hello from leon"
 
-    print("\nListing /home/user...")
     items = provider.list_dir(sid, "/home/user")
     names = [i["name"] for i in items]
-    print(f"  entries: {names}")
     assert "test.txt" in names
 
-    print("\nChecking status...")
     status = provider.get_session_status(sid)
-    print(f"  status: {status}")
     assert status == "running"
 
-    print("\nPausing...")
     assert provider.pause_session(sid)
 
     status = provider.get_session_status(sid)
-    print(f"  status after pause: {status}")
     assert status == "paused"
 
-    print("\nResuming...")
     assert provider.resume_session(sid)
 
     content = provider.read_file(sid, "/home/user/test.txt")
-    print(f"  content after resume: {content}")
     assert content == "hello from leon"
 
-    print("\nDestroying...")
     assert provider.destroy_session(sid)
-
-    print("\nAll tests passed!")
-
-
-if __name__ == "__main__":
-    test_e2b_provider()

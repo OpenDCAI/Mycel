@@ -180,7 +180,3 @@ class CheckDevValidityScriptTests(unittest.TestCase):
         requested_extras = set(re.findall(r"--extra\s+([A-Za-z0-9_-]+)", dockerfile))
 
         self.assertLessEqual(requested_extras, set(optional_dependencies))
-
-
-if __name__ == "__main__":
-    unittest.main()
