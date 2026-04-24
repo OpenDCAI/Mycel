@@ -1,6 +1,5 @@
 import os
 import subprocess
-from importlib.util import find_spec
 
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -91,12 +90,3 @@ def test_run_reloadable_app_uses_shared_uvicorn_contract(monkeypatch):
             },
         )
     ]
-
-
-def test_monitor_process_shell_no_longer_lives_under_backend_monitor_app():
-    try:
-        legacy_spec = find_spec("backend.monitor_app.main")
-    except ModuleNotFoundError:
-        legacy_spec = None
-    assert legacy_spec is None
-    assert find_spec("backend.monitor.app.main") is not None

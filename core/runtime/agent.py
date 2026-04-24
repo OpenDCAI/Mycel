@@ -953,8 +953,8 @@ class LeonAgent:
                 await asyncio.to_thread(sync_client.close)
             except RuntimeError as exc:
                 # @@@shutdown-sync-close - interpreter shutdown can make to_thread
-                # unavailable after product work already completed; fall back to a
-                # direct close instead of turning cleanup noise into a fake blocker.
+                # unavailable after product work already completed; use a direct
+                # close instead of turning cleanup noise into a fake blocker.
                 if "interpreter shutdown" not in str(exc):
                     raise
                 sync_client.close()

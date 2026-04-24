@@ -20,7 +20,7 @@ def test_provider_qualified_model_id_does_not_require_user_provider_row():
     assert overrides == {"model_provider": "openai"}
 
 
-def test_user_credential_source_does_not_fallback_to_platform_env(monkeypatch):
+def test_user_credential_source_ignores_platform_env(monkeypatch):
     monkeypatch.setenv("OPENAI_API_KEY", "platform-key")
     config = ModelsConfig(providers={"openai": ProviderConfig(credential_source="user")})
 

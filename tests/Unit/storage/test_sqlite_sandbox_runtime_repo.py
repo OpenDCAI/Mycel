@@ -16,7 +16,7 @@ def test_sqlite_sandbox_runtime_repo_schema_does_not_create_removed_volume_id(tm
     assert "volume_id" not in cols
 
 
-def test_sqlite_sandbox_runtime_repo_returns_sandbox_runtime_id_not_legacy_runtime_id(tmp_path):
+def test_sqlite_sandbox_runtime_repo_returns_sandbox_runtime_id(tmp_path):
     repo = SQLiteSandboxRuntimeRepo(tmp_path / "sandbox.db")
     try:
         created = repo.create("runtime-1", "local")
@@ -52,7 +52,7 @@ def test_sqlite_sandbox_runtime_repo_schema_uses_sandbox_runtime_id_in_sandbox_r
     assert "lease_id" not in cols
 
 
-def test_sqlite_sandbox_runtime_repo_delete_removes_runtime_without_legacy_sqlitelease_import(tmp_path):
+def test_sqlite_sandbox_runtime_repo_delete_removes_runtime(tmp_path):
     repo = SQLiteSandboxRuntimeRepo(tmp_path / "sandbox.db")
     try:
         repo.create("runtime-1", "local")

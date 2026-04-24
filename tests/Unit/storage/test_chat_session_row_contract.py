@@ -1,7 +1,7 @@
 from storage.providers.sqlite.chat_session_repo import SQLiteChatSessionRepo
 
 
-def test_chat_session_repo_create_returns_sandbox_runtime_id_not_legacy_runtime_id(tmp_path):
+def test_chat_session_repo_create_returns_sandbox_runtime_id(tmp_path):
     repo = SQLiteChatSessionRepo(tmp_path / "sandbox.db")
     try:
         created = repo.create_session(
@@ -17,7 +17,7 @@ def test_chat_session_repo_create_returns_sandbox_runtime_id_not_legacy_runtime_
     assert "lease_id" not in created
 
 
-def test_chat_session_repo_get_returns_sandbox_runtime_id_not_legacy_runtime_id(tmp_path):
+def test_chat_session_repo_get_returns_sandbox_runtime_id(tmp_path):
     repo = SQLiteChatSessionRepo(tmp_path / "sandbox.db")
     try:
         repo.create_session(

@@ -152,7 +152,7 @@ async def test_registry_get_or_create_agent_requires_explicit_messaging_service_
 
 
 @pytest.mark.asyncio
-async def test_registry_get_or_create_agent_does_not_read_app_state_messaging_service_fallback(
+async def test_registry_get_or_create_agent_requires_threads_runtime_messaging_service(
     monkeypatch: pytest.MonkeyPatch,
 ):
     def _fake_create_agent_sync(**_kwargs) -> object:
@@ -162,14 +162,14 @@ async def test_registry_get_or_create_agent_does_not_read_app_state_messaging_se
         def get_by_id(self, thread_id: str):
             return {
                 "id": thread_id,
-                "agent_user_id": "agent-user-no-fallback",
+                "agent_user_id": "agent-user-runtime-state",
                 "cwd": None,
                 "model": "leon:large",
             }
 
     class _UserRepo:
         def get_by_id(self, user_id: str):
-            return SimpleNamespace(id=user_id, owner_user_id="owner-no-fallback", agent_config_id="cfg-no-fallback")
+            return SimpleNamespace(id=user_id, owner_user_id="owner-runtime-state", agent_config_id="cfg-runtime-state")
 
     app = SimpleNamespace(
         state=SimpleNamespace(
@@ -184,7 +184,7 @@ async def test_registry_get_or_create_agent_does_not_read_app_state_messaging_se
     )
 
     monkeypatch.setattr(agent_pool._registry, "create_agent_sync", _fake_create_agent_sync)
-    monkeypatch.setattr(agent_pool._registry, "get_or_create_agent_id", lambda **_: "agent-no-fallback")
+    monkeypatch.setattr(agent_pool._registry, "get_or_create_agent_id", lambda **_: "agent-runtime-state")
     monkeypatch.setattr(
         agent_pool._registry,
         "get_messaging_service",
@@ -193,7 +193,7 @@ async def test_registry_get_or_create_agent_does_not_read_app_state_messaging_se
     )
 
     with pytest.raises(RuntimeError, match="messaging_service is required for agent chat runtime"):
-        await agent_pool._registry.get_or_create_agent(cast(Any, app), "local", thread_id="thread-no-fallback")
+        await agent_pool._registry.get_or_create_agent(cast(Any, app), "local", thread_id="thread-runtime-state")
 
 
 @pytest.mark.asyncio
