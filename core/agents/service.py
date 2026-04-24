@@ -1,10 +1,3 @@
-"""AgentService - Registers Agent/TaskOutput/TaskStop tools into ToolRegistry.
-
-Creates independent LeonAgent instances per spawn. Sub-agents run as asyncio
-tasks; parent blocks until completion by default. `run_in_background=True`
-fires-and-forgets and returns a task_id for polling via TaskOutput.
-"""
-
 from __future__ import annotations
 
 import asyncio

@@ -1,9 +1,3 @@
-"""Volume source abstraction — where files physically live.
-
-Current runtime truth only needs host-backed file roots.
-Historical Daytona file-root rows still deserialize here so cleanup can remove their host paths.
-"""
-
 from __future__ import annotations
 
 import hashlib

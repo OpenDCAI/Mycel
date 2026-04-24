@@ -1,8 +1,3 @@
-"""FileSystem backend abstraction.
-
-Separates I/O mechanism (local fs vs sandbox) from policy (hooks, staleness, etc.).
-"""
-
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
