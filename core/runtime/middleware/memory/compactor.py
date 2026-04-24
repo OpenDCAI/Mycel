@@ -204,19 +204,16 @@ class ContextCompactor:
         if len(to_keep) <= 1:
             return False, []
 
-        # Calculate token budgets
         new_content_tokens = sum(self._estimate_msg_tokens(msg) for msg in to_keep)
         max_history_tokens = int(context_limit * 0.5 * 1.2)  # 50% + 20% safety margin
 
         if new_content_tokens <= max_history_tokens:
             return False, []
 
-        # Need to split: extract prefix from to_keep
         turn_prefix = self._extract_turn_prefix(to_keep, max_history_tokens)
         return True, turn_prefix
 
     def _extract_turn_prefix(self, to_keep: list[Any], max_tokens: int) -> list[Any]:
-        """Extract prefix messages from to_keep up to max_tokens."""
         accumulated = 0
         prefix_end_idx = 0
 
@@ -256,7 +253,6 @@ class ContextCompactor:
         return combined, prefix_summary
 
     def _format_messages_for_summary(self, messages: list[Any]) -> str:
-        """Format messages into a readable string for the summarization LLM."""
         parts = []
         for msg in messages:
             role = msg.__class__.__name__.replace("Message", "")

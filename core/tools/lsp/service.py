@@ -565,7 +565,6 @@ class LSPService:
 
     @staticmethod
     def _check_file(file_path: str) -> str | None:
-        """Return error string if file exceeds 10 MB limit, else None."""
         try:
             size = Path(file_path).stat().st_size
         except OSError:
@@ -576,7 +575,6 @@ class LSPService:
         return None
 
     def _filter_gitignored(self, locations: list) -> list:
-        """Filter out locations inside gitignored paths (batches of 50, like CC)."""
         if not locations:
             return locations
         abs_paths = [loc.get("absolutePath") or loc.get("uri", "").replace("file://", "") for loc in locations]
@@ -596,7 +594,6 @@ class LSPService:
         return [loc for loc, p in zip(locations, abs_paths) if p not in ignored]
 
     def _filter_gitignored_batched(self, locations: list) -> list:
-        """Run _filter_gitignored in batches of 50 (matches CC batch size)."""
         out = []
         for i in range(0, len(locations), 50):
             out.extend(self._filter_gitignored(locations[i : i + 50]))
