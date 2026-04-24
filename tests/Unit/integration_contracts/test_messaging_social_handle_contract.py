@@ -51,12 +51,12 @@ class _FakeRelationshipRepo:
             }
         }
 
-    def get(self, actor_id: str, target_id: str):
-        key = cast(tuple[str, str], tuple(sorted((actor_id, target_id))))
+    def get(self, requester_id: str, target_id: str):
+        key = cast(tuple[str, str], tuple(sorted((requester_id, target_id))))
         return self._existing.get(key)
 
-    def upsert(self, actor_id: str, target_id: str, *, state: str, initiator_user_id: str | None):
-        key = cast(tuple[str, str], tuple(sorted((actor_id, target_id))))
+    def upsert(self, requester_id: str, target_id: str, *, state: str, initiator_user_id: str | None):
+        key = cast(tuple[str, str], tuple(sorted((requester_id, target_id))))
         row = dict(self._existing[key])
         row.update({"state": state, "initiator_user_id": initiator_user_id})
         row["updated_at"] = "2026-04-07T00:01:00Z"
@@ -120,10 +120,10 @@ def test_relationship_revoke_deletes_hire_without_snapshot_side_channel() -> Non
 
 def test_relationship_request_uses_single_pending_state_and_initiator() -> None:
     class _RequestRepo:
-        def get(self, _actor_id: str, _target_id: str):
+        def get(self, _requester_id: str, _target_id: str):
             return None
 
-        def upsert(self, _actor_id: str, _target_id: str, **fields: Any):
+        def upsert(self, _requester_id: str, _target_id: str, **fields: Any):
             return {
                 "id": "hire_visit:agent-user-1:human-user-1",
                 "user_low": "agent-user-1",
@@ -968,7 +968,7 @@ def test_messaging_service_rejects_unknown_direct_chat_participant_before_writin
             get_by_id=lambda _chat_id: (_ for _ in ()).throw(AssertionError("unknown participant must fail before lookup")),
         ),
         chat_member_repo=SimpleNamespace(
-            find_chat_between=lambda _actor_id, _target_id: (_ for _ in ()).throw(
+            find_chat_between=lambda _requester_id, _target_id: (_ for _ in ()).throw(
                 AssertionError("unknown participant must fail before member lookup")
             ),
             add_member=lambda chat_id, user_id: writes.append((chat_id, user_id)),
@@ -2478,7 +2478,7 @@ def test_delivery_resolver_notifies_when_new_contact_edge_is_muted() -> None:
     assert action is DeliveryAction.NOTIFY
 
 
-def test_same_owner_agent_turn_delivers_to_sibling_actor_without_relationship() -> None:
+def test_same_owner_agent_turn_delivers_to_sibling_user_without_relationship() -> None:
     delivered: list[tuple[str, str]] = []
     resolver = HireVisitDeliveryResolver(
         contact_repo=SimpleNamespace(get=lambda _owner_id, _target_id: None),

@@ -282,8 +282,8 @@ class MessagingService:
     def count_unread(self, chat_id: str, user_id: str) -> int:
         return self._messages.count_unread(chat_id, user_id)
 
-    def find_direct_chat_id(self, actor_id: str, target_id: str) -> str | None:
-        return self._chat_members_repo.find_chat_between(actor_id, target_id)
+    def find_direct_chat_id(self, user_id: str, target_id: str) -> str | None:
+        return self._chat_members_repo.find_chat_between(user_id, target_id)
 
     def search_messages(self, query: str, *, chat_id: str | None = None) -> list[dict[str, Any]]:
         return self._messages.search(query, chat_id=chat_id)

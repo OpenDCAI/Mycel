@@ -20,8 +20,8 @@ from backend.chat.api.http.dependencies import (
     get_thread_repo,
     get_user_repo,
 )
-from messaging.actor_ownership import is_owned_by_viewer
 from messaging.social_access import can_group_chat_with_participant
+from messaging.user_ownership import is_owned_by_viewer
 
 router = APIRouter(prefix="/api/chats", tags=["chats"])
 
@@ -88,7 +88,7 @@ def _validate_chat_participant_ids(
             validated.append(participant_id)
             continue
         if candidate is not None and getattr(candidate, "owner_user_id", None) is not None:
-            raise ValueError(f"Agent participant ids must be actor user_ids, not agent_user_id: {participant_id}")
+            raise ValueError(f"Agent participant ids must be thread user_ids, not agent_user_id: {participant_id}")
         raise ValueError(f"Unknown chat participant id: {participant_id}")
     return validated
 

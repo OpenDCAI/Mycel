@@ -6,8 +6,9 @@ from types import SimpleNamespace
 import pytest
 from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
+from pydantic import ValidationError
 
-from backend.chat.api.http import chats_router, internal_messaging_router
+from backend.chat.api.http import chats_router, internal_messaging_router, relationships_router
 from backend.identity.avatar.urls import avatar_url
 from backend.web.core.dependencies import get_current_user_id
 from storage.contracts import ContactEdgeRow
@@ -136,6 +137,40 @@ def test_internal_find_or_create_chat_maps_invalid_participants_to_400() -> None
     assert excinfo.value.status_code == 400
     assert excinfo.value.detail == "Chat participant missing-user is not a resolvable user row"
     assert inspect.iscoroutinefunction(chats_router.stream_chat_events)
+
+
+def test_internal_direct_chat_lookup_uses_user_level_payload() -> None:
+    seen: dict[str, str] = {}
+
+    def find_direct_chat_id(user_id: str, target_id: str) -> str:
+        seen["user_id"] = user_id
+        seen["target_id"] = target_id
+        return "chat-1"
+
+    result = internal_messaging_router.find_direct_chat_id(
+        internal_messaging_router.DirectChatLookupBody(user_id="user-1", target_id="user-2"),
+        messaging_service=SimpleNamespace(find_direct_chat_id=find_direct_chat_id),
+    )
+
+    assert result == {"chat_id": "chat-1"}
+    assert seen == {"user_id": "user-1", "target_id": "user-2"}
+    with pytest.raises(ValidationError):
+        internal_messaging_router.DirectChatLookupBody.model_validate({"actor_id": "user-1", "target_id": "user-2"})
+
+
+def test_relationship_bodies_use_requester_user_id_not_actor_id() -> None:
+    request_body = relationships_router.RelationshipRequestBody(
+        target_user_id="user-2",
+        requester_user_id="user-1",
+    )
+    action_body = relationships_router.RelationshipActionBody(requester_user_id="user-1")
+
+    assert request_body.requester_user_id == "user-1"
+    assert action_body.requester_user_id == "user-1"
+    with pytest.raises(ValidationError):
+        relationships_router.RelationshipRequestBody.model_validate(
+            {"target_user_id": "user-2", "actor_user_id": "user-1"}
+        )
 
 
 def test_get_accessible_chat_or_404_returns_chat():
@@ -620,7 +655,7 @@ def test_create_chat_rejects_template_member_ids_for_group_participants() -> Non
         )
 
     assert exc_info.value.status_code == 400
-    assert "actor" in str(exc_info.value.detail).lower()
+    assert "thread user_ids" in str(exc_info.value.detail).lower()
     assert called == []
 
 
@@ -642,7 +677,7 @@ def test_create_chat_rejects_template_member_id_for_direct_participant() -> None
         )
 
     assert exc_info.value.status_code == 400
-    assert "actor" in str(exc_info.value.detail).lower()
+    assert "thread user_ids" in str(exc_info.value.detail).lower()
     assert called == []
 
 
