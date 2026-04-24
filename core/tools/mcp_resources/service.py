@@ -1,5 +1,3 @@
-"""Expose MCP resource discovery and reading as agent-callable deferred tools."""
-
 from __future__ import annotations
 
 import base64

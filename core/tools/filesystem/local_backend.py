@@ -1,5 +1,3 @@
-"""Local filesystem backend - direct local I/O."""
-
 from __future__ import annotations
 
 from pathlib import Path

@@ -1,5 +1,3 @@
-"""PhysicalTerminalRuntime ABC, helpers, and remote runtime base classes."""
-
 from __future__ import annotations
 
 import asyncio

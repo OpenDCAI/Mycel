@@ -1,5 +1,3 @@
-"""Dangerous commands hook - blocks commands that may harm the system."""
-
 import re
 import shlex
 from pathlib import Path

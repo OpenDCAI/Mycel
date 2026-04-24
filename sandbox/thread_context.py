@@ -1,5 +1,3 @@
-"""Thread context tracking via ContextVar."""
-
 from __future__ import annotations
 
 from contextvars import ContextVar

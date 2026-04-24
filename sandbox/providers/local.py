@@ -1,5 +1,3 @@
-"""LocalSessionProvider — in-process session provider for local sandbox."""
-
 from __future__ import annotations
 
 import os
