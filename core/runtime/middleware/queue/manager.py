@@ -1,9 +1,3 @@
-"""Message Queue Manager — facade over QueueRepo with wake-on-enqueue.
-
-Delegates all persistence to a QueueRepo (storage layer).
-Wake handlers notify the host when messages arrive for idle agents.
-"""
-
 from __future__ import annotations
 
 import logging
@@ -18,8 +12,6 @@ logger = logging.getLogger(__name__)
 
 
 class MessageQueueManager:
-    """Facade: QueueRepo persistence + wake handler orchestration."""
-
     def __init__(self, repo: QueueRepo | None = None, *, db_path: str | None = None) -> None:
         if repo is not None:
             self._repo = repo

@@ -1,10 +1,3 @@
-"""XML formatters for steer messages and task notifications.
-
-Matches Claude Code's system-reminder convention so the LLM treats
-injected content as authoritative system instructions.
-Frontend strips <system-reminder> tags — agent sees full XML, user sees clean text.
-"""
-
 import json
 from html import escape
 from typing import Literal

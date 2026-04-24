@@ -1,15 +1,3 @@
-"""SummaryStore - Persistent storage for conversation summaries.
-
-This module implements persistent storage for MemoryMiddleware summaries,
-preventing loss of cached summaries across restarts.
-
-Architecture:
-    MemoryMiddleware → SummaryStore → SQLite
-    - Summaries stored with thread_id as key
-    - Only latest summary per thread is active
-    - Historical summaries retained for audit
-"""
-
 from __future__ import annotations
 
 import logging
@@ -47,12 +35,6 @@ class SummaryData:
 
 
 class SummaryStore:
-    """Store for managing conversation summary persistence.
-
-    Handles CRUD operations for summaries in the database.
-    Follows the same pattern as TerminalStore for consistency.
-    """
-
     def __init__(self, db_path: Path | None = None, summary_repo: SummaryRepo | None = None):
         self.db_path = db_path or resolve_role_db_path(SQLiteDBRole.SANDBOX)
         self._repo: SummaryRepo

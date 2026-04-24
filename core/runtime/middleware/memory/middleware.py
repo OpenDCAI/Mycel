@@ -1,10 +1,3 @@
-"""MemoryMiddleware — Context pruning + compaction.
-
-Combines SessionPruner (Layer 1) and ContextCompactor (Layer 2).
-All operations happen in awrap_model_call — modifies the request sent to LLM,
-does NOT modify LangGraph state. TUI sees full history, agent sees compressed.
-"""
-
 from __future__ import annotations
 
 import json
@@ -34,12 +27,6 @@ _COMPACTION_BREAKER_THRESHOLD = 3
 
 
 class MemoryMiddleware(AgentMiddleware):
-    """Context memory management middleware.
-
-    Layer 1 (Pruning): trim/clear old ToolMessage content
-    Layer 2 (Compaction): LLM summarization when context exceeds threshold
-    """
-
     tools = ()  # no tools injected
 
     def __init__(
