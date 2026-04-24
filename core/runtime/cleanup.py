@@ -9,15 +9,6 @@ logger = logging.getLogger(__name__)
 
 
 class CleanupRegistry:
-    """Registry of async cleanup functions executed in priority order on shutdown.
-
-    Usage:
-        registry = CleanupRegistry()
-        registry.register(close_db, priority=1)
-        registry.register(close_sandbox, priority=2)
-        await registry.run_cleanup()
-    """
-
     def __init__(self):
         self._entries: list[tuple[int, Callable[[], Awaitable[None] | None]]] = []
         self._timeout_s = 2.0
@@ -25,12 +16,6 @@ class CleanupRegistry:
         self._shutdown_in_progress = False
 
     def register(self, fn: Callable[[], Awaitable[None] | None], priority: int = 5) -> Callable[[], None]:
-        """Register a cleanup function.
-
-        Args:
-            fn: Sync or async callable that releases resources.
-            priority: Execution order — lower number runs first (1 before 2).
-        """
         entry = (priority, fn)
         self._entries.append(entry)
 
@@ -43,11 +28,6 @@ class CleanupRegistry:
         return unregister
 
     async def run_cleanup(self) -> None:
-        """Execute all registered cleanup functions in priority order.
-
-        Different priority tiers run in order. Entries inside the same priority
-        tier run concurrently so one slow cleanup does not serialize its peers.
-        """
         if self._cleanup_task is not None:
             await asyncio.shield(self._cleanup_task)
             return

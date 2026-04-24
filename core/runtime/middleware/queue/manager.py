@@ -38,7 +38,6 @@ class MessageQueueManager:
         sender_avatar_url: str | None = None,
         is_steer: bool = False,
     ) -> None:
-        """Persist a message. Fires wake handler after INSERT."""
         self._repo.enqueue(
             thread_id,
             content,
@@ -66,11 +65,9 @@ class MessageQueueManager:
                 logger.exception("Wake handler raised for thread %s", thread_id)
 
     def dequeue(self, thread_id: str) -> QueueItem | None:
-        """Atomically pop the oldest message."""
         return self._repo.dequeue(thread_id)
 
     def drain_all(self, thread_id: str) -> list[QueueItem]:
-        """Atomically pop all pending messages, return FIFO-ordered list."""
         return self._repo.drain_all(thread_id)
 
     def peek(self, thread_id: str) -> bool:
@@ -80,11 +77,6 @@ class MessageQueueManager:
         return self._repo.list_queue(thread_id)
 
     def register_wake(self, thread_id: str, handler: Callable[[QueueItem], None]) -> None:
-        """Register a wake handler for a thread.
-
-        The handler receives the newly-enqueued QueueItem.
-        Called by enqueue() after INSERT.
-        """
         with self._wake_lock:
             self._wake_handlers[thread_id] = handler
 
@@ -93,11 +85,9 @@ class MessageQueueManager:
             self._wake_handlers.pop(thread_id, None)
 
     def clear_queue(self, thread_id: str) -> None:
-        """Clear persisted queue for a thread."""
         self._repo.clear_queue(thread_id)
 
     def clear_all(self, thread_id: str) -> None:
-        """Clear queue and unregister wake handler for a thread."""
         self.clear_queue(thread_id)
         self.unregister_wake(thread_id)
 
