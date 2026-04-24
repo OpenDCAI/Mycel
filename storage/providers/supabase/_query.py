@@ -74,7 +74,6 @@ def schema_rpc(client: Any, schema: str, function_name: str, params: dict[str, A
 
 
 def rows(response: Any, repo: str, operation: str) -> list[dict[str, Any]]:
-    """Extract and validate the `.data` list from a supabase-py response."""
     if isinstance(response, dict):
         payload = response.get("data")
     else:

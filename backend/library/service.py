@@ -350,7 +350,6 @@ def list_library_names(
     owner_user_id: str | None = None,
     recipe_repo: RecipeRepo | None = None,
 ) -> list[dict[str, str]]:
-    """Lightweight name+desc list for Picker UI."""
     return [
         {"name": item["name"], "desc": item["desc"]}
         for item in list_library(resource_type, owner_user_id=owner_user_id, recipe_repo=recipe_repo)
@@ -405,7 +404,6 @@ def get_resource_content(
     owner_user_id: str | None = None,
     recipe_repo: RecipeRepo | None = None,
 ) -> str | None:
-    """Read the .md content file for a skill or agent resource."""
     if resource_type == "sandbox-template":
         owner_user_id = _require_recipe_owner(owner_user_id)
         for item in list_library("sandbox-template", owner_user_id=owner_user_id, recipe_repo=recipe_repo):
@@ -428,7 +426,6 @@ def get_resource_content(
 
 
 def update_resource_content(resource_type: str, resource_id: str, content: str) -> bool:
-    """Write the .md content file for a skill or agent resource."""
     now = int(time.time() * 1000)
     if resource_type == "sandbox-template":
         return False

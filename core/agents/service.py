@@ -306,8 +306,6 @@ ASK_USER_QUESTION_SCHEMA = make_tool_schema(
 
 
 class _RunningTask:
-    """Tracks a background asyncio.Task (agent run) with its metadata."""
-
     def __init__(self, task: asyncio.Task, agent_id: str, thread_id: str, description: str = ""):
         self.task = task
         self.agent_id = agent_id
@@ -328,8 +326,6 @@ class _RunningTask:
 
 
 class _BashBackgroundRun:
-    """Wraps AsyncCommand to provide the same is_done/get_result interface as _RunningTask."""
-
     def __init__(self, async_cmd: Any, command: str, description: str = ""):
         self._cmd = async_cmd
         self.command = command
@@ -364,7 +360,6 @@ def _background_run_cancelled(running: BackgroundRun) -> bool:
 
 
 async def request_background_run_stop(running: BackgroundRun) -> None:
-    """Stop a background run and mark bash runs with authoritative cancellation state."""
     if isinstance(running, _RunningTask):
         running.task.cancel()
         return
@@ -632,7 +627,6 @@ class AgentService:
         fork_context: bool = False,
         tool_context: ToolUseContext | None = None,
     ) -> Any:
-        """Spawn an independent LeonAgent and run it with the given prompt."""
         from sandbox.thread_context import get_current_thread_id
 
         task_id = uuid.uuid4().hex[:8]
@@ -728,7 +722,6 @@ class AgentService:
         fork_context: bool = False,
         parent_tool_context: ToolUseContext | None = None,
     ) -> str:
-        """Create and run an independent LeonAgent, collect its text output."""
         # Isolate this sub-agent from the parent's LangChain callback chain.
         # asyncio.create_task() copies the current context, so this task inherits
         # var_child_runnable_config which carries the parent graph's inheritable
@@ -1161,7 +1154,6 @@ class AgentService:
             )
 
     async def _handle_task_output(self, task_id: str, block: bool = True, timeout: int = 30_000) -> str:
-        """Get output of a background agent task."""
         running = self._tasks.get(task_id)
         if not running:
             return f"Error: task '{task_id}' not found"
@@ -1306,7 +1298,6 @@ class AgentService:
             await self._stop_background_run(task_id, running)
 
     async def _handle_task_stop(self, task_id: str) -> str:
-        """Stop a running background agent task."""
         running = self._tasks.get(task_id)
         if not running:
             return f"Error: task '{task_id}' not found"

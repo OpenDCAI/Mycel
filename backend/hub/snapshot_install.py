@@ -87,7 +87,6 @@ def install_from_snapshot(
     user_repo: Any = None,
     agent_config_repo: Any = None,
 ) -> str:
-    """Create or update a marketplace-backed agent user via repos only."""
     from storage.contracts import UserRow, UserType
     from storage.utils import generate_agent_config_id, generate_agent_user_id
 
