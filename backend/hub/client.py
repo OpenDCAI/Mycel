@@ -27,7 +27,6 @@ _hub_client = httpx.Client(timeout=30.0, trust_env=False)
 
 
 def _hub_api(method: str, path: str, **kwargs: Any) -> dict:
-    """Call Hub API."""
     url = f"{HUB_URL}/api/v1{path}"
     try:
         resp = _hub_client.request(method, url, **kwargs)
@@ -170,7 +169,6 @@ def publish(
     user_repo: Any = None,
     agent_config_repo: Any = None,
 ) -> dict:
-    """Publish a local agent user bundle to the Hub."""
     if user_repo is None or agent_config_repo is None:
         raise RuntimeError("user_repo and agent_config_repo are required for publish()")
 
@@ -253,7 +251,6 @@ def download(
     agent_config_repo: Any = None,
     agent_user_id: str | None = None,
 ) -> dict:
-    """Download a marketplace item to local library or install an agent user."""
     result = _hub_api("POST", f"/items/{item_id}/download")
     snapshot = result["snapshot"]
     item = result["item"]
