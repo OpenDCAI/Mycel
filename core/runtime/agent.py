@@ -363,12 +363,6 @@ class LeonAgent:
             self.agent._tool_abort_controller = tool_context.abort_controller
 
     async def ainit(self):
-        """Complete async initialization (call this if initialized in async context).
-
-        Example:
-            agent = LeonAgent(sandbox=sandbox)
-            await agent.ainit()
-        """
         if self.checkpointer is None:
             await self._init_checkpointer()
             _mcp_tools = await self._init_mcp_tools()
@@ -476,11 +470,6 @@ class LeonAgent:
         models_config_override: dict[str, Any] | None,
         memory_config_override: dict[str, Any] | None,
     ) -> tuple[LeonSettings, ModelsConfig]:
-        """Load configuration using new config system.
-
-        Returns:
-            Tuple of (LeonSettings for runtime, ModelsConfig for model identity)
-        """
         cli_overrides: dict = {}
         use_workspace_override = sandbox_name in (None, "", "local")
 
@@ -657,11 +646,6 @@ class LeonAgent:
         return f"{base_url}/v1"
 
     def _create_model(self):
-        """Initialize model with all parameters passed to init_chat_model.
-
-        Uses configurable_fields so model/provider/api_key/base_url can be
-        overridden per-request via LangGraph config without rebuilding the graph.
-        """
         kwargs = self._build_model_kwargs()
         kwargs.update(self._build_openai_http_clients(kwargs.get("model_provider")))
         kwargs = normalize_model_kwargs(self.model_name, kwargs)
@@ -734,12 +718,6 @@ class LeonAgent:
         return kwargs
 
     def update_config(self, model: str | None = None, **tool_overrides) -> None:
-        """Hot-reload model configuration (lightweight, no middleware/graph rebuild).
-
-        Args:
-            model: New model name (supports leon:* virtual names)
-            **tool_overrides: Tool configuration overrides (runtime config only)
-        """
         if tool_overrides:
             cli_overrides = {"tools": tool_overrides}
             loader = AgentLoader(workspace_root=self.workspace_root)
@@ -800,21 +778,12 @@ class LeonAgent:
         return self._observation_config
 
     def update_observation(self, **overrides) -> None:
-        """Hot-reload observation configuration.
-
-        Args:
-            **overrides: Fields to override (e.g. active="langfuse" or active=None)
-        """
         self._observation_config = ObservationLoader(workspace_root=self.workspace_root).load(cli_overrides=overrides or None)
 
         if self.verbose:
             print(f"[LeonAgent] Observation updated: active={self._observation_config.active}")
 
     def close(self, *, cleanup_sandbox: bool = True):
-        """Clean up resources via CleanupRegistry (priority-ordered).
-
-        Falls back to direct cleanup if CleanupRegistry is not initialized.
-        """
         # @@@close-idempotent - child agents may explicitly skip sandbox cleanup
         # and later still hit __del__ on GC; never let a second close silently
         # re-enable default sandbox teardown on a shared sandbox runtime.
@@ -1046,11 +1015,6 @@ class LeonAgent:
         middleware.append(self._memory_middleware)
 
     def _init_services(self) -> None:
-        """Initialize tool Services and register them with ToolRegistry.
-
-        Each Service registers its tools (INLINE or DEFERRED) into self._tool_registry.
-        This runs after sandbox init so backends are available.
-        """
         fs_backend = self._sandbox.fs()
         cmd_executor = self._sandbox.shell()
 
@@ -1272,10 +1236,6 @@ class LeonAgent:
             return []
 
     async def _init_checkpointer(self):
-        """Initialize async checkpointer for conversation persistence.
-
-        Requires LEON_POSTGRES_URL to be set (Supabase Postgres).
-        """
         pg_url = os.getenv("LEON_POSTGRES_URL")
         if not pg_url:
             raise RuntimeError("LEON_POSTGRES_URL is required for checkpointer initialization")
@@ -1433,15 +1393,6 @@ class LeonAgent:
         )
 
     def invoke(self, message: str, thread_id: str = "default") -> dict:
-        """Invoke agent with a message (sync version).
-
-        Args:
-            message: User message
-            thread_id: Thread ID
-
-        Returns:
-            Agent response (includes messages and state)
-        """
         import asyncio
 
         async def _ainvoke():
@@ -1460,15 +1411,6 @@ class LeonAgent:
             raise
 
     async def ainvoke(self, message: str, thread_id: str = "default") -> dict:
-        """Invoke agent with a message (async version).
-
-        Args:
-            message: User message
-            thread_id: Thread ID
-
-        Returns:
-            Agent response (includes messages and state)
-        """
         try:
             return await self.agent.ainvoke(
                 {"messages": [{"role": "user", "content": message}]},
