@@ -6,36 +6,14 @@ from core.tools.web.types import FetchLimits, FetchResult
 
 
 class BaseFetcher(ABC):
-    """Abstract base class for URL fetchers."""
-
     def __init__(self, limits: FetchLimits | None = None, timeout: int = 10):
         self.limits = limits or FetchLimits()
         self.timeout = timeout
 
     @abstractmethod
-    async def fetch(self, url: str) -> FetchResult:
-        """
-        Fetch content from URL asynchronously.
-
-        Args:
-            url: URL to fetch
-
-        Returns:
-            FetchResult with content and metadata
-        """
-        ...
+    async def fetch(self, url: str) -> FetchResult: ...
 
     def _split_into_chunks(self, content: str, headings: list[str] | None = None) -> list[tuple[int, str, str | None]]:
-        """
-        Split content into chunks.
-
-        Args:
-            content: Full content string
-            headings: Optional list of heading markers to use for chunk boundaries
-
-        Returns:
-            List of (position, content, heading) tuples
-        """
         chunks: list[tuple[int, str, str | None]] = []
         chunk_size = self.limits.chunk_size
 
