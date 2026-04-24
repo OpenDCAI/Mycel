@@ -118,7 +118,6 @@ async def lifespan(app: FastAPI):
         idle_reaper_owner.init_providers_and_managers = init_providers_and_managers
         idle_reaper_owner.IDLE_REAPER_INTERVAL_SEC = IDLE_REAPER_INTERVAL_SEC
 
-        # Start idle reaper background task
         app.state.idle_reaper_task = asyncio.create_task(idle_reaper_owner.idle_reaper_loop(app))
 
         yield
@@ -139,14 +138,12 @@ async def lifespan(app: FastAPI):
         if checkpoint_saver_ctx is not None:
             await checkpoint_saver_ctx.__aexit__(None, None, None)
 
-        # Cleanup: close all agents
         for agent in app.state.agent_pool.values():
             try:
                 agent.close(cleanup_sandbox=False)
             except Exception as e:
                 print(f"[web] Agent cleanup error: {e}")
 
-        # Cleanup: stop LSP language servers
         from core.tools.lsp.service import lsp_pool
 
         await lsp_pool.close_all()

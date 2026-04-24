@@ -207,7 +207,6 @@ def _agent_user_summary_from_repos(user: Any, agent_config_repo: Any) -> dict[st
 def _leon_builtin() -> dict[str, Any]:
     """Build Leon builtin agent-user dict with full tool catalog."""
     tools = [{"name": k, "enabled": v.default, "desc": v.desc, "group": v.group} for k, v in TOOLS_BY_NAME.items()]
-    # Load built-in sub-agents (read-only display)
     builtin_agents = _load_builtin_agents(TOOLS_BY_NAME)
 
     return {

@@ -41,11 +41,6 @@ class AuthService:
         self._contact_repo = contact_repo
         self._recipe_repo = recipe_repo
 
-    # Registration flow (standard Supabase signUp)
-    # Step 1: send_otp(email, password) → signUp creates user, GoTrue sends OTP
-    # Step 2: verify_register_otp(...)  → verifyOtp(type:signup), returns temp_token
-    # Step 3: complete_register(...)    → validate invite, create user + agent records
-
     def send_otp(self, email: str, password: str, invite_code: str) -> None:
         """Validate invite code, create user via signUp (sends confirmation OTP to email)."""
         auth_client = self._auth_api(self._require_auth_client())
@@ -105,7 +100,6 @@ class AuthService:
             now = time.time()
             display_name = email_from_payload.split("@")[0]
 
-            # Create human user row
             self._users.create(
                 UserRow(
                     id=auth_user_id,
@@ -145,7 +139,6 @@ class AuthService:
         """Login with email or mycel_id + password."""
         auth_client = self._auth_api(self._require_auth_client())
 
-        # Resolve email
         email = self._resolve_email(identifier)
 
         from supabase_auth.errors import AuthApiError
@@ -161,14 +154,12 @@ class AuthService:
         auth_user_id = str(resp.user.id)
         token = resp.session.access_token
 
-        # Load user info
         user = self._users.get_by_id(auth_user_id)
         if user is None:
             raise ValueError("账号数据异常，请联系支持")
         if self._recipe_repo is not None:
             self._seed_default_recipes(auth_user_id)
 
-        # Load user-owned agents.
         owned_agents = self._users.list_by_owner_user_id(auth_user_id)
         agent_info = None
         if owned_agents:
