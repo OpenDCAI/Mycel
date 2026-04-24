@@ -1,5 +1,3 @@
-"""Relationship API router — chat/backend owner module."""
-
 from __future__ import annotations
 
 import logging

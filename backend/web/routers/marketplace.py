@@ -1,5 +1,3 @@
-"""Marketplace API router — publish, install, upgrade, check updates."""
-
 import asyncio
 from typing import Annotated, Any
 

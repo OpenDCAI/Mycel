@@ -1,5 +1,3 @@
-"""Thread management and execution endpoints."""
-
 import asyncio
 import json
 import logging

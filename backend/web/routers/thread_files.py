@@ -1,5 +1,3 @@
-"""Thread file browsing endpoints."""
-
 import asyncio
 from typing import Annotated, Any
 

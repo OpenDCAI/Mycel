@@ -1,5 +1,3 @@
-"""User settings management endpoints."""
-
 import asyncio
 import copy
 import json

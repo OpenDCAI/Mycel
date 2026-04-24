@@ -1,5 +1,3 @@
-"""Sandbox management endpoints."""
-
 import asyncio
 from typing import Annotated, Any
 

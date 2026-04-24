@@ -1,5 +1,3 @@
-"""Contacts API router — /api/contacts endpoints."""
-
 from __future__ import annotations
 
 import time

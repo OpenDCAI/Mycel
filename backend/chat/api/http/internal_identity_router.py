@@ -1,5 +1,3 @@
-"""Internal identity routes for thin external-agent tooling."""
-
 from __future__ import annotations
 
 import time

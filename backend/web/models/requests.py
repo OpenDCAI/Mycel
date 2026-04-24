@@ -1,5 +1,3 @@
-"""Pydantic request models for Mycel web API."""
-
 from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field

@@ -1,5 +1,3 @@
-"""Marketplace request/response models (Mycel client side)."""
-
 from typing import Literal
 
 from pydantic import BaseModel, Field

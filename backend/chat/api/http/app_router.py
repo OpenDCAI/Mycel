@@ -1,5 +1,3 @@
-"""Aggregate HTTP router for the chat backend."""
-
 from fastapi import APIRouter
 
 from backend.chat.api.http import (

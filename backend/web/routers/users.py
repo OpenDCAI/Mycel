@@ -1,5 +1,3 @@
-"""User-backed identity endpoints for discovery, avatars, and agent thread lookup."""
-
 import logging
 import time
 from pathlib import Path

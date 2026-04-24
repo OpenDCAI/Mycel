@@ -1,5 +1,3 @@
-"""Internal messaging routes for cross-backend agent chat access."""
-
 from __future__ import annotations
 
 from typing import Annotated, Any

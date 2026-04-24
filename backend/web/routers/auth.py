@@ -1,5 +1,3 @@
-"""Authentication endpoints — 3-step registration + login."""
-
 import asyncio
 from collections.abc import Callable
 from typing import Annotated, Any

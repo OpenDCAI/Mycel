@@ -1,5 +1,3 @@
-"""Web-owned monitor-local thread routes."""
-
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Request
