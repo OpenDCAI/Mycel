@@ -26,20 +26,16 @@ export default function InstallDialog({ open, onOpenChange, item }: Props) {
   const itemTypeLabel = marketplaceTypeLabel(item.type);
   const isSkill = item.type === "skill";
   const installableAgents = agentList.filter((agent) => !agent.builtin);
+  const effectiveAgentId = selectedAgentId || installableAgents[0]?.id || "";
 
   useEffect(() => {
     if (!open || !isSkill) return;
     void ensureAgents();
   }, [ensureAgents, isSkill, open]);
 
-  useEffect(() => {
-    if (!isSkill || selectedAgentId || installableAgents.length === 0) return;
-    setSelectedAgentId(installableAgents[0].id);
-  }, [installableAgents, isSkill, selectedAgentId]);
-
   const handleDownload = async () => {
     try {
-      const targetAgentId = isSkill ? selectedAgentId : undefined;
+      const targetAgentId = isSkill ? effectiveAgentId : undefined;
       if (isSkill && !targetAgentId) {
         toast.error("请先选择要安装 Skill 的 Agent");
         return;
@@ -85,7 +81,7 @@ export default function InstallDialog({ open, onOpenChange, item }: Props) {
               安装到 Agent
               <select
                 className="mt-1 w-full rounded-md border border-border bg-background px-2 py-2 text-sm text-foreground"
-                value={selectedAgentId}
+                value={effectiveAgentId}
                 onChange={(event) => setSelectedAgentId(event.target.value)}
               >
                 {installableAgents.map((agent) => (
@@ -107,7 +103,7 @@ export default function InstallDialog({ open, onOpenChange, item }: Props) {
 
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>取消</Button>
-          <Button onClick={handleDownload} disabled={downloading || (isSkill && !selectedAgentId)}>
+          <Button onClick={handleDownload} disabled={downloading || (isSkill && !effectiveAgentId)}>
             <Download className="w-3.5 h-3.5 mr-1.5" />
             {downloading ? "下载中..." : isSkill ? "安装到 Agent" : "下载到库"}
           </Button>
