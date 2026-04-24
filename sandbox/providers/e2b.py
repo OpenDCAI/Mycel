@@ -103,8 +103,6 @@ def _require_e2b_bytes(
 
 
 class E2BProvider(SandboxProvider):
-    """E2B cloud sandbox provider."""
-
     CATALOG_ENTRY = {"vendor": "E2B", "description": "Cloud sandbox with runtime metrics", "provider_type": "cloud"}
 
     name = "e2b"
@@ -316,7 +314,6 @@ class E2BProvider(SandboxProvider):
         return self.get_metrics_via_commands(session_id)
 
     def snapshot_workspace(self, session_id: str) -> list[dict]:
-        """Download all files from /home/user/workspace."""
         sandbox = self._get_sandbox(session_id)
         stack = [self.WORKSPACE_ROOT]
         files = []
@@ -386,8 +383,6 @@ from sandbox.runtime import (  # noqa: E402
 
 
 class E2BPtyRuntime(_RemoteRuntimeBase):
-    """E2B runtime using native SDK PTY handle for persistent shell."""
-
     def __init__(self, terminal, sandbox_runtime, provider):
         super().__init__(terminal, sandbox_runtime, provider)
         self._session_lock = asyncio.Lock()
