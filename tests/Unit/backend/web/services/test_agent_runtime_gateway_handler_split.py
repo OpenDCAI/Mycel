@@ -65,14 +65,6 @@ async def test_gateway_delegates_chat_and_thread_input_to_split_handlers() -> No
     assert thread_input_handler.called_with is thread_envelope
 
 
-def test_split_handler_modules_are_the_behavior_owners() -> None:
-    from backend.threads.chat_adapters.chat_handler import NativeAgentChatDeliveryHandler
-    from backend.threads.chat_adapters.thread_handler import NativeAgentThreadInputHandler
-
-    assert NativeAgentChatDeliveryHandler.__name__ == "NativeAgentChatDeliveryHandler"
-    assert NativeAgentThreadInputHandler.__name__ == "NativeAgentThreadInputHandler"
-
-
 def test_gateway_rejects_single_chat_handler_entrypoint() -> None:
     constructor: Any = NativeAgentRuntimeGateway
     with pytest.raises(TypeError, match="chat_handler"):

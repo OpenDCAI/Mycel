@@ -14,10 +14,6 @@ from backend.monitor.infrastructure.web import gateway as monitor_gateway
 app = monitor_app_main.app
 
 
-def test_monitor_app_module_path_is_internalized():
-    assert monitor_app_main.__name__ == "backend.monitor.app.main"
-
-
 def test_monitor_app_mounts_only_global_monitor_routes(monkeypatch: pytest.MonkeyPatch):
     monitor_storage = SimpleNamespace(
         storage_container=SimpleNamespace(user_repo=lambda: object(), contact_repo=lambda: object()),

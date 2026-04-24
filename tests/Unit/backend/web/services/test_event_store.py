@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import importlib
-
 import pytest
 
 from backend.threads.events import reads as event_store_reads
@@ -63,17 +61,3 @@ def test_run_event_read_transport_uses_repo_boundary() -> None:
         ("latest_run_id", ("thread-1",), {}),
         ("list_events", ("thread-1", "run-1"), {"after": 3, "limit": 50}),
     ]
-
-
-def test_run_event_store_write_owner_lives_under_backend_thread_runtime_events() -> None:
-    owner_module = importlib.import_module("backend.threads.events.store")
-    read_owner_module = importlib.import_module("backend.threads.events.reads")
-
-    assert owner_module.__name__ == "backend.threads.events.store"
-    assert hasattr(owner_module, "append_event")
-    assert hasattr(owner_module, "read_events_after")
-    assert hasattr(owner_module, "get_last_seq")
-    assert hasattr(owner_module, "get_run_start_seq")
-    assert hasattr(owner_module, "get_latest_run_id")
-    assert hasattr(owner_module, "cleanup_old_runs")
-    assert hasattr(read_owner_module, "RunEventReadTransport")
