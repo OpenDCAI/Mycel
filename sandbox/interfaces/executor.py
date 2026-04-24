@@ -7,8 +7,6 @@ from typing import Any
 
 @dataclass
 class ExecuteResult:
-    """Result of command execution."""
-
     exit_code: int
     stdout: str
     stderr: str
@@ -27,7 +25,6 @@ class ExecuteResult:
         return self.stdout.strip()
 
     def to_tool_result(self) -> str:
-        """Format result for tool response."""
         if self.timed_out:
             return f"Command timed out.\n{self.output}"
         if self.exit_code != 0:
@@ -37,8 +34,6 @@ class ExecuteResult:
 
 @dataclass
 class AsyncCommand:
-    """Represents a running async command."""
-
     command_id: str
     command_line: str
     cwd: str

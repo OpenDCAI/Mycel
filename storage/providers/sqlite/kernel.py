@@ -25,7 +25,6 @@ def _env_path(env_var: str, default_path: Path) -> Path:
 
 
 def resolve_role_db_path(role: SQLiteDBRole, db_path: Path | str | None = None) -> Path:
-    """Resolve role-specific DB path, honoring env overrides."""
     if db_path is not None:
         return Path(db_path)
 
@@ -42,7 +41,6 @@ def resolve_role_db_path(role: SQLiteDBRole, db_path: Path | str | None = None) 
 
 
 def apply_pragmas(conn: sqlite3.Connection) -> None:
-    """Apply canonical PRAGMA settings for Leon SQLite connections."""
     conn.execute(f"PRAGMA journal_mode={WAL_MODE}")
     conn.execute(f"PRAGMA busy_timeout={BUSY_TIMEOUT_MS}")
     conn.execute(f"PRAGMA synchronous={SYNCHRONOUS}")

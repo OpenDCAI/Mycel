@@ -176,7 +176,6 @@ class _CommandWrapper(BaseExecutor):
         return self._resolve_session_for_terminal(terminal_id)
 
     async def get_status(self, command_id: str):
-        """Get status for an async command."""
         session = self._resolve_session_for_command(command_id)
         return await session.runtime.get_command(command_id)
 
@@ -196,14 +195,12 @@ class _FileSystemWrapper(FileSystemBackend):
         self._manager = manager
 
     def _get_provider(self):
-        """Get provider from session's sandbox runtime."""
         provider = getattr(self._session.runtime, "provider", None)
         if provider is None:
             raise RuntimeError("FileSystem operations only supported for remote runtimes")
         return provider
 
     def _get_instance_id(self) -> str:
-        """Get active instance ID."""
         # @@@runtime-convergence - File operations can also wake paused instances; always converge through sandbox runtime.
         provider = getattr(self._session.runtime, "provider", None)
         if provider is not None:
@@ -222,7 +219,6 @@ class _FileSystemWrapper(FileSystemBackend):
         return instance.instance_id
 
     def read_file(self, path: str):
-        """Read file via provider."""
         from sandbox.interfaces.filesystem import FileReadResult
 
         self._session.touch()
@@ -233,7 +229,6 @@ class _FileSystemWrapper(FileSystemBackend):
         return FileReadResult(content=content, size=len(content))
 
     def write_file(self, path: str, content: str):
-        """Write file via provider."""
         from sandbox.interfaces.filesystem import FileWriteResult
 
         self._session.touch()
@@ -247,7 +242,6 @@ class _FileSystemWrapper(FileSystemBackend):
             return FileWriteResult(success=False, error=str(e))
 
     def file_exists(self, path: str) -> bool:
-        """Check if file exists."""
         self._session.touch()
         provider = self._get_provider()
         instance_id = self._get_instance_id()
@@ -290,7 +284,6 @@ class _FileSystemWrapper(FileSystemBackend):
         return None
 
     def is_dir(self, path: str) -> bool:
-        """Check if path is directory."""
         self._session.touch()
         provider = self._get_provider()
         instance_id = self._get_instance_id()
@@ -302,7 +295,6 @@ class _FileSystemWrapper(FileSystemBackend):
             return False
 
     def list_dir(self, path: str):
-        """List directory contents."""
         from sandbox.interfaces.filesystem import DirEntry, DirListResult
 
         self._session.touch()

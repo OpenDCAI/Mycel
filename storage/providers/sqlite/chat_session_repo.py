@@ -586,7 +586,6 @@ class SQLiteChatSessionRepo:
             self._conn.commit()
 
     def cleanup_expired(self) -> list[str]:
-        """Return session_ids of expired active sessions (based on DB policy columns)."""
         active = self.list_active()
         now = datetime.now()
         expired_ids: list[str] = []

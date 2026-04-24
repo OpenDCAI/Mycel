@@ -82,11 +82,9 @@ class MessageQueueManager:
         return self._repo.drain_all(thread_id)
 
     def peek(self, thread_id: str) -> bool:
-        """Check if the queue has messages (without consuming)."""
         return self._repo.peek(thread_id)
 
     def list_queue(self, thread_id: str) -> list[dict]:
-        """List all pending messages (for API queries)."""
         return self._repo.list_queue(thread_id)
 
     def register_wake(self, thread_id: str, handler: Callable[[QueueItem], None]) -> None:
@@ -99,7 +97,6 @@ class MessageQueueManager:
             self._wake_handlers[thread_id] = handler
 
     def unregister_wake(self, thread_id: str) -> None:
-        """Remove wake handler for a thread."""
         with self._wake_lock:
             self._wake_handlers.pop(thread_id, None)
 
@@ -113,5 +110,4 @@ class MessageQueueManager:
         self.unregister_wake(thread_id)
 
     def queue_sizes(self, thread_id: str) -> dict[str, int]:
-        """Return persisted queue sizes."""
         return {"followup": self._repo.count(thread_id)}

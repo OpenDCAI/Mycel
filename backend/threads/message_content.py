@@ -8,14 +8,12 @@ _SYSTEM_REMINDER_RE = re.compile(r"\s*<system-reminder>.*?</system-reminder>\s*"
 
 
 def strip_system_tags(content: str) -> str:
-    """Remove user-hidden system tags from owner-visible content."""
     content = _SYSTEM_HINT_RE.sub("", content)
     content = _SYSTEM_REMINDER_RE.sub("", content)
     return content.strip()
 
 
 def extract_text_content(raw_content: Any) -> str:
-    """Extract text content from common message payload shapes."""
     if isinstance(raw_content, str):
         return raw_content
     if isinstance(raw_content, list):
