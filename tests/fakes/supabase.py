@@ -1,8 +1,3 @@
-"""In-memory fake Supabase client for unit tests.
-
-Supports: select, insert, upsert, update, delete, eq, neq, in_, gt, gte, order, limit.
-"""
-
 from __future__ import annotations
 
 
@@ -94,7 +89,6 @@ class FakeSupabaseQuery:
     def execute(self) -> FakeSupabaseResponse:
         table = self._tables.setdefault(self._table_name, [])
 
-        # INSERT
         if self._insert_payload is not None:
             rows_to_insert = self._insert_payload if isinstance(self._insert_payload, list) else [self._insert_payload]
             inserted = []
@@ -107,7 +101,6 @@ class FakeSupabaseQuery:
                 inserted.append(dict(row))
             return FakeSupabaseResponse(inserted)
 
-        # UPSERT
         if self._upsert_payload is not None:
             conflict_col = self._upsert_conflict or "id"
             conflict_val = self._upsert_payload.get(conflict_col)
@@ -119,19 +112,15 @@ class FakeSupabaseQuery:
             table.append(row)
             return FakeSupabaseResponse([dict(row)])
 
-        # Filter
         matching = [r for r in table if self._match(r)]
 
-        # ORDER
         if self._order_by is not None:
             column, desc = self._order_by
             matching = sorted(matching, key=lambda r: r.get(column), reverse=desc)
 
-        # LIMIT
         if self._limit_value is not None:
             matching = matching[: self._limit_value]
 
-        # UPDATE
         if self._update_payload is not None:
             updated = []
             for row in table:
@@ -140,23 +129,14 @@ class FakeSupabaseQuery:
                     updated.append(dict(row))
             return FakeSupabaseResponse(updated)
 
-        # DELETE
         if self._delete_requested:
             self._tables[self._table_name] = [r for r in table if not self._match(r)]
             return FakeSupabaseResponse([dict(r) for r in matching])
 
-        # SELECT
         return FakeSupabaseResponse([dict(r) for r in matching])
 
 
 class FakeSupabaseClient:
-    """In-memory Supabase client for tests.
-
-    Args:
-        tables: shared mutable dict of table_name -> list[dict].
-        auto_seq_tables: set of table names that auto-generate a `seq` column on insert.
-    """
-
     def __init__(
         self,
         tables: dict[str, list[dict]] | None = None,

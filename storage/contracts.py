@@ -10,9 +10,7 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 NotificationType = Literal["steer", "command", "agent", "chat"]
 
 
-# ---------------------------------------------------------------------------
 # Sandbox — repo protocols
-# ---------------------------------------------------------------------------
 
 
 class SandboxRuntimeRepo(Protocol):
@@ -98,9 +96,7 @@ class SandboxMonitorRepo(Protocol):
     def list_probe_targets(self) -> list[dict[str, Any]]: ...
 
 
-# ---------------------------------------------------------------------------
 # User / Agent / Chat — enums + row types
-# ---------------------------------------------------------------------------
 
 
 class UserType(StrEnum):
@@ -407,9 +403,7 @@ class RelationshipRow(BaseModel):
         return self
 
 
-# ---------------------------------------------------------------------------
 # Delivery strategy — contact relationships + delivery actions
-# ---------------------------------------------------------------------------
 
 
 class DeliveryAction(StrEnum):

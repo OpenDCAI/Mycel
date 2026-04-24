@@ -47,10 +47,6 @@ class SQLiteTerminalRepo:
     def _terminal_row_from_db_row(self, row: sqlite3.Row) -> dict[str, Any]:
         return dict(row)
 
-    # ------------------------------------------------------------------
-    # Table setup
-    # ------------------------------------------------------------------
-
     def _ensure_tables(self) -> None:
         self._conn.execute("PRAGMA journal_mode=WAL")
         self._conn.execute(
@@ -112,10 +108,6 @@ class SQLiteTerminalRepo:
 
         if any(cols == {"thread_id"} for cols in unique_index_columns.values()):
             raise RuntimeError("abstract_terminals still has UNIQUE index from single-terminal schema. Purge ~/.leon/sandbox.db and retry.")
-
-    # ------------------------------------------------------------------
-    # Reads
-    # ------------------------------------------------------------------
 
     def _get_pointer_row(self, thread_id: str) -> dict[str, Any] | None:
         with self._lock:
@@ -272,10 +264,6 @@ class SQLiteTerminalRepo:
             ).fetchall()
             self._conn.row_factory = None
             return [self._terminal_row_from_db_row(row) for row in rows]
-
-    # ------------------------------------------------------------------
-    # Writes
-    # ------------------------------------------------------------------
 
     def _ensure_thread_pointer(self, thread_id: str, terminal_id: str) -> None:
         now = datetime.now().isoformat()
