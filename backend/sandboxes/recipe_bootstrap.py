@@ -1,5 +1,3 @@
-"""Neutral recipe bootstrap helpers used by auth/bootstrap flows."""
-
 from __future__ import annotations
 
 import time

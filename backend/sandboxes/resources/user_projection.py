@@ -1,5 +1,3 @@
-"""Shared user-scoped resource projection helpers."""
-
 from __future__ import annotations
 
 from datetime import UTC, datetime

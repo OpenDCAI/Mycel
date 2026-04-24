@@ -1,5 +1,3 @@
-"""Shared user-scoped sandbox read helpers."""
-
 from __future__ import annotations
 
 import json

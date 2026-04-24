@@ -1,5 +1,3 @@
-"""Shared sandbox recipe catalog helpers."""
-
 from __future__ import annotations
 
 from backend.sandboxes.inventory import available_sandbox_types

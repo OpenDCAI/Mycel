@@ -1,5 +1,3 @@
-"""Shared sandbox thread resource cleanup helpers."""
-
 from __future__ import annotations
 
 from backend.sandboxes.inventory import init_providers_and_managers

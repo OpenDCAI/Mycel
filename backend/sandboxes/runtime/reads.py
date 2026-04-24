@@ -1,5 +1,3 @@
-"""Shared sandbox runtime read helpers."""
-
 from __future__ import annotations
 
 from datetime import datetime
@@ -53,7 +51,6 @@ def _to_ts(value: Any) -> float:
 
 
 def load_all_sandbox_runtimes(managers: dict) -> list[dict]:
-    """Load sandbox runtime rows from all managers in parallel."""
     runtimes: list[dict] = []
     if not managers:
         return runtimes
@@ -97,7 +94,6 @@ def find_runtime_and_manager(
     runtime_id: str,
     provider_name: str | None = None,
 ) -> tuple[dict | None, Any | None]:
-    """Find sandbox runtime by external ID/prefix (+optional provider), return (runtime, manager)."""
     candidates: list[dict] = []
     for runtime in runtimes:
         if provider_name and runtime.get("provider") != provider_name:
