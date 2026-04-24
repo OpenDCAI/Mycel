@@ -125,11 +125,9 @@ class DaytonaProvider(SandboxProvider):
         self._managed_mounts: dict[str, tuple[str, str]] = {}  # thread_id -> (backend_ref, mount_path)
 
     def set_thread_bind_mounts(self, thread_id: str, mounts: list[MountSpec | dict]) -> None:
-        """Set thread-specific bind mounts that will be applied when creating sessions."""
         self._thread_bind_mounts[thread_id] = [MountSpec.model_validate(m) if isinstance(m, dict) else m for m in mounts]
 
     def create_managed_volume(self, managed_ref: str, mount_path: str) -> str:
-        """Create a Daytona managed volume. Returns volume name as backend_ref."""
         volume_name = f"leon-volume-{managed_ref}"
         logger.info("Creating managed volume: %s", volume_name)
         # @@@volume-ready - volume transitions pending_create → ready (~6s)
