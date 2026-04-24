@@ -1,12 +1,3 @@
-"""Provider-specific streaming usage patches.
-
-Centralizes workarounds for upstream bugs where streaming responses
-return incomplete token usage data. Each patch is idempotent and
-guarded by a flag so it can be called multiple times safely.
-
-Remove individual patches once the upstream library is fixed.
-"""
-
 from __future__ import annotations
 
 from typing import Any

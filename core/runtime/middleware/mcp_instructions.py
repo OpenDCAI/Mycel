@@ -1,11 +1,3 @@
-"""Thread-scoped MCP instruction delta injection.
-
-Mycel does not have CC's attachment plane. Keep this contract smaller:
-- MCP server configs may carry `instructions`
-- the loop stores which server names have already been announced per thread
-- on the next turn after a change, inject one delta SystemMessage
-"""
-
 from __future__ import annotations
 
 import json
@@ -45,8 +37,6 @@ def _render_delta_message(*, added: dict[str, str], removed: list[str]) -> Syste
 
 
 class McpInstructionsDeltaMiddleware(AgentMiddleware):
-    """Injects MCP instruction deltas once per thread when the connected set changes."""
-
     def __init__(
         self,
         *,

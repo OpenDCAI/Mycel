@@ -1,9 +1,3 @@
-"""Local runtime middleware protocol and request/response types.
-
-This replaces the phantom `langchain.agents.middleware.types` dependency for
-the current runtime stack.
-"""
-
 from __future__ import annotations
 
 from collections.abc import Awaitable, Callable
@@ -46,8 +40,6 @@ class ToolCallRequest:
 
 
 class AgentMiddleware:
-    """Minimal chain-of-responsibility middleware base for the runtime stack."""
-
     tools: ClassVar[tuple[Any, ...]] = ()
 
     def wrap_model_call(
