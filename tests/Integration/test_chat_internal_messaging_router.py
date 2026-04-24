@@ -6,6 +6,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from backend.chat.api.http import internal_messaging_router
+from messaging.errors import ChatNotCaughtUpError
 
 
 def test_internal_messaging_router_dispatches_display_user_and_send_message() -> None:
@@ -120,3 +121,26 @@ def test_internal_messaging_router_dispatches_display_user_and_send_message() ->
         ),
         ("mark_read", {"chat_id": "chat-1", "user_id": "agent-1"}),
     ]
+
+
+def test_internal_messaging_router_returns_conflict_when_sender_is_not_caught_up() -> None:
+    class _MessagingService:
+        def send(self, *_args, **_kwargs):
+            raise ChatNotCaughtUpError("Call read_messages(chat_id='chat-1') first.")
+
+    app = FastAPI()
+    app.state.chat_runtime_state = SimpleNamespace(messaging_service=_MessagingService())
+    app.include_router(internal_messaging_router.router)
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/api/internal/messaging/chats/chat-1/messages/send",
+            json={
+                "sender_id": "agent-1",
+                "content": "hello",
+                "enforce_caught_up": True,
+            },
+        )
+
+    assert response.status_code == 409
+    assert response.json() == {"detail": "Call read_messages(chat_id='chat-1') first."}

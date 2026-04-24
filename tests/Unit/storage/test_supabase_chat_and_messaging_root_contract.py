@@ -3,6 +3,7 @@ from __future__ import annotations
 import pytest
 
 from storage.contracts import ChatRow, ContactEdgeRow
+from storage.errors import StorageConflictError
 from storage.providers.supabase.chat_repo import SupabaseChatRepo
 from storage.providers.supabase.contact_repo import SupabaseContactRepo
 from storage.providers.supabase.messaging_repo import (
@@ -398,7 +399,7 @@ def test_supabase_messages_repo_create_with_stale_expected_read_seq_fails_loudly
     client.schema("chat").table("chats").rows = []
     repo = SupabaseMessagesRepo(client)
 
-    with pytest.raises(RuntimeError, match="Chat advanced after your last read. Call read_messages\\(chat_id='chat-1'\\) first\\."):
+    with pytest.raises(StorageConflictError, match="Chat advanced after your last read. Call read_messages\\(chat_id='chat-1'\\) first\\."):
         repo.create(
             {
                 "id": "msg-7",
