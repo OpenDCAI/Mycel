@@ -1,10 +1,3 @@
-"""Owner visibility helpers.
-
-v3 default is "visible unless explicitly hidden". Some backend paths still emit
-durable hidden owner messages (for example AskUserQuestion answer anchors), so
-this layer must preserve an already-declared display contract.
-"""
-
 from __future__ import annotations
 
 from typing import Any

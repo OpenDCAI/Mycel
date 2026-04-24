@@ -1,13 +1,3 @@
-"""AbstractTerminal - Durable terminal identity + state snapshot.
-
-This module implements the terminal abstraction layer that separates
-durable terminal state (cwd, env_delta) from ephemeral runtime processes.
-
-Architecture:
-    Thread → AbstractTerminal (durable state) → SandboxRuntimeHandle → Instance
-    Thread → ChatSession → PhysicalTerminalRuntime (ephemeral process)
-"""
-
 from __future__ import annotations
 
 import json
