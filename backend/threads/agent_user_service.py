@@ -9,11 +9,12 @@ import yaml
 import backend.hub.snapshot_install as _snapshot_install_owner
 from backend.hub.versioning import BumpType, bump_semver
 from backend.identity.avatar.urls import avatar_url
-from backend.library.service import get_skill_content_by_name
+from backend.library.service import get_mcp_config_by_name, get_skill_content_by_name
 from config.defaults.tool_catalog import TOOLS_BY_NAME, ToolDef, tool_enabled_for_agent
 from config.loader import AgentLoader
 
 _SYSTEM_AGENTS_DIR = (Path(__file__).resolve().parents[2] / "config" / "defaults" / "agents").resolve()
+_MCP_CONFIG_KEYS = ("transport", "command", "args", "env", "url", "allowed_tools", "instructions")
 install_from_snapshot = _snapshot_install_owner.install_from_snapshot
 
 
@@ -119,17 +120,13 @@ def _sub_agents_from_repo(agent_config_id: str, agent_config_repo: Any) -> list[
 
 def _mcps_from_repo(config: dict[str, Any]) -> list[dict[str, Any]]:
     raw = config.get("mcp", {}) if isinstance(config.get("mcp"), dict) else {}
-    return [
-        {
-            "name": name,
-            "command": item.get("command", ""),
-            "args": item.get("args", []),
-            "env": item.get("env", {}),
-            "disabled": item.get("disabled", False),
-        }
-        for name, item in raw.items()
-        if isinstance(item, dict)
-    ]
+    items: list[dict[str, Any]] = []
+    for name, item in raw.items():
+        if isinstance(item, dict):
+            exposed = {"name": name, **{key: item[key] for key in _MCP_CONFIG_KEYS if key in item}}
+            exposed["disabled"] = bool(item.get("disabled", False))
+            items.append(exposed)
+    return items
 
 
 def _compact_from_repo(config: dict[str, Any]) -> dict[str, Any]:
@@ -503,12 +500,12 @@ def _mcp_from_patch(config_patch: dict[str, Any], current_config: dict[str, Any]
     servers: dict[str, Any] = {}
     for item in config_patch["mcps"]:
         if isinstance(item, dict) and item.get("name"):
-            servers[item["name"]] = {
-                "command": item.get("command", ""),
-                "args": item.get("args", []),
-                "env": item.get("env", {}),
-                "disabled": item.get("disabled", False),
-            }
+            name = str(item["name"])
+            library_config = get_mcp_config_by_name(name)
+            direct_config = {key: item[key] for key in _MCP_CONFIG_KEYS if key in item and item[key] is not None}
+            config = dict(library_config if library_config is not None else direct_config)
+            config["disabled"] = bool(item.get("disabled", config.get("disabled", False)))
+            servers[name] = config
     return servers
 
 
