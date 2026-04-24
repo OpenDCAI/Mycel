@@ -52,8 +52,6 @@ if TYPE_CHECKING:
 
 
 class DaytonaProvider(SandboxProvider):
-    """Daytona cloud sandbox provider."""
-
     CATALOG_ENTRY = {
         "vendor": "Daytona",
         "description": "Managed cloud or self-host Daytona sandboxes",
@@ -412,7 +410,6 @@ class DaytonaProvider(SandboxProvider):
         return urlunparse(parsed._replace(netloc=f"127.0.0.1:{parsed.port or 4000}"))
 
     def get_runtime_sandbox(self, session_id: str):
-        """Expose native SDK sandbox for runtime-level persistent terminal handling."""
         return self._get_sandbox(session_id)
 
     def _api_auth_headers(self) -> dict[str, str]:
@@ -513,8 +510,6 @@ from sandbox.runtime import (  # noqa: E402
 
 
 class DaytonaSessionRuntime(_RemoteRuntimeBase):
-    """Daytona runtime using native PTY session API (persistent terminal semantics)."""
-
     def __init__(self, terminal, sandbox_runtime, provider):
         super().__init__(terminal, sandbox_runtime, provider)
         self._session_lock = asyncio.Lock()
