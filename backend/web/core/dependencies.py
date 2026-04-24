@@ -53,7 +53,6 @@ async def verify_thread_row_owner(
     user_id: Annotated[str, Depends(get_current_user_id)],
     app: Annotated[FastAPI, Depends(get_app)],
 ) -> str:
-    """Verify ownership without mutating or converging thread runtime state."""
     thread = app.state.thread_repo.get_by_id(thread_id)
     if not thread:
         raise HTTPException(404, "Thread not found")
@@ -64,7 +63,6 @@ async def verify_thread_row_owner(
 
 
 async def get_thread_lock(app: Annotated[FastAPI, Depends(get_app)], thread_id: str) -> asyncio.Lock:
-    """Get or create a lock for a specific thread."""
     async with app.state.thread_locks_guard:
         lock = app.state.thread_locks.get(thread_id)
         if lock is None:
@@ -78,7 +76,6 @@ async def get_thread_agent(
     thread_id: str,
     require_remote: bool = False,
 ) -> Any:
-    """Get or create agent for a thread, with optional remote sandbox requirement."""
     sandbox_type = resolve_thread_sandbox(app, thread_id)
     if require_remote and sandbox_type == "local":
         raise HTTPException(400, "Local threads have no remote sandbox")

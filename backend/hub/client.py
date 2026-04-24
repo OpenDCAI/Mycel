@@ -367,7 +367,6 @@ def download(
 
 
 def upgrade(user_id: str, item_id: str, owner_user_id: str, user_repo: Any = None, agent_config_repo: Any = None) -> dict:
-    """Upgrade a locally installed marketplace item."""
     if user_repo is None or agent_config_repo is None:
         raise RuntimeError("user_repo and agent_config_repo are required to upgrade marketplace user snapshot")
 
@@ -391,5 +390,4 @@ def upgrade(user_id: str, item_id: str, owner_user_id: str, user_repo: Any = Non
 
 
 def check_updates(items: list[dict]) -> dict:
-    """Check for updates for installed marketplace items."""
     return _hub_api("POST", "/check-updates", json={"installed": items})

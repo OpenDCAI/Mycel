@@ -209,7 +209,6 @@ async def get_or_create_agent(
 
 
 async def update_agent_config(app_obj: FastAPI, model: str, thread_id: str | None = None) -> dict[str, Any]:
-    """Update agent configuration with hot-reload."""
     lock_key = thread_id or "global"
     lock = _config_update_locks.setdefault(lock_key, asyncio.Lock())
 

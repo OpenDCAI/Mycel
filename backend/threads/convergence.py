@@ -10,7 +10,6 @@ from storage.runtime import uses_supabase_runtime_defaults
 
 
 def delete_thread_in_db(thread_id: str) -> None:
-    """Delete all records for a thread via storage repos + sandbox db."""
     _get_container().purge_thread(thread_id)
 
     sandbox_db = resolve_sandbox_db_path()
@@ -52,7 +51,6 @@ def purge_incomplete_owner_thread(app: Any, thread_id: str) -> None:
 
 
 def inspect_owner_thread_runtime(app: Any, thread_id: str) -> str:
-    """Check an owner-visible thread against the runtime contract without mutating thread rows."""
     thread = app.state.thread_repo.get_by_id(thread_id)
     if thread is None:
         return "missing"

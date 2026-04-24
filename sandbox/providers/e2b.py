@@ -341,14 +341,12 @@ class E2BProvider(SandboxProvider):
         return files
 
     def restore_workspace(self, session_id: str, files: list[dict]) -> None:
-        """Upload files back into /home/user/workspace."""
         sandbox = self._get_sandbox(session_id)
         for f in files:
             abs_path = f"{self.WORKSPACE_ROOT}/{f['file_path']}"
             sandbox.files.write(abs_path, f["content"])
 
     def _get_sandbox(self, session_id: str) -> _E2BSandboxHandle:
-        """Get sandbox object, reconnecting if not cached."""
         if session_id not in self._sandboxes:
             from e2b import Sandbox
 
@@ -361,7 +359,6 @@ class E2BProvider(SandboxProvider):
         return cast(_E2BSandboxHandle, self._sandboxes[session_id])
 
     def get_runtime_sandbox(self, session_id: str) -> _E2BSandboxHandle:
-        """Expose native SDK sandbox for runtime-level persistent terminal handling."""
         return self._get_sandbox(session_id)
 
     def create_runtime(self, terminal: AbstractTerminal, sandbox_runtime: SandboxRuntimeHandle) -> PhysicalTerminalRuntime:
