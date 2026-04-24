@@ -8,8 +8,6 @@ _INFLIGHT_ATTR = "_owner_thread_read_inflight"
 
 
 async def list_owner_thread_rows_for_auth_burst(app: Any, user_id: str) -> list[dict]:
-    """Reuse only currently in-flight owner thread reads for the same user."""
-
     state = app.state
     lock = getattr(state, _LOCK_ATTR, None)
     if lock is None:

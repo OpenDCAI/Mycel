@@ -176,8 +176,6 @@ class ThreadDisplay:
 
 
 class DisplayBuilder:
-    """Single source of truth for per-thread ChatEntry[] display state."""
-
     def __init__(self) -> None:
         self._threads: dict[str, ThreadDisplay] = {}
 
@@ -190,14 +188,9 @@ class DisplayBuilder:
         return td.display_seq if td else 0
 
     def set_entries(self, thread_id: str, entries: list[dict]) -> None:
-        """Set entries for a thread (after build_from_checkpoint)."""
         self._threads[thread_id] = ThreadDisplay(entries=entries)
 
     def build_from_checkpoint(self, thread_id: str, messages: list[dict]) -> list[dict]:
-        """Convert serialized checkpoint messages → ChatEntry[].
-
-        Port of frontend mapBackendEntries.
-        """
         now = int(time.time() * 1000)
         current_turn: dict | None = None
         current_run_id: str | None = None
@@ -233,11 +226,6 @@ class DisplayBuilder:
         return entries
 
     def apply_event(self, thread_id: str, event_type: str, data: dict) -> dict | None:
-        """Apply a streaming event → mutate entries → return delta dict or None.
-
-        Called after emit() in streaming_service.  The delta is sent as
-        SSE event: display_delta.
-        """
         td = self._threads.get(thread_id)
         if td is None:
             td = ThreadDisplay()
@@ -253,14 +241,12 @@ class DisplayBuilder:
         return None
 
     def finalize_turn(self, thread_id: str) -> dict | None:
-        """Close the current turn.  Returns finalize_turn delta."""
         td = self._threads.get(thread_id)
         if not td or not td.current_turn_id:
             return None
         return _handle_finalize(td)
 
     def open_turn(self, thread_id: str, turn_id: str | None = None, timestamp: int | None = None) -> dict:
-        """Open a new assistant turn.  Returns append_entry delta."""
         td = self._threads.get(thread_id)
         if td is None:
             td = ThreadDisplay()
@@ -273,7 +259,6 @@ class DisplayBuilder:
         return {"type": "append_entry", "entry": turn}
 
     def clear(self, thread_id: str) -> None:
-        """Remove cached display state for a thread."""
         self._threads.pop(thread_id, None)
 
     def _handle_human(

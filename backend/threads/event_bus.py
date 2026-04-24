@@ -12,8 +12,6 @@ Unsubscribe = Callable[[], None]
 
 
 class EventBus:
-    """Thread-scoped publish/subscribe bus for agent activity events."""
-
     def __init__(self) -> None:
         self._subs: dict[str, list[EventCallback]] = {}
 
