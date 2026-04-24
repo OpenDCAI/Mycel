@@ -13,7 +13,6 @@ _anthropic_patched = False
 
 
 def patch_anthropic_streaming_usage() -> None:
-    """Restore input-token extraction from message_start in streaming."""
     global _anthropic_patched
     if _anthropic_patched:
         return
@@ -54,5 +53,4 @@ def patch_anthropic_streaming_usage() -> None:
 
 
 def apply_all() -> None:
-    """Apply all provider-specific streaming usage patches."""
     patch_anthropic_streaming_usage()
