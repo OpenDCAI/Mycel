@@ -61,8 +61,6 @@ _REPO_REGISTRY: dict[str, tuple[str, str]] = {
 
 
 class StorageContainer:
-    """Composition root for storage repos (Supabase-only)."""
-
     def __init__(self, supabase_client: Any) -> None:
         if supabase_client is None:
             raise RuntimeError("StorageContainer requires a supabase_client.")
@@ -155,7 +153,6 @@ class StorageContainer:
         return self._build("contact_repo")
 
     def purge_thread(self, thread_id: str) -> None:
-        """Delete all data for a thread across all repos."""
         for repo_factory, purge in (
             (self.checkpoint_repo, lambda repo: repo.delete_thread_data(thread_id)),
             (self.run_event_repo, lambda repo: repo.delete_thread_events(thread_id)),
