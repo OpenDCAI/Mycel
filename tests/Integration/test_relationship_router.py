@@ -58,8 +58,9 @@ async def test_approve_relationship_accepts_owned_agent_requester_user_id() -> N
     }
     relationship_service = SimpleNamespace(
         get_by_id=lambda relationship_id: existing if relationship_id == existing["id"] else None,
-        approve=lambda approver_id, requester_id: seen.append((approver_id, requester_id))
-        or _row(state="visit", initiator_user_id=requester_id),
+        approve=lambda approver_id, requester_id: (
+            seen.append((approver_id, requester_id)) or _row(state="visit", initiator_user_id=requester_id)
+        ),
     )
     user_repo = SimpleNamespace(
         get_by_id=lambda user_id: SimpleNamespace(id=user_id, owner_user_id="owner-user-1") if user_id == "agent-user-1" else None
@@ -90,8 +91,9 @@ async def test_reject_relationship_accepts_owned_agent_requester_user_id() -> No
     }
     relationship_service = SimpleNamespace(
         get_by_id=lambda relationship_id: existing if relationship_id == existing["id"] else None,
-        reject=lambda rejecting_user_id, requester_id: seen.append((rejecting_user_id, requester_id))
-        or _row(state="none", initiator_user_id=requester_id),
+        reject=lambda rejecting_user_id, requester_id: (
+            seen.append((rejecting_user_id, requester_id)) or _row(state="none", initiator_user_id=requester_id)
+        ),
     )
     user_repo = SimpleNamespace(
         get_by_id=lambda user_id: SimpleNamespace(id=user_id, owner_user_id="owner-user-1") if user_id == "agent-user-1" else None
@@ -122,7 +124,9 @@ async def test_downgrade_relationship_accepts_owned_agent_requester_user_id() ->
     }
     relationship_service = SimpleNamespace(
         get_by_id=lambda relationship_id: existing if relationship_id == existing["id"] else None,
-        downgrade=lambda requester_id, other_id: seen.append((requester_id, other_id)) or _row(state="visit", initiator_user_id="requester-user-1"),
+        downgrade=lambda requester_id, other_id: (
+            seen.append((requester_id, other_id)) or _row(state="visit", initiator_user_id="requester-user-1")
+        ),
     )
     user_repo = SimpleNamespace(
         get_by_id=lambda user_id: SimpleNamespace(id=user_id, owner_user_id="owner-user-1") if user_id == "agent-user-1" else None

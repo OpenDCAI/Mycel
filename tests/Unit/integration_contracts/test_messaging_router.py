@@ -168,9 +168,7 @@ def test_relationship_bodies_use_requester_user_id_not_actor_id() -> None:
     assert request_body.requester_user_id == "user-1"
     assert action_body.requester_user_id == "user-1"
     with pytest.raises(ValidationError):
-        relationships_router.RelationshipRequestBody.model_validate(
-            {"target_user_id": "user-2", "actor_user_id": "user-1"}
-        )
+        relationships_router.RelationshipRequestBody.model_validate({"target_user_id": "user-2", "actor_user_id": "user-1"})
 
 
 def test_get_accessible_chat_or_404_returns_chat():

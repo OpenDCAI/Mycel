@@ -282,9 +282,7 @@ def test_repo_backed_tools_star_keeps_panel_and_runtime_tool_state_aligned() -> 
     assert "LSP" not in agent._get_agent_blocked_tools()
 
 
-def test_assigning_library_skill_to_agent_copies_skill_content_into_repo(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
+def test_assigning_library_skill_to_agent_copies_skill_content_into_repo(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     saved_skills: list[tuple[str, str, str, dict[str, object] | None]] = []
     monkeypatch.setattr(library_service, "LIBRARY_DIR", tmp_path / "library")
     skill = library_service.create_resource("skill", "Loadable Skill", "Use this skill.")
@@ -358,9 +356,7 @@ def test_created_library_skill_is_loadable_skill_document(monkeypatch: pytest.Mo
     assert content == "---\nname: Loadable Skill\ndescription: Use this skill\n---\n\nUse this skill\n"
 
 
-def test_assigning_library_mcp_to_agent_copies_mcp_config_into_repo(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
+def test_assigning_library_mcp_to_agent_copies_mcp_config_into_repo(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     saved_configs: list[tuple[str, dict[str, object]]] = []
     monkeypatch.setattr(library_service, "LIBRARY_DIR", tmp_path / "library")
     library_service.create_resource("mcp", "demo-mcp", "Demo MCP")

@@ -63,6 +63,5 @@ def transition(
 
         case _:
             raise TransitionError(
-                f"Invalid transition: state={current_state!r} event={event!r} "
-                f"requester_is_initiator={requester_is_initiator}"
+                f"Invalid transition: state={current_state!r} event={event!r} requester_is_initiator={requester_is_initiator}"
             )
