@@ -282,6 +282,82 @@ def test_repo_backed_tools_star_keeps_panel_and_runtime_tool_state_aligned() -> 
     assert "LSP" not in agent._get_agent_blocked_tools()
 
 
+def test_assigning_library_skill_to_agent_copies_skill_content_into_repo(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    saved_skills: list[tuple[str, str, str, dict[str, object] | None]] = []
+    monkeypatch.setattr(library_service, "LIBRARY_DIR", tmp_path / "library")
+    skill = library_service.create_resource("skill", "Loadable Skill", "Use this skill.")
+    expected_content = library_service.get_resource_content("skill", skill["id"])
+
+    class _AgentConfigRepo:
+        def get_config(self, _agent_config_id: str):
+            return {
+                "name": "Toad",
+                "description": "",
+                "tools": ["*"],
+                "runtime": {},
+                "mcp": {},
+                "system_prompt": "",
+                "status": "draft",
+            }
+
+        def save_config(self, _agent_config_id: str, _data: dict[str, object]) -> None:
+            return None
+
+        def list_rules(self, _agent_config_id: str):
+            return []
+
+        def list_skills(self, _agent_config_id: str):
+            return []
+
+        def delete_skill(self, _skill_id: str) -> None:
+            return None
+
+        def save_skill(self, agent_config_id: str, name: str, content: str, meta: dict[str, object] | None = None) -> None:
+            saved_skills.append((agent_config_id, name, content, meta))
+
+        def list_sub_agents(self, _agent_config_id: str):
+            return []
+
+    result = agent_user_service.update_agent_user_config(
+        "agent-1",
+        {"skills": [{"name": "Loadable Skill", "desc": "loadable", "enabled": True}]},
+        user_repo=SimpleNamespace(
+            get_by_id=lambda _agent_id: UserRow(
+                id="agent-1",
+                type=UserType.AGENT,
+                display_name="Toad",
+                owner_user_id="owner-1",
+                agent_config_id="cfg-1",
+                created_at=1,
+            )
+        ),
+        agent_config_repo=_AgentConfigRepo(),
+    )
+
+    assert result is not None
+    assert saved_skills == [
+        (
+            "cfg-1",
+            "Loadable Skill",
+            expected_content,
+            {"desc": "loadable"},
+        )
+    ]
+
+
+def test_created_library_skill_is_loadable_skill_document(monkeypatch: pytest.MonkeyPatch, tmp_path) -> None:
+    from backend.library import service as library_service
+
+    monkeypatch.setattr(library_service, "LIBRARY_DIR", tmp_path / "library")
+
+    item = library_service.create_resource("skill", "Loadable Skill", "Use this skill")
+    content = library_service.get_resource_content("skill", item["id"])
+
+    assert content == "---\nname: Loadable Skill\ndescription: Use this skill\n---\n\nUse this skill\n"
+
+
 def test_agent_config_exposes_and_persists_compaction_trigger_tokens():
     agent = UserRow(
         id="agent-1",

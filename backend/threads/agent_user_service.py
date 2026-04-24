@@ -9,6 +9,7 @@ import yaml
 import backend.hub.snapshot_install as _snapshot_install_owner
 from backend.hub.versioning import BumpType, bump_semver
 from backend.identity.avatar.urls import avatar_url
+from backend.library.service import get_skill_content_by_name
 from config.defaults.tool_catalog import TOOLS_BY_NAME, ToolDef, tool_enabled_for_agent
 from config.loader import AgentLoader
 
@@ -526,11 +527,18 @@ def _sync_repo_children(agent_config_id: str, config_patch: dict[str, Any], agen
         for skill in config_patch["skills"]:
             if isinstance(skill, dict) and skill.get("name"):
                 prior = existing.get(skill["name"], {})
+                content = str(prior.get("content") or "")
+                meta = prior.get("meta_json") if isinstance(prior.get("meta_json"), dict) else None
+                if not content:
+                    content = get_skill_content_by_name(str(skill["name"])) or ""
+                    meta = {"desc": str(skill.get("desc") or "")}
+                if not content:
+                    raise RuntimeError(f"Library skill content not found: {skill['name']}")
                 agent_config_repo.save_skill(
                     agent_config_id,
                     skill["name"],
-                    str(prior.get("content", "")),
-                    meta=prior.get("meta_json") if isinstance(prior.get("meta_json"), dict) else None,
+                    content,
+                    meta=meta,
                 )
 
     if "subAgents" in config_patch and config_patch["subAgents"] is not None:

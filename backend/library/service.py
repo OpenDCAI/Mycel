@@ -206,7 +206,11 @@ def create_resource(
         content_path.parent.mkdir(parents=True, exist_ok=True)
         meta = {"name": name, "desc": desc, "category": cat, "created_at": now, "updated_at": now}
         _write_json(meta_path, meta)
-        content = f"# {name}\n\n{desc}\n" if resource_type == "skill" else f"---\nname: {rid}\ndescription: {desc}\n---\n\n# {name}\n"
+        content = (
+            f"---\nname: {name}\ndescription: {desc}\n---\n\n{desc}\n"
+            if resource_type == "skill"
+            else f"---\nname: {rid}\ndescription: {desc}\n---\n\n# {name}\n"
+        )
         content_path.write_text(content, encoding="utf-8")
         return _library_resource_item(resource_type, rid, meta)
     if resource_type == "mcp":
@@ -356,6 +360,13 @@ def list_library_names(
 def get_library_skill_desc(name: str) -> str:
     """Get skill description from Library by name."""
     return next((item["desc"] for item in list_library("skill") if item["name"] == name), "")
+
+
+def get_skill_content_by_name(name: str) -> str | None:
+    for item in list_library("skill"):
+        if item["name"] == name:
+            return get_resource_content("skill", item["id"])
+    return None
 
 
 def get_resource_used_by(
