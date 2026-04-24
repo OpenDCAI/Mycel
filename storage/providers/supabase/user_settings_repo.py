@@ -1,5 +1,3 @@
-"""Supabase repository for per-user workspace preferences."""
-
 from __future__ import annotations
 
 import json

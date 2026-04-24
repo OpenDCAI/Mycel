@@ -1,5 +1,3 @@
-"""Supabase repository for message queue persistence."""
-
 from __future__ import annotations
 
 from typing import Any

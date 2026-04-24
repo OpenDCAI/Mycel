@@ -1,5 +1,3 @@
-"""Supabase repository for invite codes."""
-
 from __future__ import annotations
 
 import secrets

@@ -1,5 +1,3 @@
-"""Supabase implementations for messaging v2 repos."""
-
 from __future__ import annotations
 
 import logging

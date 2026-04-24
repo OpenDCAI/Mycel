@@ -1,5 +1,3 @@
-"""Supabase repository for unified users."""
-
 from __future__ import annotations
 
 from typing import Any
