@@ -1,8 +1,3 @@
-"""Sandbox session manager.
-
-Orchestrates: Thread → ChatSession → Runtime with sandbox runtime bindings.
-"""
-
 import logging
 import uuid
 from collections.abc import Callable

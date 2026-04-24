@@ -1,10 +1,3 @@
-"""Three-layer state models aligned with CC architecture.
-
-Layer 1: BootstrapConfig — survives /clear, process-level constants
-Layer 2: AppState — per-session mutable state (Zustand-style store)
-Layer 3: ToolUseContext — per-turn, holds live closures to AppState
-"""
-
 from __future__ import annotations
 
 import uuid

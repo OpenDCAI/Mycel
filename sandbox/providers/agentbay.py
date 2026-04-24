@@ -1,9 +1,3 @@
-"""
-AgentBay sandbox provider.
-
-Implements SandboxProvider using Alibaba Cloud's AgentBay SDK.
-"""
-
 from __future__ import annotations
 
 import json

@@ -1,16 +1,3 @@
-"""QueryLoop — self-managing agentic tool loop replacing LangGraph create_agent.
-
-Implements CC Pattern 1: Agentic Tool Loop (queryLoop).
-
-Design:
-- AsyncGenerator that alternates LLM sampling and tool execution.
-- Exposes the same .astream(input, config, stream_mode) interface as CompiledStateGraph.
-- Middleware chain (SpillBuffer/Monitor/PromptCaching/Memory/Steering/ToolRunner) is
-  preserved exactly — awrap_model_call and awrap_tool_call pass through in order.
-- is_concurrency_safe tools execute in parallel; others execute serially.
-- Checkpointer (AsyncSqliteSaver) stores/restores message history across calls.
-"""
-
 from __future__ import annotations
 
 import asyncio
