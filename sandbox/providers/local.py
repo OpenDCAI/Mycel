@@ -28,8 +28,6 @@ if TYPE_CHECKING:
 
 @dataclass
 class LocalSessionProvider(SandboxProvider):
-    """Local session provider with direct host access."""
-
     CATALOG_ENTRY = {"vendor": None, "description": "Direct host access", "provider_type": "local"}
     name: str = "local"
     CAPABILITY = ProviderCapability(
@@ -338,11 +336,6 @@ def _build_windows_shell_script(
 
 
 class LocalPersistentShellRuntime(PhysicalTerminalRuntime):
-    """Local persistent shell runtime (for local provider).
-
-    Uses a persistent PTY-backed shell session.
-    """
-
     def __init__(
         self,
         terminal,
@@ -477,7 +470,6 @@ class LocalPersistentShellRuntime(PhysicalTerminalRuntime):
                 )
 
     async def _recover_after_timeout(self) -> None:
-        """Recover PTY session after a command timeout."""
         if self._use_windows_shell:
             return
         if self._pty_session is None:
@@ -495,11 +487,9 @@ class LocalPersistentShellRuntime(PhysicalTerminalRuntime):
         return True
 
     async def execute(self, command: str, timeout: float | None = None) -> ExecuteResult:
-        """Execute command in local shell."""
         return await self._execute_background_command(command, timeout=timeout)
 
     async def close(self) -> None:
-        """Close the shell session."""
         if self._use_windows_shell:
             return
         if self._pty_session:

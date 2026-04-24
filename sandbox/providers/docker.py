@@ -40,15 +40,6 @@ logger = logging.getLogger(__name__)
 
 
 class DockerProvider(SandboxProvider):
-    """
-    Local Docker sandbox provider.
-
-    Notes:
-    - Requires Docker CLI available on host.
-    - Uses one container per session.
-    - If context_id is provided, uses a named Docker volume for persistence.
-    """
-
     CATALOG_ENTRY = {"vendor": None, "description": "Isolated container sandbox", "provider_type": "container"}
 
     name = "docker"
@@ -102,7 +93,6 @@ class DockerProvider(SandboxProvider):
         self._thread_bind_mounts: dict[str, list[MountSpec]] = {}  # thread_id -> bind_mounts
 
     def set_thread_bind_mounts(self, thread_id: str, mounts: list[MountSpec | dict]) -> None:
-        """Set thread-specific bind mounts that will be applied when creating sessions."""
         self._thread_bind_mounts[thread_id] = [MountSpec.model_validate(m) if isinstance(m, dict) else m for m in mounts]
 
     def create_session(self, context_id: str | None = None, thread_id: str | None = None) -> SessionInfo:
@@ -349,7 +339,6 @@ class DockerProvider(SandboxProvider):
         )
 
     def _disk_usage_from_ps(self, container_id: str) -> float | None:
-        """Read writable-layer size for any container state via docker ps --size."""
         result = self._run(
             ["docker", "ps", "-a", "--filter", f"id={container_id}", "--format", "{{.Size}}"],
             timeout=self.command_timeout_sec,
@@ -512,8 +501,6 @@ class DockerProvider(SandboxProvider):
 
 
 class DockerPtyRuntime(_RemoteRuntimeBase):
-    """Docker runtime using a persistent PTY shell inside container."""
-
     def __init__(self, terminal, sandbox_runtime, provider):
         super().__init__(terminal, sandbox_runtime, provider)
         self._session_lock = asyncio.Lock()
@@ -597,7 +584,6 @@ class DockerPtyRuntime(_RemoteRuntimeBase):
                 return ExecuteResult(exit_code=1, stdout="", stderr=f"Error: {exc}")
 
     async def _recover_after_timeout(self) -> None:
-        """Recover PTY session after a command timeout."""
         if self._pty_session is None:
             return
         recovered = await asyncio.to_thread(self._pty_session.interrupt_and_recover)

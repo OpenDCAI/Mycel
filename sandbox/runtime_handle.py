@@ -92,8 +92,6 @@ def _make_sandbox_repo():
 
 @dataclass
 class SandboxInstance:
-    """Ephemeral sandbox compute instance."""
-
     instance_id: str
     provider_name: str
     status: str
@@ -101,8 +99,6 @@ class SandboxInstance:
 
 
 class SandboxRuntimeHandle(ABC):
-    """Durable shared compute handle."""
-
     def __init__(
         self,
         sandbox_runtime_id: str,
@@ -177,8 +173,6 @@ class SandboxRuntimeHandle(ABC):
 
 
 class SQLiteSandboxRuntimeHandle(SandboxRuntimeHandle):
-    """SQLite-backed sandbox runtime handle implementation."""
-
     _lock_guard = threading.Lock()
     _runtime_locks: dict[str, threading.RLock] = {}
 
@@ -1098,7 +1092,6 @@ class SQLiteSandboxRuntimeHandle(SandboxRuntimeHandle):
 
 
 def sandbox_runtime_from_row(row: dict, db_path: Path) -> SQLiteSandboxRuntimeHandle:
-    """Construct SQLiteSandboxRuntimeHandle from a dict returned by the repo."""
     instance = None
     inst_data = row.get("_instance")
     if inst_data:

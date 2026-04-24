@@ -263,23 +263,19 @@ class SandboxManager:
         )
 
     def _get_sandbox_runtime(self, sandbox_runtime_id: str):
-        """Get sandbox runtime as domain object, or None."""
         row = self.sandbox_runtime_store.get(sandbox_runtime_id)
         if row is None:
             return None
         return sandbox_runtime_from_row(row, self.db_path)
 
     def _create_sandbox_runtime(self, sandbox_runtime_id: str, provider_name: str):
-        """Create sandbox runtime and return as domain object."""
         row = self.sandbox_runtime_store.create(sandbox_runtime_id, provider_name)
         return sandbox_runtime_from_row(row, self.db_path)
 
     def get_terminal(self, thread_id: str):
-        """Public API: get active terminal as domain object."""
         return self._get_active_terminal(thread_id)
 
     def get_sandbox_runtime(self, sandbox_runtime_id: str):
-        """Public API: get sandbox runtime as domain object."""
         return self._get_sandbox_runtime(sandbox_runtime_id)
 
     def _default_terminal_cwd(self) -> str:
@@ -295,7 +291,6 @@ class SandboxManager:
         self.provider.delete_managed_volume(f"leon-volume-{sandbox_runtime_id}")
 
     def _setup_mounts(self, thread_id: str) -> dict:
-        """Mount the workspace file channel into the sandbox."""
         terminal = self._get_active_terminal(thread_id)
         if not terminal:
             raise ValueError(f"No active terminal for thread {thread_id}")
@@ -320,8 +315,6 @@ class SandboxManager:
         return {"source_path": source_path, "remote_path": remote_path}
 
     def _upgrade_to_daytona_volume(self, thread_id: str, sandbox_runtime_id: str, remote_path: str):
-        """Ensure Daytona managed volume exists and return provider backend ref."""
-
         try:
             volume_name = self.provider.create_managed_volume(sandbox_runtime_id, remote_path)
         except Exception as e:
@@ -426,7 +419,6 @@ class SandboxManager:
         self.volume.sync_download(thread_id, instance_id, source, self.volume.resolve_mount_path())
 
     def sync_uploads(self, thread_id: str, files: list[str] | None = None) -> bool:
-        """Upload files to the active sandbox. Returns False if no active session."""
         terminal = self._get_active_terminal(thread_id)
         if not terminal:
             return False
@@ -714,7 +706,6 @@ class SandboxManager:
         return capability.resolve_session_info(self.provider.name)
 
     def pause_session(self, thread_id: str) -> bool:
-        """Pause session for thread."""
         terminals = self._get_thread_terminals(thread_id)
         if not terminals:
             return False
@@ -813,7 +804,6 @@ class SandboxManager:
         return self.destroy_thread_resources(thread_id)
 
     def destroy_thread_resources(self, thread_id: str) -> bool:
-        """Destroy physical resources and detach thread from terminal/runtime records."""
         terminal_rows = self.terminal_store.list_by_thread(thread_id)
         terminals = [terminal_from_row(r, self.db_path) for r in terminal_rows]
         if not terminals:

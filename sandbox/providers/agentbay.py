@@ -24,16 +24,6 @@ if TYPE_CHECKING:
 
 
 class AgentBayProvider(SandboxProvider):
-    """
-    AgentBay (Alibaba Cloud) sandbox provider.
-
-    Features:
-    - Cloud-based Linux/Windows/Browser environments
-    - Context sync for data persistence
-    - Pause/resume for cost optimization
-    - Rich inspection APIs (metrics, screenshot, processes)
-    """
-
     CATALOG_ENTRY = {"vendor": "Alibaba Cloud", "description": "Remote Linux sandbox", "provider_type": "cloud"}
 
     name = "agentbay"
@@ -302,12 +292,10 @@ class AgentBayProvider(SandboxProvider):
         return []
 
     def get_web_url(self, session_id: str) -> str | None:
-        """Get AgentBay web UI URL for the session."""
         session = self._get_session(session_id)
         return getattr(session, "resource_url", None)
 
     def _get_session(self, session_id: str) -> Any:
-        """Get session object, fetching from API if not cached."""
         if session_id not in self._sessions:
             result = self.client.get(session_id)
             if not result.success:
@@ -319,7 +307,6 @@ class AgentBayProvider(SandboxProvider):
         return hydrated
 
     def _hydrate_direct_call_session(self, session: Any) -> Any:
-        """Ensure cached session carries LinkUrl/token/tool metadata for direct shell calls."""
         if not self._session_needs_direct_call_refresh(session):
             return session
         session_id = str(getattr(session, "session_id", "") or "")
