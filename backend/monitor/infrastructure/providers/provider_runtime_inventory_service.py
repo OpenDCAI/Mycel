@@ -1,5 +1,3 @@
-"""Provider runtime inventory read port for Monitor."""
-
 from __future__ import annotations
 
 from typing import Any
