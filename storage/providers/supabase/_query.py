@@ -9,7 +9,6 @@ IN_FILTER_CHUNK_SIZE = 80
 
 
 def validate_client(client: Any, repo: str) -> Any:
-    """Validate and return a Supabase client, raising on None or missing table()."""
     if client is None:
         raise RuntimeError(f"Supabase {repo} requires a client. Pass supabase_client=... into StorageContainer.")
     if not hasattr(client, "table"):
@@ -49,7 +48,6 @@ def _preserve_postgrest_session(client: Any, schema: str) -> Any | None:
 
 
 def schema_table(client: Any, schema: str, table: str, repo: str) -> Any:
-    """Return a schema-qualified table query root, failing loudly if unsupported."""
     scoped = _preserve_postgrest_session(client, schema)
     schema_method = getattr(client, "schema", None)
     if scoped is None and not callable(schema_method):
@@ -64,7 +62,6 @@ def schema_table(client: Any, schema: str, table: str, repo: str) -> Any:
 
 
 def schema_rpc(client: Any, schema: str, function_name: str, params: dict[str, Any], repo: str) -> Any:
-    """Return a schema-qualified RPC query, failing loudly if unsupported."""
     scoped = _preserve_postgrest_session(client, schema)
     schema_method = getattr(client, "schema", None)
     if scoped is None and not callable(schema_method):

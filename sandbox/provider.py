@@ -60,8 +60,6 @@ def build_resource_capabilities(
 
 @dataclass(frozen=True)
 class MountCapability:
-    """Mount behavior capability shared across providers."""
-
     supports_mount: bool = False
     supports_copy: bool = False
     supports_read_only: bool = False
@@ -80,8 +78,6 @@ class MountCapability:
 
 @dataclass(frozen=True)
 class ProviderCapability:
-    """Declared lifecycle capability of a provider implementation."""
-
     can_pause: bool
     can_resume: bool
     can_destroy: bool
@@ -172,17 +168,9 @@ class SandboxProvider(ABC):
         pass
 
     def upload_bytes(self, session_id: str, remote_path: str, data: bytes) -> None:
-        """Upload raw bytes to remote path. Uses native SDK file API when available.
-        Default: falls back to write_file with utf-8 decode (lossy for binary).
-        Override in providers with native binary upload support.
-        """
         self.write_file(session_id, remote_path, data.decode("utf-8", errors="replace"))
 
     def download_bytes(self, session_id: str, remote_path: str) -> bytes:
-        """Download raw bytes from remote path. Uses native SDK file API when available.
-        Default: falls back to read_file with utf-8 encode.
-        Override in providers with native binary download support.
-        """
         return self.read_file(session_id, remote_path).encode("utf-8")
 
     @abstractmethod
@@ -198,7 +186,6 @@ class SandboxProvider(ABC):
         """Create the appropriate PhysicalTerminalRuntime for this provider."""
 
     def get_metrics_via_commands(self, session_id: str) -> Metrics | None:
-        """Get metrics by running Linux shell commands inside the sandbox."""
         try:
             cpu_result = self.execute(
                 session_id,
@@ -255,7 +242,6 @@ class SandboxProvider(ABC):
         raise NotImplementedError(f"{self.name} does not support managed volumes")
 
     def delete_managed_volume(self, backend_ref: str) -> None:
-        """Delete provider-managed persistent volume."""
         raise NotImplementedError(f"{self.name} does not support managed volumes")
 
     def wait_managed_volume_ready(self, backend_ref: str) -> None:
@@ -265,5 +251,4 @@ class SandboxProvider(ABC):
         """Set per-thread bind mounts for next create_session(). No-op for providers without mount support."""
 
     def list_provider_runtimes(self) -> list[SessionInfo]:
-        """List raw provider runtimes for monitor/orphan visibility. Empty by default."""
         return []
