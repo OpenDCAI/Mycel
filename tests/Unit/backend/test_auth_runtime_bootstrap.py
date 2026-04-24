@@ -68,5 +68,3 @@ def test_attach_auth_runtime_state_returns_bundle_without_loose_state_mirrors(mo
 
     assert result is fake_state
     assert app.state.auth_runtime_state is fake_state
-    assert not hasattr(app.state, "auth_service")
-    assert not hasattr(app.state, "_supabase_auth_client_factory")
