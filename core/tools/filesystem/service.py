@@ -1,12 +1,3 @@
-"""FileSystem Service - registers file operation tools with ToolRegistry.
-
-Tools:
-- Read: Read file content (with chunking support)
-- Write: Create new file
-- Edit: Edit file (str_replace mode, supports replace_all)
-- list_dir: List directory
-"""
-
 from __future__ import annotations
 
 import logging

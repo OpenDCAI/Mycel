@@ -1,10 +1,3 @@
-"""Search Service - registers Grep and Glob tools with ToolRegistry.
-
-Tools:
-- Grep: Content search using regex (ripgrep when available, Python implementation otherwise)
-- Glob: File pattern matching sorted by modification time
-"""
-
 from __future__ import annotations
 
 import re
@@ -36,8 +29,6 @@ DEFAULT_EXCLUDES: list[str] = [
 
 
 class SearchService:
-    """Registers Grep and Glob tools into ToolRegistry."""
-
     def __init__(
         self,
         registry: ToolRegistry,
