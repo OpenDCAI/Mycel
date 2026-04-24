@@ -22,10 +22,6 @@ class SupabaseAgentConfigRepo:
     def _table(self, table: str) -> Any:
         return q.schema_table(self._client, _SCHEMA, table, _REPO)
 
-    # ------------------------------------------------------------------
-    # agent_configs (1:1 with agent_config id)
-    # ------------------------------------------------------------------
-
     def get_config(self, agent_config_id: str) -> dict[str, Any] | None:
         rows = q.rows(
             self._table("agent_configs").select("*").eq("id", agent_config_id).execute(),
@@ -80,10 +76,6 @@ class SupabaseAgentConfigRepo:
     def delete_config(self, agent_config_id: str) -> None:
         self._table("agent_configs").delete().eq("id", agent_config_id).execute()
 
-    # ------------------------------------------------------------------
-    # agent_rules
-    # ------------------------------------------------------------------
-
     def list_rules(self, agent_config_id: str) -> list[dict[str, Any]]:
         rows = q.rows(
             self._table("agent_rules").select("*").eq("agent_config_id", agent_config_id).execute(),
@@ -100,10 +92,6 @@ class SupabaseAgentConfigRepo:
 
     def delete_rule(self, rule_id: str) -> None:
         self._table("agent_rules").delete().eq("id", rule_id).execute()
-
-    # ------------------------------------------------------------------
-    # agent_skills
-    # ------------------------------------------------------------------
 
     def list_skills(self, agent_config_id: str) -> list[dict[str, Any]]:
         rows = q.rows(
@@ -125,10 +113,6 @@ class SupabaseAgentConfigRepo:
 
     def delete_skill(self, skill_id: str) -> None:
         self._table("agent_skills").delete().eq("id", skill_id).execute()
-
-    # ------------------------------------------------------------------
-    # agent_sub_agents
-    # ------------------------------------------------------------------
 
     def list_sub_agents(self, agent_config_id: str) -> list[dict[str, Any]]:
         rows = q.rows(
