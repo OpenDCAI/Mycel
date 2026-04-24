@@ -1,5 +1,3 @@
-"""Backend-facing regression tests for QueryLoop web caller contracts."""
-
 from __future__ import annotations
 
 import asyncio

@@ -1,5 +1,3 @@
-"""执行状态监控"""
-
 import logging
 import threading
 from collections.abc import Callable

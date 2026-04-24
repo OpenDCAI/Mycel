@@ -1,5 +1,3 @@
-"""Chat runtime bootstrap owned by the chat backend."""
-
 from __future__ import annotations
 
 from dataclasses import dataclass

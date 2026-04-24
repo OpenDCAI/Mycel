@@ -1,5 +1,3 @@
-"""Storage-layer errors shared by provider implementations."""
-
 from __future__ import annotations
 
 

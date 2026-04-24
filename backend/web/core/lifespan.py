@@ -1,5 +1,3 @@
-"""Application lifespan management."""
-
 import asyncio
 import os
 from contextlib import asynccontextmanager
