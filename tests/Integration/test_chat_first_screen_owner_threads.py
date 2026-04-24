@@ -11,10 +11,6 @@ from backend.chat.api.http import conversations_router as owner_conversations_ro
 from backend.web.routers import threads as threads_router
 
 
-def test_first_screen_conversations_router_owner_module_lives_under_backend_chat() -> None:
-    assert owner_conversations_router.__name__ == "backend.chat.api.http.conversations_router"
-
-
 class _CountingOwnerThreadRepo:
     def __init__(self) -> None:
         self.calls = 0

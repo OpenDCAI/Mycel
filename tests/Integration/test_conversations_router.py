@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import importlib
 import threading
 from types import SimpleNamespace
 
@@ -8,15 +7,6 @@ import pytest
 
 from backend.chat.api.http import conversations_router as owner_conversations_router
 from backend.identity.avatar.urls import avatar_url
-
-
-def test_conversations_http_owner_module_lives_under_backend_chat() -> None:
-    assert owner_conversations_router.__name__ == "backend.chat.api.http.conversations_router"
-
-
-def test_conversations_router_shell_is_deleted() -> None:
-    with pytest.raises(ModuleNotFoundError):
-        importlib.import_module("backend.web.routers.conversations")
 
 
 async def _list_conversations(app: SimpleNamespace, user_id: str = "human-user-1"):

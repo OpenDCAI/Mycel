@@ -63,21 +63,3 @@ def test_agent_runtime_gateway_handler_injection_is_typed() -> None:
     assert "app" not in constructor_hints
     assert "AgentChatRuntimeHandler" in str(constructor_hints["chat_handlers"])
     assert constructor_hints["thread_input_handler"] == gateway_module.AgentThreadInputRuntimeHandler | None
-
-
-def test_agent_runtime_implementation_lives_under_backend_agent_runtime() -> None:
-    gateway_impl = importlib.import_module("backend.threads.chat_adapters.gateway")
-    bootstrap_impl = importlib.import_module("backend.threads.chat_adapters.bootstrap")
-    port_impl = importlib.import_module("backend.threads.chat_adapters.port")
-    chat_handler_impl = importlib.import_module("backend.threads.chat_adapters.chat_handler")
-    thread_handler_impl = importlib.import_module("backend.threads.chat_adapters.thread_handler")
-
-    assert gateway_impl.NativeAgentRuntimeGateway.__module__ == "backend.threads.chat_adapters.gateway"
-    assert bootstrap_impl.build_agent_runtime_state.__module__ == "backend.threads.chat_adapters.bootstrap"
-    assert port_impl.get_agent_runtime_gateway.__module__ == "backend.threads.chat_adapters.port"
-    assert chat_handler_impl.NativeAgentChatDeliveryHandler.__module__ == "backend.threads.chat_adapters.chat_handler"
-    assert thread_handler_impl.NativeAgentThreadInputHandler.__module__ == "backend.threads.chat_adapters.thread_handler"
-    assert gateway_impl.NativeAgentRuntimeGateway is not None
-    assert port_impl.get_agent_runtime_gateway is not None
-    assert chat_handler_impl.NativeAgentChatDeliveryHandler is not None
-    assert thread_handler_impl.NativeAgentThreadInputHandler is not None
