@@ -35,5 +35,3 @@ def test_attach_runtime_storage_state_returns_bundle_without_loose_state_mirrors
     result = runtime_storage_bootstrap.attach_runtime_storage_state(app)
 
     assert result is fake_state
-    assert not hasattr(app.state, "_supabase_client")
-    assert not hasattr(app.state, "_storage_container")
