@@ -1,5 +1,3 @@
-"""Shared local workspace root helper."""
-
 from __future__ import annotations
 
 import os

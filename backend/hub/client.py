@@ -1,5 +1,3 @@
-"""HTTP client for Mycel Hub marketplace API."""
-
 import copy
 import json
 import logging

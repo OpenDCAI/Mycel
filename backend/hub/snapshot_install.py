@@ -1,5 +1,3 @@
-"""Neutral owner for marketplace agent-user snapshot installs."""
-
 from __future__ import annotations
 
 import re

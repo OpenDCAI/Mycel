@@ -1,5 +1,3 @@
-"""Shared resource helper functions for monitor and product projections."""
-
 from __future__ import annotations
 
 import json

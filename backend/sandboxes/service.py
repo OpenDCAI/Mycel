@@ -1,5 +1,3 @@
-"""Sandbox management service."""
-
 import logging
 from typing import Any
 
