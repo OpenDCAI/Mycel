@@ -12,8 +12,6 @@ from sandbox.interfaces.filesystem import (
 
 
 class LocalBackend(FileSystemBackend):
-    """Backend that operates directly on the local filesystem."""
-
     def read_file(self, path: str) -> FileReadResult:
         p = Path(path)
         with p.open("r", encoding="utf-8", newline="") as f:

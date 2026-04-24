@@ -7,8 +7,6 @@ from .base import BashHook, HookResult
 
 
 class DangerousCommandsHook(BashHook):
-    """Dangerous commands hook - blocks destructive system commands."""
-
     priority = 5
     name = "DangerousCommands"
     description = "Block dangerous commands that may harm the system"
