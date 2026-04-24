@@ -19,14 +19,6 @@ SKIP_TOOLS: set[str] = {"Read"}
 
 
 class SpillBufferMiddleware(AgentMiddleware):
-    """Catches tool outputs that exceed a byte threshold.
-
-    Oversized content is written to disk under
-    ``{workspace_root}/.leon/tool-results/{tool_call_id}.txt``
-    and replaced with a preview + file path so the model can
-    use ``Read`` to inspect specific sections.
-    """
-
     def __init__(
         self,
         fs_backend: FileSystemBackend | None = None,

@@ -23,18 +23,6 @@ def spill_if_needed(
     fs_backend: FileSystemBackend,
     workspace_root: str,
 ) -> Any:
-    """Replace oversized string content with a preview + on-disk path.
-
-    Args:
-        content: Tool output (only strings are checked).
-        threshold_bytes: Max byte size before spilling.
-        tool_call_id: Used to derive the spill filename.
-        fs_backend: Backend for writing the full output to disk.
-        workspace_root: Root directory for the .leon/tool-results/ folder.
-
-    Returns:
-        Original content if within threshold, otherwise a preview string.
-    """
     if not isinstance(content, str):
         return content
 
