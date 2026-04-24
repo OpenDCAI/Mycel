@@ -1,5 +1,3 @@
-"""Agent Runtime Gateway facade for service-to-service dispatch."""
-
 from __future__ import annotations
 
 from collections.abc import Mapping

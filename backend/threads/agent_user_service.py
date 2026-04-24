@@ -1,5 +1,3 @@
-"""Agent-user CRUD over repo-backed users/configs."""
-
 import time
 from pathlib import Path
 from typing import Any

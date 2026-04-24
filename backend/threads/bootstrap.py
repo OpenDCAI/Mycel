@@ -1,5 +1,3 @@
-"""Threads runtime bootstrap owned by the threads backend."""
-
 from __future__ import annotations
 
 import asyncio

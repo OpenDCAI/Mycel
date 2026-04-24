@@ -1,5 +1,3 @@
-"""SSE streaming service for agent execution."""
-
 import logging
 from typing import Any
 
