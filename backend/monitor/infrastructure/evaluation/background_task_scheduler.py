@@ -1,5 +1,3 @@
-"""BackgroundTasks-backed evaluation scheduler."""
-
 from __future__ import annotations
 
 from backend.monitor.infrastructure.evaluation.evaluation_execution_service import run_monitor_evaluation_batch

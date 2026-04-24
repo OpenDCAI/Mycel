@@ -1,5 +1,3 @@
-"""Monitor evaluation storage construction boundary."""
-
 from __future__ import annotations
 
 from eval.batch_service import EvaluationBatchService

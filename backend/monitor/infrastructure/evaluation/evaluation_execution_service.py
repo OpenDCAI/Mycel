@@ -1,5 +1,3 @@
-"""Evaluation scenario and runner port for Monitor."""
-
 from __future__ import annotations
 
 from pathlib import Path
