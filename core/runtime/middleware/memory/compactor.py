@@ -38,16 +38,6 @@ class ContextCompactor:
         self.keep_recent_tokens = keep_recent_tokens
 
     def should_compact(self, estimated_tokens: int, context_limit: int, threshold: float = 0.7) -> bool:
-        """Whether current context exceeds the compaction threshold.
-
-        Args:
-            estimated_tokens: Current estimated token count
-            context_limit: Maximum context window size
-            threshold: Fraction of context_limit to trigger compaction (default 0.7)
-
-        Returns:
-            True if compaction should be triggered
-        """
         threshold_tokens = int(context_limit * threshold)
         return estimated_tokens > threshold_tokens
 
@@ -146,7 +136,6 @@ class ContextCompactor:
         return summary
 
     def _estimate_msg_tokens(self, msg: Any) -> int:
-        """Estimate tokens for a single message (chars // 2)."""
         content = getattr(msg, "content", "")
         if isinstance(content, str):
             return len(content) // 2
