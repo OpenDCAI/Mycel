@@ -1,5 +1,3 @@
-"""SQLite repository for sandbox runtime persistence."""
-
 from __future__ import annotations
 
 import json

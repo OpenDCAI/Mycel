@@ -1,5 +1,3 @@
-"""Unified SQLite kernel for role-based connections and consistent PRAGMA setup."""
-
 from __future__ import annotations
 
 import os
