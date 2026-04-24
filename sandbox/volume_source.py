@@ -92,7 +92,6 @@ class HostVolume:
 
 
 def deserialize_volume_source(data: dict[str, Any]) -> VolumeSource:
-    """Reconstruct VolumeSource from serialized JSON."""
     match data["type"]:
         case "host":
             return HostVolume(Path(data["path"]))

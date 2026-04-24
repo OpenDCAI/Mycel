@@ -16,13 +16,6 @@ def create_sandbox(
     workspace_root: str | None = None,
     db_path: Path | None = None,
 ) -> Sandbox:
-    """Factory: create a Sandbox from config.
-
-    Args:
-        config: SandboxConfig (from SandboxConfig.load() or inline)
-        workspace_root: Default working dir for LocalSandbox
-        db_path: SQLite path for session tracking
-    """
     p = config.provider
 
     if p == "local":

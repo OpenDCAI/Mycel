@@ -118,14 +118,12 @@ class Metrics:
 
 
 class SandboxProvider(ABC):
-    """Abstract interface for sandbox providers."""
-
     name: str  # Provider identifier: 'agentbay', 'e2b', 'docker', 'local'
     WORKSPACE_ROOT: str = "/workspace"  # Override in subclasses with non-standard workspace paths
 
     @abstractmethod
     def get_capability(self) -> ProviderCapability:
-        """Return lifecycle capability contract for this provider."""
+        pass
 
     @abstractmethod
     def create_session(self, context_id: str | None = None, thread_id: str | None = None) -> SessionInfo:
@@ -181,7 +179,7 @@ class SandboxProvider(ABC):
 
     @abstractmethod
     def create_runtime(self, terminal: AbstractTerminal, sandbox_runtime: SandboxRuntimeHandle) -> PhysicalTerminalRuntime:
-        """Create the appropriate PhysicalTerminalRuntime for this provider."""
+        pass
 
     def get_metrics_via_commands(self, session_id: str) -> Metrics | None:
         try:
@@ -228,25 +226,19 @@ class SandboxProvider(ABC):
         return None
 
     def create_managed_volume(self, managed_ref: str, mount_path: str) -> str:
-        """Create provider-managed persistent volume. Returns backend_ref (volume name).
-        Override in providers with managed volume support (Daytona, Docker).
-        """
         raise NotImplementedError(f"{self.name} does not support managed volumes")
 
     def set_managed_volume_mount(self, thread_id: str, backend_ref: str, mount_path: str) -> None:
-        """Configure managed volume mount for next create_session().
-        Called before create_session(). Provider stores this internally.
-        """
         raise NotImplementedError(f"{self.name} does not support managed volumes")
 
     def delete_managed_volume(self, backend_ref: str) -> None:
         raise NotImplementedError(f"{self.name} does not support managed volumes")
 
     def wait_managed_volume_ready(self, backend_ref: str) -> None:
-        """Block until a previously created managed volume is reusable."""
+        pass
 
     def set_thread_bind_mounts(self, thread_id: str, mounts: list) -> None:
-        """Set per-thread bind mounts for next create_session(). No-op for providers without mount support."""
+        pass
 
     def list_provider_runtimes(self) -> list[SessionInfo]:
         return []

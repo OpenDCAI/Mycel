@@ -111,8 +111,6 @@ def _run_coroutine_blocking[T](coro: Coroutine[Any, Any, T], *, timeout: float |
 
 
 class RemoteSandbox(Sandbox):
-    """Concrete sandbox for all provider-backed environments (AgentBay, Docker, E2B, Daytona)."""
-
     def __init__(
         self,
         provider: SandboxProvider,
@@ -240,8 +238,6 @@ class _LazyLocalExecutor:
 
 
 class LocalSandbox(Sandbox):
-    """Concrete sandbox for the local host environment."""
-
     def __init__(self, workspace_root: str, db_path: Path | None = None) -> None:
         from sandbox.manager import SandboxManager
         from sandbox.providers.local import LocalSessionProvider
