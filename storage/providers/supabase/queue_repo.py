@@ -11,8 +11,6 @@ _SENDER_USER_ID = "sender_user_id"
 
 
 class SupabaseQueueRepo:
-    """Message queue backed by Supabase (table: agent.message_queue, BIGSERIAL id)."""
-
     def __init__(self, client: Any) -> None:
         self._client = q.validate_client(client, _REPO)
 

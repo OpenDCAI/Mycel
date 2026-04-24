@@ -11,8 +11,6 @@ _TABLE = "file_operations"
 
 
 class SupabaseFileOperationRepo:
-    """Minimal file operation repository backed by a Supabase client."""
-
     def __init__(self, client: Any) -> None:
         self._client = q.validate_client(client, _REPO)
 

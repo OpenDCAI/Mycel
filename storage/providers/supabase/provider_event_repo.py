@@ -11,8 +11,6 @@ _TABLE = "provider_events"
 
 
 class SupabaseProviderEventRepo:
-    """Provider event persistence backed by Supabase (table: observability.provider_events)."""
-
     def __init__(self, client: Any) -> None:
         self._client = q.validate_client(client, _REPO)
 
