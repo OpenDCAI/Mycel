@@ -12,7 +12,6 @@ from core.runtime.middleware.spill_buffer.spill import PREVIEW_BYTES, spill_if_n
 
 
 def _make_fs_backend():
-    """Return a mock FileSystemBackend with write_file as a MagicMock."""
     backend = MagicMock()
     backend.write_file = MagicMock(return_value=None)
     return backend
@@ -29,7 +28,6 @@ class _ModelRequestHarness:
 
 
 def _make_request(tool_name: str, tool_call_id: str = "call_abc123"):
-    """Build a minimal request harness matching the middleware surface."""
     return cast(Any, _ToolCallRequestHarness(tool_call={"name": tool_name, "id": tool_call_id}))
 
 
@@ -330,7 +328,6 @@ class TestSpillBufferMiddleware:
         fs.write_file.assert_called_once()
 
     def test_spill_path_uses_tool_call_id(self):
-        """Verify the spill file name is derived from tool_call_id."""
         mw, fs = self._make_middleware(default_threshold=10)
         unique_id = "call_unique_xyz_789"
         request = _make_request("Bash", unique_id)

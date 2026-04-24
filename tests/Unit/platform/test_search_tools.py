@@ -392,8 +392,6 @@ class TestIsExcluded:
 
 
 class TestDefaultExcludes:
-    """Verify the DEFAULT_EXCLUDES list contains essential entries."""
-
     def test_essential_entries(self):
         for entry in ["node_modules", ".git", "__pycache__", ".venv", "dist", "build"]:
             assert entry in DEFAULT_EXCLUDES

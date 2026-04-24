@@ -664,7 +664,6 @@ class AgentService:
             model_name=model or self._model_name,
         )
 
-        # Create async task (independent LeonAgent runs inside)
         task = asyncio.create_task(
             self._run_agent(
                 task_id,
@@ -702,7 +701,6 @@ class AgentService:
                 },
             )
 
-        # Default: parent blocks until sub-agent completes (does not block frontend event loop)
         try:
             result = await task
             return tool_success(
@@ -946,7 +944,6 @@ class AgentService:
                     )
                 )
 
-            # Build initial input — with or without forked parent context
             if fork_context:
                 from sandbox.thread_context import get_current_messages
 

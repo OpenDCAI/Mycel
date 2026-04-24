@@ -2164,8 +2164,6 @@ class TestToolRunnerInlineInjection:
 
 
 class TestServiceDeclaredToolModes:
-    """Verify services declare the runtime tool modes they own."""
-
     def test_task_service_registers_deferred(self):
         reg = ToolRegistry()
         from core.tools.task.service import TaskService

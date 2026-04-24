@@ -70,7 +70,6 @@ def test_hub_api_preserves_hub_bad_request_detail(monkeypatch):
 
 
 def _make_hub_response(item_type: str, slug: str, content: str = "# Hello", version: str = "1.0.0", publisher: str = "tester") -> dict:
-    """Build a fake Hub /download response."""
     return {
         "item": {
             "name": slug.replace("-", " ").title(),

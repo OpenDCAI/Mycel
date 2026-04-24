@@ -515,7 +515,6 @@ class _LSPSessionPool:
         self._pyright.clear()
 
 
-# Process-level singleton — import and use directly
 lsp_pool = _LSPSessionPool()
 
 
