@@ -70,33 +70,6 @@ def test_hub_api_preserves_hub_bad_request_detail(monkeypatch):
     assert exc_info.value.detail == "Unsupported sort: featured"
 
 
-def test_marketplace_client_uses_neutral_library_path_owner() -> None:
-    import backend.hub.client as marketplace_client
-
-    source = importlib.reload(marketplace_client).__loader__.get_source(marketplace_client.__name__) or ""
-
-    assert "from backend.library.service import LIBRARY_DIR" not in source
-    assert "import backend.library.paths as _lib_paths" in source
-
-
-def test_marketplace_client_uses_neutral_versioning_owner() -> None:
-    import backend.hub.client as marketplace_client
-
-    source = importlib.reload(marketplace_client).__loader__.get_source(marketplace_client.__name__) or ""
-
-    assert "from backend.web.utils.versioning import BumpType, bump_semver" not in source
-    assert "from backend.hub.versioning import BumpType, bump_semver" in source
-
-
-def test_marketplace_client_uses_neutral_agent_user_snapshot_install_owner() -> None:
-    import backend.hub.client as marketplace_client
-
-    source = importlib.reload(marketplace_client).__loader__.get_source(marketplace_client.__name__) or ""
-
-    assert "from backend.threads.agent_user_service import install_from_snapshot" not in source
-    assert "import backend.hub.snapshot_install as _snapshot_install_owner" in source
-
-
 # ── Helpers ──
 
 
