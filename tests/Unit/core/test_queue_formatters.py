@@ -1,5 +1,3 @@
-"""Tests for core/queue/formatters.py"""
-
 import xml.etree.ElementTree as ET
 
 from core.runtime.middleware.queue.formatters import format_command_notification
@@ -17,10 +15,7 @@ def _require_text(element: ET.Element) -> str:
 
 
 class TestFormatCommandNotification:
-    """Test format_command_notification XML generation."""
-
     def test_basic_format(self):
-        """Test basic XML structure."""
         result = format_command_notification(
             command_id="cmd-123",
             status="completed",
@@ -41,7 +36,6 @@ class TestFormatCommandNotification:
         assert _require_text(_require_child(notif, "Output")) == "hello\n"
 
     def test_failed_status(self):
-        """Test failed command notification."""
         result = format_command_notification(
             command_id="cmd-456",
             status="failed",
@@ -56,7 +50,6 @@ class TestFormatCommandNotification:
         assert _require_text(_require_child(notif, "ExitCode")) == "1"
 
     def test_output_truncation(self):
-        """Test output is truncated to 1000 characters."""
         long_output = "x" * 2000
         result = format_command_notification(
             command_id="cmd-789",
@@ -73,7 +66,6 @@ class TestFormatCommandNotification:
         assert output_text == "x" * 1000
 
     def test_empty_output(self):
-        """Test empty output is handled correctly."""
         result = format_command_notification(
             command_id="cmd-empty",
             status="completed",
@@ -88,7 +80,6 @@ class TestFormatCommandNotification:
         assert output_elem.text is None or output_elem.text == ""
 
     def test_xml_special_characters_escaped(self):
-        """Test XML special characters are properly escaped."""
         result = format_command_notification(
             command_id="cmd-special",
             status="completed",
@@ -109,7 +100,6 @@ class TestFormatCommandNotification:
         assert "&" in output
 
     def test_multiline_output(self):
-        """Test multiline output is preserved."""
         result = format_command_notification(
             command_id="cmd-multi",
             status="completed",
