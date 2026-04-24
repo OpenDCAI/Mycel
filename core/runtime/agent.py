@@ -1274,9 +1274,7 @@ class LeonAgent:
             self._mcp_client = client  # Save reference for cleanup
             tools = await client.get_tools()
 
-            # Apply mcp__ prefix to match Claude Code naming convention
             for tool in tools:
-                # Extract server name from tool metadata or connection
                 server_name = None
                 for name in configs:
                     if hasattr(tool, "metadata") and tool.metadata:
@@ -1314,7 +1312,6 @@ class LeonAgent:
         await self.checkpointer.setup()
 
     def _is_tool_allowed(self, tool) -> bool:
-        # Extract original tool name without mcp__ prefix
         tool_name = tool.name
         if tool_name.startswith("mcp__"):
             parts = tool_name.split("__", 2)
