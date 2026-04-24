@@ -11,23 +11,6 @@ def read_text(
     offset: int | None = None,
     limit: int | None = None,
 ) -> ReadResult:
-    """
-    Read text file with triple limits.
-
-    Limits applied (first reached wins):
-    1. max_lines: Maximum number of lines to return
-    2. max_chars: Maximum total characters to return
-    3. max_line_length: Truncate individual lines exceeding this
-
-    Args:
-        path: Absolute path to file
-        limits: ReadLimits configuration
-        offset: Start line (1-indexed, None = start from beginning)
-        limit: Number of lines to read (None = use limits.max_lines)
-
-    Returns:
-        ReadResult with content and metadata
-    """
     result = ReadResult(
         file_path=str(path),
         file_type=FileType.TEXT,
