@@ -1,5 +1,3 @@
-"""Webhook endpoints for provider events."""
-
 import asyncio
 from typing import Any
 

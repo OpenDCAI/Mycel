@@ -1,5 +1,3 @@
-"""Unified conversation list API — chat/backend owner module."""
-
 from __future__ import annotations
 
 import asyncio

@@ -1,5 +1,3 @@
-"""Pydantic models for panel API."""
-
 from pydantic import BaseModel, Field
 
 from backend.hub.versioning import BumpType

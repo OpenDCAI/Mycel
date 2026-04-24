@@ -1,5 +1,3 @@
-"""Invite code management endpoints."""
-
 import asyncio
 from collections.abc import Callable
 from typing import Annotated, Any

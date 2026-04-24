@@ -1,5 +1,3 @@
-"""Panel API router — Agents, Library, Profile."""
-
 import asyncio
 from typing import Annotated, Any
 
