@@ -34,7 +34,6 @@ async def _validate_web_checkpointer_contract() -> None:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """FastAPI lifespan context manager for startup and shutdown."""
     _require_web_runtime_contract()
     await _validate_web_checkpointer_contract()
 

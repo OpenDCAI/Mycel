@@ -47,7 +47,6 @@ def browse_sandbox(
     make_sandbox_monitor_repo_fn=make_sandbox_monitor_repo,
     build_provider_from_config_name_fn=build_provider_from_config_name,
 ) -> dict[str, Any]:
-    """Browse the filesystem of a sandbox via its provider."""
     from pathlib import PurePosixPath
 
     provider, instance_id = _resolve_sandbox_provider(
@@ -113,7 +112,6 @@ def refresh_resource_snapshots(
     probe_and_upsert_for_instance_fn=probe_and_upsert_for_instance,
     upsert_resource_snapshot_for_sandbox_fn=upsert_resource_snapshot_for_sandbox,
 ) -> dict[str, Any]:
-    """Probe active sandbox runtimes and upsert resource snapshots."""
     repo = make_sandbox_monitor_repo_fn()
     try:
         probe_targets = repo.list_probe_targets()

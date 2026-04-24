@@ -77,7 +77,6 @@ class SupabaseInviteCodeRepo:
         return [dict(r) for r in rows]
 
     def use(self, code: str, user_id: str) -> dict[str, Any] | None:
-        """Atomically mark a code as used. Returns the row if successful, None if not valid."""
         now = datetime.now(UTC).isoformat()
         resp = (
             self._table()

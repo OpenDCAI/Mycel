@@ -33,7 +33,6 @@ async def verify_thread_owner(
     user_id: Annotated[str, Depends(get_current_user_id)],
     app: Annotated[FastAPI, Depends(get_app)],
 ) -> str:
-    """Verify that user_id owns the thread. Returns user_id."""
     runtime_state = thread_runtime_convergence.inspect_owner_thread_runtime(app, thread_id)
     if runtime_state == "missing":
         raise HTTPException(404, "Thread not found")

@@ -84,7 +84,6 @@ def _resource_display_status(
 
 
 def _project_user_visible_resource_rows(repo: Any, rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Project raw monitor rows into the user-visible resource surface."""
     grouped: dict[str, list[dict[str, Any]]] = {}
     for row in rows:
         sandbox_id = str(row.get("sandbox_id") or "").strip()
