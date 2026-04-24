@@ -240,7 +240,6 @@ ARCHIVE_EXTENSIONS: set[str] = {
 
 
 def detect_file_type(path: Path) -> FileType:
-    """Detect file type based on extension."""
     ext = path.suffix.lstrip(".").lower()
 
     if not ext:
