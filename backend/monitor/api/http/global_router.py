@@ -1,5 +1,3 @@
-"""Global monitor routes eligible for future monitor_app mounting."""
-
 import asyncio
 from typing import Annotated
 

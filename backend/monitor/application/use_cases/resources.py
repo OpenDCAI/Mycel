@@ -1,5 +1,3 @@
-"""Monitor resource boundary for overview and sandbox file reads."""
-
 from __future__ import annotations
 
 from typing import Any
