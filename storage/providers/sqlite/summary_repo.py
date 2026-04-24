@@ -9,8 +9,6 @@ from storage.providers.sqlite.kernel import connect_sqlite
 
 
 class SQLiteSummaryRepo:
-    """Repository boundary for summaries table operations."""
-
     def __init__(
         self,
         db_path: Path | str,

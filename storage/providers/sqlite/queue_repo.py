@@ -10,11 +10,6 @@ from storage.providers.sqlite.kernel import SQLiteDBRole, connect_sqlite, resolv
 
 
 class SQLiteQueueRepo:
-    """Message queue backed by SQLite.
-
-    Thread-safe: all connection access is serialized via a lock.
-    """
-
     def __init__(self, db_path: str | Path | None = None, conn: sqlite3.Connection | None = None) -> None:
         self._own_conn = conn is None
         self._lock = threading.Lock()
