@@ -1,11 +1,3 @@
-"""
-Daytona sandbox provider.
-
-Uses Daytona's Python SDK for sandbox lifecycle, filesystem, and process execution.
-
-Important: runtime semantics remain PTY-backed (`daytona_pty`) for both SaaS and self-hosted.
-"""
-
 from __future__ import annotations
 
 import logging

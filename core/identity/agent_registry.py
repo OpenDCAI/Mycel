@@ -1,9 +1,3 @@
-"""Agent instance identity persistence.
-
-Stores agent identity mappings in ~/.leon/agent_instances.json.
-Backend-internal only — agent_id does not leak to SSE events.
-"""
-
 from __future__ import annotations
 
 import json

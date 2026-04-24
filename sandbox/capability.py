@@ -1,10 +1,3 @@
-"""SandboxCapability - Agent-facing sandbox binding surface.
-
-This module provides the capability object that agents interact with.
-It wraps the agent-facing thread/runtime/sandbox binding surface while
-keeping sandbox runtime identity details behind the capability interface.
-"""
-
 from __future__ import annotations
 
 import shlex

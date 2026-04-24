@@ -1,13 +1,3 @@
-"""SandboxRuntimeHandle - durable compute handle with sandbox-runtime state machine.
-
-Architecture:
-    SandboxRuntimeHandle (durable) -> SandboxInstance (ephemeral)
-
-State machine contract:
-- Physical lifecycle writes must go through SQLiteSandboxRuntimeHandle.apply(event).
-- Sandbox runtime snapshot stores desired_state + observed_state + version.
-"""
-
 from __future__ import annotations
 
 import json

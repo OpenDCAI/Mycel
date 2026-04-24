@@ -1,10 +1,3 @@
-"""Lifecycle state machine contracts for chat sessions and sandbox runtime instances.
-
-Fail-loud policy:
-- Invalid state strings raise immediately.
-- Illegal transitions raise immediately.
-"""
-
 from __future__ import annotations
 
 from enum import StrEnum
