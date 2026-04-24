@@ -176,17 +176,6 @@ class AgentBayProvider(SandboxProvider):
             "cwd": cwd or self.default_context_path,
         }
         shell_server = self._resolve_shell_server(session)
-        session_tools = getattr(session, "mcpTools", None) or getattr(session, "mcp_tools", None) or []
-        print(
-            "[AgentBay.execute] "
-            f"session_id={session_id} "
-            f"has_link_url={bool(getattr(session, 'link_url', ''))} "
-            f"has_token={bool(getattr(session, 'token', ''))} "
-            f"shell_server={shell_server!r} "
-            f"tool_count={len(session_tools)} "
-            f"timeout_ms={timeout_ms}",
-            flush=True,
-        )
 
         if getattr(session, "link_url", "") and getattr(session, "token", "") and shell_server:
             # @@@agentbay-shell-link-route - shared provider runs proved shell can degrade into the API path
@@ -200,7 +189,6 @@ class AgentBayProvider(SandboxProvider):
             )
             return result
 
-        print(f"[AgentBay.execute] session_id={session_id} path=sdk_command_execute", flush=True)
         try:
             result = session.command.execute_command(**exec_args)
         except Exception as exc:
@@ -221,13 +209,6 @@ class AgentBayProvider(SandboxProvider):
             )
             return ProviderExecResult(output=result.output or "", exit_code=result.exit_code or 1, error=result.error_message)
 
-        print(
-            "[AgentBay.execute] "
-            f"session_id={session_id} path=sdk_command_execute success=True "
-            f"exit_code={getattr(result, 'exit_code', None)} "
-            f"output_len={len(getattr(result, 'output', '') or '')}",
-            flush=True,
-        )
         return ProviderExecResult(output=result.output or "", exit_code=result.exit_code or 0)
 
     def read_file(self, session_id: str, path: str) -> str:
