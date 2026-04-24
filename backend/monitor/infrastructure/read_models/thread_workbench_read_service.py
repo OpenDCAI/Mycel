@@ -1,5 +1,3 @@
-"""Owner thread workbench app-state read boundary."""
-
 from __future__ import annotations
 
 from collections.abc import Callable

@@ -1,5 +1,3 @@
-"""Thread read-source boundary for Monitor."""
-
 from __future__ import annotations
 
 from typing import Any
