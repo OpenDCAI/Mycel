@@ -40,7 +40,6 @@ class AuthService:
         self._recipe_repo = recipe_repo
 
     def send_otp(self, email: str, password: str, invite_code: str) -> None:
-        """Validate invite code, create user via signUp (sends confirmation OTP to email)."""
         auth_client = self._auth_api(self._require_auth_client())
         if self._sb is None:
             raise RuntimeError("Supabase client required.")
@@ -57,7 +56,6 @@ class AuthService:
             raise ValueError("发送验证码失败，请稍后重试") from e
 
     def verify_register_otp(self, email: str, token: str) -> dict:
-        """Verify signup OTP. Returns temp_token to be used in complete_register."""
         auth_client = self._auth_api(self._require_auth_client())
         if self._sb is None:
             raise RuntimeError("Supabase client required.")
@@ -72,11 +70,9 @@ class AuthService:
         return {"temp_token": resp.session.access_token}
 
     def complete_register(self, temp_token: str, invite_code: str) -> dict:
-        """Complete registration: validate invite code, create unified user records."""
         if self._sb is None:
             raise RuntimeError("Supabase client required.")
 
-        # 1. Decode temp_token to get user_id
         jwt_secret = os.getenv("SUPABASE_JWT_SECRET")
         if not jwt_secret:
             raise RuntimeError("SUPABASE_JWT_SECRET not set.")
@@ -86,11 +82,9 @@ class AuthService:
             raise ValueError("会话已过期，请重新验证邮箱") from e
         auth_user_id = payload["sub"]
 
-        # 2. Validate invite code (re-check; repo handles expired/used)
         if self._invite_codes is None or not self._invite_codes.is_valid(invite_code):
             raise ValueError("邀请码无效或已过期")
 
-        # 3. Create unified user records (idempotent guard)
         email_from_payload = payload.get("email", "")
         existing = self._users.get_by_id(auth_user_id)
         if existing is None:
@@ -109,7 +103,6 @@ class AuthService:
                 )
             )
 
-            # Initial agents
             first_agent_info = self._create_initial_agents(auth_user_id, now)
             self._seed_default_recipes(auth_user_id)
         else:
@@ -122,7 +115,6 @@ class AuthService:
                 agent = owned_agents[0]
                 first_agent_info = {"id": agent.id, "name": agent.display_name, "type": agent.type.value, "avatar": agent.avatar}
 
-        # 4. Mark invite code used (atomic via repo)
         if self._invite_codes is not None:
             self._invite_codes.use(invite_code, auth_user_id)
 
@@ -134,14 +126,12 @@ class AuthService:
         }
 
     def login(self, identifier: str, password: str) -> dict:
-        """Login with email or mycel_id + password."""
         auth_client = self._auth_api(self._require_auth_client())
 
         email = self._resolve_email(identifier)
 
         from supabase_auth.errors import AuthApiError
 
-        # Sign in via Supabase
         try:
             resp = auth_client.sign_in_with_password({"email": email, "password": password})
         except AuthApiError:
@@ -178,7 +168,6 @@ class AuthService:
         }
 
     def verify_token(self, token: str) -> dict:
-        """Verify Supabase JWT. Returns {user_id}."""
         jwt_secret = os.getenv("SUPABASE_JWT_SECRET")
         if not jwt_secret:
             raise RuntimeError("SUPABASE_JWT_SECRET env var required for token verification.")
@@ -196,10 +185,7 @@ class AuthService:
         except jwt.InvalidTokenError as e:
             raise ValueError(f"Token 无效: {e}")
 
-    # Internal helpers
-
     def _resolve_email(self, identifier: str) -> str:
-        """Turn mycel_id (numeric string) or email into email address."""
         if identifier.strip().lstrip("0123456789") == "" and identifier.strip().isdigit():
             user = self._users.get_by_mycel_id(int(identifier.strip()))
             if user is None or user.email is None:
@@ -223,7 +209,6 @@ class AuthService:
         seed_default_recipes(owner_user_id, recipe_repo=self._recipe_repo)
 
     def _create_initial_agents(self, owner_user_id: str, now: float) -> dict | None:
-        """Create Toad and Morel agents for a new user. Returns first agent info."""
         if self._agent_configs is None:
             raise RuntimeError("Agent config repo required for initial agent creation during schema cutover.")
         from pathlib import Path

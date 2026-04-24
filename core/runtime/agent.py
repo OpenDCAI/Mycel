@@ -24,15 +24,9 @@ from config.models_loader import ModelsLoader  # noqa: E402
 from config.models_schema import ModelsConfig  # noqa: E402
 from config.observation_loader import ObservationLoader  # noqa: E402
 from config.observation_schema import ObservationConfig  # noqa: E402
-
-# Multi-agent services
 from core.agents.service import AgentService  # noqa: E402
 from core.model_params import normalize_model_kwargs  # noqa: E402
-
-# Import file operation recorder for time travel
 from core.operations import get_recorder  # noqa: E402
-
-# New architecture: ToolRegistry + ToolRunner + Services
 from core.runtime.cleanup import CleanupRegistry  # noqa: E402
 from core.runtime.loop import QueryLoop  # noqa: E402
 from core.runtime.middleware.mcp_instructions import McpInstructionsDeltaMiddleware  # noqa: E402
@@ -40,15 +34,11 @@ from core.runtime.middleware.memory import MemoryMiddleware  # noqa: E402
 from core.runtime.middleware.monitor import MonitorMiddleware, apply_usage_patches  # noqa: E402
 from core.runtime.middleware.prompt_caching import PromptCachingMiddleware  # noqa: E402
 from core.runtime.middleware.queue import MessageQueueManager, SteeringMiddleware  # noqa: E402
-
-# Middleware imports (migrated paths)
 from core.runtime.middleware.spill_buffer import SpillBufferMiddleware  # noqa: E402
 from core.runtime.registry import ToolEntry, ToolMode, ToolRegistry, make_tool_schema  # noqa: E402
 from core.runtime.runner import ToolRunner  # noqa: E402
 from core.runtime.state import AppState, BootstrapConfig  # noqa: E402
 from core.runtime.validator import ToolValidator  # noqa: E402
-
-# Hooks (used by Services)
 from core.tools.command.hooks.dangerous_commands import DangerousCommandsHook  # noqa: E402
 from core.tools.command.hooks.file_access_logger import FileAccessLoggerHook  # noqa: E402
 from core.tools.command.hooks.file_permission import FilePermissionHook  # noqa: E402
@@ -1671,21 +1661,10 @@ class LeonAgent:
         return True
 
     def get_response(self, message: str, thread_id: str = "default", **kwargs) -> str:
-        """Get agent's text response.
-
-        Args:
-            message: User message
-            thread_id: Thread ID
-            **kwargs: Additional state parameters
-
-        Returns:
-            Agent's text response
-        """
         result = self.invoke(message, thread_id, **kwargs)
         return result["messages"][-1].content
 
     def cleanup(self):
-        """Clean up temporary workspace directory."""
         if self.workspace_root.exists() and "tmp" in str(self.workspace_root):
             import shutil
 
@@ -1700,30 +1679,6 @@ def create_leon_agent(
     storage_container: StorageContainer | None = None,
     **kwargs,
 ) -> LeonAgent:
-    """Create Leon Agent.
-
-    Args:
-        model_name: Model name. None means "let LeonAgent resolve defaults".
-        api_key: API key
-        workspace_root: Workspace directory
-        sandbox: Sandbox instance, name string, or None for local
-        storage_container: Optional pre-built storage container (runtime wiring injection)
-        **kwargs: Additional configuration parameters
-
-    Returns:
-        Configured LeonAgent instance
-
-    Examples:
-        # Basic usage
-        agent = create_leon_agent()
-
-        # With sandbox
-        agent = create_leon_agent(sandbox="agentbay")
-
-        # Custom workspace
-        agent = create_leon_agent(workspace_root="/path/to/workspace")
-    """
-    # Filter out kwargs that LeonAgent.__init__ doesn't accept (e.g. profile from CLI)
     import inspect as _inspect
 
     from storage.runtime import build_storage_container, uses_supabase_storage
@@ -1741,29 +1696,3 @@ def create_leon_agent(
         storage_container=storage_container,
         **kwargs,
     )
-
-
-if __name__ == "__main__":
-    # Example usage
-    leon_agent = create_leon_agent()
-
-    try:
-        print("=== Example 1: File Operations ===")
-        response = leon_agent.get_response(
-            f"Create a Python file at {leon_agent.workspace_root}/hello.py that prints 'Hello, Mycel!'",
-            thread_id="demo",
-        )
-        print(response)
-        print()
-
-        print("=== Example 2: Read File ===")
-        response = leon_agent.get_response(f"Read the file {leon_agent.workspace_root}/hello.py", thread_id="demo")
-        print(response)
-        print()
-
-        print("=== Example 3: Search ===")
-        response = leon_agent.get_response(f"Search for 'Hello' in {leon_agent.workspace_root}", thread_id="demo")
-        print(response)
-
-    finally:
-        leon_agent.cleanup()

@@ -19,9 +19,6 @@ async def _call_auth_service(app: Any, status_code: int, call: Callable[[Any], A
         raise HTTPException(status_code, str(e))
 
 
-# ── Registration step 1: send OTP ──────────────────────────────────────────
-
-
 class SendOtpRequest(BaseModel):
     email: str
     password: str
@@ -38,9 +35,6 @@ async def send_otp(payload: SendOtpRequest, app: Annotated[Any, Depends(get_app)
     return {"ok": True}
 
 
-# ── Registration step 2: verify OTP ────────────────────────────────────────
-
-
 class VerifyOtpRequest(BaseModel):
     email: str
     token: str
@@ -55,9 +49,6 @@ async def verify_otp(payload: VerifyOtpRequest, app: Annotated[Any, Depends(get_
     )
 
 
-# ── Registration step 3: set password + invite code ────────────────────────
-
-
 class CompleteRegisterRequest(BaseModel):
     temp_token: str
     invite_code: str
@@ -70,9 +61,6 @@ async def complete_register(payload: CompleteRegisterRequest, app: Annotated[Any
         400,
         lambda service: service.complete_register(payload.temp_token, payload.invite_code),
     )
-
-
-# ── Login ───────────────────────────────────────────────────────────────────
 
 
 class LoginRequest(BaseModel):
