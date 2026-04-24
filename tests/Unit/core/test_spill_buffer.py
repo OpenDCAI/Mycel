@@ -85,16 +85,13 @@ class TestSpillIfNeeded:
             workspace_root="/workspace",
         )
 
-        # Verify write_file was called with the correct spill path.
         expected_path = posixpath.join("/workspace", ".leon", "tool-results", "call_big.txt")
         fs.write_file.assert_called_once_with(expected_path, large)
 
-        # Result must mention the file path and include a preview.
         assert expected_path in result
         assert result.startswith("<persisted-output")
         assert f"{len(large.encode('utf-8'))} bytes" in result
         assert f"Preview (first {PREVIEW_BYTES} bytes)" in result
-        # Preview text is the first PREVIEW_BYTES chars of the original.
         assert large[:PREVIEW_BYTES] in result
 
     @pytest.mark.parametrize(
@@ -125,12 +122,9 @@ class TestSpillIfNeeded:
     def test_preview_length_capped(self):
         """Preview contains at most PREVIEW_BYTES characters of the original."""
         fs = _make_fs_backend()
-        # Create content much larger than PREVIEW_BYTES.
         large = "X" * (PREVIEW_BYTES * 5)
         result = _spill(large, threshold_bytes=100, tool_call_id="call_prev", fs_backend=fs)
-        # The preview portion should be exactly PREVIEW_BYTES chars of "X".
         assert ("X" * PREVIEW_BYTES) in result
-        # But not the full content.
         assert large not in result
 
     def test_large_output_uses_persisted_output_wrapper(self):
@@ -326,13 +320,11 @@ class TestSpillBufferMiddleware:
         large_content = "A" * 100
         original_msg = ToolMessage(content=large_content, tool_call_id="call_async")
 
-        # Create a mock coroutine-returning handler.
         import asyncio
 
         async def async_handler(req):
             return original_msg
 
-        # Run the async method synchronously via a fresh event loop.
         loop = asyncio.new_event_loop()
         try:
             result = loop.run_until_complete(mw.awrap_tool_call(request, async_handler))

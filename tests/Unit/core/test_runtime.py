@@ -192,10 +192,8 @@ class TestLocalPersistentShellRuntime:
 
         runtime = LocalPersistentShellRuntime(terminal, sandbox_runtime)
 
-        # Execute cd command
         await runtime.execute("cd /")
 
-        # Verify cwd updated
         state = runtime.get_terminal_state()
         assert state.cwd == "/"
 
@@ -207,11 +205,9 @@ class TestLocalPersistentShellRuntime:
 
         runtime = LocalPersistentShellRuntime(terminal, sandbox_runtime)
 
-        # Change directory
         await runtime.execute("cd /")
         assert runtime.get_terminal_state().cwd == "/"
 
-        # Execute another command - should still be in /
         result = await runtime.execute("pwd")
         assert "/" in result.stdout.strip()
 
@@ -223,7 +219,6 @@ class TestLocalPersistentShellRuntime:
 
         runtime = LocalPersistentShellRuntime(terminal, sandbox_runtime)
 
-        # Execute long-running command with short timeout
         result = await runtime.execute("sleep 10", timeout=0.1)
 
         assert result.timed_out
@@ -237,15 +232,12 @@ class TestLocalPersistentShellRuntime:
 
         runtime = LocalPersistentShellRuntime(terminal, sandbox_runtime)
 
-        # Execute command to start session
         await runtime.execute("echo 'test'")
         assert runtime._pty_session is not None
         proc = runtime._pty_session.process
 
-        # Close
         await runtime.close()
 
-        # Session should be terminated
         assert proc is not None and proc.returncode is not None
 
     @pytest.mark.asyncio
@@ -258,11 +250,9 @@ class TestLocalPersistentShellRuntime:
 
         assert runtime.get_terminal_state().state_version == 0
 
-        # Execute command that changes cwd
         await runtime.execute("cd /")
         assert runtime.get_terminal_state().state_version == 1
 
-        # Execute another command
         await runtime.execute("cd /tmp")
         assert runtime.get_terminal_state().state_version == 2
 
@@ -314,7 +304,6 @@ class TestRemoteWrappedRuntime:
 
         await runtime.execute("echo 'test'")
 
-        # Should have called cd to hydrate cwd
         calls = [str(call) for call in mock_provider.execute.call_args_list]
         assert any("cd /home/user" in str(call) for call in calls)
 
@@ -324,11 +313,9 @@ class TestRemoteWrappedRuntime:
         terminal = terminal_from_row(terminal_store.create("term-1", "thread-1", "runtime-1", "/root"), terminal_store.db_path)
         sandbox_runtime = sandbox_runtime_store.create("runtime-1", "test-provider")
 
-        # Mock sandbox_runtime to return instance
         instance = _make_instance()
         sandbox_runtime.ensure_active_instance = MagicMock(return_value=instance)
 
-        # Mock provider execute
         def mock_execute(instance_id, command, **kwargs):
             start_match = re.search(r"__LEON_STATE_START_[a-f0-9]{8}__", command)
             end_match = re.search(r"__LEON_STATE_END_[a-f0-9]{8}__", command)
@@ -343,7 +330,6 @@ class TestRemoteWrappedRuntime:
 
         await runtime.execute("cd /home/user")
 
-        # Verify cwd updated
         state = runtime.get_terminal_state()
         assert state.cwd == "/home/user"
 
@@ -355,7 +341,6 @@ class TestRemoteWrappedRuntime:
 
         runtime = RemoteWrappedRuntime(terminal, sandbox_runtime, mock_provider)
 
-        # Close should not raise
         await runtime.close()
 
     @pytest.mark.asyncio
@@ -457,7 +442,6 @@ class TestRuntimeIntegration:
 
         runtime = LocalPersistentShellRuntime(terminal, sandbox_runtime)
 
-        # Execute multiple commands
         result1 = await runtime.execute("echo 'first'")
         assert "first" in result1.stdout
 
@@ -467,13 +451,11 @@ class TestRuntimeIntegration:
         result3 = await runtime.execute("pwd")
         assert "/" in result3.stdout
 
-        # Verify state persisted
         state = runtime.get_terminal_state()
         assert state.cwd == "/"
         # State version increments: initial=0, after first execute=1, after cd=2, after pwd=3
         assert state.state_version >= 2
 
-        # Close
         await runtime.close()
 
     @pytest.mark.asyncio
@@ -482,16 +464,13 @@ class TestRuntimeIntegration:
         terminal = terminal_from_row(terminal_store.create("term-1", "thread-1", "runtime-1", "/tmp"), terminal_store.db_path)
         sandbox_runtime = sandbox_runtime_store.create("runtime-1", "local")
 
-        # First runtime
         runtime1 = LocalPersistentShellRuntime(terminal, sandbox_runtime)
         await runtime1.execute("cd /")
         await runtime1.close()
 
-        # Retrieve terminal again
         terminal2 = terminal_from_row(terminal_store.get_active("thread-1"), terminal_store.db_path)
         assert terminal2.get_state().cwd == "/"
 
-        # Second runtime should start with persisted state
         runtime2 = LocalPersistentShellRuntime(terminal2, sandbox_runtime)
         result = await runtime2.execute("pwd")
         assert "/" in result.stdout
