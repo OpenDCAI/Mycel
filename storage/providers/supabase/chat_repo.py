@@ -10,8 +10,6 @@ _TABLE_CHATS = "chats"
 
 
 class SupabaseChatRepo:
-    """Chat CRUD backed by Supabase."""
-
     def __init__(self, client: Any) -> None:
         self._client = q.validate_client(client, _REPO_CHAT)
 

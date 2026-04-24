@@ -9,8 +9,6 @@ logger = logging.getLogger(__name__)
 
 
 class NativeAgentChatDeliveryHandler:
-    """Routes Chat messages into native Mycel Agent threads."""
-
     def __init__(
         self,
         *,

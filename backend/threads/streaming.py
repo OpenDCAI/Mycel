@@ -95,7 +95,6 @@ async def _run_agent_to_buffer(  # pyright: ignore[reportGeneralTypeIssues]  # @
     message_metadata: dict[str, Any] | None = None,
     input_messages: list[Any] | None = None,
 ) -> str:
-    """Run agent execution and write all SSE events into *thread_buf*."""
     _run_execution.ensure_thread_handlers = _ensure_thread_handlers
     _run_execution.prime_sandbox = _run_lifecycle.prime_sandbox
     _run_execution.repair_incomplete_tool_calls = _run_lifecycle.repair_incomplete_tool_calls

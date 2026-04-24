@@ -20,8 +20,6 @@ class AgentChatRuntimeServices(Protocol):
 
 
 class AppAgentChatRuntimeServices:
-    """Runtime-owned adapter around app-backed chat delivery dependencies."""
-
     def __init__(
         self,
         app: Any,

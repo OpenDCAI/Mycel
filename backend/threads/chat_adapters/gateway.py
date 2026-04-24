@@ -19,8 +19,6 @@ class AgentThreadInputRuntimeHandler(Protocol):
 
 
 class NativeAgentRuntimeGateway:
-    """In-process Agent-side gateway for native Mycel runtime dispatch."""
-
     def __init__(
         self,
         *,
@@ -41,7 +39,6 @@ class NativeAgentRuntimeGateway:
     async def dispatch_thread_input(
         self, envelope: agent_runtime_protocol.AgentThreadInputEnvelope
     ) -> agent_runtime_protocol.AgentThreadInputResult:
-        """Route direct thread input through the Agent-side gateway."""
         if self._thread_input_handler is None:
             raise ValueError("No Agent thread input runtime handler configured")
         return await self._thread_input_handler.dispatch(envelope)
