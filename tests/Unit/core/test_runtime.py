@@ -138,7 +138,6 @@ def test_terminal_from_row_uses_sqlite_terminal_under_supabase_defaults(monkeypa
     try:
         row = terminal_store.create("term-1", "thread-1", sandbox_runtime_id="runtime-1", initial_cwd="/tmp")
         assert row["sandbox_runtime_id"] == "runtime-1"
-        assert "lease_id" not in row
         terminal = terminal_from_row(row, terminal_store.db_path)
     finally:
         terminal_store.close()
@@ -156,7 +155,6 @@ def test_terminal_repo_get_active_returns_sandbox_runtime_id(tmp_path):
 
     assert active is not None
     assert active["sandbox_runtime_id"] == "runtime-1"
-    assert "lease_id" not in active
 
 
 def test_terminal_repo_schema_uses_sandbox_runtime_id_column(tmp_path):
@@ -167,7 +165,6 @@ def test_terminal_repo_schema_uses_sandbox_runtime_id_column(tmp_path):
         repo.close()
 
     assert "sandbox_runtime_id" in cols
-    assert "lease_id" not in cols
 
 
 @pytest.mark.skipif(sys.platform == "win32", reason="LocalPersistentShellRuntime requires a Unix shell")

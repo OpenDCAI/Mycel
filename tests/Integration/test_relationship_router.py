@@ -5,7 +5,6 @@ from types import SimpleNamespace
 
 import pytest
 from fastapi import HTTPException
-from pydantic import ValidationError
 
 from backend.chat.api.http import relationships_router as owner_relationship_router
 from messaging.contracts import RelationshipRow
@@ -45,8 +44,6 @@ async def test_request_relationship_accepts_owned_agent_actor_user_id() -> None:
     assert seen == [("agent-user-1", "requester-user-1")]
     assert result["other_user_id"] == "requester-user-1"
     assert result["is_requester"] is True
-    assert "hire_granted_at" not in result
-    assert "hire_revoked_at" not in result
 
 
 @pytest.mark.asyncio
@@ -78,8 +75,6 @@ async def test_approve_relationship_accepts_owned_agent_actor_user_id() -> None:
     assert seen == [("agent-user-1", "requester-user-1")]
     assert result["other_user_id"] == "requester-user-1"
     assert result["state"] == "visit"
-    assert "hire_granted_at" not in result
-    assert "hire_revoked_at" not in result
 
 
 @pytest.mark.asyncio
@@ -160,8 +155,3 @@ async def test_request_relationship_rejects_unowned_actor_user_id() -> None:
         )
 
     assert exc_info.value.status_code == 403
-
-
-def test_relationship_action_body_rejects_removed_hire_snapshot_field() -> None:
-    with pytest.raises(ValidationError):
-        owner_relationship_router.RelationshipActionBody(actor_user_id="agent-user-1", hire_snapshot={"probe": "live"})

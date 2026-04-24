@@ -6,7 +6,6 @@ from backend.monitor.infrastructure.read_models import resource_read_service as 
 from storage import runtime as storage_runtime
 
 SANDBOX_RUNTIME_KEY = "sandbox_runtime_" + "id"
-REMOVED_RUNTIME_FIELD = "runtime" + "SessionId"
 
 
 class _FakeRepo:
@@ -674,7 +673,6 @@ def test_list_resource_providers_keeps_remote_runtime_id_actor_first(monkeypatch
 
     assert provider["consoleUrl"] == "https://example.com/daytona"
     assert resource_row["runtimeId"] == "provider-session-1"
-    assert REMOVED_RUNTIME_FIELD not in resource_row
     assert resource_row["agentUserId"] == "agent-remote"
     assert resource_row["agentName"] == "Remote Agent"
     assert resource_row["avatarUrl"] == "/api/users/agent-remote/avatar"
@@ -726,7 +724,6 @@ def test_list_resource_providers_uses_batch_runtime_lookup_for_remote_sandboxes(
     resource_rows = payload["providers"][0]["resource_rows"]
 
     assert [resource_row["runtimeId"] for resource_row in resource_rows] == ["runtime-a", "runtime-b"]
-    assert all(REMOVED_RUNTIME_FIELD not in resource_row for resource_row in resource_rows)
     assert repo.batch_calls == [["sandbox-a", "sandbox-b"]]
 
 

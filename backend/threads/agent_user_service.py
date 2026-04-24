@@ -646,9 +646,7 @@ def delete_agent_user(
 
     if user.agent_config_id is None:
         raise RuntimeError(f"Agent user {agent_user_id} is missing agent_config_id")
-    # @@@delete-agent-order - clear dependent rows before the config/user roots.
-    # If dependency cleanup fails, refusing the delete is safer than leaving an
-    # agent user pointing at a removed config.
+    # @@@delete-agent-order - fail before deleting roots if dependency cleanup fails.
     contact_repo.delete_for_user(agent_user_id)
     agent_config_repo.delete_config(user.agent_config_id)
 

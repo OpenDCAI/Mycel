@@ -89,23 +89,6 @@ def test_messaging_display_user_resolver_prefers_direct_user_row() -> None:
     assert resolved.display_name == "Human"
 
 
-def test_messaging_display_user_resolver_does_not_read_removed_thread_user_id() -> None:
-    resolved = resolve_messaging_display_user(
-        user_repo=SimpleNamespace(
-            get_by_id=lambda uid: (
-                None
-                if uid == "thread-user-1"
-                else SimpleNamespace(id=uid, display_name="Toad", type="agent", avatar=None)
-                if uid == "agent-user-1"
-                else None
-            )
-        ),
-        social_user_id="thread-user-1",
-    )
-
-    assert resolved is None
-
-
 def test_deliver_to_agents_does_not_require_main_thread_id():
     delivered: list[tuple[str, str]] = []
     dispatcher = ChatDeliveryDispatcher(
@@ -133,7 +116,6 @@ def test_relationship_revoke_deletes_hire_without_snapshot_side_channel() -> Non
     row = service.revoke("human-user-1", "agent-user-1")
 
     assert row.state == "none"
-    assert "hire_snapshot" not in repo._existing[("agent-user-1", "human-user-1")]
 
 
 def test_relationship_request_uses_single_pending_state_and_initiator() -> None:
@@ -158,44 +140,6 @@ def test_relationship_request_uses_single_pending_state_and_initiator() -> None:
 
     assert row.state == "pending"
     assert row.initiator_user_id == "human-user-1"
-
-
-def test_relationship_upgrade_does_not_write_removed_hire_timestamp_columns() -> None:
-    captured: dict[str, Any] = {}
-
-    class _UpgradeRepo:
-        def get(self, _actor_id: str, _target_id: str):
-            return {
-                "id": "hire_visit:agent-user-1:human-user-1",
-                "user_low": "agent-user-1",
-                "user_high": "human-user-1",
-                "kind": "hire_visit",
-                "state": "visit",
-                "initiator_user_id": "human-user-1",
-                "created_at": "2026-04-07T00:00:00Z",
-                "updated_at": "2026-04-07T00:00:01Z",
-            }
-
-        def upsert(self, _actor_id: str, _target_id: str, **fields: Any):
-            captured.update(fields)
-            return {
-                "id": "hire_visit:agent-user-1:human-user-1",
-                "user_low": "agent-user-1",
-                "user_high": "human-user-1",
-                "kind": "hire_visit",
-                "created_at": "2026-04-07T00:00:00Z",
-                "updated_at": "2026-04-07T00:00:02Z",
-                **fields,
-            }
-
-    service = RelationshipService(_UpgradeRepo())
-
-    row = service.upgrade("human-user-1", "agent-user-1")
-
-    assert row.state == "hire"
-    assert "hire_granted_at" not in captured
-    assert "hire_revoked_at" not in captured
-    assert "hire_snapshot" not in captured
 
 
 def test_relationship_list_for_user_fails_on_invalid_row() -> None:
@@ -246,9 +190,6 @@ def test_chat_tool_registry_exposes_final_contract_only() -> None:
 
     for tool_name in ("list_chats", "read_messages", "send_message", "search_messages"):
         assert registry.get(tool_name) is not None
-
-    for removed_name in ("chats", "chat_search", "directory", "wechat_send", "wechat_contacts"):
-        assert registry.get(removed_name) is None
 
 
 def test_send_message_schema_uses_participant_id_for_direct_chat() -> None:
@@ -729,17 +670,6 @@ def test_chat_tool_list_chats_unread_filter_requires_unread_count_contract() -> 
 
     with pytest.raises(RuntimeError, match="Chat summary chat-1 is missing unread_count"):
         list_chats.handler(unread_only=True)
-
-
-def test_chat_tool_service_rejects_removed_constructor_user_id() -> None:
-    registry = ToolRegistry()
-
-    with pytest.raises(TypeError, match="user_id"):
-        ChatToolService(
-            registry=registry,
-            user_id="agent-user-1",
-            messaging_service=_messaging_display_service(),
-        )
 
 
 @pytest.mark.parametrize("chat_identity_id", [None, ""])

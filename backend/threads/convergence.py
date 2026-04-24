@@ -34,8 +34,7 @@ def delete_thread_in_db(thread_id: str) -> None:
 
 def purge_incomplete_owner_thread(app: Any, thread_id: str) -> None:
     # @@@incomplete-thread-purge - visible threads that cannot satisfy the
-    # current thread->workspace->sandbox runtime binding should be removed once,
-    # not kept alive behind endpoint-level repair guesses.
+    # current thread->workspace->sandbox runtime binding are purged at the source.
     delete_thread_in_db(thread_id)
     app.state.thread_repo.delete(thread_id)
 

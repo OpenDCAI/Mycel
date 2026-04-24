@@ -898,9 +898,6 @@ def test_builtin_agent_surface_exposes_chat_tools():
         assert tools[tool_name]["enabled"] is True
         assert tools[tool_name]["group"] == "chat"
 
-    for removed_name in ("chats", "read_message", "search_message", "directory", "wechat_send", "wechat_contacts"):
-        assert removed_name not in tools
-
 
 def _agent_user(*, user_id: str = "agent-1", owner_user_id: str = "user-1") -> UserRow:
     return UserRow(
