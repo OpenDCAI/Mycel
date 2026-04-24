@@ -12,11 +12,6 @@ logger = logging.getLogger(__name__)
 
 
 def _native_upload(session_id: str, provider, workspace: Path, workspace_root: str, files: list[str]):
-    """Upload files using provider's native file API (upload_bytes).
-
-    Each file is uploaded individually via the SDK's binary upload endpoint.
-    No shell commands, no base64, no size limits from execute().
-    """
     t0 = time.time()
     total_bytes = 0
     # @@@mkdir-batch - collect all needed dirs, create in one command
@@ -42,10 +37,6 @@ def _native_upload(session_id: str, provider, workspace: Path, workspace_root: s
 
 
 def _native_download(session_id: str, provider, workspace: Path, workspace_root: str):
-    """Download files from sandbox using provider's native file API.
-
-    Lists remote dir, downloads each file individually.
-    """
     t0 = time.time()
     try:
         entries = provider.list_dir(session_id, workspace_root)
@@ -82,7 +73,6 @@ def _native_download(session_id: str, provider, workspace: Path, workspace_root:
 
 
 def _pack_tar(workspace: Path, files: list[str]) -> bytes:
-    """Pack files into an in-memory tar.gz archive."""
     buf = io.BytesIO()
     with tarfile.open(fileobj=buf, mode="w:gz") as tar:
         for rel_path in files:
@@ -95,7 +85,6 @@ def _pack_tar(workspace: Path, files: list[str]) -> bytes:
 
 
 def _batch_upload_tar(session_id: str, provider, workspace: Path, workspace_root: str, files: list[str]):
-    """Tar upload path for providers without native file API."""
     t0 = time.time()
     tar_bytes = _pack_tar(workspace, files)
     if not tar_bytes or len(tar_bytes) < 10:
@@ -117,7 +106,6 @@ def _batch_upload_tar(session_id: str, provider, workspace: Path, workspace_root
 
 
 def _batch_download_tar(session_id: str, provider, workspace: Path, workspace_root: str):
-    """Tar download path for providers without native file API."""
     t0 = time.time()
     check = provider.execute(session_id, f"test -d {workspace_root} && echo EXISTS", timeout_ms=10000)
     check_out = (getattr(check, "output", "") or "").strip()
@@ -164,7 +152,7 @@ class SyncStrategy(ABC):
         pass
 
     def clear_state(self, state_key: str):
-        """Remove all sync state for a key. Default no-op."""
+        pass
 
 
 class NoOpStrategy(SyncStrategy):
@@ -237,7 +225,6 @@ class IncrementalSyncStrategy(SyncStrategy):
         self.state.clear_thread(state_key)
 
     def _update_checksums_after_download(self, state_key: str | None, source_path: Path):
-        """Update checksum DB to match downloaded files, preventing redundant re-uploads on resume."""
         if not state_key:
             return
         if not source_path.exists():

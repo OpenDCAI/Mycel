@@ -3,7 +3,6 @@ from pathlib import Path
 
 
 def _calculate_checksum(file_path: Path) -> str:
-    """Calculate SHA256 checksum of file."""
     sha256 = hashlib.sha256()
     with open(file_path, "rb") as f:
         for chunk in iter(lambda: f.read(8192), b""):
@@ -19,21 +18,15 @@ class SyncState:
         self._repo.close()
 
     def track_files_batch(self, thread_id: str, file_records: list[tuple[str, str, int]]):
-        """Batch insert/update multiple files in a single transaction.
-        file_records: list of (relative_path, checksum, timestamp)
-        """
         self._repo.track_files_batch(thread_id, file_records)
 
     def get_all_files(self, thread_id: str) -> dict[str, str]:
-        """Batch fetch all tracked files for a thread. Returns {relative_path: checksum}."""
         return self._repo.get_all_files(thread_id)
 
     def clear_thread(self, thread_id: str) -> int:
-        """Delete all sync records for a thread."""
         return self._repo.clear_thread(thread_id)
 
     def detect_changes(self, thread_id: str, workspace_path: Path) -> list[str]:
-        """Detect files that changed since last sync. Uses batch DB query + mtime heuristic."""
         known = self.get_all_files(thread_id)
         changed = []
         for file_path in workspace_path.rglob("*"):

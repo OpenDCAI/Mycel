@@ -16,18 +16,6 @@ if TYPE_CHECKING:
 
 
 class SandboxCapability:
-    """Agent-facing capability object.
-
-    Wraps ChatSession and provides access to command execution and filesystem.
-    Agents interact through command and filesystem handles; sandbox runtime
-    binding details stay behind this capability object.
-
-    Usage:
-        sandbox = sandbox_manager.get_sandbox(thread_id)
-        result = await sandbox.command.execute("ls")
-        content = sandbox.fs.read_file("/path/to/file")
-    """
-
     def __init__(self, session: ChatSession, manager: SandboxManager | None = None):
         self._session = session
         self._command_wrapper = _CommandWrapper(session, manager=manager)
@@ -59,8 +47,6 @@ class SandboxCapability:
 
 
 class _CommandWrapper(BaseExecutor):
-    """Wrapper that delegates to runtime's execute method."""
-
     runtime_owns_cwd = True
 
     def __init__(self, session: ChatSession, manager: SandboxManager | None = None):
@@ -82,7 +68,6 @@ class _CommandWrapper(BaseExecutor):
         return wrapped, work_dir
 
     async def execute(self, command: str, cwd: str | None = None, timeout: float | None = None, env: dict[str, str] | None = None):
-        """Execute command via runtime."""
         self._session.touch()
         # @@@command-context - CommandService passes env; preserve that context for remote runtimes.
         wrapped, _ = self._wrap_command(command, cwd, env)
@@ -97,7 +82,6 @@ class _CommandWrapper(BaseExecutor):
         return await self._session.runtime.execute(wrapped, timeout)
 
     async def execute_async(self, command: str, cwd: str | None = None, env: dict[str, str] | None = None):
-        """Execute command asynchronously via runtime and return command handle."""
         self._session.touch()
         wrapped, work_dir = self._wrap_command(command, cwd, env)
         if self._manager is None:
@@ -173,14 +157,11 @@ class _CommandWrapper(BaseExecutor):
         return await session.runtime.get_command(command_id)
 
     async def wait_for(self, command_id: str, timeout: float | None = None):
-        """Wait for async command completion."""
         session = self._resolve_session_for_command(command_id)
         return await session.runtime.wait_for_command(command_id, timeout=timeout)
 
 
 class _FileSystemWrapper(FileSystemBackend):
-    """Wrapper that delegates to provider via sandbox runtime."""
-
     is_remote = True
 
     def __init__(self, session: ChatSession, manager: SandboxManager | None = None):
