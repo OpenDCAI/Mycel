@@ -139,9 +139,6 @@ def _resolve_workspace_backed_existing_config(
         raise PermissionError(f"sandbox owner mismatch: expected {owner_user_id}, got {sandbox_owner_user_id}")
     provider_env_id = sandbox.get("provider_env_id") if isinstance(sandbox, dict) else getattr(sandbox, "provider_env_id", None)
     if not str(provider_env_id or "").strip():
-        # @@@stale-existing-default-guard - launch-config should not steer the UI
-        # into existing-sandbox mode when the persisted sandbox row no longer carries
-        # the runtime identity required by the existing-sandbox bind path.
         return None
     sandbox_template = _resolve_workspace_backed_sandbox_template(
         app=app,

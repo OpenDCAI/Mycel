@@ -1,11 +1,5 @@
 from __future__ import annotations
 
-# NOTE: User is the only identity table. The old EntityRow layer was removed;
-# this router projects user rows into chat-candidate payloads for contacts and
-# group-chat creation. The test below verifies the current production behaviour:
-#   • current user is excluded
-#   • other humans and agents are all included (no branch filtering)
-#   • chat/contact eligibility is computed by backend ownership + relationship state
 from types import SimpleNamespace
 
 import pytest

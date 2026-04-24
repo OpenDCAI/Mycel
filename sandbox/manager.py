@@ -298,8 +298,6 @@ class SandboxManager:
         return self.provider_capability.runtime_kind != "local"
 
     def _destroy_daytona_managed_volume(self, sandbox_runtime_id: str) -> None:
-        # @@@daytona-managed-volume-ref - daytona managed volumes now derive their backend
-        # ref from sandbox runtime identity directly, so cleanup no longer depends on dropped volume rows.
         self.provider.delete_managed_volume(f"leon-volume-{sandbox_runtime_id}")
 
     def _setup_mounts(self, thread_id: str) -> dict:
@@ -395,8 +393,6 @@ class SandboxManager:
         return bool(sandbox_runtime and sandbox_runtime.provider_name == self.provider.name)
 
     def _resolve_sync_source_path(self, thread_id: str) -> Path:
-        # @@@sync-source-truth - sync no longer needs dropped volume-row truth; it only needs
-        # the workspace-owned local file root that backs the current file channel.
         container = build_storage_container()
         thread_repo = container.thread_repo()
         try:

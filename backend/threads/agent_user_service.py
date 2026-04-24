@@ -559,8 +559,6 @@ def _sync_repo_children(agent_config_id: str, config_patch: dict[str, Any], agen
 def _sync_agent_config_patch_to_repo(
     agent_user_id: str, config_patch: dict[str, Any], user_repo: Any, agent_config_repo: Any
 ) -> dict[str, Any] | None:
-    # @@@repo-only-agent-shell - fresh register now creates DB-only agents. Owner-scoped
-    # panel edits must use the repo config even when no stale local agent dir exists.
     user, current_config = _resolve_repo_backed_agent(agent_user_id, user_repo, agent_config_repo)
     if user is None or current_config is None:
         return None
@@ -621,8 +619,6 @@ def _resolve_repo_backed_agent(
     user = user_repo.get_by_id(agent_user_id)
     if user is None or user.agent_config_id is None:
         return None, None
-    # @@@repo-backed-agent-wins - repo-backed agent users must not silently write
-    # to stale local agent dirs just because an old shell still exists.
     config = agent_config_repo.get_config(user.agent_config_id)
     if config is None:
         raise RuntimeError(f"Agent config {user.agent_config_id} is missing for {agent_user_id}")

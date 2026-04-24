@@ -11,14 +11,12 @@ from __future__ import annotations
 
 from typing import Any
 
-# ---------------------------------------------------------------------------
 # @@@langchain-anthropic-streaming-usage-regression
 # langchain-anthropic >= 1.0 dropped usage extraction from message_start,
 # assuming message_delta carries complete info. But Anthropic API only puts
 # input_tokens (+ cache tokens) in message_start and output_tokens in
 # message_delta. This patch restores the v0.2.4 behavior.
 # Remove this once upstream is fixed.
-# ---------------------------------------------------------------------------
 
 _anthropic_patched = False
 
