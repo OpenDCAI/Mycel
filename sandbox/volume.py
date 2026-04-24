@@ -1,13 +1,3 @@
-"""SandboxVolume — provider-agnostic mount/sync engine.
-
-"Mount" is abstract: make a manager-supplied source path visible inside the sandbox.
-Docker uses bind mount, E2B uses tar sync, Daytona uses managed volume.
-SandboxVolume smooths over these differences.
-
-This is sandbox infrastructure. It doesn't know what's being mounted
-(files, code, data) — that's decided by the application layer.
-"""
-
 from __future__ import annotations
 
 import logging

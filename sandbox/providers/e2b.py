@@ -1,14 +1,3 @@
-"""
-E2B sandbox provider.
-
-Implements SandboxProvider using E2B's cloud sandbox SDK.
-
-Key differences from AgentBay:
-- No persistent storage (context_id ignored) -- pause is the only way to preserve state
-- Pause/resume via beta API: beta_pause() / Sandbox.connect()
-- Uses beta_create(auto_pause=True) so sandboxes pause on timeout instead of dying
-"""
-
 from __future__ import annotations
 
 import logging
