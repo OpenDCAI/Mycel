@@ -92,11 +92,6 @@ class MemoryMiddleware(AgentMiddleware):
                 print(f"[MemoryMiddleware] SummaryStore enabled at {db_path}")
 
     def set_model(self, model: Any, model_config: dict[str, Any] | None = None) -> None:
-        """Inject LLM model reference (called by agent.py).
-
-        model_config: configurable fields (model, api_key, base_url, etc.)
-        so compact invokes the correct model, not the ConfigurableModel default.
-        """
         self._model = model
         self._model_config = model_config
 
@@ -111,7 +106,6 @@ class MemoryMiddleware(AgentMiddleware):
 
     @property
     def _resolved_model(self) -> Any:
-        """Return model with config bound so it uses the correct model/provider."""
         if self._model_config and hasattr(self._model, "with_config"):
             return self._model.with_config(configurable=self._model_config)
         return self._model
@@ -130,7 +124,6 @@ class MemoryMiddleware(AgentMiddleware):
             self.compactor.keep_recent_tokens = max_keep
 
     def set_runtime(self, runtime: Any) -> None:
-        """Inject AgentRuntime reference (called by agent.py)."""
         self._runtime = runtime
 
     @property
@@ -218,7 +211,6 @@ class MemoryMiddleware(AgentMiddleware):
         return response
 
     async def _do_compact(self, messages: list[Any], thread_id: str | None = None) -> list[Any]:
-        """Execute compaction: summarize old messages, return compacted list."""
         if self._runtime:
             self._runtime.set_flag("is_compacting", True)
         try:
@@ -271,7 +263,6 @@ class MemoryMiddleware(AgentMiddleware):
                 self._runtime.set_flag("is_compacting", False)
 
     async def force_compact(self, messages: list[Any]) -> dict[str, Any] | None:
-        """Manual compaction trigger (/compact command). Ignores threshold."""
         if not self._model:
             return None
 
@@ -299,7 +290,6 @@ class MemoryMiddleware(AgentMiddleware):
                 self._runtime.set_flag("is_compacting", False)
 
     async def compact_messages_for_recovery(self, messages: list[Any], thread_id: str | None = None) -> list[Any] | None:
-        """Force a compaction pass and return the compacted message list."""
         if not self._model:
             return None
 
@@ -317,7 +307,6 @@ class MemoryMiddleware(AgentMiddleware):
         )
 
     def _estimate_tokens(self, messages: list[Any]) -> int:
-        """Estimate total tokens for messages (chars // 2)."""
         total = 0
         for msg in messages:
             content = getattr(msg, "content", "")
@@ -332,7 +321,6 @@ class MemoryMiddleware(AgentMiddleware):
         return total // 2
 
     def _estimate_system_tokens(self, request: Any) -> int:
-        """Estimate tokens for system_message (not in messages list)."""
         sys_msg = getattr(request, "system_message", None)
         if not sys_msg:
             return 0
@@ -340,7 +328,6 @@ class MemoryMiddleware(AgentMiddleware):
         return len(content) // 2 if isinstance(content, str) else 0
 
     def _extract_thread_id(self, request: ModelRequest) -> str | None:
-        """Extract thread_id from thread context (ContextVar set by streaming/agent)."""
         from sandbox.thread_context import get_current_thread_id
 
         tid = get_current_thread_id()
@@ -484,7 +471,6 @@ class MemoryMiddleware(AgentMiddleware):
             )
 
     async def _restore_summary_from_store(self, thread_id: str) -> None:
-        """Restore summary from SummaryStore."""
         if not thread_id:
             raise ValueError(
                 "[Memory] thread_id is required for summary persistence. Ensure request.config.configurable contains 'thread_id'."
@@ -529,7 +515,6 @@ class MemoryMiddleware(AgentMiddleware):
             logger.error(f"[Memory] Failed to restore summary: {e}")
 
     async def _rebuild_summary_from_checkpointer(self, thread_id: str) -> None:
-        """Rebuild summary from checkpointer when store data is corrupted."""
         try:
             if self.summary_store is None or self._checkpoint_store is None:
                 return
