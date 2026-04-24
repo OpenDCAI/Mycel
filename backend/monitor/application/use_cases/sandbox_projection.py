@@ -1,5 +1,3 @@
-"""Sandbox projection read surface for Monitor and resource triage."""
-
 from __future__ import annotations
 
 from datetime import datetime

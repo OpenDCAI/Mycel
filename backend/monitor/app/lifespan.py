@@ -1,5 +1,3 @@
-"""Minimal lifespan for the separate Monitor app shell."""
-
 import asyncio
 from contextlib import asynccontextmanager
 

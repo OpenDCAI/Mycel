@@ -1,5 +1,3 @@
-"""Owner thread workbench projection."""
-
 from __future__ import annotations
 
 from backend.monitor.infrastructure.read_models.thread_workbench_read_service import OwnerThreadWorkbenchReader

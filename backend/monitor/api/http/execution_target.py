@@ -1,5 +1,3 @@
-"""Execution target resolution for monitor-triggered evaluation runs."""
-
 from __future__ import annotations
 
 import os

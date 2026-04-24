@@ -1,5 +1,3 @@
-"""Evaluation read and batch control boundary for Monitor."""
-
 from __future__ import annotations
 
 from typing import Any

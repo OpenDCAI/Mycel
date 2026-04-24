@@ -1,5 +1,3 @@
-"""Sandbox detail and cleanup boundary for Monitor."""
-
 from __future__ import annotations
 
 from backend.monitor.application.use_cases import operations, sandbox_projection
