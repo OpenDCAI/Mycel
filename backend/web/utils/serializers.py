@@ -1,5 +1,3 @@
-"""Message serialization utilities."""
-
 from typing import Any
 
 from backend.threads.message_content import extract_text_content, strip_system_tags
@@ -8,7 +6,6 @@ __all__ = ["strip_system_tags", "extract_text_content", "serialize_message"]
 
 
 def serialize_message(msg: Any) -> dict[str, Any]:
-    """Serialize a LangChain message to a JSON-serializable dict."""
     content = getattr(msg, "content", "")
     metadata = dict(getattr(msg, "metadata", None) or {})
     additional_kwargs = getattr(msg, "additional_kwargs", None) or {}

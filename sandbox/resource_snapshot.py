@@ -1,5 +1,3 @@
-"""Sandbox resource probing helpers."""
-
 from __future__ import annotations
 
 from typing import Any
@@ -76,7 +74,6 @@ def probe_and_upsert_for_instance(
     instance_id: str,
     repo: Any | None = None,
 ) -> dict[str, Any]:
-    """Probe provider metrics and persist to storage."""
     if not sandbox_id:
         return {"ok": False, "error": "sandbox-shaped snapshot helper requires sandbox_id"}
 

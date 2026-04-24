@@ -1,5 +1,3 @@
-"""Shared shell/PTY output normalization helpers."""
-
 from __future__ import annotations
 
 import re
