@@ -1,5 +1,3 @@
-"""Sandbox provider inventory port for Monitor config projection."""
-
 from __future__ import annotations
 
 from typing import Any

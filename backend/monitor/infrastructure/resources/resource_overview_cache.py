@@ -1,5 +1,3 @@
-"""Cached monitor resource overview snapshot."""
-
 from __future__ import annotations
 
 import asyncio

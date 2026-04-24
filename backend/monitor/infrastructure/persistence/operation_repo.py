@@ -1,5 +1,3 @@
-"""Monitor operation storage boundary."""
-
 from __future__ import annotations
 
 import copy

@@ -1,5 +1,3 @@
-"""Resource refresh and file IO port for Monitor."""
-
 from __future__ import annotations
 
 from typing import Any

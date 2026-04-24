@@ -1,5 +1,3 @@
-"""Monitor backend boundary for routers and future service extraction."""
-
 from __future__ import annotations
 
 from typing import Any

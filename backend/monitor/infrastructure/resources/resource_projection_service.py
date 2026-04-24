@@ -1,5 +1,3 @@
-"""Monitor-local access to product resource projections."""
-
 from __future__ import annotations
 
 from typing import Any

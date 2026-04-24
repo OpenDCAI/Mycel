@@ -1,5 +1,3 @@
-"""Monitor-local access to app config values."""
-
 from __future__ import annotations
 
 from pathlib import Path
