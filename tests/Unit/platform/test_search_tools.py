@@ -67,7 +67,6 @@ class TestGrepContent:
         result = _grep(mw, pattern="hello", output_mode="content")
         # Python implementation format: <filepath>:<lineno>:<line>
         assert ":2:" in result or ":5:" in result  # line2 or line5 in data.txt
-        # The actual line text should be present
         assert "hello" in result
 
     def test_content_line_numbers(self, mw: SearchService, workspace: Path):
@@ -161,7 +160,6 @@ class TestGrepPagination:
         assert len(lines) == 1
 
     def test_offset(self, mw: SearchService, workspace: Path):
-        # Get all matches first
         full = _grep(
             mw,
             pattern="hello",
@@ -215,9 +213,7 @@ class TestGrepTypeFilter:
     """type filter parameter (Python implementation ignores type, only ripgrep uses it)."""
 
     def test_type_filter_no_crash(self, mw: SearchService):
-        # Python implementation does not implement --type, but should not crash
         result = _grep(mw, pattern="hello", type="py")
-        # Should still return results (type is ignored in Python implementation)
         assert isinstance(result, str)
 
 
@@ -320,7 +316,6 @@ class TestGlobMtimeSorting:
     """Results sorted by modification time, newest first."""
 
     def test_sorted_by_mtime_descending(self, mw: SearchService, workspace: Path):
-        # Create files with distinct mtimes
         old = workspace / "old.txt"
         old.write_text("old")
         time.sleep(0.05)
@@ -367,7 +362,6 @@ class TestGlobPathParameter:
 
     def test_defaults_to_workspace(self, mw: SearchService, workspace: Path):
         result = _glob(mw, pattern="**/*.py")
-        # Should find files under workspace
         assert "main.py" in result
 
     def test_subdirectory(self, mw: SearchService, workspace: Path):

@@ -29,11 +29,9 @@ class TestFormatCommandNotification:
             output="hello\n",
         )
 
-        # Should be valid XML
         root = ET.fromstring(result)
         assert root.tag == "system-reminder"
 
-        # Check CommandNotification structure
         notif = root.find("CommandNotification")
         assert notif is not None
         assert _require_text(_require_child(notif, "CommandId")) == "cmd-123"
@@ -99,11 +97,9 @@ class TestFormatCommandNotification:
             output="<output>&</output>",
         )
 
-        # Should parse without error
         root = ET.fromstring(result)
         notif = _require_child(root, "CommandNotification")
 
-        # Check escaped content is preserved
         cmd_line = _require_text(_require_child(notif, "CommandLine"))
         assert "<tag>" in cmd_line
         assert "&" in cmd_line
