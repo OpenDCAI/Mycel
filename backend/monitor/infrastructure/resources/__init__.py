@@ -1,1 +1,0 @@
-"""Monitor resource projection adapters."""

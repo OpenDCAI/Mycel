@@ -1,5 +1,3 @@
-"""Supabase storage provider implementations."""
-
 from .agent_config_repo import SupabaseAgentConfigRepo
 from .chat_repo import SupabaseChatRepo
 from .checkpoint_repo import SupabaseCheckpointRepo
