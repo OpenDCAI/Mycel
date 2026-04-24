@@ -7,15 +7,6 @@ from core.tools.web.types import ContentChunk, FetchLimits, FetchResult
 
 
 class JinaFetcher(BaseFetcher):
-    """
-    Fetcher using Jina Reader API.
-
-    Features:
-    - Returns clean Markdown directly
-    - Automatically removes ads, navigation, etc.
-    - Supports PDF extraction
-    """
-
     READER_BASE_URL = "https://r.jina.ai/"
 
     def __init__(
@@ -28,7 +19,6 @@ class JinaFetcher(BaseFetcher):
         self.api_key = api_key
 
     async def fetch(self, url: str) -> FetchResult:
-        """Fetch URL content using Jina Reader API."""
         result = FetchResult(url=url)
 
         try:

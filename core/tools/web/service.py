@@ -129,45 +129,34 @@ class WebService:
         blocked_domains: list[str] | None = None,
     ) -> str:
         if not self._searchers:
-            return "No search providers configured"
+            raise RuntimeError("No search providers configured")
 
         effective_max = max_results or self.max_search_results
 
-        for name, searcher in self._searchers:
-            try:
-                result: SearchResult = await searcher.search(
-                    query=query,
-                    max_results=effective_max,
-                    include_domains=allowed_domains,
-                    exclude_domains=blocked_domains,
-                )
-                if not result.error:
-                    return result.format_output()
-            except Exception:
-                continue
+        searcher = self._searchers[0][1]
+        result: SearchResult = await searcher.search(
+            query=query,
+            max_results=effective_max,
+            include_domains=allowed_domains,
+            exclude_domains=blocked_domains,
+        )
+        if result.error:
+            raise RuntimeError(result.error)
 
-        return "All search providers failed"
+        return result.format_output()
 
     async def _web_fetch(self, url: str, prompt: str) -> str:
         if not self._fetchers:
-            return "Error: No fetch providers configured"
+            raise RuntimeError("No fetch providers configured")
 
-        fetch_result: FetchResult | None = None
-        for name, fetcher in self._fetchers:
-            try:
-                result = await fetcher.fetch(url)
-                if not result.error:
-                    fetch_result = result
-                    break
-            except Exception:
-                continue
-
-        if fetch_result is None:
-            return f"Error: Failed to fetch URL: {url}"
+        fetcher = self._fetchers[0][1]
+        fetch_result: FetchResult = await fetcher.fetch(url)
+        if fetch_result.error:
+            raise RuntimeError(fetch_result.error)
 
         content = fetch_result.content or ""
         if not content:
-            return f"Error: No content retrieved from URL: {url}"
+            raise RuntimeError(f"No content retrieved from URL: {url}")
 
         max_chars = 100_000
         if len(content) > max_chars:
@@ -176,28 +165,20 @@ class WebService:
         return await self._ai_extract(content, prompt, url)
 
     async def _ai_extract(self, content: str, prompt: str, url: str) -> str:
-        try:
-            model = self._extraction_model
-            if model is None:
-                preview = content[:5000] if len(content) > 5000 else content
-                return f"AI extraction unavailable. Configure an extraction model. Raw content:\n\n{preview}"
+        model = self._extraction_model
+        if model is None:
+            raise RuntimeError("AI extraction model is not configured")
 
-            extraction_prompt = (
-                f"You are extracting information from a web page.\n"
-                f"URL: {url}\n\n"
-                f"Web page content:\n{content}\n\n"
-                f"User's request: {prompt}\n\n"
-                f"Provide a concise, relevant answer based on the web page content."
-            )
+        extraction_prompt = (
+            f"You are extracting information from a web page.\n"
+            f"URL: {url}\n\n"
+            f"Web page content:\n{content}\n\n"
+            f"User's request: {prompt}\n\n"
+            f"Provide a concise, relevant answer based on the web page content."
+        )
 
-            response = await asyncio.wait_for(
-                model.ainvoke(extraction_prompt, config={"callbacks": []}),
-                timeout=30,
-            )
-            return response.content
-        except TimeoutError:
-            preview = content[:5000] if len(content) > 5000 else content
-            return f"AI extraction timed out (30s). Raw content preview:\n\n{preview}"
-        except Exception as e:
-            preview = content[:5000] if len(content) > 5000 else content
-            return f"AI extraction failed ({e}). Raw content preview:\n\n{preview}"
+        response = await asyncio.wait_for(
+            model.ainvoke(extraction_prompt, config={"callbacks": []}),
+            timeout=30,
+        )
+        return response.content

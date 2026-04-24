@@ -7,15 +7,6 @@ from core.tools.web.types import SearchItem, SearchResult
 
 
 class FirecrawlSearcher(BaseSearcher):
-    """
-    Searcher using Firecrawl API.
-
-    Features:
-    - Web crawling capabilities
-    - Can search and extract content
-    - Crawler-backed secondary provider
-    """
-
     API_URL = "https://api.firecrawl.dev/v1/search"
 
     def __init__(
@@ -34,7 +25,6 @@ class FirecrawlSearcher(BaseSearcher):
         include_domains: list[str] | None = None,
         exclude_domains: list[str] | None = None,
     ) -> SearchResult:
-        """Search using Firecrawl API."""
         result = SearchResult(query=query)
 
         try:
@@ -81,7 +71,5 @@ class FirecrawlSearcher(BaseSearcher):
             result.error = f"Firecrawl API error {e.response.status_code}"
         except httpx.RequestError as e:
             result.error = f"Search error: {e}"
-        except Exception as e:
-            result.error = f"Unexpected error: {e}"
 
         return result

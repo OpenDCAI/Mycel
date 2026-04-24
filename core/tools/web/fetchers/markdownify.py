@@ -30,12 +30,6 @@ _BROWSER_UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.3
 
 
 class MarkdownifyFetcher(BaseFetcher):
-    """
-    Fetcher using markdownify for HTML to Markdown conversion.
-
-    Falls back to BeautifulSoup text extraction if markdownify unavailable.
-    """
-
     def __init__(
         self,
         limits: FetchLimits | None = None,
@@ -47,33 +41,21 @@ class MarkdownifyFetcher(BaseFetcher):
         self.has_markdownify = HAS_MARKDOWNIFY
         self.has_bs4 = HAS_BS4
 
-    async def _do_fetch(self, url: str, verify: bool = True) -> httpx.Response:
-        """Fetch URL with explicit timeout and redirect following."""
+    async def _do_fetch(self, url: str) -> httpx.Response:
         timeout = httpx.Timeout(self.timeout, connect=5.0)
         async with httpx.AsyncClient(
             timeout=timeout,
             follow_redirects=True,
-            verify=verify,
         ) as client:
             response = await client.get(url, headers={"User-Agent": self.user_agent})
             response.raise_for_status()
             return response
 
     async def fetch(self, url: str) -> FetchResult:
-        """Fetch URL content and convert to Markdown."""
         result = FetchResult(url=url)
 
         try:
-            try:
-                response = await self._do_fetch(url, verify=True)
-            except httpx.ConnectError as e:
-                # Only retry without SSL verify for certificate-related errors
-                cause = str(e.__cause__) if e.__cause__ else str(e)
-                if "ssl" in cause.lower() or "certificate" in cause.lower():
-                    response = await self._do_fetch(url, verify=False)
-                else:
-                    raise
-
+            response = await self._do_fetch(url)
             content_type = response.headers.get("Content-Type", "")
 
             if "text/html" in content_type:
@@ -170,7 +152,6 @@ class MarkdownifyFetcher(BaseFetcher):
         return re.sub(r"\n{3,}", "\n\n", text)
 
     def _basic_extract(self, html: str, result: FetchResult) -> str:
-        """Basic HTML extraction without external libraries."""
         title_match = re.search(r"<title[^>]*>(.*?)</title>", html, re.IGNORECASE | re.DOTALL)
         if title_match:
             result.title = title_match.group(1).strip()
