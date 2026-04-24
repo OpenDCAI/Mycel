@@ -651,7 +651,6 @@ class LeonAgent:
 
         base_url = base_url.removesuffix("/v1")
 
-        # Add /v1 for OpenAI-compatible providers
         if provider in ("openai", None):  # None defaults to OpenAI
             return f"{base_url}/v1"
 
@@ -876,8 +875,7 @@ class LeonAgent:
                 await asyncio.to_thread(sync_client.close)
             except RuntimeError as exc:
                 # @@@shutdown-sync-close - interpreter shutdown can make to_thread
-                # unavailable after product work already completed; use a direct
-                # close instead of turning cleanup noise into a fake blocker.
+                # unavailable after product work already completed.
                 if "interpreter shutdown" not in str(exc):
                     raise
                 sync_client.close()

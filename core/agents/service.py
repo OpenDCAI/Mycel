@@ -876,9 +876,8 @@ class AgentService:
             # ensure state is persisted (and loadable via GET /api/threads/{thread_id}).
             assert agent is not None
             await agent.ainit()
-            # @@@subagent-prompt-path-sanitize - Parent models sometimes satisfy
-            # "use absolute paths" by appending natural-language cwd labels onto the
-            # real workspace path. Normalize the obvious fake suffix before dispatch.
+            # @@@subagent-prompt-path-sanitize - Parent models sometimes append
+            # natural-language cwd labels onto the real workspace path.
             child_workspace_root = Path(getattr(agent, "workspace_root", self._workspace_root))
             prompt = _normalize_child_workspace_prompt(prompt, child_workspace_root)
 

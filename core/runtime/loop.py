@@ -32,7 +32,6 @@ from .validator import _required_sets_match
 
 logger = logging.getLogger(__name__)
 
-_NOOP_HANDLER: Any = None  # placeholder for innermost "handler" in middleware chain
 _ESCALATED_MAX_OUTPUT_TOKENS = 64000
 _FLOOR_OUTPUT_TOKENS = 3000
 _CONTEXT_OVERFLOW_SAFETY_BUFFER = 1000
@@ -294,16 +293,6 @@ class StreamingToolExecutor:
 
 
 class QueryLoop:
-    """Self-managing query loop replacing create_agent.
-
-    The .astream() method is an AsyncGenerator that yields dicts compatible
-    with LangGraph's stream_mode="updates":
-      {"agent": {"messages": [AIMessage(...)]}}
-      {"tools": {"messages": [ToolMessage(...), ...]}}
-
-    The checkpointer attribute is set post-construction (mirrors create_agent pattern).
-    """
-
     @property
     def checkpointer(self) -> Any:
         return self._checkpointer
@@ -618,7 +607,6 @@ class QueryLoop:
         config: dict | None = None,
         stream_mode: str | list[str] = "updates",
     ) -> AsyncGenerator[Any, None]:
-        """Stream agent execution chunks compatible with LangGraph stream modes."""
         requested_modes = [stream_mode] if isinstance(stream_mode, str) else list(stream_mode)
         emitted_live_agent_chunks = False
         async for event in self.query(input, config=config):
@@ -2187,12 +2175,7 @@ class QueryLoop:
         return AIMessage(content=reply)
 
 
-# Closure helpers (avoid late-binding bugs in loop-built lambdas)
-
-
 def _make_model_wrapper(mw: AgentMiddleware, next_handler):
-    """Build an awrap_model_call wrapper that correctly closes over mw and next_handler."""
-
     async def wrapper(request: ModelRequest) -> ModelResponse:
         return await mw.awrap_model_call(request, next_handler)
 
@@ -2200,17 +2183,13 @@ def _make_model_wrapper(mw: AgentMiddleware, next_handler):
 
 
 def _make_tool_wrapper(mw: AgentMiddleware, next_handler):
-    """Build an awrap_tool_call wrapper that correctly closes over mw and next_handler."""
-
     async def wrapper(request: ToolCallRequest) -> ToolMessage:
         return await mw.awrap_tool_call(request, next_handler)
 
     return wrapper
 
 
-# Middleware override detection helpers
 def _mw_overrides_model_call(mw: AgentMiddleware) -> bool:
-    """True if mw actually overrides awrap_model_call (not just inherits the base stub)."""
     mw_type = type(mw)
     own_fn = mw_type.__dict__.get("awrap_model_call")
     if own_fn is not None:
@@ -2220,7 +2199,6 @@ def _mw_overrides_model_call(mw: AgentMiddleware) -> bool:
 
 
 def _mw_overrides_tool_call(mw: AgentMiddleware) -> bool:
-    """True if mw actually overrides awrap_tool_call (not just inherits the base stub)."""
     mw_type = type(mw)
     own_fn = mw_type.__dict__.get("awrap_tool_call")
     if own_fn is not None:

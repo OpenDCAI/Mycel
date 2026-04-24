@@ -164,7 +164,7 @@ class DaytonaProvider(SandboxProvider):
     def create_session(self, context_id: str | None = None, thread_id: str | None = None) -> SessionInfo:
         from daytona_sdk import CreateSandboxFromSnapshotParams, VolumeMount
 
-        # @@@volume-mount - use SDK VolumeMount instead of bind mount HTTP workaround
+        # @@@volume-mount - use SDK VolumeMount instead of bind mount HTTP setup
         if thread_id and thread_id in self._managed_mounts:
             volume_name, vol_mount_path = self._managed_mounts.pop(thread_id)
             vol = self.client.volume.get(volume_name)
