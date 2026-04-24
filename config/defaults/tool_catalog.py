@@ -82,3 +82,20 @@ TOOLS: list[ToolDef] = [
 
 # Fast lookup: name → ToolDef
 TOOLS_BY_NAME: dict[str, ToolDef] = {t.name: t for t in TOOLS}
+
+
+def tool_enabled_for_agent(tool_name: str, *, configured_tools: list[str] | None, runtime: dict[str, object] | None) -> bool:
+    runtime = runtime or {}
+    runtime_key = f"tools:{tool_name}"
+    override = runtime.get(runtime_key)
+    if isinstance(override, dict) and "enabled" in override:
+        return bool(override["enabled"])
+    if hasattr(override, "enabled"):
+        return bool(override.enabled)
+
+    tools = configured_tools or ["*"]
+    if tools == ["*"]:
+        return True
+    if tool_name in tools:
+        return True
+    return TOOLS_BY_NAME[tool_name].default

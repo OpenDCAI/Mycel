@@ -267,6 +267,21 @@ def test_create_agent_user_persists_owner_contact_edge():
     ]
 
 
+def test_repo_backed_tools_star_keeps_panel_and_runtime_tool_state_aligned() -> None:
+    from config.types import AgentBundle, AgentConfig
+    from core.runtime.agent import LeonAgent
+
+    config = {"tools": ["*"], "runtime": {}}
+
+    panel_lsp = next(item for item in agent_user_service._tools_from_repo(config) if item["name"] == "LSP")
+
+    agent = LeonAgent.__new__(LeonAgent)
+    agent._agent_bundle = AgentBundle(agent=AgentConfig(name="Toad", tools=["*"]), runtime={})
+
+    assert panel_lsp["enabled"] is True
+    assert "LSP" not in agent._get_agent_blocked_tools()
+
+
 def test_agent_config_exposes_and_persists_compaction_trigger_tokens():
     agent = UserRow(
         id="agent-1",

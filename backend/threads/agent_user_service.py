@@ -9,7 +9,7 @@ import yaml
 import backend.hub.snapshot_install as _snapshot_install_owner
 from backend.hub.versioning import BumpType, bump_semver
 from backend.identity.avatar.urls import avatar_url
-from config.defaults.tool_catalog import TOOLS_BY_NAME, ToolDef
+from config.defaults.tool_catalog import TOOLS_BY_NAME, ToolDef, tool_enabled_for_agent
 from config.loader import AgentLoader
 
 _SYSTEM_AGENTS_DIR = (Path(__file__).resolve().parents[2] / "config" / "defaults" / "agents").resolve()
@@ -40,7 +40,6 @@ def _parse_agent_md_content(content: str) -> dict[str, Any] | None:
 def _tools_from_repo(config: dict[str, Any]) -> list[dict[str, Any]]:
     runtime = config.get("runtime", {}) if isinstance(config.get("runtime"), dict) else {}
     enabled_tools = config.get("tools") or ["*"]
-    is_all = enabled_tools == ["*"]
     tools_list = []
     for tool_name, tool_info in TOOLS_BY_NAME.items():
         runtime_key = f"tools:{tool_name}"
@@ -48,7 +47,7 @@ def _tools_from_repo(config: dict[str, Any]) -> list[dict[str, Any]]:
         tools_list.append(
             {
                 "name": tool_name,
-                "enabled": bool(override.get("enabled", is_all or tool_name in enabled_tools)),
+                "enabled": tool_enabled_for_agent(tool_name, configured_tools=enabled_tools, runtime=runtime),
                 "desc": override.get("desc") or tool_info.desc,
                 "group": tool_info.group,
             }
