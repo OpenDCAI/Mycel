@@ -1,5 +1,3 @@
-"""FastAPI dependency injection functions."""
-
 import asyncio
 from typing import Annotated, Any
 

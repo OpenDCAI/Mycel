@@ -1,5 +1,3 @@
-"""Monitor Middleware - 监控容器"""
-
 from collections.abc import Awaitable, Callable
 from typing import Any
 

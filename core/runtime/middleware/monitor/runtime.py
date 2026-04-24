@@ -1,5 +1,3 @@
-"""Agent 运行时状态聚合"""
-
 import asyncio
 import json
 import logging

@@ -1,5 +1,3 @@
-"""Smoke test for E2B provider and sandbox."""
-
 import builtins
 import os
 import sys

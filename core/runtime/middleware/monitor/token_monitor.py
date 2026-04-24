@@ -1,5 +1,3 @@
-"""Token 使用量监控（6 项分项追踪）"""
-
 from __future__ import annotations
 
 from typing import Any

@@ -1,5 +1,3 @@
-"""Minimal abort controller tree for runtime lifecycle wiring."""
-
 from __future__ import annotations
 
 from collections.abc import Callable

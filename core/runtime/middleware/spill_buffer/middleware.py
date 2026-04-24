@@ -1,5 +1,3 @@
-"""SpillBuffer middleware - intercepts oversized tool outputs."""
-
 from __future__ import annotations
 
 import json

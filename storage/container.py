@@ -1,5 +1,3 @@
-"""Storage container — Supabase-only repo composition root."""
-
 from __future__ import annotations
 
 import importlib

@@ -1,5 +1,3 @@
-"""Storage utility functions."""
-
 import secrets
 import string
 

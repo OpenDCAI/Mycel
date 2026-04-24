@@ -1,5 +1,3 @@
-"""Core spill logic: detect oversized content, write to disk, return preview."""
-
 from __future__ import annotations
 
 import posixpath

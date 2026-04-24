@@ -1,5 +1,3 @@
-"""Structural storage contracts for repo-level provider parity."""
-
 from __future__ import annotations
 
 from enum import StrEnum

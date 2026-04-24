@@ -1,5 +1,3 @@
-"""Focused runtime support tests for cleanup, fork, and state helpers."""
-
 import asyncio
 from pathlib import Path
 from typing import Any, get_type_hints

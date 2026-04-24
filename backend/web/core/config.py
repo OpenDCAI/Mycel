@@ -1,5 +1,3 @@
-"""Configuration constants for Mycel web backend."""
-
 from backend.sandboxes.local_workspace import local_workspace_root
 from config.user_paths import user_home_path
 
