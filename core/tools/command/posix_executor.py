@@ -11,8 +11,6 @@ from .base import require_subprocess_pipe
 
 
 class PosixShellExecutor(BaseExecutor):
-    """Executor for bash/zsh-style shells with a persistent blocking session."""
-
     shell_command: tuple[str, ...]
     _running_commands: ClassVar[dict[str, AsyncCommand]] = {}
 

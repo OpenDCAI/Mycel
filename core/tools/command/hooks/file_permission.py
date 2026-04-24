@@ -4,8 +4,6 @@ from .base import HookResult
 
 
 class FilePermissionHook:
-    """File permission control hook with extension whitelist and path blacklist."""
-
     def __init__(
         self,
         workspace_root: Path | str | None = None,

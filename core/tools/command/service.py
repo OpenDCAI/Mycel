@@ -20,8 +20,6 @@ DEFAULT_TIMEOUT_MS = 120_000
 
 
 class CommandService:
-    """Registers Bash tool into ToolRegistry."""
-
     def __init__(
         self,
         registry: ToolRegistry,
@@ -205,7 +203,6 @@ class CommandService:
         emit_fn: Callable[[dict[str, Any]], Awaitable[None] | None] | None = None,
         description: str = "",
     ) -> None:
-        """Poll until async command finishes, then enqueue CommandNotification."""
         while not async_cmd.done:
             await asyncio.sleep(1)
 

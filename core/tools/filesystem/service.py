@@ -88,8 +88,6 @@ class _ReadFileStateCache:
 
 
 class FileSystemService:
-    """Registers filesystem tools (Read/Write/Edit/list_dir) into ToolRegistry."""
-
     def __init__(
         self,
         registry: ToolRegistry,
