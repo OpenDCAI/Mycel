@@ -68,20 +68,14 @@ class TestFullAgentSummaryPersistence:
 
             memory = _memory_middleware(agent)
             store = memory.summary_store
-            print(f"[Test] Checking summary store: {store}")
-            print(f"[Test] Thread ID: {thread_id}")
-            print(f"[Test] Cached summary exists: {memory._cached_summary is not None}")
-            print(f"[Test] Compact up to index: {memory._compact_up_to_index}")
 
             summary = store.get_latest_summary(thread_id)
-            print(f"[Test] Retrieved summary: {summary}")
 
             assert summary is not None, "Summary should exist after exceeding threshold"
             assert summary.thread_id == thread_id
             assert summary.summary_text is not None
             assert len(summary.summary_text) > 0
             assert summary.compact_up_to_index >= 0
-            print(f"[Test] Summary saved: compact_up_to_index={summary.compact_up_to_index}")
 
         finally:
             agent.close()
@@ -106,7 +100,6 @@ class TestFullAgentSummaryPersistence:
 
             assert memory2._cached_summary is not None, "Summary should be restored"
             assert memory2._compact_up_to_index >= 0
-            print(f"[Test] Summary restored: compact_up_to_index={memory2._compact_up_to_index}")
 
         finally:
             agent2.close()
@@ -138,16 +131,9 @@ class TestAgentSplitTurnE2E:
             store = memory.summary_store
             summary = store.get_latest_summary(thread_id)
 
-            if summary:
-                print(f"[Test] Summary exists: is_split_turn={summary.is_split_turn}")
-                if summary.is_split_turn:
-                    assert summary.split_turn_prefix is not None
-                    assert len(summary.split_turn_prefix) > 0
-                    print(f"[Test] Split turn detected with prefix length: {len(summary.split_turn_prefix)}")
-                else:
-                    print("[Test] Normal compaction occurred (split turn not needed)")
-            else:
-                print("[Test] No summary yet - threshold may not have been reached")
+            if summary and summary.is_split_turn:
+                assert summary.split_turn_prefix is not None
+                assert len(summary.split_turn_prefix) > 0
 
         finally:
             agent.close()
@@ -193,9 +179,6 @@ class TestAgentConcurrentThreads:
             summary = store.get_latest_summary(thread_id)
             if summary:
                 assert summary.thread_id == thread_id
-                print(f"[Test] Thread {thread_id}: summary exists")
-            else:
-                print(f"[Test] Thread {thread_id}: no summary yet")
 
         all_summaries = []
         for thread_id in thread_ids:
@@ -204,7 +187,6 @@ class TestAgentConcurrentThreads:
 
         for summary in all_summaries:
             assert summary["thread_id"] in thread_ids
-            print(f"[Test] Summary {summary['summary_id']} belongs to {summary['thread_id']}")
 
         for thread_id in thread_ids:
             set_current_thread_id(thread_id)
@@ -223,11 +205,6 @@ class TestAgentConcurrentThreads:
                     thread_id=thread_id,
                 )
                 assert result is not None
-
-                if memory._cached_summary:
-                    print(f"[Test] Thread {thread_id}: summary restored")
-                else:
-                    print(f"[Test] Thread {thread_id}: no summary to restore")
 
             finally:
                 agent.close()
