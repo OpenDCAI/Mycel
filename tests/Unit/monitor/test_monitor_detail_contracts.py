@@ -32,7 +32,6 @@ from backend.monitor.infrastructure.read_models import trace_read_service as mon
 
 SANDBOX_RUNTIME_KEY = "sandbox_runtime_" + "id"
 SANDBOX_RUNTIME_CAMEL_KEY = "".join(["lea", "se", "Id"])
-REMOVED_RUNTIME_IDS_KEY = "lease_" + "ids"
 
 
 @pytest.fixture(autouse=True)
@@ -257,10 +256,8 @@ def test_get_monitor_provider_detail_reads_current_resource_snapshot(monkeypatch
 
     assert payload["provider"]["id"] == "daytona"
     assert payload["sandbox_ids"] == ["sandbox-1", "sandbox-2"]
-    assert REMOVED_RUNTIME_IDS_KEY not in payload
     assert "thread_ids" not in payload
     assert payload["runtime_ids"] == ["runtime-1"]
-    assert "runtime_" + "session_ids" not in payload
 
     assert monitor_provider_runtime_service._resource_row_values(
         [

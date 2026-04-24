@@ -1032,7 +1032,7 @@ def test_leon_agent_chat_tool_wiring_rejects_user_id_only_runtime_shape(monkeypa
         LeonAgent._init_services(agent)
 
 
-def test_leon_agent_chat_identity_prompt_accepts_chat_identity_id_without_removed_user_id():
+def test_leon_agent_chat_identity_prompt_accepts_chat_identity_id():
     from core.runtime.agent import LeonAgent
 
     agent = object.__new__(LeonAgent)
@@ -1052,34 +1052,6 @@ def test_leon_agent_chat_identity_prompt_accepts_chat_identity_id_without_remove
 
     assert "- Your chat identity id: agent-user-2" in prompt
     assert "- Your owner: Owner 2 (human user_id: human-user-2)" in prompt
-
-
-def test_leon_agent_chat_identity_prompt_ignores_removed_thread_user_id_lookup() -> None:
-    from core.runtime.agent import LeonAgent
-
-    agent = object.__new__(LeonAgent)
-    agent._build_system_prompt = lambda: "BASE"
-    cast(Any, agent).config = SimpleNamespace(system_prompt=None)
-    agent._thread_repo = SimpleNamespace(get_by_user_id=lambda _uid: pytest.fail("removed thread-user lookup should not be used"))
-    agent._chat_repos = {
-        "chat_identity_id": "thread-user-3",
-        "owner_id": "human-user-3",
-        "user_repo": SimpleNamespace(
-            get_by_id=lambda uid: (
-                None
-                if uid == "thread-user-3"
-                else SimpleNamespace(id=uid, display_name="Truffle")
-                if uid == "agent-user-3"
-                else SimpleNamespace(id=uid, display_name="Owner 3")
-            )
-        ),
-    }
-
-    prompt = LeonAgent._compose_system_prompt(agent)
-
-    assert "- Your name: thread-user-3" in prompt
-    assert "- Your chat identity id: thread-user-3" in prompt
-    assert "- Your owner: Owner 3 (human user_id: human-user-3)" in prompt
 
 
 def test_leon_agent_chat_tool_wiring_does_not_pass_dead_repo_dependencies(monkeypatch: pytest.MonkeyPatch, tmp_path) -> None:

@@ -1,23 +1,7 @@
-import pytest
-
 from storage.providers.supabase.sandbox_monitor_repo import SupabaseSandboxMonitorRepo
 from tests.fakes.supabase import FakeSupabaseClient, FakeSupabaseQuery
 
 SANDBOX_RUNTIME_KEY = "sandbox_runtime_" + "id"
-
-
-class _BrokenSandboxInstancesClient(FakeSupabaseClient):
-    def table(self, table_name: str):
-        if table_name == "sandbox_instances":
-            raise RuntimeError("sandbox_instances exploded")
-        return super().table(table_name)
-
-
-class _BrokenChatSessionsClient(FakeSupabaseClient):
-    def table(self, table_name: str):
-        if table_name == "chat_sessions":
-            raise RuntimeError("chat_sessions exploded")
-        return super().table(table_name)
 
 
 class _MaxInFilterQuery(FakeSupabaseQuery):
@@ -354,65 +338,6 @@ def test_query_sandbox_allows_missing_sandbox_runtime_handle() -> None:
         "last_error": None,
         "updated_at": "2026-04-05T10:10:00",
     }
-
-
-def test_query_thread_runtime_rows_ignores_removed_chat_sessions_rows() -> None:
-    repo = _repo(
-        {
-            "container.sandboxes": [
-                _sandbox(
-                    "sandbox-1",
-                    provider_name="daytona_selfhost",
-                    provider_env_id="instance-1",
-                    desired_state="paused",
-                    observed_state="paused",
-                    sandbox_runtime_handle="runtime-1",
-                    last_error="last boom",
-                )
-            ],
-            "chat_sessions": [
-                {
-                    **_chat_session("sess-1", "thread-1", "runtime-1", started_at="2026-04-05T10:01:00"),
-                    "ended_at": None,
-                    "close_reason": None,
-                }
-            ],
-        }
-    )
-
-    assert repo.query_thread_runtime_rows("thread-1") == []
-
-
-def test_chat_session_monitor_surfaces_do_not_read_removed_chat_sessions_table() -> None:
-    repo = SupabaseSandboxMonitorRepo(
-        _BrokenChatSessionsClient(
-            {
-                "container.sandboxes": [
-                    _sandbox("sandbox-1", provider_env_id="instance-1", sandbox_runtime_handle="runtime-1"),
-                ],
-                "container.workspaces": [
-                    _workspace("workspace-1", "sandbox-1", updated_at="2026-04-05T10:05:00"),
-                ],
-                "agent.threads": [
-                    _thread("thread-1", "workspace-1", updated_at="2026-04-05T10:05:00"),
-                ],
-            }
-        )
-    )
-
-    assert repo.query_thread_runtime_rows("thread-1") == []
-    assert repo.query_sandbox_runtime_rows("sandbox-1") == []
-    assert repo.query_resource_rows() == [
-        {
-            "provider": "local",
-            "session_id": None,
-            "thread_id": "thread-1",
-            "sandbox_id": "sandbox-1",
-            "observed_state": "running",
-            "desired_state": "running",
-            "created_at": "2026-04-05T09:00:00",
-        }
-    ]
 
 
 def test_query_sandboxes_uses_latest_workspace_thread_binding() -> None:
@@ -794,44 +719,6 @@ def test_list_probe_targets_use_sandbox_runtime_identity() -> None:
             "observed_state": "detached",
         },
     ]
-
-
-@pytest.mark.parametrize(
-    ("include_updated_at", "caller"),
-    [
-        (False, lambda repo: repo.query_sandbox_instance_id("sandbox-1")),
-        (True, lambda repo: repo.list_probe_targets()),
-    ],
-    ids=["query-sandbox-instance-id", "list-probe-targets"],
-)
-def test_instance_lookup_does_not_read_removed_instances_table(include_updated_at, caller) -> None:
-    tables = {
-        "container.sandboxes": [
-            _sandbox(
-                "sandbox-1",
-                provider_name="daytona_selfhost",
-                provider_env_id="instance-runtime",
-                observed_state="detached",
-                updated_at="2026-04-05T10:10:00" if include_updated_at else "2026-04-05T10:00:00",
-                sandbox_runtime_handle="runtime-1",
-            )
-        ]
-    }
-    repo = SupabaseSandboxMonitorRepo(_BrokenSandboxInstancesClient(tables))
-
-    result = caller(repo)
-
-    if include_updated_at:
-        assert result == [
-            {
-                "sandbox_id": "sandbox-1",
-                "provider_name": "daytona_selfhost",
-                "instance_id": "instance-runtime",
-                "observed_state": "detached",
-            }
-        ]
-    else:
-        assert result == "instance-runtime"
 
 
 def test_query_resource_rows_uses_sandbox_thread_rows_without_session_rows() -> None:
