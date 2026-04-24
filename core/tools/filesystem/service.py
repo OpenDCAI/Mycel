@@ -134,9 +134,7 @@ class FileSystemService:
 
         self._register(registry)
 
-    # ------------------------------------------------------------------
     # Registration
-    # ------------------------------------------------------------------
 
     def _register(self, registry: ToolRegistry) -> None:
         registry.register(
@@ -276,9 +274,7 @@ class FileSystemService:
             )
         )
 
-    # ------------------------------------------------------------------
     # Path validation (reused from middleware)
-    # ------------------------------------------------------------------
 
     def _validate_path(self, path: str, operation: str) -> ValidationResult:
         if self.backend.is_remote:
@@ -580,9 +576,7 @@ class FileSystemService:
         except Exception:
             return 0
 
-    # ------------------------------------------------------------------
     # Tool handlers
-    # ------------------------------------------------------------------
 
     def _read_file(self, file_path: str, offset: int = 0, limit: int | None = None, pages: str | None = None) -> str | ToolResultEnvelope:
         error, resolved = self._read_preflight(

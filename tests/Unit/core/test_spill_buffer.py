@@ -12,10 +12,6 @@ from core.runtime.middleware import ModelRequest
 from core.runtime.middleware.spill_buffer.middleware import SKIP_TOOLS, SpillBufferMiddleware
 from core.runtime.middleware.spill_buffer.spill import PREVIEW_BYTES, spill_if_needed
 
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-
 
 def _make_fs_backend():
     """Return a mock FileSystemBackend with write_file as a MagicMock."""

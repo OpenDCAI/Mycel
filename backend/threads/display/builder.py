@@ -21,9 +21,7 @@ from backend.threads.message_content import strip_system_tags as _strip_system_t
 
 logger = logging.getLogger(__name__)
 
-# ---------------------------------------------------------------------------
 # Types — mirror frontend/app/src/api/types.ts
-# ---------------------------------------------------------------------------
 
 DeltaType = Literal[
     "append_entry",
@@ -34,9 +32,7 @@ DeltaType = Literal[
 ]
 
 
-# ---------------------------------------------------------------------------
 # Helpers — ported from message-mapper.ts
-# ---------------------------------------------------------------------------
 
 _TASK_NOTIFICATION_RUN_ID_RE = re.compile(r"<run-id>(.*?)</run-id>", re.IGNORECASE | re.DOTALL)
 _TASK_NOTIFICATION_STATUS_RE = re.compile(r"<status>(.*?)</status>", re.IGNORECASE | re.DOTALL)
@@ -78,9 +74,7 @@ def _reconcile_subagent_stream_status(
                 return
 
 
-# ---------------------------------------------------------------------------
 # Entry builders
-# ---------------------------------------------------------------------------
 
 
 def _build_tool_segments(tool_calls: list, msg_index: int, now: int) -> list[dict]:
@@ -190,9 +184,7 @@ def _build_hidden_ask_user_answer_entry(
     }
 
 
-# ---------------------------------------------------------------------------
 # ThreadDisplay — per-thread in-memory state
-# ---------------------------------------------------------------------------
 
 
 @dataclass
@@ -203,9 +195,7 @@ class ThreadDisplay:
     display_seq: int = 0  # monotonic counter for display_delta dedup
 
 
-# ---------------------------------------------------------------------------
 # DisplayBuilder — owns all display computation
-# ---------------------------------------------------------------------------
 
 
 class DisplayBuilder:
@@ -443,9 +433,7 @@ class DisplayBuilder:
         _attach_subagent_stream(seg["step"], msg.get("metadata") or {}, content_str)
 
 
-# ---------------------------------------------------------------------------
 # Streaming event handlers — called by apply_event
-# ---------------------------------------------------------------------------
 
 
 def _get_current_turn(td: ThreadDisplay) -> dict | None:

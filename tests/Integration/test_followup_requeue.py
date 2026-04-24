@@ -13,10 +13,6 @@ import pytest
 
 from core.runtime.middleware.queue.manager import MessageQueueManager
 
-# ---------------------------------------------------------------------------
-# Fixtures
-# ---------------------------------------------------------------------------
-
 
 @pytest.fixture()
 def queue_manager(tmp_path):
@@ -44,11 +40,6 @@ def mock_agent():
     runtime._activity_sink = None
     agent = SimpleNamespace(runtime=runtime)
     return agent
-
-
-# ---------------------------------------------------------------------------
-# Tests
-# ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio

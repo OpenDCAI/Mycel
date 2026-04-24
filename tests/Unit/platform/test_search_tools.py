@@ -10,10 +10,6 @@ import pytest
 
 from core.tools.search.service import DEFAULT_EXCLUDES, SearchService
 
-# ---------------------------------------------------------------------------
-# Fixtures
-# ---------------------------------------------------------------------------
-
 
 @pytest.fixture()
 def workspace(tmp_path: Path) -> Path:
@@ -48,11 +44,6 @@ def _grep(mw: SearchService, **kwargs) -> str:
 def _glob(mw: SearchService, **kwargs) -> str:
     """Shortcut: invoke _glob directly and return content."""
     return mw._glob(**kwargs)
-
-
-# ---------------------------------------------------------------------------
-# Grep tests
-# ---------------------------------------------------------------------------
 
 
 class TestGrepFilesWithMatches:
@@ -302,11 +293,6 @@ class TestGrepPathValidation:
         assert "not found" in result.lower() or "No matches" in result
 
 
-# ---------------------------------------------------------------------------
-# Glob tests
-# ---------------------------------------------------------------------------
-
-
 class TestGlobBasic:
     """Basic glob pattern matching."""
 
@@ -403,11 +389,6 @@ class TestGlobPathParameter:
         assert "Not a directory" in result
 
 
-# ---------------------------------------------------------------------------
-# _paginate
-# ---------------------------------------------------------------------------
-
-
 class TestPaginate:
     """Unit tests for _paginate static method."""
 
@@ -425,11 +406,6 @@ class TestPaginate:
         assert SearchService._paginate(text, head_limit, offset) == expected
 
 
-# ---------------------------------------------------------------------------
-# _is_excluded
-# ---------------------------------------------------------------------------
-
-
 class TestIsExcluded:
     """Unit tests for _is_excluded."""
 
@@ -444,11 +420,6 @@ class TestIsExcluded:
     )
     def test_paths(self, path: str, expected: bool):
         assert SearchService._is_excluded(Path(path)) is expected
-
-
-# ---------------------------------------------------------------------------
-# DEFAULT_EXCLUDES constant
-# ---------------------------------------------------------------------------
 
 
 class TestDefaultExcludes:
