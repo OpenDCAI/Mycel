@@ -1,5 +1,3 @@
-"""Supabase repository for user-scoped recipe overrides and custom recipes."""
-
 from __future__ import annotations
 
 import json

@@ -1,5 +1,3 @@
-"""Supabase repository for directional contact relationships."""
-
 from __future__ import annotations
 
 from typing import Any

@@ -1,5 +1,3 @@
-"""Supabase repository for agent configuration (config, rules, skills, sub-agents)."""
-
 from __future__ import annotations
 
 import uuid

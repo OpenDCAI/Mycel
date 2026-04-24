@@ -1,5 +1,3 @@
-"""Supabase repository for agent schedule records."""
-
 from __future__ import annotations
 
 import uuid

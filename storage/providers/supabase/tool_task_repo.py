@@ -1,5 +1,3 @@
-"""Supabase repository for thread-scoped tool tasks."""
-
 from __future__ import annotations
 
 import json

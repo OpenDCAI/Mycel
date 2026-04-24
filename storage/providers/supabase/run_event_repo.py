@@ -1,5 +1,3 @@
-"""Supabase repository for run event persistence operations."""
-
 from __future__ import annotations
 
 import json

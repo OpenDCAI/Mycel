@@ -1,5 +1,3 @@
-"""Supabase repository for sandbox provider webhook events."""
-
 from __future__ import annotations
 
 import json
