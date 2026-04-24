@@ -25,12 +25,10 @@ from backend.web.routers import (  # noqa: E402
     webhooks,
 )
 
-# Create FastAPI app
 app = FastAPI(title="Mycel Web Backend", lifespan=lifespan)
 
 add_permissive_cors(app)
 
-# Include routers
 app.include_router(auth.router)
 app.include_router(invite_codes.router)
 app.include_router(threads.router)

@@ -72,7 +72,6 @@ class TestAgentLoader:
         dict2 = {"api": {"temperature": None}}
 
         result = loader._deep_merge(dict1, dict2)
-        # None values should not override
         assert result["api"]["temperature"] == 0.5
 
     def test_deep_merge_multiple(self):
@@ -92,7 +91,6 @@ class TestAgentLoader:
         config2 = {"mcp": {"servers": {"server2": {}}}}
         config3 = {"mcp": {"servers": {"server3": {}}}}
 
-        # First found wins
         result = loader._lookup_merge("mcp", config1, config2, config3)
         assert "server1" in result["servers"]
         assert "server2" not in result["servers"]

@@ -182,15 +182,12 @@ def publish(
 
     new_version = bump_semver(meta.get("version", "0.1.0"), bump_type)
 
-    # Get slug from agent name
     slug = bundle.agent.name.lower().replace(" ", "-")
 
-    # Check for fork/parent relationship
     source = meta.get("source", {})
     parent_item_id = source.get("marketplace_item_id")
     parent_version = source.get("installed_version")
 
-    # Call Hub API
     result = _hub_api(
         "POST",
         "/publish",
@@ -211,7 +208,6 @@ def publish(
         },
     )
 
-    # Update local meta.json
     meta["version"] = new_version
     meta["status"] = "active"
     meta["updated_at"] = int(time.time() * 1000)
