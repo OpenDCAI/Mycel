@@ -146,7 +146,6 @@ async def get_settings(request: Request, user_id: CurrentUserId) -> UserSettings
     ws = _load_workspace_settings(repo, user_id)
     models = _load_merged_models_for_storage(repo, user_id)
 
-    # Build the app-facing settings bundle.
     mapping = {k: v.model for k, v in models.mapping.items()}
     providers = {}
     for name, provider in models.providers.items():
@@ -449,7 +448,6 @@ async def add_custom_model(
     custom_providers = pool.setdefault("custom_providers", {})
     custom_providers[request.model_id] = request.provider
 
-    # Store based_on/context_limit in custom_config
     if request.based_on or request.context_limit:
         custom_config = pool.setdefault("custom_config", {})
         cfg: dict[str, Any] = custom_config.get(request.model_id, {})
@@ -473,11 +471,9 @@ async def test_model(request: ModelTestRequest, req: Request, user_id: CurrentUs
     repo = _get_settings_repo(req)
     mc = _load_merged_models_for_storage(repo, user_id)
 
-    # Resolve virtual model
     resolved, overrides = mc.resolve_model(request.model_id)
     provider_name = overrides.get("model_provider") or (mc.active.provider if mc.active else None)
 
-    # Check custom_providers mapping
     data = repo.get_models_config(user_id) or {}
     custom_providers = data.get("pool", {}).get("custom_providers", {})
     if request.model_id in custom_providers:

@@ -239,7 +239,6 @@ class TaskService:
             self._repo.delete(thread_id, task_id)
             return json.dumps({"status": "deleted", "id": task_id})
 
-        # Update status
         if status:
             try:
                 task.status = TaskStatus(status)
@@ -247,7 +246,6 @@ class TaskService:
                 valid = ", ".join(s.value for s in TaskStatus)
                 return json.dumps({"error": f"Invalid status '{status}'. Valid: {valid}"})
 
-        # Update fields
         if "subject" in args:
             task.subject = args["subject"]
         if "description" in args:

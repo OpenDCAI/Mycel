@@ -365,8 +365,6 @@ class QueryLoop:
         self.last_terminal: TerminalState | None = None
         self.last_continue: ContinueState | None = None
 
-    # Public streaming interface (LangGraph-compatible)
-
     async def query(
         self,
         input: dict,
@@ -381,12 +379,10 @@ class QueryLoop:
 
         set_current_thread_id(thread_id)
 
-        # Load message history and thread-scoped runtime state from checkpointer
         persisted = await self._hydrate_thread_state_from_checkpoint(thread_id)
         messages = list(persisted["messages"])
         self._restore_discovered_tool_names_from_messages(thread_id, messages)
 
-        # Parse and append new input messages
         new_msgs = self._parse_input(input)
         messages.extend(new_msgs)
         self._sync_app_state(messages=messages, turn_count=0)
@@ -780,7 +776,6 @@ class QueryLoop:
             model = request.model
             bound = self._bind_model(model, tools, max_output_tokens_override=max_output_tokens_override)
 
-            # Build message list: system + conversation
             call_messages = []
             if request.system_message:
                 call_messages.append(request.system_message)
@@ -791,7 +786,6 @@ class QueryLoop:
                 result = [result]
             return ModelResponse(result=result, request_messages=list(request.messages))
 
-        # Build ModelRequest
         inline_schemas = self._registry.get_inline_schemas(self._get_discovered_tool_names(thread_id))
         request = ModelRequest(
             model=self.model,

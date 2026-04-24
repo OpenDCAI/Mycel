@@ -157,7 +157,6 @@ class CommandService:
 
             self._background_runs[task_id] = _BashBackgroundRun(async_cmd, command, description=description)
 
-        # Build emit_fn for SSE task lifecycle events
         emit_fn: Callable[[dict[str, Any]], Awaitable[None] | None] | None = None
         parent_thread_id = None
         from sandbox.thread_context import get_current_thread_id

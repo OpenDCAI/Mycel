@@ -1,22 +1,3 @@
-"""
-Leon - AI Coding Agent with Middleware Architecture
-
-Middleware stack (outer → inner):
-  SpillBuffer → Monitor → PromptCaching → Memory → Steering → ToolRunner
-
-Tools are registered via Services into ToolRegistry:
-- FileSystemService: Read, Write, Edit, list_dir
-- SearchService: Grep, Glob
-- CommandService: Bash (with hooks)
-- WebService: WebSearch, WebFetch
-- SkillsService: load_skill (dynamic schema)
-- TaskService: TaskCreate/Update/List/Get (deferred)
-- AgentService: Agent, TaskOutput, TaskStop
-- ToolSearchService: tool_search
-
-All paths must be absolute. Full security mechanisms and audit logging.
-"""
-
 import asyncio
 import concurrent.futures
 import inspect
@@ -29,7 +10,6 @@ import httpx
 from langchain.chat_models import init_chat_model
 from langchain_core.messages import SystemMessage
 
-# Load .env file
 _env_file = Path(__file__).parent / ".env"
 if _env_file.exists():
     for line in _env_file.read_text().splitlines():
@@ -231,9 +211,7 @@ class LeonAgent:
             models_config_override=models_config_override,
             memory_config_override=memory_config_override,
         )
-        # Load observation config (langfuse / langsmith)
         self._observation_config = ObservationLoader(workspace_root=workspace_root).load()
-        # Resolve virtual model name
         active_model = self.models_config.active.model if self.models_config.active else model_name
         if not active_model:
             from config.schema import DEFAULT_MODEL  # noqa: E402
@@ -247,7 +225,6 @@ class LeonAgent:
         self.model_name = resolved_model
         self._model_overrides = model_overrides
 
-        # Resolve API key (prefer resolved provider from mapping)
         provider_name = self._resolve_provider_name(resolved_model, model_overrides)
         self._explicit_api_key = api_key is not None
         self.api_key = api_key or self.models_config.resolve_api_key(provider_name)
@@ -261,24 +238,20 @@ class LeonAgent:
                 "  - models.json providers section"
             )
 
-        # Initialize workspace and configuration
         self.workspace_root = self._resolve_workspace_root()
         self._init_config_attributes()
         self.storage_container: StorageContainer | None = runtime_storage
         self._sandbox = self._init_sandbox(sandbox)
 
-        # Override workspace_root for sandbox mode
         if self._sandbox.name != "local":
             self.workspace_root = Path(self._sandbox.working_dir)
         else:
             self.workspace_root.mkdir(parents=True, exist_ok=True)
 
-        # Initialize model
         self._model_http_client: httpx.Client | None = None
         self._model_http_async_client: httpx.AsyncClient | None = None
         self.model = self._create_model()
 
-        # Store current model config for per-request override via configurable_fields
         model_kwargs = self._build_model_kwargs()
         self._current_model_config = {
             "model": self.model_name,
@@ -287,7 +260,6 @@ class LeonAgent:
             "base_url": model_kwargs.get("base_url"),
         }
 
-        # Initialize checkpointer and MCP tools
         self.checkpointer = None
         _conn, mcp_tools = self._init_async_components()
 
@@ -296,11 +268,9 @@ class LeonAgent:
         # which also returns conn=None but DID initialize successfully.
         self._needs_async_init = self.checkpointer is None
 
-        # Set checkpointer to None if in async context (will be initialized later)
         if self._needs_async_init:
             self.checkpointer = None
 
-        # Initialize ToolRegistry and Services (new architecture)
         blocked = self._get_agent_blocked_tools()
         if extra_blocked_tools:
             blocked = blocked | extra_blocked_tools
@@ -311,13 +281,11 @@ class LeonAgent:
         self._init_services()
         self._register_mcp_tools(mcp_tools)
 
-        # Build middleware stack
         middleware = self._build_middleware_stack()
 
         self._system_prompt_section_cache: dict[str, str] = {}
         self.system_prompt = self._compose_system_prompt()
 
-        # Build BootstrapConfig for sub-agent forking
         self._bootstrap = BootstrapConfig(
             workspace_root=self.workspace_root,
             original_cwd=Path.cwd(),
@@ -342,7 +310,6 @@ class LeonAgent:
         if hasattr(self, "_agent_service"):
             self._agent_service._parent_bootstrap = self._bootstrap
 
-        # Create agent via QueryLoop (replaces LangGraph create_agent)
         self.agent = QueryLoop(
             model=self.model,
             system_prompt=SystemMessage(content=[{"type": "text", "text": self.system_prompt}]),
@@ -354,10 +321,8 @@ class LeonAgent:
             bootstrap=self._bootstrap,
         )
 
-        # Get runtime from MonitorMiddleware
         self.runtime = self._monitor_middleware.runtime
 
-        # Inject runtime into MemoryMiddleware and SteeringMiddleware
         if hasattr(self, "_memory_middleware"):
             self._memory_middleware.set_runtime(self.runtime)
         if hasattr(self, "_steering_middleware"):
@@ -415,12 +380,10 @@ class LeonAgent:
             await agent.ainit()
         """
         if self.checkpointer is None:
-            # Initialize async components
             await self._init_checkpointer()
             _mcp_tools = await self._init_mcp_tools()
             self._register_mcp_tools(_mcp_tools)
 
-            # Update agent with checkpointer
             self.agent.checkpointer = self.checkpointer
             if hasattr(self, "_memory_middleware"):
                 # @@@late-checkpointer-fanout - async bringup creates the saver after
@@ -447,18 +410,14 @@ class LeonAgent:
         import asyncio
 
         try:
-            # Check if we're already in an async context
             loop = asyncio.get_running_loop()
             return None, []
         except RuntimeError:
-            # Create a new event loop and keep it running
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
 
-            # Store the loop for later use
             self._event_loop = loop
 
-            # Initialize components
             loop.run_until_complete(self._init_checkpointer())
             mcp_tools = loop.run_until_complete(self._init_mcp_tools())
 
@@ -532,7 +491,6 @@ class LeonAgent:
         Returns:
             Tuple of (LeonSettings for runtime, ModelsConfig for model identity)
         """
-        # Build CLI overrides for runtime config
         cli_overrides: dict = {}
         use_workspace_override = sandbox_name in (None, "", "local")
 
@@ -544,7 +502,6 @@ class LeonAgent:
             # init ever runs, so only local sandboxes pin workspace_root here.
             cli_overrides["workspace_root"] = str(workspace_root)
 
-        # Runtime overrides go into "runtime" section
         runtime_overrides: dict = {}
         if allowed_file_extensions is not None:
             runtime_overrides["allowed_extensions"] = allowed_file_extensions
@@ -560,13 +517,11 @@ class LeonAgent:
         if enable_web_tools is not None:
             cli_overrides.setdefault("tools", {}).setdefault("web", {})["enabled"] = enable_web_tools
 
-        # Load runtime config
         loader = AgentLoader(workspace_root=workspace_root)
         config = loader.load(cli_overrides=cli_overrides or None)
         if memory_config_override is not None:
             config = self._with_memory_config_override(config, memory_config_override)
 
-        # Load models config
         models_cli: dict = {}
         if model_name is not None:
             models_cli["active"] = {"model": model_name}
@@ -701,11 +656,9 @@ class LeonAgent:
         Returns:
             Normalized base URL
         """
-        # Remove whitespace and trailing slash
         base_url = base_url.strip()
         base_url = base_url.rstrip("/")
 
-        # Remove /v1 suffix if present (we'll add it back if needed)
         base_url = base_url.removesuffix("/v1")
 
         # Add /v1 for OpenAI-compatible providers
@@ -716,7 +669,6 @@ class LeonAgent:
         if provider == "anthropic":
             return base_url
 
-        # Default: add /v1
         return f"{base_url}/v1"
 
     def _create_model(self):
@@ -775,7 +727,6 @@ class LeonAgent:
         """Build model parameters for model initialization and sub-agents."""
         kwargs = {}
 
-        # Include virtual model overrides (filter out Leon-internal keys)
         if hasattr(self, "_model_overrides"):
             kwargs.update({k: v for k, v in self._model_overrides.items() if k not in ("context_limit", "based_on")})
 
@@ -807,13 +758,11 @@ class LeonAgent:
             model: New model name (supports leon:* virtual names)
             **tool_overrides: Tool configuration overrides (runtime config only)
         """
-        # Reload runtime config if tool overrides provided
         if tool_overrides:
             cli_overrides = {"tools": tool_overrides}
             loader = AgentLoader(workspace_root=self.workspace_root)
             self.config = loader.load(cli_overrides=cli_overrides)
 
-        # Reload models config (picks up new API keys + model changes from disk)
         models_cli = {"active": {"model": model}} if model else None
         models_loader = ModelsLoader(workspace_root=self.workspace_root)
         self.models_config = models_loader.load(cli_overrides=models_cli)
@@ -833,20 +782,17 @@ class LeonAgent:
             )
             return
 
-        # Resolve virtual model
         active_model = self.models_config.active.model if self.models_config.active else model
         resolved_model, model_overrides = self.models_config.resolve_model(active_model)
         self.model_name = resolved_model
         self._model_overrides = model_overrides
 
-        # Resolve provider credentials
         provider_name = self._resolve_provider_name(resolved_model, model_overrides)
         self.api_key = self.models_config.resolve_api_key(provider_name)
         base_url = self.models_config.resolve_base_url(provider_name)
         if base_url:
             base_url = self._normalize_base_url(base_url, provider_name)
 
-        # Update stored config (no rebuild — configurable_fields handles the rest)
         self._current_model_config = {
             "model": resolved_model,
             "model_provider": provider_name,
@@ -854,11 +800,9 @@ class LeonAgent:
             "base_url": base_url,
         }
 
-        # Update monitor (cost calculator + context_limit)
         if hasattr(self, "_monitor_middleware"):
             self._monitor_middleware.update_model(resolved_model, overrides=model_overrides)
 
-        # Update memory middleware context_limit + model config
         if hasattr(self, "_memory_middleware"):
             from core.runtime.middleware.monitor.cost import get_model_context_limit
 
@@ -1038,7 +982,6 @@ class LeonAgent:
         """
         middleware = []
 
-        # Get backends from sandbox
         fs_backend = self._sandbox.fs()
 
         # 1. Monitor — second from outside; observes all model calls/responses.

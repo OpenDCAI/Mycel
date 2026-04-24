@@ -426,7 +426,6 @@ def get_resource_content(
         if config_only is None:
             return None
         if not config_only:
-            # Return a template if no config exists yet
             config_only = {"command": "", "args": [], "env": {}}
         return json.dumps(config_only, ensure_ascii=False, indent=2)
     return None
