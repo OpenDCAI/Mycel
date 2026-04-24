@@ -22,7 +22,6 @@ class FileChannelBinding:
 
 
 def get_file_channel_source(thread_id: str):
-    """Get the local file-channel source for a thread."""
     from sandbox.volume_source import HostVolume
 
     binding = get_file_channel_binding(thread_id)

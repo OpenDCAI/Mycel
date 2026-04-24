@@ -42,7 +42,6 @@ def get_or_create_agent_id(
     sandbox_type: str,
     user_path: str | None = None,
 ) -> str:
-    """Get existing agent_id for this user+thread combo, or create a new one."""
     instances = _load()
 
     for aid, info in instances.items():

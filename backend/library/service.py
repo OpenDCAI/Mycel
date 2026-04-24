@@ -360,7 +360,6 @@ def list_library_names(
 
 
 def get_library_skill_desc(name: str) -> str:
-    """Get skill description from Library by name."""
     return next((item["desc"] for item in list_library("skill") if item["name"] == name), "")
 
 
@@ -389,7 +388,6 @@ def get_resource_used_by(
     user_repo: Any = None,
     agent_config_repo: Any = None,
 ) -> list[str]:
-    """Return agent user names under the owner that use a given resource."""
     from backend.threads.agent_user_service import list_agent_users
 
     config_key = {"skill": "skills", "mcp": "mcps", "agent": "subAgents"}.get(resource_type, "")
