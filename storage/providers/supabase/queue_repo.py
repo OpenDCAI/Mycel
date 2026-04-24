@@ -54,7 +54,6 @@ class SupabaseQueueRepo:
         ).execute()
 
     def dequeue(self, thread_id: str) -> QueueItem | None:
-        # Find the minimum id for this thread
         head = q.rows(
             q.limit(
                 q.order(
@@ -77,7 +76,6 @@ class SupabaseQueueRepo:
         row_id = row.get("id")
         if row_id is None:
             raise RuntimeError("Supabase queue repo expected non-null id in dequeue row. Check message_queue table schema.")
-        # Delete the row we just selected
         self._t().delete().eq("id", row_id).execute()
         return self._hydrate_item(row)
 

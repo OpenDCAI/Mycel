@@ -11,7 +11,6 @@ from typing import Literal
 
 
 def format_agent_message(sender_name: str, message: str) -> str:
-    """Format inter-agent delivery for steering injection on the next turn."""
     return (
         "<system-reminder>\n"
         "<agent-message>\n"
@@ -28,7 +27,6 @@ def format_progress_notification(
     *,
     step: str = "running",
 ) -> str:
-    """Format background worker progress for coordinator-style prompt injection."""
     return (
         "<system-reminder>\n"
         "<worker-progress>\n"
@@ -48,7 +46,6 @@ def format_background_notification(
     usage: dict | None = None,
     description: str | None = None,
 ) -> str:
-    """Format background task completion as system-reminder XML."""
     parts = [
         "<system-reminder>",
         "<task-notification>",
@@ -77,11 +74,8 @@ def format_command_notification(
     output: str,
     description: str | None = None,
 ) -> str:
-    """Format Bash command completion as system-reminder XML."""
-    # Truncate output to 1000 characters
     truncated_output = output[:1000] if output else ""
 
-    # Escape XML special characters
     escaped_command = escape(command_line)
     escaped_output = escape(truncated_output)
 

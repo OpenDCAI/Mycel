@@ -8,8 +8,6 @@ from pathlib import Path
 
 
 class FileType(Enum):
-    """Supported file types."""
-
     TEXT = "text"
     BINARY = "binary"
     DOCUMENT = "document"
@@ -47,8 +45,6 @@ class ReadLimits:
 
 @dataclass
 class ReadResult:
-    """Result of a file read operation."""
-
     file_path: str
     file_type: FileType
 
@@ -71,7 +67,6 @@ class ReadResult:
     error: str | None = None
 
     def format_output(self) -> str:
-        """Format result as string output for the agent."""
         if self.error:
             return self.error
 
