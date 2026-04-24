@@ -142,8 +142,6 @@ async def get_or_create_agent(
             if messaging_service is None:
                 raise RuntimeError(f"messaging_service is required for agent chat runtime: {thread_id}")
             agent_user = agent_user or user_repo.get_by_id(agent_user_id)
-            # @@@thread-chat-identity-source - agent users are now the stable social
-            # identity root. Runtime threads no longer carry a second dedicated user_id.
             owner_id = agent_user.owner_user_id or ""
             chat_repos = {
                 "chat_identity_id": agent_user_id,

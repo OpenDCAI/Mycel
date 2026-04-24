@@ -115,9 +115,7 @@ async def _run_agent_to_buffer(  # pyright: ignore[reportGeneralTypeIssues]  # @
     _run_execution.log_captured_exception = _log_captured_exception
     _run_emit.append_event = _append_event
     _run_buffer_wiring._append_event = _append_event
-    # @@@run-buffer-borrowed-typing-tracker - execution cleanup still needs
-    # chat-owned typing state, but the borrow happens at the streaming wrapper
-    # so the deeper execution helper no longer reopens app.state on its own.
+    # @@@run-buffer-borrowed-typing-tracker - borrow chat-owned typing state at the wrapper boundary.
     return await _run_execution.run_agent_to_buffer(
         agent=agent,
         thread_id=thread_id,

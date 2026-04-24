@@ -75,8 +75,7 @@ class SupabaseSandboxMonitorRepo:
         return results[0] if results else None
 
     def query_thread_runtime_rows(self, thread_id: str) -> list[dict]:
-        # @@@monitor-session-demotion - Supabase no longer owns runtime-local chat
-        # session history; remote monitor detail must not read runtime-local chat_sessions.
+        # @@@runtime-local-chat - remote monitor detail must not read runtime-local chat_sessions.
         return []
 
     def query_sandboxes(self) -> list[dict]:
@@ -122,8 +121,7 @@ class SupabaseSandboxMonitorRepo:
         return None
 
     def query_sandbox_runtime_rows(self, sandbox_id: str) -> list[dict]:
-        # @@@monitor-session-demotion - sandbox detail still has sandbox/thread
-        # facts, but Supabase session rows are no longer admitted remote truth.
+        # @@@runtime-local-chat - sandbox detail must not admit Supabase session rows.
         return []
 
     def query_sandbox_threads(self, sandbox_id: str) -> list[dict]:

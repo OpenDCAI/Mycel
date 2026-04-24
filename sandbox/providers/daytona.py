@@ -230,7 +230,6 @@ class DaytonaProvider(SandboxProvider):
             logger.warning("[DaytonaProvider] destroy_session error for %s, verifying actual state", session_id)
             actual = self.get_session_status(session_id)
             if actual == "unknown":
-                # Sandbox no longer findable — delete succeeded
                 logger.info("[DaytonaProvider] sandbox %s no longer exists — destroy succeeded", session_id)
                 self._sandboxes.pop(session_id, None)
                 return True

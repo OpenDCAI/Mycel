@@ -101,11 +101,7 @@ def _project_user_visible_resource_rows(repo: Any, rows: list[dict[str, Any]]) -
             projected.extend(visible_rows)
             continue
 
-        # @@@resource-visible-parent-projection - visible resource cards are now
-        # sandbox-first. If the raw monitor row lands on a hidden/subagent
-        # thread, only sandbox truth can authorize a visible-parent projection.
-        # Rows without sandbox truth are no longer eligible for
-        # visible-parent projection on the user-facing resource surface.
+        # @@@resource-visible-parent-projection - hidden/subagent rows need sandbox truth for visible-parent projection.
         thread_rows = repo.query_sandbox_threads(sandbox_id)
         preferred_thread_id = next(
             (str(item.get("thread_id") or "").strip() for item in thread_rows if _is_resource_visible_thread(item.get("thread_id"))),
