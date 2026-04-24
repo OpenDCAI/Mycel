@@ -68,7 +68,7 @@ class ContextCompactor:
         if len(messages) <= 2:
             return [], messages
 
-        # Walk backwards, accumulating tokens for to_keep
+        # Walk from newest to oldest, accumulating tokens for to_keep.
         accumulated = 0
         split_idx = len(messages)
 
@@ -174,7 +174,7 @@ class ContextCompactor:
         Rules:
         1. Never start with ToolMessage (orphaned from its AIMessage)
         2. Never start with AIMessage (LLM expects Human→AI alternation after summary)
-        Move boundary backward until to_keep starts with HumanMessage.
+        Move boundary toward older entries until to_keep starts with HumanMessage.
         """
         while split_idx < len(messages):
             cls = messages[split_idx].__class__.__name__

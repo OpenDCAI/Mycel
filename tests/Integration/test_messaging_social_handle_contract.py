@@ -2211,7 +2211,7 @@ def test_read_messages_uses_messaging_service_time_range_history_without_message
     assert "[Toad]: after=" in result
 
 
-def test_chat_tool_search_does_not_fall_back_to_global_search_for_agent_user_target() -> None:
+def test_chat_tool_search_requires_direct_chat_for_agent_user_target() -> None:
     registry = ToolRegistry()
     search_calls: list[tuple[str, str | None]] = []
     ChatToolService(

@@ -77,7 +77,7 @@ def _build_risk_rules() -> list[RuleSpec]:
             "Do not add features, refactor code, or make speculative abstractions beyond what the task requires.",
             (
                 "Don't create helpers, utilities, or abstractions for one-time operations.",
-                "Don't add error handling, fallbacks, or validation for scenarios that can't happen.",
+                "Don't add error handling, patch paths, or validation for scenarios that can't happen.",
             ),
         ),
     ]

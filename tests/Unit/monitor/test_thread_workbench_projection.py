@@ -108,7 +108,7 @@ def test_build_owner_thread_workbench_requires_agent_user_id_for_visible_threads
         raise AssertionError("expected owner-visible thread rows without agent_user_id to fail loudly")
 
 
-def test_build_owner_thread_workbench_preserves_agent_order_across_fallback_selection():
+def test_build_owner_thread_workbench_preserves_agent_order_across_branch_selection():
     rows = [
         {"id": "agent-1-main", "agent_user_id": "agent-1", "is_main": True, "branch_index": 0, "sandbox_type": "local"},
         {"id": "agent-2-main", "agent_user_id": "agent-2", "is_main": True, "branch_index": 0, "sandbox_type": "local"},

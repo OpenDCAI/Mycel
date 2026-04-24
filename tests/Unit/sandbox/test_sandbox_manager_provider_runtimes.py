@@ -34,7 +34,7 @@ def test_provider_runtime_listing_rejects_non_list_provider_result() -> None:
         manager.list_sessions()
 
 
-def test_provider_runtime_listing_does_not_emit_legacy_runtime_id_field() -> None:
+def test_provider_runtime_listing_omits_removed_runtime_id_field() -> None:
     manager = _manager_for_provider(
         SimpleNamespace(name="daytona", list_provider_runtimes=lambda: [SimpleNamespace(session_id="runtime-1", status="running")])
     )

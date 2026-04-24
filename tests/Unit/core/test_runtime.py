@@ -146,7 +146,7 @@ def test_terminal_from_row_uses_sqlite_terminal_under_supabase_defaults(monkeypa
     assert isinstance(terminal, SQLiteTerminal)
 
 
-def test_terminal_repo_get_active_returns_sandbox_runtime_id_not_legacy_runtime_id(tmp_path):
+def test_terminal_repo_get_active_returns_sandbox_runtime_id(tmp_path):
     repo = SQLiteTerminalRepo(db_path=tmp_path / "sandbox.db")
     try:
         repo.create("term-1", "thread-1", sandbox_runtime_id="runtime-1", initial_cwd="/tmp")

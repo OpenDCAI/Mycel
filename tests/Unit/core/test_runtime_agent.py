@@ -45,7 +45,7 @@ def test_close_skips_sandbox_cleanup_and_stays_idempotent():
     agent._cleanup_mcp_client.assert_called_once()
 
 
-def test_close_uses_shutdown_fallback_for_model_client_cleanup(monkeypatch: pytest.MonkeyPatch):
+def test_close_uses_direct_model_client_cleanup_during_shutdown(monkeypatch: pytest.MonkeyPatch):
     events: list[str] = []
 
     class _SyncClient:
@@ -111,7 +111,7 @@ def test_close_logs_unexpected_runtimeerror_from_model_client_cleanup(
     assert agent._closed is True
 
 
-def test_close_remains_idempotent_after_shutdown_fallback(monkeypatch: pytest.MonkeyPatch):
+def test_close_remains_idempotent_after_direct_shutdown_cleanup(monkeypatch: pytest.MonkeyPatch):
     events: list[str] = []
 
     class _SyncClient:

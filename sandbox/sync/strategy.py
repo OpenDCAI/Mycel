@@ -208,7 +208,7 @@ class IncrementalSyncStrategy(SyncStrategy):
         if not to_upload:
             return
 
-        # @@@native-first - use provider SDK file API when available, fall back to tar+execute
+        # @@@native-first - use provider SDK file API when available, otherwise tar+execute
         if "upload_bytes" in type(provider).__dict__:
             _native_upload(session_id, provider, source_path, remote_path, to_upload)
         else:

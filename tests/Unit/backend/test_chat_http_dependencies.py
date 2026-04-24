@@ -42,7 +42,7 @@ def test_chat_http_dependencies_read_chat_runtime_state_bundle():
     assert chat_http_dependencies.get_chat_event_bus(app) is chat_event_bus
 
 
-def test_chat_http_dependencies_do_not_fall_back_to_legacy_chat_attrs():
+def test_chat_http_dependencies_require_chat_runtime_state_bundle():
     app = _app_state(
         messaging_service=object(),
         relationship_service=object(),
