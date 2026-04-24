@@ -11,24 +11,18 @@ from dataclasses import dataclass, field
 
 @dataclass
 class FileReadResult:
-    """Raw file content from backend."""
-
     content: str
     size: int = 0
 
 
 @dataclass
 class FileWriteResult:
-    """Result of a write operation."""
-
     success: bool
     error: str | None = None
 
 
 @dataclass
 class DirEntry:
-    """Single directory entry."""
-
     name: str
     is_dir: bool
     size: int = 0
@@ -37,8 +31,6 @@ class DirEntry:
 
 @dataclass
 class DirListResult:
-    """Result of listing a directory."""
-
     entries: list[DirEntry] = field(default_factory=list)
     error: str | None = None
 

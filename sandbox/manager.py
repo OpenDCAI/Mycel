@@ -26,7 +26,6 @@ logger = logging.getLogger(__name__)
 
 
 def resolve_provider_cwd(provider) -> str:
-    """Get the default working directory for a provider."""
     for attr in ("default_cwd", "default_context_path", "mount_path"):
         val = getattr(provider, attr, None)
         if isinstance(val, str) and val:
@@ -588,7 +587,6 @@ class SandboxManager:
         )
 
     def _terminal_is_busy(self, terminal_id: str) -> bool:
-        """Return True if this terminal has a running command."""
         if not terminal_id:
             return False
         if not self.db_path.exists():
@@ -596,7 +594,6 @@ class SandboxManager:
         return self.session_manager._repo.terminal_has_running_command(terminal_id)
 
     def _sandbox_runtime_is_busy(self, sandbox_runtime_id: str) -> bool:
-        """Return True if any terminal under this sandbox runtime has a running command."""
         if not sandbox_runtime_id:
             return False
         if not self.db_path.exists():

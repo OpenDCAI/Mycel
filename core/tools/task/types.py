@@ -7,16 +7,12 @@ from pydantic import BaseModel, Field
 
 
 class TaskStatus(StrEnum):
-    """Task status enum."""
-
     PENDING = "pending"
     IN_PROGRESS = "in_progress"
     COMPLETED = "completed"
 
 
 class Task(BaseModel):
-    """Task model for tracking work items."""
-
     id: str
     subject: str
     description: str
@@ -28,7 +24,6 @@ class Task(BaseModel):
     metadata: dict[str, Any] = Field(default_factory=dict)
 
     def is_blocked(self, all_tasks: dict[str, "Task"]) -> bool:
-        """Check if this task is blocked by any incomplete tasks."""
         for task_id in self.blocked_by:
             if task_id in all_tasks:
                 blocker = all_tasks[task_id]
@@ -37,7 +32,6 @@ class Task(BaseModel):
         return False
 
     def to_summary(self) -> dict:
-        """Return summary for TaskList."""
         return {
             "id": self.id,
             "subject": self.subject,
@@ -47,7 +41,6 @@ class Task(BaseModel):
         }
 
     def to_detail(self) -> dict:
-        """Return full details for TaskGet."""
         return {
             "id": self.id,
             "subject": self.subject,

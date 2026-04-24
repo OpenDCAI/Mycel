@@ -56,7 +56,6 @@ class TerminalState:
     state_version: int = 0
 
     def to_json(self) -> str:
-        """Serialize to JSON for DB storage."""
         return json.dumps(
             {
                 "cwd": self.cwd,
@@ -67,7 +66,6 @@ class TerminalState:
 
     @classmethod
     def from_json(cls, data: str) -> TerminalState:
-        """Deserialize from JSON."""
         obj = json.loads(data)
         return cls(
             cwd=obj["cwd"],
@@ -107,7 +105,6 @@ class AbstractTerminal(ABC):
         self._state = state
 
     def get_state(self) -> TerminalState:
-        """Get current terminal state snapshot."""
         return self._state
 
     def update_state(self, state: TerminalState) -> None:

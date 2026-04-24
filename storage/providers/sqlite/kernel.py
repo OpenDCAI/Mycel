@@ -14,15 +14,12 @@ SYNCHRONOUS = "NORMAL"
 
 
 class SQLiteDBRole(StrEnum):
-    """Logical database roles used by SQLite callers."""
-
     MAIN = "main"
     SANDBOX = "sandbox"
     QUEUE = "queue"
 
 
 def _env_path(env_var: str, default_path: Path) -> Path:
-    """Return Path from environment variable if set, otherwise the default path."""
     raw = os.getenv(env_var)
     return Path(raw) if raw else default_path
 
@@ -58,7 +55,6 @@ def connect_sqlite(
     check_same_thread: bool = True,
     timeout_ms: int = BUSY_TIMEOUT_MS,
 ) -> sqlite3.Connection:
-    """Create a SQLite connection with unified settings."""
     path = Path(db_path)
     path.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(
@@ -78,7 +74,6 @@ async def connect_sqlite_async(
     row_factory: Any | None = None,
     timeout_ms: int = BUSY_TIMEOUT_MS,
 ):
-    """Create async SQLite connection with unified settings."""
     import aiosqlite
 
     path = Path(db_path)

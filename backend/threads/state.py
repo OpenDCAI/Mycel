@@ -22,7 +22,6 @@ def _runtime_row_from_binding(runtime_repo: Any, binding: Any) -> dict[str, Any]
 
 
 def get_sandbox_info(app: Any, thread_id: str, sandbox_type: str) -> dict[str, Any]:
-    """Get sandbox info for a thread from the target runtime binding."""
     sandbox_info: dict[str, Any] = {"type": sandbox_type, "status": None}
 
     try:
@@ -70,7 +69,6 @@ async def get_sandbox_status_from_repos(
     sandbox_runtime_repo: Any,
     thread_id: str,
 ) -> dict[str, Any] | None:
-    """Get thread sandbox status from storage repos without bootstrapping an agent."""
     binding = await asyncio.to_thread(
         resolve_thread_runtime_binding,
         thread_repo=thread_repo,

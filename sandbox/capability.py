@@ -42,20 +42,16 @@ class SandboxCapability:
 
     @property
     def command(self) -> BaseExecutor:
-        """Get command executor."""
         return self._command_wrapper
 
     @property
     def fs(self) -> FileSystemBackend:
-        """Get filesystem backend."""
         return self._fs_wrapper
 
     def touch(self) -> None:
-        """Update session activity timestamp."""
         self._session.touch()
 
     def resolve_session_info(self, provider_name: str):
-        """Resolve current session info without exposing internal session object."""
         from sandbox.provider import SessionInfo
 
         instance = self._session.sandbox_runtime.get_instance()
