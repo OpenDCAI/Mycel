@@ -192,12 +192,10 @@ class DisplayBuilder:
         self._threads: dict[str, ThreadDisplay] = {}
 
     def get_entries(self, thread_id: str) -> list[dict] | None:
-        """Return in-memory entries, or None if not cached (cold start)."""
         td = self._threads.get(thread_id)
         return td.entries if td else None
 
     def get_display_seq(self, thread_id: str) -> int:
-        """Return current display_seq for dedup on SSE reconnect."""
         td = self._threads.get(thread_id)
         return td.display_seq if td else 0
 
@@ -417,7 +415,6 @@ class DisplayBuilder:
 
 
 def _get_current_turn(td: ThreadDisplay) -> dict | None:
-    """Get the current open assistant turn, or None."""
     if not td.current_turn_id:
         return None
     for entry in reversed(td.entries):
