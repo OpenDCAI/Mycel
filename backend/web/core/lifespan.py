@@ -79,6 +79,7 @@ async def lifespan(app: FastAPI):
         typing_tracker=chat_runtime.typing_tracker,
         messaging_service=chat_runtime.messaging_service,
         relationship_service=chat_runtime.relationship_service,
+        chat_join_request_service=chat_runtime.chat_join_request_service,
     )
     wire_chat_delivery(
         app,
