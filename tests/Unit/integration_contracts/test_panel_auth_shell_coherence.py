@@ -982,6 +982,54 @@ def test_select_agent_skill_uses_agent_config_skill_patch_boundary() -> None:
     assert "description" not in saved_configs[-1].skills[0].model_dump()
 
 
+def test_select_agent_skill_rejects_package_for_another_skill() -> None:
+    skill_repo = _MemorySkillRepo()
+    library_skill = _put_skill(
+        skill_repo,
+        owner_user_id="user-1",
+        skill_id="loadable-skill",
+        name="Loadable Skill",
+        description="loadable",
+        content="---\nname: Loadable Skill\n---\nUse it.",
+    )
+    wrong_package = SkillPackage(
+        id="wrong-package",
+        owner_user_id="user-1",
+        skill_id="other-skill",
+        version="1.0.0",
+        hash="sha256:wrong",
+        skill_md="---\nname: Other Skill\n---\nUse it.",
+        created_at=datetime(2026, 4, 24, tzinfo=UTC),
+    )
+    skill_repo.create_package(wrong_package)
+    skill_repo.select_package("user-1", library_skill.id, wrong_package.id)
+
+    class _AgentConfigRepo:
+        def get_agent_config(self, _agent_config_id: str):
+            return _agent_config(skills=[])
+
+        def save_agent_config(self, _config: AgentConfig) -> None:
+            raise AssertionError("invalid package reference must fail before saving AgentConfig")
+
+    with pytest.raises(RuntimeError, match="Library skill selected package does not belong to Skill: wrong-package"):
+        agent_user_service.select_agent_skill(
+            "agent-1",
+            "loadable-skill",
+            user_repo=SimpleNamespace(
+                get_by_id=lambda _agent_id: UserRow(
+                    id="agent-1",
+                    type=UserType.AGENT,
+                    display_name="Toad",
+                    owner_user_id="user-1",
+                    agent_config_id="cfg-1",
+                    created_at=1,
+                )
+            ),
+            agent_config_repo=_AgentConfigRepo(),
+            skill_repo=skill_repo,
+        )
+
+
 def test_panel_library_skill_routes_use_skill_repo_without_recipe_repo() -> None:
     app = FastAPI()
     app.include_router(panel_router.router)
@@ -1006,6 +1054,37 @@ def test_panel_library_skill_routes_use_skill_repo_without_recipe_repo() -> None
         content = client.get(f"/api/panel/library/skill/{created_id}/content")
         assert content.status_code == 200
         assert content.json()["content"] == _editable_skill_md()
+
+
+def test_library_skill_content_rejects_selected_package_for_another_skill() -> None:
+    skill_repo = _MemorySkillRepo()
+    skill = _put_skill(
+        skill_repo,
+        owner_user_id="owner-1",
+        skill_id="loadable-skill",
+        name="Loadable Skill",
+        description="loadable",
+        content="---\nname: Loadable Skill\n---\nUse it.",
+    )
+    wrong_package = SkillPackage(
+        id="wrong-package",
+        owner_user_id="owner-1",
+        skill_id="other-skill",
+        version="1.0.0",
+        hash="sha256:wrong",
+        skill_md="---\nname: Other Skill\n---\nUse it.",
+        created_at=datetime(2026, 4, 24, tzinfo=UTC),
+    )
+    skill_repo.create_package(wrong_package)
+    skill_repo.select_package("owner-1", skill.id, wrong_package.id)
+
+    with pytest.raises(RuntimeError, match="Library skill selected package does not belong to Skill: wrong-package"):
+        library_service.get_resource_content(
+            "skill",
+            "loadable-skill",
+            owner_user_id="owner-1",
+            skill_repo=skill_repo,
+        )
 
 
 def test_library_skill_content_update_rejects_frontmatter_name_drift() -> None:

@@ -366,6 +366,15 @@ def test_get_agent_config_does_not_read_skill_package_version() -> None:
     assert "version" not in config.skills[0].model_dump()
 
 
+def test_get_agent_config_rejects_skill_binding_package_for_another_skill() -> None:
+    tables = _tables()
+    tables["library.skill_packages"][0]["skill_id"] = "other-skill"
+    repo = SupabaseAgentConfigRepo(_FakeClient(tables))
+
+    with pytest.raises(RuntimeError, match="AgentConfig Skill binding package does not belong to Skill: package-1"):
+        repo.get_agent_config("cfg-1")
+
+
 def test_get_agent_config_does_not_read_skill_description() -> None:
     tables = _tables()
     tables["library.skills"][0]["description"] = None
