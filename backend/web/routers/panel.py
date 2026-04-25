@@ -326,13 +326,28 @@ async def delete_resource(
     request: Request,
     user_id: CurrentUserId,
 ) -> dict[str, Any]:
+    recipe_repo = _recipe_repo_for(resource_type, request)
+    skill_repo = _skill_repo_for(resource_type, request)
+    if resource_type == "skill":
+        skill = await asyncio.to_thread(skill_repo.get_by_id, user_id, resource_id)
+        if skill is not None:
+            used_by = await asyncio.to_thread(
+                library_service.get_resource_used_by,
+                "skill",
+                skill.name,
+                user_id,
+                user_repo=request.app.state.user_repo,
+                agent_config_repo=_agent_config_repo(request),
+            )
+            if used_by:
+                raise HTTPException(409, f"Skill is still assigned to Agent: {', '.join(used_by)}")
     ok = await asyncio.to_thread(
         library_service.delete_resource,
         resource_type,
         resource_id,
         user_id,
-        _recipe_repo_for(resource_type, request),
-        _skill_repo_for(resource_type, request),
+        recipe_repo,
+        skill_repo,
     )
     if not ok:
         raise HTTPException(404, "Resource not found")
