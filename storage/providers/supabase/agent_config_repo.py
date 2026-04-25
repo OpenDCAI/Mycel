@@ -127,9 +127,6 @@ class SupabaseAgentConfigRepo:
             package_id = row["package_id"]
             skill = self._get_library_skill(owner_user_id, skill_id)
             package = self._get_skill_package(owner_user_id, package_id)
-            source_json = package.get("source_json")
-            if source_json is None or source_json == {}:
-                source_json = skill.get("source_json")
             skills.append(
                 AgentSkill(
                     id=row.get("id"),
@@ -139,7 +136,7 @@ class SupabaseAgentConfigRepo:
                     description=skill.get("description") or "",
                     version=package.get("version") or "0.1.0",
                     enabled=_enabled_from_row(row, label="skill_bindings"),
-                    source=_json_object(source_json, label="skill source_json"),
+                    source=_required_json_object(package.get("source_json"), label="skill package source_json"),
                 )
             )
         return skills

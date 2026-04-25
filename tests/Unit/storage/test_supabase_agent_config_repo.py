@@ -305,8 +305,20 @@ def test_get_agent_config_fails_loudly_when_skill_source_json_is_not_an_object()
     tables["library.skill_packages"][0]["source_json"] = ["bad"]
     repo = SupabaseAgentConfigRepo(_FakeClient(tables))
 
-    with pytest.raises(RuntimeError, match="skill source_json must be a JSON object"):
+    with pytest.raises(RuntimeError, match="skill package source_json must be a JSON object"):
         repo.get_agent_config("cfg-1")
+
+
+def test_get_agent_config_reads_agent_skill_source_from_selected_package_only() -> None:
+    tables = _tables()
+    tables["library.skills"][0]["source_json"] = {"source_version": "library"}
+    tables["library.skill_packages"][0]["source_json"] = {}
+    repo = SupabaseAgentConfigRepo(_FakeClient(tables))
+
+    config = repo.get_agent_config("cfg-1")
+
+    assert config is not None
+    assert config.skills[0].source == {}
 
 
 def test_get_agent_config_fails_loudly_when_sub_agent_tools_json_is_not_an_array() -> None:
