@@ -1,8 +1,16 @@
 from __future__ import annotations
 
+from types import SimpleNamespace
+
 import pytest
 
 from sandbox import control_plane_repos
+from sandbox.manager import SandboxManager
+
+
+class _Provider:
+    def get_capability(self):
+        return SimpleNamespace(runtime_kind="local")
 
 
 @pytest.mark.parametrize(
@@ -33,4 +41,16 @@ def test_sandbox_runtime_repo_factory_uses_runtime_storage_without_local_path(mo
     monkeypatch.setattr(control_plane_repos, "build_sandbox_runtime_repo", lambda: fake_repo)
 
     assert control_plane_repos.make_sandbox_runtime_repo() is fake_repo
+    assert not (tmp_path / ".leon").exists()
+
+
+def test_sandbox_manager_requires_explicit_control_plane_db_path(monkeypatch, tmp_path):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.delenv("LEON_SANDBOX_DB_PATH", raising=False)
+    monkeypatch.delenv("LEON_STORAGE_STRATEGY", raising=False)
+    monkeypatch.delenv("LEON_SUPABASE_CLIENT_FACTORY", raising=False)
+
+    with pytest.raises(RuntimeError, match="LEON_SANDBOX_DB_PATH"):
+        SandboxManager(provider=_Provider())
+
     assert not (tmp_path / ".leon").exists()

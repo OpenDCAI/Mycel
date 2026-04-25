@@ -9,7 +9,7 @@ from config.user_paths import user_home_path
 from sandbox.capability import SandboxCapability
 from sandbox.chat_session import ChatSessionManager, ChatSessionPolicy
 from sandbox.clock import parse_runtime_datetime, utc_now
-from sandbox.control_plane_repos import make_chat_session_repo, make_sandbox_runtime_repo, make_terminal_repo
+from sandbox.control_plane_repos import make_chat_session_repo, make_sandbox_runtime_repo, make_terminal_repo, resolve_sandbox_db_path
 from sandbox.provider import SandboxProvider
 from sandbox.recipes import bootstrap_recipe
 from sandbox.runtime_handle import sandbox_runtime_from_row
@@ -242,7 +242,7 @@ class SandboxManager:
         self.provider_capability = provider.get_capability()
         self._on_session_ready = on_session_ready
 
-        self.db_path = db_path or resolve_role_db_path(SQLiteDBRole.SANDBOX)
+        self.db_path = resolve_sandbox_db_path(db_path)
         self.terminal_store = make_terminal_repo(db_path=self.db_path)
         self.sandbox_runtime_store = make_sandbox_runtime_repo(db_path=self.db_path)
 
