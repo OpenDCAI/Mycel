@@ -1,5 +1,5 @@
 import inspect
-from typing import cast
+from typing import Any, cast
 
 import pytest
 
@@ -82,10 +82,13 @@ def test_skills_service_requires_resolved_skill_items() -> None:
         SkillsService(
             registry=registry,
             skills=[
-                {
-                    "name": "query-helper",
-                    "content": "---\nname: query-helper\n---\nUse exact terms.",
-                }
+                cast(
+                    Any,
+                    {
+                        "name": "query-helper",
+                        "content": "---\nname: query-helper\n---\nUse exact terms.",
+                    },
+                )
             ],
         )
 
