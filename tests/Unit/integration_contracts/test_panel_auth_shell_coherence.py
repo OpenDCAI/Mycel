@@ -1759,6 +1759,38 @@ def test_apply_snapshot_with_skills_requires_skill_repo():
         )
 
 
+@pytest.mark.parametrize(
+    ("field", "value", "message"),
+    [
+        ("marketplace_item_id", " ", "marketplace_item_id must be a string"),
+        ("source_version", " ", "source_version must be a string"),
+    ],
+)
+def test_apply_snapshot_requires_source_identity(field: str, value: str, message: str):
+    from backend.hub.snapshot_apply import apply_snapshot
+
+    kwargs = {
+        "snapshot": {
+            "schema_version": "agent-snapshot/v1",
+            "agent": {
+                "id": "cfg-source",
+                "name": "Repo Agent",
+                "skills": [{"name": "Search", "content": "---\nname: Search\n---\nbody"}],
+            },
+        },
+        "marketplace_item_id": "item-1",
+        "source_version": "1.0.0",
+        "owner_user_id": "user-1",
+        "user_repo": SimpleNamespace(create=lambda _row: None),
+        "agent_config_repo": SimpleNamespace(save_agent_config=lambda _config: None),
+        "skill_repo": _MemorySkillRepo(),
+    }
+    kwargs[field] = value
+
+    with pytest.raises(ValueError, match=message):
+        apply_snapshot(**kwargs)
+
+
 def test_apply_snapshot_rejects_duplicate_skill_names_before_library_write():
     from backend.hub.snapshot_apply import apply_snapshot
 
