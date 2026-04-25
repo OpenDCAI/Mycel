@@ -174,6 +174,9 @@ class SupabaseAgentConfigRepo:
                 raise RuntimeError(f"Agent config {agent_config_id} mcp_json items must be JSON objects")
             if "disabled" in row:
                 raise RuntimeError(f"Agent config {agent_config_id} mcp_json items must use enabled")
+            enabled = row.get("enabled", True)
+            if not isinstance(enabled, bool):
+                raise RuntimeError(f"Agent config {agent_config_id} mcp_json item enabled must be a boolean")
             servers.append(
                 McpServerConfig(
                     id=row.get("id"),
@@ -185,7 +188,7 @@ class SupabaseAgentConfigRepo:
                     url=row.get("url"),
                     instructions=row.get("instructions"),
                     allowed_tools=row.get("allowed_tools"),
-                    enabled=bool(row.get("enabled", True)),
+                    enabled=enabled,
                 )
             )
         return servers
