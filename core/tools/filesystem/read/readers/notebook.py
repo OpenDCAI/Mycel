@@ -85,10 +85,7 @@ def _format_cell(cell: dict, cell_num: int, total_cells: int) -> str:
     cell_type = cell.get("cell_type", "unknown")
     source = cell.get("source", [])
 
-    if isinstance(source, list):
-        source_text = "".join(source)
-    else:
-        source_text = str(source)
+    source_text = "".join(source) if isinstance(source, list) else str(source)
 
     parts = [
         f"\n{'─' * 60}",
