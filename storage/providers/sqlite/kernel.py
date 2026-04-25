@@ -17,25 +17,10 @@ class SQLiteDBRole(StrEnum):
     QUEUE = "queue"
 
 
-def _env_path(env_var: str, default_path: Path) -> Path:
-    raw = os.getenv(env_var)
-    return Path(raw) if raw else default_path
-
-
 def resolve_role_db_path(role: SQLiteDBRole, db_path: Path | str | None = None) -> Path:
     if db_path is not None:
         return Path(db_path)
-
-    home_root = Path.home() / ".leon"
-    main_path = _env_path("LEON_DB_PATH", home_root / "leon.db")
-
-    if role == SQLiteDBRole.MAIN:
-        return main_path
-    if role == SQLiteDBRole.SANDBOX:
-        return _env_path("LEON_SANDBOX_DB_PATH", home_root / "sandbox.db")
-    if role == SQLiteDBRole.QUEUE:
-        return _env_path("LEON_QUEUE_DB_PATH", main_path.with_name("queue.db"))
-    return main_path
+    return resolve_explicit_role_db_path(role)
 
 
 def resolve_explicit_role_db_path(role: SQLiteDBRole) -> Path:
