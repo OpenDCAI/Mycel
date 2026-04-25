@@ -445,16 +445,14 @@ class _LSPSessionPool:
         for (lang, ws), session in list(self._sessions.items()):
             try:
                 await session.stop()
-                logger.debug("[LSPPool] stopped %s server (workspace=%s)", lang, ws)
-            except Exception as e:
-                logger.debug("[LSPPool] error stopping %s: %s", lang, e)
+            except Exception:
+                pass
         self._sessions.clear()
         for ws, session in list(self._pyright.items()):
             try:
                 await session.stop()
-                logger.debug("[LSPPool] stopped pyright (workspace=%s)", ws)
-            except Exception as e:
-                logger.debug("[LSPPool] error stopping pyright: %s", e)
+            except Exception:
+                pass
         self._pyright.clear()
 
 
