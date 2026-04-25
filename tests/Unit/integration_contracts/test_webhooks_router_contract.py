@@ -16,7 +16,7 @@ async def test_ingest_provider_webhook_keeps_unmatched_payload_shape(monkeypatch
             return None
 
         def close(self) -> None:
-            return None
+            pass
 
     class _EventRepo:
         def __init__(self) -> None:

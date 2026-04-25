@@ -2149,7 +2149,6 @@ async def test_handle_model_error_recovery_uses_ordered_strategy_chain(monkeypat
 
     async def first(_ctx):
         calls.append("first")
-        return None
 
     async def second(_ctx):
         calls.append("second")

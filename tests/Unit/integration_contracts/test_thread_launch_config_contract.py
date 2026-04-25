@@ -717,7 +717,6 @@ async def test_resolve_main_thread_uses_owned_agent_lookup(monkeypatch: pytest.M
 
     def _fake_find_owned_agent(app_obj, agent_user_id: str, owner_user_id: str):
         calls.append((app_obj, agent_user_id, owner_user_id))
-        return None
 
     monkeypatch.setattr(threads_router, "_find_owned_agent", _fake_find_owned_agent)
 

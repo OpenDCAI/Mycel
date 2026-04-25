@@ -739,11 +739,9 @@ class TestToolRunnerErrorNormalization:
 
         async def post_hook_one(message, request):
             await wait_for_peer("one")
-            return None
 
         async def post_hook_two(message, request):
             await wait_for_peer("two")
-            return None
 
         req.state.post_tool_use = [post_hook_one, post_hook_two]
 
@@ -1419,11 +1417,9 @@ class TestToolRunnerErrorNormalization:
 
         async def hook_one(payload, request):
             await wait_for_peer("one")
-            return None
 
         async def hook_two(payload, request):
             await wait_for_peer("two")
-            return None
 
         req.state.pre_tool_use = [hook_one, hook_two]
 
