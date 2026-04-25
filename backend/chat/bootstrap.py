@@ -54,6 +54,8 @@ def attach_chat_runtime(
         messages_repo=messages_repo,
         user_repo=user_repo,
         thread_repo=thread_repo,
+        contact_repo=contact_repo,
+        relationship_service=relationship_service,
         event_bus=chat_event_bus,
         delivery_resolver=delivery_resolver,
         avatar_url_builder=avatar_url,

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 
 from storage.contracts import ChatRow, ContactEdgeRow
@@ -82,6 +84,14 @@ def test_supabase_contact_and_relationship_repos_use_chat_schema() -> None:
     assert tables["chat.relationships"][0]["initiator_user_id"] == "user-1"
     assert "contacts" not in tables
     assert "relationships" not in tables
+
+
+def test_relationship_schema_constraint_does_not_depend_on_database_collation() -> None:
+    sql = Path("storage/schema/2026_04_25_relationship_pair_constraint.sql").read_text()
+
+    assert "drop constraint if exists relationships_check" in sql.lower()
+    assert "user_low <> user_high" in sql.lower()
+    assert "user_low < user_high" not in sql.lower()
 
 
 class _FakeResponse:

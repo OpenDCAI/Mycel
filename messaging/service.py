@@ -21,6 +21,8 @@ from messaging.contracts import ContentType, MessageType
 from messaging.delivery.dispatcher import ChatDeliveryDispatcher, ChatDeliveryFn
 from messaging.display_user import resolve_messaging_display_user
 from messaging.errors import ChatNotCaughtUpError
+from messaging.social_access import can_group_chat_with_participant
+from messaging.user_ownership import is_owned_by_viewer
 from storage.errors import StorageConflictError
 
 logger = logging.getLogger(__name__)
@@ -42,6 +44,8 @@ class MessagingService:
         messages_repo: Any,
         user_repo: Any,
         thread_repo: Any | None = None,
+        contact_repo: Any | None = None,
+        relationship_service: Any | None = None,
         delivery_resolver: Any | None = None,
         delivery_fn: ChatDeliveryFn | None = None,
         delivery_dispatcher: ChatDeliveryDispatcher | None = None,
@@ -53,6 +57,9 @@ class MessagingService:
         self._chat_members_repo = chat_member_repo
         self._messages = messages_repo
         self._user_repo = user_repo
+        self._thread_repo = thread_repo
+        self._contact_repo = contact_repo
+        self._relationship_service = relationship_service
         self._avatar_url_builder = avatar_url_builder
         self._delivery_dispatcher = delivery_dispatcher or ChatDeliveryDispatcher(
             chat_member_repo=chat_member_repo,
@@ -147,6 +154,7 @@ class MessagingService:
         if len(user_ids) < 3:
             raise ValueError("Group chat requires 3+ users")
         self._require_resolvable_chat_users(user_ids)
+        self._require_group_chat_access(user_ids)
         return self._create_chat(user_ids, chat_type="group", title=title)
 
     def _require_resolvable_chat_users(self, user_ids: list[str]) -> None:
@@ -156,6 +164,28 @@ class MessagingService:
             social_user_id = str(uid or "")
             if not social_user_id or self._resolve_display_user(social_user_id) is None:
                 raise ValueError(f"Chat participant {social_user_id or '<missing>'} is not a resolvable user row")
+
+    def _require_group_chat_access(self, user_ids: list[str]) -> None:
+        requester_user_id = user_ids[0]
+        if self._contact_repo is None:
+            raise RuntimeError("contact_repo is required for social access checks")
+        if self._relationship_service is None:
+            raise RuntimeError("relationship_service is required for social access checks")
+        for participant_id in dict.fromkeys(user_ids):
+            if participant_id == requester_user_id:
+                continue
+            participant_user = self._resolve_display_user(participant_id)
+            if is_owned_by_viewer(requester_user_id, participant_user):
+                continue
+            if can_group_chat_with_participant(
+                viewer_user_id=requester_user_id,
+                participant_user_id=participant_id,
+                participant_user=participant_user,
+                contact_repo=self._contact_repo,
+                relationship_service=self._relationship_service,
+            ):
+                continue
+            raise ValueError(f"Active relationship required for group chat participant: {participant_id}")
 
     def _create_chat(self, user_ids: list[str], *, chat_type: str, title: str | None) -> dict[str, Any]:
         from storage.contracts import ChatRow

@@ -1,6 +1,6 @@
 """Chat tool service (messaging module version).
 
-Provides 4 tools: list_chats, read_messages, send_message, search_messages.
+Provides 5 tools: list_chats, create_group_chat, read_messages, send_message, search_messages.
 """
 
 from __future__ import annotations
@@ -67,7 +67,7 @@ def _parse_time_endpoint(s: str, now: float) -> float | None:
 
 
 class ChatToolService:
-    """Registers 4 chat tools into ToolRegistry (messaging module version)."""
+    """Registers chat tools into ToolRegistry (messaging module version)."""
 
     def __init__(
         self,
@@ -97,6 +97,7 @@ class ChatToolService:
 
     def _register(self, registry: ToolRegistry) -> None:
         self._register_list_chats(registry)
+        self._register_create_group_chat(registry)
         self._register_chat_read(registry)
         self._register_chat_send(registry)
         self._register_search_messages(registry)
@@ -214,6 +215,52 @@ class ChatToolService:
                             },
                             "limit": {"type": "integer", "description": "Max number of chats to return", "default": 20},
                         },
+                    },
+                },
+                handler=handle,
+                source="chat",
+            )
+        )
+
+    def _register_create_group_chat(self, registry: ToolRegistry) -> None:
+        eid = self._chat_identity_id
+
+        def handle(participant_ids: list[str], title: str | None = None) -> str:
+            other_ids = [participant_id for participant_id in dict.fromkeys(participant_ids) if participant_id != eid]
+            chat = self._messaging.create_group_chat([eid, *other_ids], title=title)
+            if not isinstance(chat, dict):
+                raise RuntimeError("Created group chat row is invalid")
+            chat_id = chat.get("id")
+            if not isinstance(chat_id, str) or not chat_id:
+                raise RuntimeError("Created group chat has invalid id")
+            chat_title = chat.get("title") or title
+            if chat_title:
+                return f"Group chat created: {chat_title} [chat_id: {chat_id}]"
+            return f"Group chat created. [chat_id: {chat_id}]"
+
+        registry.register(
+            ToolEntry(
+                name="create_group_chat",
+                mode=ToolMode.INLINE,
+                schema={
+                    "name": "create_group_chat",
+                    "description": (
+                        "Create a group chat owned by your current social identity. "
+                        "Your own id is added automatically and ignored if participant_ids includes it."
+                    ),
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "participant_ids": {
+                                "type": "array",
+                                "items": {"type": "string", "minLength": 1},
+                                "minItems": 2,
+                                "uniqueItems": True,
+                                "description": "Other user ids to include in the group chat.",
+                            },
+                            "title": {"type": "string", "minLength": 1, "description": "Optional group chat title."},
+                        },
+                        "required": ["participant_ids"],
                     },
                 },
                 handler=handle,

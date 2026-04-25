@@ -1990,7 +1990,7 @@ def test_builtin_agent_surface_exposes_chat_tools():
     agent = agent_user_service._leon_builtin()
     tools = {item["name"]: item for item in agent["config"]["tools"]}
 
-    for tool_name in ("list_chats", "read_messages", "send_message", "search_messages"):
+    for tool_name in ("list_chats", "create_group_chat", "read_messages", "send_message", "search_messages"):
         assert tool_name in tools
         assert tools[tool_name]["enabled"] is True
         assert tools[tool_name]["group"] == "chat"
