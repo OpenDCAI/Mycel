@@ -226,6 +226,15 @@ def test_get_agent_config_fails_loudly_when_mcp_json_is_not_an_array() -> None:
         repo.get_agent_config("cfg-1")
 
 
+def test_get_agent_config_fails_loudly_when_mcp_json_uses_reverse_state() -> None:
+    tables = _tables()
+    tables["agent.agent_configs"][0]["mcp_json"] = [{"name": "filesystem", "transport": "stdio", "command": "fs", "disabled": False}]
+    repo = SupabaseAgentConfigRepo(_FakeClient(tables))
+
+    with pytest.raises(RuntimeError, match="mcp_json items must use enabled"):
+        repo.get_agent_config("cfg-1")
+
+
 def test_save_agent_config_calls_single_rpc_with_full_payload() -> None:
     client = _FakeClient()
     repo = SupabaseAgentConfigRepo(client)
@@ -307,7 +316,7 @@ def test_save_agent_config_rejects_duplicate_mcp_server_names_before_rpc() -> No
     assert client.rpc_calls == []
 
 
-def test_save_agent_config_rejects_duplicate_disabled_child_names_before_rpc() -> None:
+def test_save_agent_config_rejects_duplicate_inactive_child_names_before_rpc() -> None:
     client = _FakeClient()
     repo = SupabaseAgentConfigRepo(client)
     config = AgentConfig(

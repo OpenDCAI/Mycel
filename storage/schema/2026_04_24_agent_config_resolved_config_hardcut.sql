@@ -157,37 +157,10 @@ begin
     if exists (
         select 1
         from agent.agent_configs
-        where jsonb_typeof(mcp_json) not in ('array', 'object')
+        where jsonb_typeof(mcp_json) <> 'array'
     ) then
-        raise exception 'agent.agent_configs.mcp_json must be a JSON array or object before hard cut';
+        raise exception 'agent.agent_configs.mcp_json must be a JSON array before hard cut';
     end if;
-
-    if exists (
-        select 1
-        from agent.agent_configs c,
-             jsonb_each(c.mcp_json) item
-        where jsonb_typeof(c.mcp_json) = 'object'
-          and jsonb_typeof(item.value) <> 'object'
-    ) then
-        raise exception 'agent.agent_configs.mcp_json object values must be JSON objects before hard cut';
-    end if;
-
-    update agent.agent_configs c
-    set mcp_json = coalesce(
-        (
-            select jsonb_agg(
-                (item.value - 'disabled')
-                || jsonb_build_object(
-                    'name', item.key,
-                    'enabled', not coalesce((item.value->>'disabled')::boolean, false)
-                )
-                order by item.key
-            )
-            from jsonb_each(c.mcp_json) item
-        ),
-        '[]'::jsonb
-    )
-    where jsonb_typeof(c.mcp_json) = 'object';
 end $$;
 
 create or replace function agent.save_agent_config(payload jsonb)
@@ -224,6 +197,20 @@ begin
     end if;
     if jsonb_typeof(coalesce(payload->'mcp_servers', '[]'::jsonb)) <> 'array' then
         raise exception 'agent_config.mcp_servers must be a JSON array';
+    end if;
+    if exists (
+        select 1
+        from jsonb_array_elements(coalesce(payload->'skills', '[]'::jsonb)) as skill_item(value)
+        where skill_item.value ? 'disabled'
+    ) then
+        raise exception 'agent_config.skills child state must use enabled';
+    end if;
+    if exists (
+        select 1
+        from jsonb_array_elements(coalesce(payload->'mcp_servers', '[]'::jsonb)) as mcp_item(value)
+        where mcp_item.value ? 'disabled'
+    ) then
+        raise exception 'agent_config.mcp_servers child state must use enabled';
     end if;
     if exists (
         select 1

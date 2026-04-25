@@ -168,18 +168,24 @@ class SupabaseAgentConfigRepo:
         mcp_rows = rows[0].get("mcp_json") or []
         if not isinstance(mcp_rows, list):
             raise RuntimeError(f"Agent config {agent_config_id} mcp_json must be a JSON array")
-        return [
-            McpServerConfig(
-                id=row.get("id"),
-                name=row["name"],
-                transport=row.get("transport"),
-                command=row.get("command"),
-                args=list(row.get("args") or []),
-                env=dict(row.get("env") or {}),
-                url=row.get("url"),
-                instructions=row.get("instructions"),
-                allowed_tools=row.get("allowed_tools"),
-                enabled=bool(row.get("enabled", True)),
+        servers: list[McpServerConfig] = []
+        for row in mcp_rows:
+            if not isinstance(row, dict):
+                raise RuntimeError(f"Agent config {agent_config_id} mcp_json items must be JSON objects")
+            if "disabled" in row:
+                raise RuntimeError(f"Agent config {agent_config_id} mcp_json items must use enabled")
+            servers.append(
+                McpServerConfig(
+                    id=row.get("id"),
+                    name=row["name"],
+                    transport=row.get("transport"),
+                    command=row.get("command"),
+                    args=list(row.get("args") or []),
+                    env=dict(row.get("env") or {}),
+                    url=row.get("url"),
+                    instructions=row.get("instructions"),
+                    allowed_tools=row.get("allowed_tools"),
+                    enabled=bool(row.get("enabled", True)),
+                )
             )
-            for row in mcp_rows
-        ]
+        return servers

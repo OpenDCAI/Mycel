@@ -20,7 +20,7 @@ from config.skill_package import build_skill_package_hash, build_skill_package_m
 
 HUB_URL = os.environ.get("MYCEL_HUB_URL", "https://hub.mycel.nextmind.space")
 # @@@hub-agent-user-item-type - Hub still names published Agent users "member";
-# local Mycel domain code must keep exposing them as Agent users.
+# Mycel app domain code exposes them as Agent users.
 HUB_AGENT_USER_ITEM_TYPE = "member"
 
 _hub_client = httpx.Client(timeout=30.0, trust_env=False)
@@ -144,7 +144,7 @@ def publish(
     agent_config_repo: Any = None,
     skill_repo: Any = None,
 ) -> dict:
-    """Publish a local AgentSnapshot to the Hub."""
+    """Publish an AgentConfig snapshot to the Hub."""
     if user_repo is None or agent_config_repo is None:
         raise RuntimeError("user_repo and agent_config_repo are required for publish()")
     if skill_repo is None:
@@ -210,10 +210,10 @@ def apply_item(
     skill_repo: Any = None,
     agent_user_id: str | None = None,
 ) -> dict:
-    """Apply a Hub item into the local account.
+    """Apply a Hub item into the owner account.
 
-    The Hub protocol still exposes this as /download; Mycel's local product
-    semantics are save-to-Library or add Agent User.
+    The Hub endpoint is /download; Mycel product semantics are save-to-Library
+    or add Agent User.
     """
     result = _hub_api("POST", f"/items/{item_id}/download")
     snapshot = result["snapshot"]
@@ -346,7 +346,7 @@ def upgrade(
     agent_config_repo: Any = None,
     skill_repo: Any = None,
 ) -> dict:
-    """Upgrade a local marketplace-sourced agent user."""
+    """Upgrade a marketplace-sourced Agent user."""
     if user_repo is None or agent_config_repo is None:
         raise RuntimeError("user_repo and agent_config_repo are required to upgrade marketplace user snapshot")
 
