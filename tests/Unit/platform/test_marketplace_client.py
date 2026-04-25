@@ -452,7 +452,7 @@ class TestApplySkill:
             def get_agent_config(self, agent_config_id: str) -> AgentConfig | None:
                 assert agent_config_id == "cfg-1"
                 return _agent_config(
-                    skills=[AgentSkill(skill_id="existing", package_id="existing-package", name="Existing", version="1.0.0")]
+                    skills=[AgentSkill(skill_id="existing", package_id="existing-package", name="Existing")]
                 )
 
             def save_agent_config(self, config: AgentConfig) -> None:
@@ -795,7 +795,6 @@ def test_publish_uses_repo_material_when_member_dir_is_absent(tmp_path, monkeypa
                         skill_id="search",
                         package_id="search-package",
                         name="Search",
-                        version="1.0.0",
                     )
                 ],
             )

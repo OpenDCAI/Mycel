@@ -67,7 +67,6 @@ class AgentSkill(AgentConfigSchemaModel):
     package_id: str
     name: str
     description: str = ""
-    version: str
     enabled: bool = True
 
     @field_validator("skill_id", "package_id", "name")

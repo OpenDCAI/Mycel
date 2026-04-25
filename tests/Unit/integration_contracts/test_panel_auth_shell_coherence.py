@@ -217,7 +217,6 @@ async def test_panel_agent_detail_exposes_library_skill_id_for_round_trip() -> N
                     package_id="loadable-skill-package",
                     name="Loadable Skill",
                     description="loadable",
-                    version="1.0.0",
                     enabled=True,
                 )
             ],
@@ -471,7 +470,6 @@ def test_agent_config_patch_saves_library_skill_package_choice() -> None:
             package_id=library_skill.package_id,
             name="Loadable Skill",
             description="loadable",
-            version="1.0.0",
         )
     ]
 
@@ -498,7 +496,6 @@ def test_agent_config_patch_keeps_package_source_out_of_agent_skill_binding() ->
                         skill_id="loadable-skill",
                         package_id=library_skill.package_id,
                         name="Loadable Skill",
-                        version="1.0.0",
                     )
                 ]
             )
@@ -823,7 +820,6 @@ def test_agent_config_patch_rejects_skill_after_library_delete() -> None:
         package_id="loadable-package",
         name="Loadable Skill",
         description="loadable",
-        version="1.0.0",
     )
 
     class _AgentConfigRepo:
@@ -1823,7 +1819,7 @@ def test_get_agent_user_uses_repo_skill_desc():
                 model="leon:large",
                 system_prompt="",
                 skills=[
-                    AgentSkill(skill_id="search", package_id="search-package", name="Search", description="repo desc", version="1.0.0")
+                    AgentSkill(skill_id="search", package_id="search-package", name="Search", description="repo desc")
                 ],
             )
 
@@ -1855,7 +1851,7 @@ def test_get_agent_user_ignores_runtime_skill_desc_override():
                 system_prompt="",
                 runtime_settings={"skills:Search": {"desc": "runtime desc", "enabled": False}},
                 skills=[
-                    AgentSkill(skill_id="search", package_id="search-package", name="Search", description="repo desc", version="1.0.0")
+                    AgentSkill(skill_id="search", package_id="search-package", name="Search", description="repo desc")
                 ],
             )
 
@@ -2001,7 +1997,7 @@ def test_get_agent_user_preserves_explicit_empty_repo_skill_desc():
                 description="probe",
                 model="leon:large",
                 system_prompt="",
-                skills=[AgentSkill(skill_id="search", package_id="search-package", name="Search", description="", version="1.0.0")],
+                skills=[AgentSkill(skill_id="search", package_id="search-package", name="Search", description="")],
             )
 
     result = agent_user_service.get_agent_user(
@@ -2500,7 +2496,6 @@ def test_library_used_by_reads_agent_configs_without_display_projection(monkeypa
                     skill_id="skill-1",
                     package_id="skill-1-package",
                     name="api-design-reviewer",
-                    version="1.0.0",
                     enabled=True,
                 )
             ],
@@ -2536,7 +2531,6 @@ async def test_delete_skill_route_rejects_skill_still_selected_by_agent(monkeypa
                     skill_id="skill-1",
                     package_id="skill-1-package",
                     name="api-design-reviewer",
-                    version="1.0.0",
                     enabled=True,
                 )
             ],

@@ -16,7 +16,6 @@ def test_snapshot_contains_resolved_agent_config_only():
                     skill_id="github",
                     package_id="github-package",
                     name="github",
-                    version="1.0.0",
                 )
             ],
         ),
@@ -63,7 +62,6 @@ def test_snapshot_preserves_skill_id_when_name_changes():
                     skill_id="github-core",
                     package_id="github-core-package",
                     name="GitHub",
-                    version="1.0.0",
                 )
             ],
         ),

@@ -141,7 +141,6 @@ class SupabaseAgentConfigRepo:
                     package_id=package_id,
                     name=skill["name"],
                     description=_required_text(skill, "description", label="library.skills description"),
-                    version=package["version"],
                     enabled=_enabled_from_row(row, label="skill_bindings"),
                 )
             )
