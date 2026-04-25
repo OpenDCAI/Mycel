@@ -59,7 +59,7 @@ from core.agents.service import _background_run_cancelled, _background_run_resul
 from core.runtime.middleware.monitor import AgentState
 from sandbox.config import MountSpec
 from sandbox.manager import bind_thread_to_existing_sandbox, resolve_existing_sandbox_runtime
-from sandbox.recipes import default_recipe_id, normalize_recipe_snapshot, provider_type_from_name
+from sandbox.recipes import default_recipe_id, default_recipe_snapshot, normalize_recipe_snapshot, provider_type_from_name
 from sandbox.thread_context import set_current_thread_id
 from storage.contracts import WorkspaceRow
 
@@ -713,6 +713,8 @@ def _resolve_owned_recipe_snapshot(
         raise RuntimeError("recipe_repo is required for thread recipe resolution")
 
     row = recipe_repo.get(owner_user_id, resolved_recipe_id)
+    if row is None and resolved_recipe_id == default_recipe_id(sandbox_type):
+        return default_recipe_snapshot(provider_type_from_name(sandbox_type), provider_name=sandbox_type)
     if row is None:
         raise HTTPException(400, "Recipe not found")
 

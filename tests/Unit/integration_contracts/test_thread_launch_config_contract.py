@@ -202,6 +202,27 @@ def test_normalize_launch_config_payload_uses_sandbox_template_id() -> None:
     }
 
 
+@pytest.mark.asyncio
+async def test_create_thread_uses_builtin_default_recipe_when_owner_has_no_recipe_row() -> None:
+    app = _make_threads_app()
+    app.state.runtime_storage_state.recipe_repo.rows.clear()
+    payload = CreateThreadRequest(agent_user_id="agent-user-1", sandbox="local")
+
+    with (
+        patch.object(threads_router, "_validate_mount_capability_gate", AsyncMock(return_value=None)),
+        patch.object(threads_router, "_validate_sandbox_quota_gate", return_value=None),
+        patch.object(threads_router, "_create_thread_sandbox_resources", return_value="workspace-1") as create_resources,
+        patch.object(threads_router, "_invalidate_resource_overview_cache", return_value=None),
+    ):
+        result = _require_thread_result(await threads_router.create_thread(payload, "owner-1", app))
+
+    assert result["thread_id"] == "agent-user-1-1"
+    create_resources.assert_called_once()
+    recipe = create_resources.call_args.args[2]
+    assert recipe["id"] == "local:default"
+    assert recipe["provider_name"] == "local"
+
+
 def test_resolve_default_config_derives_existing_from_workspace_backed_current_workspace_id() -> None:
     thread_repo = _FakeThreadRepo()
     thread_repo.rows["agent-user-1-1"] = {
