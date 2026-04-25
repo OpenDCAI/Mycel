@@ -61,9 +61,5 @@
     "command": {
       "enabled": true
     }
-  },
-  "mcp": {
-    "enabled": true,
-    "servers": {}
   }
 }

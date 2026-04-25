@@ -1,7 +1,7 @@
 """Core runtime configuration schema for Mycel using Pydantic.
 
 This module defines the runtime configuration structure with:
-- Nested config groups (Memory, Tools, Skills, MCP)
+- Nested config groups (Memory, Tools)
 - Runtime behavior parameters (temperature, max_tokens, context_limit, etc.)
 - Field validators for paths, extensions
 
@@ -178,32 +178,6 @@ class ToolsConfig(RuntimeSchemaModel):
 
 
 # ============================================================================
-# MCP Configuration
-# ============================================================================
-
-
-class MCPServerConfig(RuntimeSchemaModel):
-    """Configuration for a single MCP server."""
-
-    transport: str | None = Field(
-        None,
-        description="MCP transport type: stdio | streamable_http | sse | websocket",
-    )
-    command: str | None = Field(None, description="Command to run the MCP server")
-    args: list[str] = Field(default_factory=list, description="Command arguments")
-    env: dict[str, str] = Field(default_factory=dict, description="Environment variables")
-    url: str | None = Field(None, description="URL for streamable HTTP transport")
-    allowed_tools: list[str] | None = Field(None, description="Allowed tool names (None = all)")
-
-
-class MCPConfig(RuntimeSchemaModel):
-    """MCP (Model Context Protocol) configuration."""
-
-    enabled: StrictBool = True
-    servers: dict[str, MCPServerConfig] = Field(default_factory=dict, description="MCP server configurations")
-
-
-# ============================================================================
 # Main Settings
 # ============================================================================
 
@@ -211,7 +185,7 @@ class MCPConfig(RuntimeSchemaModel):
 class LeonSettings(RuntimeSchemaModel):
     """Main Mycel runtime configuration.
 
-    Contains non-model runtime settings: memory, tools, mcp, and behavior params.
+    Contains non-model runtime settings: memory, tools, and behavior params.
     Model identity (model name, provider, API keys) lives in ModelsConfig.
 
     Configuration priority (highest to lowest):
@@ -225,7 +199,6 @@ class LeonSettings(RuntimeSchemaModel):
     # Core configuration groups
     memory: MemoryConfig = Field(default_factory=lambda: MemoryConfig(), description="Memory management")
     tools: ToolsConfig = Field(default_factory=lambda: ToolsConfig(), description="Tools configuration")
-    mcp: MCPConfig = Field(default_factory=lambda: MCPConfig(), description="MCP configuration")
 
     # Agent configuration
     system_prompt: str | None = Field(None, description="Custom system prompt")
