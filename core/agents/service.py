@@ -7,6 +7,7 @@ import os
 import time
 import uuid
 from collections.abc import Awaitable, Callable
+from contextlib import suppress
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
 
@@ -1128,11 +1129,9 @@ class AgentService:
         # @@@sa-06-progress-loop - keep prompt-facing coordinator updates on the
         # real thread delivery queue instead of inventing a detached parallel channel.
         while True:
-            try:
+            with suppress(TimeoutError):
                 await asyncio.wait_for(stop_event.wait(), timeout=self._background_progress_interval_s)
                 return
-            except TimeoutError:
-                pass
 
             if self._queue_manager is None:
                 return
@@ -1278,10 +1277,8 @@ class AgentService:
             was_running = not running.task.done()
             if was_running:
                 running.task.cancel()
-                try:
+                with suppress(asyncio.CancelledError):
                     await running.task
-                except asyncio.CancelledError:
-                    pass
             self._tasks.pop(task_id, None)
             return
 
