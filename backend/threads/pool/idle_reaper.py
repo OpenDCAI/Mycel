@@ -35,9 +35,7 @@ def run_idle_reaper_once(app_obj: Any) -> int:
 async def idle_reaper_loop(app_obj: Any) -> None:
     while True:
         try:
-            count = await asyncio.to_thread(run_idle_reaper_once, app_obj)
-            if count > 0:
-                print(f"[idle-reaper] reclaimed+closed {count} expired chat session(s)")
+            await asyncio.to_thread(run_idle_reaper_once, app_obj)
         except Exception as e:
             print(f"[idle-reaper] error: {e}")
         await asyncio.sleep(IDLE_REAPER_INTERVAL_SEC)

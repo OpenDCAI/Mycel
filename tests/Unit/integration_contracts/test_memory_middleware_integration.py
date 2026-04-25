@@ -92,7 +92,6 @@ class TestSummarySaveOnCompaction:
             context_limit=10000,
             compaction_threshold=0.5,
             db_path=temp_db,
-            verbose=True,
         )
         middleware.set_model(mock_model)
 
@@ -123,7 +122,6 @@ class TestSummaryRestoreOnStartup:
             context_limit=10000,
             compaction_threshold=0.5,
             db_path=temp_db,
-            verbose=True,
         )
         middleware1.set_model(mock_model)
 
@@ -143,7 +141,6 @@ class TestSummaryRestoreOnStartup:
             context_limit=10000,
             compaction_threshold=0.5,
             db_path=temp_db,
-            verbose=True,
         )
         middleware2.set_model(mock_model)
 
@@ -162,7 +159,6 @@ class TestSummaryRestoreOnStartup:
             context_limit=10000,
             compaction_threshold=0.5,
             db_path=temp_db,
-            verbose=True,
         )
         middleware.set_model(mock_model)
 
@@ -221,7 +217,6 @@ class TestRebuildFromCheckpointer:
             compaction_threshold=0.5,
             db_path=temp_db,
             checkpointer=None,
-            verbose=True,
         )
         middleware.set_model(mock_model)
 
@@ -248,7 +243,6 @@ class TestRebuildFromCheckpointer:
             compaction_threshold=0.5,
             db_path=temp_db,
             checkpointer=mock_checkpointer,
-            verbose=True,
         )
         middleware.set_model(mock_model)
 
@@ -281,7 +275,6 @@ class TestMultipleThreadsIsolated:
             context_limit=10000,
             compaction_threshold=0.5,
             db_path=temp_db,
-            verbose=True,
         )
         middleware.set_model(mock_model)
 
@@ -341,7 +334,6 @@ class TestCompactionBreakerScope:
             context_limit=10000,
             compaction_threshold=0.5,
             db_path=temp_db,
-            verbose=True,
         )
         middleware.set_model(model)
 
@@ -390,7 +382,6 @@ class TestSummaryUpdateOnSecondCompaction:
             context_limit=10000,
             compaction_threshold=0.5,
             db_path=temp_db,
-            verbose=True,
         )
         middleware.set_model(mock_model)
 

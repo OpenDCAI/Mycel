@@ -803,7 +803,6 @@ class AgentService:
                         child_thread_live_runner=self._child_thread_live_runner,
                         extra_blocked_tools=extra_blocked,
                         allowed_tools=allowed,
-                        verbose=False,
                     )
                 else:
                     raise AttributeError("no parent bootstrap")
@@ -831,7 +830,6 @@ class AgentService:
                         child_thread_live_runner=self._child_thread_live_runner,
                         extra_blocked_tools=extra_blocked,
                         allowed_tools=allowed,
-                        verbose=False,
                     )
                 # @@@sa-04-child-bootstrap-wiring
                 # Keep the forked bootstrap/context handoff behind an explicit
@@ -863,7 +861,6 @@ class AgentService:
                     child_thread_live_runner=self._child_thread_live_runner,
                     extra_blocked_tools=extra_blocked,
                     allowed_tools=allowed,
-                    verbose=False,
                 )
             # In async context LeonAgent defers checkpointer init; call ainit() to
             # ensure state is persisted (and loadable via GET /api/threads/{thread_id}).

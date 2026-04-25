@@ -319,10 +319,6 @@ class LeonAgent:
             self._steering_middleware._agent_runtime = self.runtime
             self._memory_middleware.set_model(self.model, self._current_model_config)
 
-        if self.verbose:
-            if self.checkpointer is None:
-                print("[LeonAgent] Note: Async components need initialization via ainit()")
-
         # Wire CleanupRegistry for priority-ordered resource teardown
         self._cleanup_registry = CleanupRegistry()
         self._cleanup_registry.register(self._cleanup_model_clients, priority=1)
@@ -992,7 +988,6 @@ class LeonAgent:
             summary_repo=summary_repo,
             checkpointer=self.checkpointer,
             compaction_threshold=0.7,
-            verbose=self.verbose,
         )
         # Cap keep_recent_tokens for small context windows
         self._memory_middleware.set_context_limit(context_limit)
@@ -1072,7 +1067,6 @@ class LeonAgent:
                         DangerousCommandsHook(
                             workspace_root=self.workspace_root,
                             block_network=self.block_network_commands,
-                            verbose=self.verbose,
                         )
                     )
             self._command_service = CommandService(

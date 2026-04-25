@@ -68,7 +68,6 @@ class DangerousCommandsHook(BashHook):
         workspace_root: Path | str | None = None,
         block_network: bool = False,
         custom_blocked: list[str] | None = None,
-        verbose: bool = True,
     ):
         super().__init__(workspace_root)
 

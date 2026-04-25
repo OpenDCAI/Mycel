@@ -939,7 +939,7 @@ class TestToolRunnerErrorNormalization:
         CommandService(
             registry=registry,
             workspace_root=tmp_path,
-            hooks=[DangerousCommandsHook(verbose=False)],
+            hooks=[DangerousCommandsHook()],
         )
         runner = ToolRunner(registry=registry)
         req = _make_tool_call_request("Bash", {"command": 'echo "rm -rf /"'})
@@ -956,7 +956,7 @@ class TestToolRunnerErrorNormalization:
         CommandService(
             registry=registry,
             workspace_root=tmp_path,
-            hooks=[DangerousCommandsHook(verbose=False)],
+            hooks=[DangerousCommandsHook()],
         )
         runner = ToolRunner(registry=registry)
         req = _make_tool_call_request("Bash", {"command": "echo hi # rm -rf /"})
@@ -973,7 +973,7 @@ class TestToolRunnerErrorNormalization:
         CommandService(
             registry=registry,
             workspace_root=tmp_path,
-            hooks=[DangerousCommandsHook(verbose=False)],
+            hooks=[DangerousCommandsHook()],
         )
         runner = ToolRunner(registry=registry)
         req = _make_tool_call_request("Bash", {"command": 's"u"do echo hi'})
@@ -990,7 +990,7 @@ class TestToolRunnerErrorNormalization:
         CommandService(
             registry=registry,
             workspace_root=tmp_path,
-            hooks=[DangerousCommandsHook(verbose=False)],
+            hooks=[DangerousCommandsHook()],
         )
         runner = ToolRunner(registry=registry)
         req = _make_tool_call_request("Bash", {"command": "s$'udo' echo hi"})

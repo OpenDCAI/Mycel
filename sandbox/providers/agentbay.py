@@ -181,12 +181,6 @@ class AgentBayProvider(SandboxProvider):
             # @@@agentbay-shell-link-route - shared provider runs proved shell can degrade into the API path
             # despite hydrated direct-call metadata; take the explicit LinkUrl route when shell server is known.
             result = self._call_link_url_tool(session, "shell", exec_args, shell_server)
-            print(
-                "[AgentBay.execute] "
-                f"session_id={session_id} path=link_url exit_code={result.exit_code} "
-                f"error={result.error!r} output_len={len(result.output or '')}",
-                flush=True,
-            )
             return result
 
         try:

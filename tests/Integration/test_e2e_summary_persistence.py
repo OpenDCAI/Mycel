@@ -40,7 +40,6 @@ class TestFullAgentSummaryPersistence:
         agent = create_leon_agent(
             workspace_root=temp_workspace,
             sandbox="local",
-            verbose=True,
         )
 
         try:
@@ -83,7 +82,6 @@ class TestFullAgentSummaryPersistence:
         agent2 = create_leon_agent(
             workspace_root=temp_workspace,
             sandbox="local",
-            verbose=True,
         )
 
         try:
@@ -113,7 +111,6 @@ class TestAgentSplitTurnE2E:
         agent = create_leon_agent(
             workspace_root=temp_workspace,
             sandbox="local",
-            verbose=True,
         )
 
         try:
@@ -148,7 +145,6 @@ class TestAgentConcurrentThreads:
             agent = create_leon_agent(
                 workspace_root=temp_workspace,
                 sandbox="local",
-                verbose=True,
             )
 
             try:
@@ -193,7 +189,6 @@ class TestAgentConcurrentThreads:
             agent = create_leon_agent(
                 workspace_root=temp_workspace,
                 sandbox="local",
-                verbose=True,
             )
 
             try:
