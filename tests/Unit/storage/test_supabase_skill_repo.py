@@ -261,7 +261,7 @@ def test_get_package_rejects_null_version() -> None:
 
 
 def test_select_package_updates_library_skill_pointer() -> None:
-    client = _FakeClient({"library.skills": [_row()]})
+    client = _FakeClient({"library.skills": [_row()], "library.skill_packages": [_package_row()]})
     repo = SupabaseSkillRepo(client)
 
     repo.select_package("owner-1", "skill-1", "package-1")
@@ -270,6 +270,24 @@ def test_select_package_updates_library_skill_pointer() -> None:
     assert query.update_payload == {"package_id": "package-1"}
     assert ("owner_user_id", "owner-1") in query.eq_calls
     assert ("id", "skill-1") in query.eq_calls
+
+
+def test_select_package_rejects_missing_package() -> None:
+    client = _FakeClient({"library.skills": [_row()], "library.skill_packages": []})
+    repo = SupabaseSkillRepo(client)
+
+    with pytest.raises(RuntimeError, match="Skill package not found: package-1"):
+        repo.select_package("owner-1", "skill-1", "package-1")
+
+
+def test_select_package_rejects_package_for_another_skill() -> None:
+    package = _package_row()
+    package["skill_id"] = "other-skill"
+    client = _FakeClient({"library.skills": [_row()], "library.skill_packages": [package]})
+    repo = SupabaseSkillRepo(client)
+
+    with pytest.raises(RuntimeError, match="Skill package package-1 does not belong to Skill skill-1"):
+        repo.select_package("owner-1", "skill-1", "package-1")
 
 
 def test_delete_filters_owner_and_skill_id() -> None:

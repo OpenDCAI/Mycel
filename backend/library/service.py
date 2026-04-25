@@ -111,7 +111,10 @@ def _package_id(package_hash: str) -> str:
 def _selected_skill_package(owner_user_id: str, skill: Skill, skill_repo: SkillRepo) -> SkillPackage | None:
     if not skill.package_id:
         return None
-    return skill_repo.get_package(owner_user_id, skill.package_id)
+    package = skill_repo.get_package(owner_user_id, skill.package_id)
+    if package is not None and package.skill_id != skill.id:
+        raise RuntimeError(f"Library skill selected package does not belong to Skill: {skill.package_id}")
+    return package
 
 
 def _write_skill_package(
