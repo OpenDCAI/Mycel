@@ -95,6 +95,57 @@ class ChatToolService:
             raise RuntimeError(f"Chat message sender identity not found: {sender_id}")
         return sender.display_name
 
+    def _display_user_type(self, user: Any, *, user_id: str) -> str:
+        raw_type = getattr(user, "type", None)
+        if hasattr(raw_type, "value"):
+            raw_type = raw_type.value
+        if not isinstance(raw_type, str) or not raw_type:
+            raise RuntimeError(f"Chat user {user_id} is missing user type")
+        return raw_type
+
+    def _chat_member_count(self, chat_id: str) -> int:
+        members = self._messaging.list_chat_members(chat_id)
+        if not isinstance(members, list):
+            raise RuntimeError(f"Chat members collection is invalid for chat {chat_id}")
+        for member in members:
+            if not isinstance(member, dict):
+                raise RuntimeError(f"Chat member row is invalid for chat {chat_id}")
+            member_user_id = member.get("user_id") or member.get("id")
+            if not isinstance(member_user_id, str) or not member_user_id:
+                raise RuntimeError(f"Chat member row is missing user_id for chat {chat_id}")
+        return len(members)
+
+    def _blocking_unread_count(self, chat_id: str, sender_id: str, *, direct_chat: bool) -> int:
+        unread_messages = self._messaging.list_unread(chat_id, sender_id)
+        if not isinstance(unread_messages, list):
+            raise RuntimeError(f"Chat unread messages collection is invalid for chat {chat_id}")
+        if not unread_messages:
+            return 0
+
+        is_direct = direct_chat or self._chat_member_count(chat_id) <= 2
+        blocking = 0
+        for message in unread_messages:
+            if not isinstance(message, dict):
+                raise RuntimeError(f"Chat unread message row is invalid for chat {chat_id}")
+            if is_direct:
+                blocking += 1
+                continue
+            mentioned_ids = message.get("mentioned_ids") or message.get("mentions") or message.get("mentions_json") or []
+            if not isinstance(mentioned_ids, list):
+                raise RuntimeError(f"Chat unread message mentions are invalid for chat {chat_id}")
+            if sender_id in mentioned_ids:
+                blocking += 1
+                continue
+            message_sender_id = message.get("sender_id") or message.get("sender_user_id")
+            if not isinstance(message_sender_id, str) or not message_sender_id:
+                raise RuntimeError(f"Chat unread message is missing sender_id for chat {chat_id}")
+            message_sender = self._resolve_display_user(message_sender_id)
+            if message_sender is None:
+                raise RuntimeError(f"Chat message sender identity not found: {message_sender_id}")
+            if self._display_user_type(message_sender, user_id=message_sender_id) == "human":
+                blocking += 1
+        return blocking
+
     def _register(self, registry: ToolRegistry) -> None:
         self._register_list_chats(registry)
         self._register_create_group_chat(registry)
@@ -361,11 +412,13 @@ class ChatToolService:
         ) -> str | ToolResultEnvelope:
             resolved_chat_id = chat_id
             target_name = "chat"
+            direct_chat = False
 
             if chat_id:
                 if not self._messaging.is_chat_member(chat_id, eid):
                     raise RuntimeError(f"You are not a member of chat {chat_id}")
             elif participant_id:
+                direct_chat = True
                 if participant_id == eid:
                     raise RuntimeError("Cannot send a message to yourself.")
                 target = self._resolve_display_user(participant_id)
@@ -383,10 +436,10 @@ class ChatToolService:
             else:
                 raise RuntimeError("Provide participant_id (for 1:1) or chat_id (for group)")
 
-            # @@@read-before-send-gate - group chats and direct chats share the same
-            # delivery invariant: you must consume unread messages before replying,
-            # otherwise siblings can race on stale history and fork the conversation.
-            unread = self._messaging.count_unread(resolved_chat_id, eid)
+            # @@@attention-read-gate - a group reply must not be serialized behind
+            # unrelated peer replies, but it still cannot skip direct, human, or
+            # explicitly mentioned unread messages that require this identity's attention.
+            unread = self._blocking_unread_count(resolved_chat_id, eid, direct_chat=direct_chat)
             if type(unread) is not int:
                 raise RuntimeError(f"Chat unread count is invalid for chat {resolved_chat_id}")
             if unread > 0:
@@ -406,7 +459,6 @@ class ChatToolService:
                     content,
                     mentions=mentions,
                     signal=effective_signal,
-                    enforce_caught_up=True,
                 )
             except RuntimeError as exc:
                 message = str(exc)
