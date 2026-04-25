@@ -156,6 +156,21 @@ def test_summary_store_explicit_db_path_keeps_sqlite_under_supabase(monkeypatch,
         store._repo.close()
 
 
+def test_summary_store_explicit_db_path_works_without_runtime_config(monkeypatch, tmp_path) -> None:
+    monkeypatch.delenv("LEON_STORAGE_STRATEGY", raising=False)
+    monkeypatch.delenv("LEON_SUPABASE_CLIENT_FACTORY", raising=False)
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+
+    store = SummaryStore(Path(tmp_path / "summary.db"))
+
+    try:
+        assert isinstance(store._repo, SQLiteSummaryRepo)
+        assert store.db_path == tmp_path / "summary.db"
+        assert not (tmp_path / "home" / ".leon").exists()
+    finally:
+        store._repo.close()
+
+
 def test_memory_middleware_repo_injection_does_not_pass_default_home_db_path(monkeypatch) -> None:
     captured: dict[str, object] = {}
     fake_repo = _FakeSummaryRepo()
