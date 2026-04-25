@@ -1,5 +1,6 @@
 import asyncio
 import time
+from datetime import datetime
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, cast
@@ -7,7 +8,7 @@ from typing import Any, cast
 import pytest
 
 from backend.threads import activity_pool_service as agent_pool
-from config.agent_config_types import AgentConfig
+from config.agent_config_types import AgentConfig, AgentSkill, ResolvedAgentConfig, SkillPackage
 
 
 class _FakeThreadRepo:
@@ -26,8 +27,8 @@ class _EmptyAgentConfigRepo:
         )
 
 
-def _runtime_storage_state(agent_config_repo: object | None) -> SimpleNamespace:
-    return SimpleNamespace(storage_container=SimpleNamespace(agent_config_repo=lambda: agent_config_repo))
+def _runtime_storage_state(agent_config_repo: object | None, skill_repo: object | None = None) -> SimpleNamespace:
+    return SimpleNamespace(storage_container=SimpleNamespace(agent_config_repo=lambda: agent_config_repo, skill_repo=lambda: skill_repo))
 
 
 @pytest.mark.asyncio
@@ -358,8 +359,7 @@ async def test_get_or_create_agent_creates_once_per_thread(monkeypatch: pytest.M
         workspace_root=None,
         model_name: str | None = None,
         agent: str | None = None,
-        agent_config_id=None,
-        agent_config_repo=None,
+        resolved_agent_config=None,
         thread_repo=None,
         user_repo=None,
         queue_manager=None,
@@ -404,8 +404,7 @@ async def test_get_or_create_agent_ignores_unavailable_local_cwd(monkeypatch: py
         workspace_root=None,
         model_name: str | None = None,
         agent: str | None = None,
-        agent_config_id=None,
-        agent_config_repo=None,
+        resolved_agent_config=None,
         thread_repo=None,
         user_repo=None,
         queue_manager=None,
@@ -453,8 +452,7 @@ async def test_get_or_create_agent_does_not_create_unavailable_live_local_cwd(mo
         workspace_root=None,
         model_name: str | None = None,
         agent: str | None = None,
-        agent_config_id=None,
-        agent_config_repo=None,
+        resolved_agent_config=None,
         thread_repo=None,
         user_repo=None,
         queue_manager=None,
@@ -494,7 +492,7 @@ async def test_get_or_create_agent_does_not_create_unavailable_live_local_cwd(mo
 
 
 @pytest.mark.asyncio
-async def test_get_or_create_agent_prefers_repo_backed_runtime_startup_even_with_conflicting_stale_member_shell(
+async def test_get_or_create_agent_passes_resolved_config_even_with_conflicting_stale_member_shell(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ):
@@ -511,8 +509,7 @@ async def test_get_or_create_agent_prefers_repo_backed_runtime_startup_even_with
         workspace_root=None,
         model_name: str | None = None,
         agent: str | None = None,
-        agent_config_id=None,
-        agent_config_repo=None,
+        resolved_agent_config=None,
         thread_repo=None,
         user_repo=None,
         queue_manager=None,
@@ -521,8 +518,7 @@ async def test_get_or_create_agent_prefers_repo_backed_runtime_startup_even_with
         web_app=None,
         **_kwargs,
     ) -> object:
-        captured["agent_config_id"] = agent_config_id
-        captured["agent_config_repo"] = agent_config_repo
+        captured["resolved_agent_config"] = resolved_agent_config
         return SimpleNamespace()
 
     class _ThreadRepo:
@@ -553,10 +549,81 @@ async def test_get_or_create_agent_prefers_repo_backed_runtime_startup_even_with
 
     await agent_pool.get_or_create_agent(cast(Any, app), "local", thread_id="thread-4")
 
-    # @@@runtime-repo-source-of-truth - runtime startup must stay repo-rooted
-    # for repo-backed agent users even when a stale member shell still exists on disk.
-    assert captured["agent_config_id"] == "cfg-1"
-    assert captured["agent_config_repo"] is app.state.runtime_storage_state.storage_container.agent_config_repo()
+    # @@@runtime-resolved-config-source - runtime startup must pass a resolved
+    # config, not repo handles, even when a stale member shell still exists on disk.
+    resolved = captured["resolved_agent_config"]
+    assert isinstance(resolved, ResolvedAgentConfig)
+    assert resolved.name == "Test Agent"
+
+
+@pytest.mark.asyncio
+async def test_get_or_create_agent_resolves_skill_packages_before_runtime_startup(monkeypatch: pytest.MonkeyPatch):
+    captured: dict[str, object] = {}
+
+    def _fake_create_agent_sync(**kwargs) -> object:
+        captured.update(kwargs)
+        return SimpleNamespace()
+
+    class _ThreadRepo:
+        def get_by_id(self, thread_id: str):
+            return {
+                "id": thread_id,
+                "cwd": None,
+                "model": "leon:large",
+                "agent_user_id": "agent-user-skill",
+            }
+
+    class _AgentConfigRepo:
+        def get_agent_config(self, agent_config_id: str):
+            assert agent_config_id == "cfg-skill"
+            return AgentConfig(
+                id="cfg-skill",
+                owner_user_id="owner-skill",
+                agent_user_id="agent-user-skill",
+                name="Skill Agent",
+                version="1.0.0",
+                skills=[AgentSkill(skill_id="fastapi", package_id="pkg-fastapi", name="FastAPI", version="1.0.0")],
+            )
+
+    class _SkillRepo:
+        def get_package(self, owner_user_id: str, package_id: str):
+            assert owner_user_id == "owner-skill"
+            assert package_id == "pkg-fastapi"
+            return SkillPackage(
+                id="pkg-fastapi",
+                owner_user_id="owner-skill",
+                skill_id="fastapi",
+                version="1.0.0",
+                hash="sha256:fastapi",
+                skill_md="---\nname: FastAPI\n---\nUse APIRouter.",
+                created_at=datetime.fromisoformat("2026-04-26T00:00:00+00:00"),
+            )
+
+    monkeypatch.setattr(agent_pool, "create_agent_sync", _fake_create_agent_sync)
+    monkeypatch.setattr(agent_pool, "get_or_create_agent_id", lambda **_: "agent-skill")
+
+    app = SimpleNamespace(
+        state=SimpleNamespace(
+            agent_pool={},
+            thread_repo=_ThreadRepo(),
+            user_repo=SimpleNamespace(
+                get_by_id=lambda user_id: SimpleNamespace(id=user_id, agent_config_id="cfg-skill", owner_user_id="owner-skill")
+            ),
+            threads_runtime_state=SimpleNamespace(messaging_service=SimpleNamespace()),
+            runtime_storage_state=_runtime_storage_state(_AgentConfigRepo(), _SkillRepo()),
+            thread_cwd={},
+            thread_sandbox={},
+        )
+    )
+
+    await agent_pool.get_or_create_agent(cast(Any, app), "local", thread_id="thread-skill")
+
+    resolved = captured["resolved_agent_config"]
+    assert isinstance(resolved, ResolvedAgentConfig)
+    assert [skill.name for skill in resolved.skills] == ["FastAPI"]
+    assert resolved.skills[0].content.endswith("Use APIRouter.")
+    assert "agent_config_repo" not in captured
+    assert "skill_repo" not in captured
 
 
 @pytest.mark.asyncio
@@ -568,8 +635,7 @@ async def test_get_or_create_agent_uses_thread_user_id_for_chat_identity(monkeyp
         workspace_root=None,
         model_name: str | None = None,
         agent: str | None = None,
-        agent_config_id=None,
-        agent_config_repo=None,
+        resolved_agent_config=None,
         thread_repo=None,
         user_repo=None,
         queue_manager=None,
