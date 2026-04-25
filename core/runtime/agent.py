@@ -337,13 +337,6 @@ class LeonAgent:
             self._steering_middleware._agent_runtime = self.runtime
             self._memory_middleware.set_model(self.model, self._current_model_config)
 
-        if self.verbose:
-            print("[LeonAgent] Initialized successfully")
-            print(f"[LeonAgent] Workspace: {self.workspace_root}")
-            print(f"[LeonAgent] Audit log: {self.enable_audit_log}")
-            if self.checkpointer is None:
-                print("[LeonAgent] Note: Async components need initialization via ainit()")
-
         # Wire CleanupRegistry for priority-ordered resource teardown
         self._cleanup_registry = CleanupRegistry()
         self._cleanup_registry.register(self._cleanup_model_clients, priority=1)
@@ -402,9 +395,6 @@ class LeonAgent:
                 self._memory_middleware.checkpointer = self.checkpointer
 
             self._monitor_middleware.mark_ready()
-
-            if self.verbose:
-                print("[LeonAgent] Async initialization completed")
 
         if not self._session_started:
             await self._run_session_hooks("SessionStart")
@@ -578,10 +568,6 @@ class LeonAgent:
         else:
             self._agent_override = None
             self._resolved_agent_config = None
-
-        if self.verbose:
-            active_name = models_config.active.model if models_config.active else model_name
-            print(f"[LeonAgent] Config: agent={agent_name or 'default'}, model={active_name}")
 
         return config, models_config
 
@@ -837,9 +823,6 @@ class LeonAgent:
             self._memory_middleware.set_context_limit(model_overrides.get("context_limit") or get_model_context_limit(lookup_name))
             self._memory_middleware.set_model(self.model, self._current_model_config)
 
-        if self.verbose:
-            print(f"[LeonAgent] Config updated: model={resolved_model}")
-
     @property
     def observation_config(self) -> ObservationConfig:
         """Current observation provider configuration."""
@@ -852,9 +835,6 @@ class LeonAgent:
             **overrides: Fields to override (e.g. active="langfuse" or active=None)
         """
         self._observation_config = ObservationLoader(workspace_root=self.workspace_root).load(cli_overrides=overrides or None)
-
-        if self.verbose:
-            print(f"[LeonAgent] Observation updated: active={self._observation_config.active}")
 
     def close(self, *, cleanup_sandbox: bool = True):
         """Clean up resources via CleanupRegistry (priority-ordered).
@@ -1262,12 +1242,6 @@ class LeonAgent:
             )
         except Exception as e:
             logger.debug("[LeonAgent] LSPService init skipped: %s", e)
-
-        if self.verbose:
-            all_tools = self._tool_registry.list_all()
-            inline = [t for t in all_tools if t.mode.value == "inline"]
-            deferred = [t for t in all_tools if t.mode.value == "deferred"]
-            print(f"[LeonAgent] ToolRegistry: {len(inline)} inline, {len(deferred)} deferred tools")
 
     async def _init_mcp_tools(self) -> list:
         client, tools = await mcp_gateway.init_client_tools(
@@ -1712,29 +1686,3 @@ def create_leon_agent(
         storage_container=storage_container,
         **kwargs,
     )
-
-
-if __name__ == "__main__":
-    # Example usage
-    leon_agent = create_leon_agent()
-
-    try:
-        print("=== Example 1: File Operations ===")
-        response = leon_agent.get_response(
-            f"Create a Python file at {leon_agent.workspace_root}/hello.py that prints 'Hello, Mycel!'",
-            thread_id="demo",
-        )
-        print(response)
-        print()
-
-        print("=== Example 2: Read File ===")
-        response = leon_agent.get_response(f"Read the file {leon_agent.workspace_root}/hello.py", thread_id="demo")
-        print(response)
-        print()
-
-        print("=== Example 3: Search ===")
-        response = leon_agent.get_response(f"Search for 'Hello' in {leon_agent.workspace_root}", thread_id="demo")
-        print(response)
-
-    finally:
-        leon_agent.cleanup()
