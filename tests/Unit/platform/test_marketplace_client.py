@@ -265,20 +265,27 @@ class TestApplySkill:
             with pytest.raises(ValueError, match="Hub download version must be a string"):
                 apply_item("item-broken", owner_user_id="owner-1", skill_repo=skill_repo)
 
-    def test_apply_skill_requires_item_slug(self):
+    def test_apply_skill_does_not_require_item_slug(self, monkeypatch):
+        monkeypatch.setattr("backend.hub.client.generate_skill_id", lambda: "skill_noSlug123")
         hub_resp = _make_hub_response("skill", "broken-skill", content="---\nname: Broken Skill\ndescription: Broken\n---\nBody")
         del hub_resp["item"]["slug"]
+        saved: list[Skill] = []
+        packages: list[SkillPackage] = []
         skill_repo = SimpleNamespace(
             get_by_id=lambda _owner_user_id, _skill_id: None,
             list_for_owner=lambda _owner_user_id: [],
-            upsert=lambda _skill: (_ for _ in ()).throw(AssertionError("must not save broken Skill")),
+            upsert=lambda skill: saved.append(skill) or skill,
+            create_package=lambda package: packages.append(package) or package,
+            select_package=lambda _owner_user_id, _skill_id, _package_id: None,
         )
 
         with patch("backend.hub.client._hub_api", return_value=hub_resp):
             from backend.hub.client import apply_item
 
-            with pytest.raises(ValueError, match="Hub item slug must be a string"):
-                apply_item("item-broken", owner_user_id="owner-1", skill_repo=skill_repo)
+            result = apply_item("item-broken", owner_user_id="owner-1", skill_repo=skill_repo)
+
+        assert result["resource_id"] == "skill_noSlug123"
+        assert saved[0].id == "skill_noSlug123"
 
     def test_apply_skill_requires_publisher(self):
         hub_resp = _make_hub_response("skill", "broken-skill", content="---\nname: Broken Skill\ndescription: Broken\n---\nBody")
@@ -401,15 +408,26 @@ class TestApplySkill:
         assert saved[0].description == "Frontmatter wins"
         assert packages[0].skill_id == "meta-free-skill"
 
-    def test_path_traversal_blocked(self):
+    def test_slug_path_shape_does_not_affect_library_id(self, monkeypatch):
+        monkeypatch.setattr("backend.hub.client.generate_skill_id", lambda: "skill_evilSafe1")
         hub_resp = _make_hub_response("skill", "../../evil", content="---\nname: Evil\n---\n# Hello")
-        skill_repo = SimpleNamespace(upsert=lambda _skill: (_ for _ in ()).throw(AssertionError("must not save invalid slug")))
+        saved: list[Skill] = []
+        packages: list[SkillPackage] = []
+        skill_repo = SimpleNamespace(
+            get_by_id=lambda _owner_user_id, _skill_id: None,
+            list_for_owner=lambda _owner_user_id: [],
+            upsert=lambda skill: saved.append(skill) or skill,
+            create_package=lambda package: packages.append(package) or package,
+            select_package=lambda _owner_user_id, _skill_id, _package_id: None,
+        )
 
         with patch("backend.hub.client._hub_api", return_value=hub_resp):
             from backend.hub.client import apply_item
 
-            with pytest.raises(ValueError, match="Invalid slug"):
-                apply_item("item-evil", owner_user_id="owner-1", skill_repo=skill_repo)
+            result = apply_item("item-evil", owner_user_id="owner-1", skill_repo=skill_repo)
+
+        assert result["resource_id"] == "skill_evilSafe1"
+        assert saved[0].id == "skill_evilSafe1"
 
     def test_apply_skill_saves_library_package_without_agent_config_write(self):
         import backend.hub.client as marketplace_client
