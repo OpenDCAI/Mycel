@@ -2,13 +2,10 @@ from __future__ import annotations
 
 import asyncio
 import json
-import logging
 import random
 from typing import Any
 
 from backend.threads.message_content import extract_text_content
-
-logger = logging.getLogger(__name__)
 
 
 def _is_retryable_stream_error(err: Exception) -> bool:
@@ -42,7 +39,6 @@ async def run_stream_loop(
     max_stream_retries: int = 10,
 ) -> str:
     async def run_agent_stream(input_data: dict | None = initial_input):
-        chunk_count = 0
         # @@@astream-reentry — LangGraph's astream(input) silently returns
         # 0 chunks when the graph is at __end__ (completed previous run).
         # The fix: always use aupdate_state to inject input, then astream(None).
@@ -60,9 +56,7 @@ async def run_stream_loop(
             config=config,
             stream_mode=["messages", "updates"],
         ):
-            chunk_count += 1
             yield chunk
-        logger.debug("[stream] thread=%s STREAM DONE chunks=%d", thread_id[:15], chunk_count)
 
     stream_attempt = 0
     stream_gen = None
@@ -193,14 +187,6 @@ async def run_stream_loop(
                                     tc_id = tc.get("id")
                                     tc_name = tc.get("name", "unknown")
                                     full_args = tc.get("args", {})
-                                    logger.debug(
-                                        "[stream:update] tc=%s name=%s dup=%s chk=%s thread=%s",
-                                        tc_id or "?",
-                                        tc_name,
-                                        dedup.already_emitted(tc_id),
-                                        dedup.is_duplicate(tc_id),
-                                        thread_id,
-                                    )
                                     # @@@checkpoint-dedup — skip tool_calls from previous runs
                                     # but allow current run's updates (delivers full args after early emission)
                                     if dedup.is_duplicate(tc_id):
