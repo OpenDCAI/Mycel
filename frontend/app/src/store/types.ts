@@ -26,7 +26,7 @@ interface McpItem {
   command: string;
   args: string[];
   env: Record<string, string>;
-  disabled: boolean;
+  enabled: boolean;
 }
 
 export interface AgentConfig {

@@ -225,6 +225,49 @@ describe("AgentDetailPage wording contract", () => {
     expect(ensureLibrary).not.toHaveBeenCalled();
   });
 
+  it("toggles MCP servers with enabled config", async () => {
+    getAgentById.mockReturnValue({
+      ...agentFixture,
+      config: {
+        ...agentFixture.config,
+        mcpServers: [
+          {
+            name: "demo-mcp",
+            command: "uv",
+            args: [],
+            env: {},
+            enabled: true,
+          },
+        ],
+      },
+    });
+
+    render(
+      <MemoryRouter initialEntries={["/contacts/agents/agent-1"]}>
+        <Routes>
+          <Route path="/contacts/agents/:id" element={<AgentDetailPage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /^MCP 高级/ }));
+    fireEvent.click(screen.getByRole("switch"));
+
+    await waitFor(() => {
+      expect(updateAgentConfig).toHaveBeenCalledWith("agent-1", {
+        mcpServers: [
+          {
+            name: "demo-mcp",
+            command: "uv",
+            args: [],
+            env: {},
+            enabled: false,
+          },
+        ],
+      });
+    });
+  });
+
   it("does not expose a Library picker for subagents", async () => {
     render(
       <MemoryRouter initialEntries={["/contacts/agents/agent-1"]}>
