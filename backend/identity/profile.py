@@ -1,26 +1,6 @@
-import json
-from pathlib import Path
 from typing import Any
 
-from config.user_paths import preferred_existing_user_home_path, user_home_path
 from storage.contracts import UserRow
-
-LEON_HOME = user_home_path()
-CONFIG_PATH = LEON_HOME / "config.json"
-
-
-def _read_json(path: Path, default: Any = None) -> Any:
-    if not path.exists():
-        return default if default is not None else {}
-    try:
-        return json.loads(path.read_text(encoding="utf-8"))
-    except (json.JSONDecodeError, OSError):
-        return default if default is not None else {}
-
-
-def _write_json(path: Path, data: Any) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
 def _initials_from_name(name: str) -> str:
@@ -34,18 +14,12 @@ def _initials_from_name(name: str) -> str:
 
 
 def get_profile(user: UserRow | None = None) -> dict[str, Any]:
-    if user is not None:
-        return {
-            "name": user.display_name or "用户",
-            "initials": _initials_from_name(user.display_name or ""),
-            "email": user.email or "",
-        }
-    cfg = _read_json(preferred_existing_user_home_path("config.json"), {})
-    profile = cfg.get("profile", {})
+    if user is None:
+        raise ValueError("user is required")
     return {
-        "name": profile.get("name", "用户名"),
-        "initials": profile.get("initials", "YZ"),
-        "email": profile.get("email", "user@example.com"),
+        "name": user.display_name or "用户",
+        "initials": _initials_from_name(user.display_name or ""),
+        "email": user.email or "",
     }
 
 

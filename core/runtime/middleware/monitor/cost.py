@@ -1,20 +1,17 @@
 """模型成本计算
 
 定价来源优先级：
-1. OpenRouter API（启动时拉取，缓存到 ~/.leon/pricing_cache.json，24h TTL）
-2. 本地 models.json（OpenRouter /models 原始快照，随代码发布，离线兜底）
+1. OpenRouter API（启动时拉取）
+2. 本地 models.json（OpenRouter /models 原始快照，随代码发布）
 """
 
 from __future__ import annotations
 
 import json
 import logging
-import time
 from decimal import Decimal
 from pathlib import Path
 from typing import Any
-
-from config.user_paths import preferred_existing_user_home_path, user_home_path
 
 logger = logging.getLogger(__name__)
 
@@ -26,8 +23,6 @@ _initialized = False
 
 # 路径
 _BUNDLED_PATH = Path(__file__).parent / "models.json"
-_CACHE_PATH = user_home_path("pricing_cache.json")
-_CACHE_TTL = 86400  # 24 小时
 
 M = Decimal("1000000")
 _PER_TOKEN_TO_PER_M = Decimal("1000000")
@@ -109,50 +104,6 @@ def _infer_cache_prices(provider: str, input_per_m: Decimal, cache_read: Decimal
     return cache_read, cache_write
 
 
-def _load_cache() -> tuple[dict[str, dict[str, str]], dict[str, int], dict[str, str]] | None:
-    """从磁盘缓存加载定价数据、上下文窗口大小和 provider 映射"""
-    cache_path = preferred_existing_user_home_path("pricing_cache.json")
-    if not cache_path.exists():
-        return None
-    try:
-        data = json.loads(cache_path.read_text(encoding="utf-8"))
-        if time.time() - data.get("timestamp", 0) > _CACHE_TTL:
-            return None
-        models = data.get("models", {})
-        ctx = data.get("context_limits", {})
-        provs = data.get("providers", {})
-        return models, ctx, provs
-    except Exception:
-        logger.warning("Failed to load pricing cache from %s", cache_path, exc_info=True)
-        return None
-
-
-def _save_cache(models: dict[str, dict[str, str]], context_limits: dict[str, int], providers: dict[str, str]) -> None:
-    """保存定价数据、上下文窗口大小和 provider 映射到磁盘缓存"""
-    try:
-        _CACHE_PATH.parent.mkdir(parents=True, exist_ok=True)
-        data = {"timestamp": time.time(), "models": models, "context_limits": context_limits, "providers": providers}
-        _CACHE_PATH.write_text(json.dumps(data), encoding="utf-8")
-    except Exception:
-        logger.warning("Failed to save pricing cache to %s", _CACHE_PATH, exc_info=True)
-
-
-def _deserialize_costs(raw: dict[str, dict[str, str]]) -> dict[str, dict[str, Decimal]]:
-    """将缓存中的字符串值转为 Decimal"""
-    result = {}
-    for model_name, costs in raw.items():
-        try:
-            result[model_name] = {k: Decimal(v) for k, v in costs.items()}
-        except Exception:
-            continue
-    return result
-
-
-def _serialize_costs(costs: dict[str, dict[str, Decimal]]) -> dict[str, dict[str, str]]:
-    """将 Decimal 值转为字符串用于缓存"""
-    return {model: {k: str(v) for k, v in c.items()} for model, c in costs.items()}
-
-
 def fetch_openrouter_pricing() -> dict[str, dict[str, Decimal]]:
     """加载定价数据：API 缓存 → OpenRouter API → packaged 文件
 
@@ -163,21 +114,6 @@ def fetch_openrouter_pricing() -> dict[str, dict[str, Decimal]]:
 
     if _initialized:
         return _pricing_data
-
-    cached = _load_cache()
-    if cached:
-        models_raw, ctx, provs = cached
-        cached_costs = _deserialize_costs(models_raw)
-        # @@@pricing-cache-integrity - older CI caches can carry context/provider
-        # metadata with an empty model-pricing payload, which makes cost
-        # calculation silently degrade while context-limit tests still pass.
-        # Treat that cache as invalid and fall through to packaged/API reload.
-        if cached_costs:
-            _pricing_data = cached_costs
-            _context_limits = ctx
-            _model_providers = provs
-            _initialized = True
-            return _pricing_data
 
     _pricing_data = _fetch_from_openrouter() or _load_packaged()
     _initialized = True
@@ -215,7 +151,6 @@ def _fetch_from_openrouter() -> dict[str, dict[str, Decimal]] | None:
         if result:
             _context_limits = ctx_result
             _model_providers = prov_result
-            _save_cache(_serialize_costs(result), ctx_result, prov_result)
             return result
     except Exception:
         logger.warning("Failed to fetch OpenRouter pricing; packaged pricing will be used", exc_info=True)
@@ -249,7 +184,6 @@ def _load_packaged() -> dict[str, dict[str, Decimal]]:
                         prov_result[name] = provider
         _context_limits = ctx_result
         _model_providers = prov_result
-        _save_cache(_serialize_costs(result), ctx_result, prov_result)
         return result
     except Exception:
         return {}

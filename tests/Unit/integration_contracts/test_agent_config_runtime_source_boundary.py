@@ -2,10 +2,14 @@ import inspect
 import json
 from pathlib import Path
 
+from backend.identity import profile as identity_profile
+from backend.threads import file_channel
 from config.loader import AgentLoader
 from config.models_loader import ModelsLoader
 from config.observation_loader import ObservationLoader
 from core.runtime.agent import LeonAgent
+from core.runtime.middleware.monitor import cost as cost_monitor
+from sandbox import manager as sandbox_manager
 
 
 def test_runtime_api_has_no_process_local_agent_config_source() -> None:
@@ -55,3 +59,28 @@ def test_runtime_defaults_do_not_define_skill_runtime_config() -> None:
 
     assert "skills" not in runtime_defaults
     assert not hasattr(AgentLoader().load(), "skills")
+
+
+def test_identity_profile_has_no_user_home_source() -> None:
+    source = inspect.getsource(identity_profile)
+
+    assert "user_home_path" not in source
+    assert "preferred_existing_user_home_path" not in source
+    assert "config.json" not in source
+
+
+def test_cost_monitor_has_no_user_home_cache_source() -> None:
+    source = inspect.getsource(cost_monitor)
+
+    assert "config.user_paths" not in source
+    assert "user_home_path" not in source
+    assert "preferred_existing_user_home_path" not in source
+    assert "pricing_cache.json" not in source
+
+
+def test_file_channel_paths_have_no_user_home_source() -> None:
+    source = f"{inspect.getsource(file_channel)}\n{inspect.getsource(sandbox_manager)}"
+
+    assert "config.user_paths" not in source
+    assert "user_home_path" not in source
+    assert "file_channels" not in source

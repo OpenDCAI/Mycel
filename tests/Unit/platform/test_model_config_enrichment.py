@@ -145,18 +145,9 @@ class TestMonitorUpdateModel:
         assert cost_calculator is not None
         assert cost_calculator.costs != {}
 
-    def test_empty_cached_pricing_uses_packaged_models(self, monkeypatch: pytest.MonkeyPatch):
+    def test_openrouter_unavailable_uses_packaged_models(self, monkeypatch: pytest.MonkeyPatch):
         importlib.reload(cost_module)
 
-        monkeypatch.setattr(
-            cost_module,
-            "_load_cache",
-            lambda: (
-                {},
-                {"claude-sonnet-4.5": SONNET_LIMIT},
-                {"claude-sonnet-4.5": "anthropic"},
-            ),
-        )
         monkeypatch.setattr(cost_module, "_fetch_from_openrouter", lambda: None)
 
         prices = cost_module.fetch_openrouter_pricing()

@@ -5,7 +5,6 @@ from typing import Any, cast
 import pytest
 
 import sandbox.manager as sandbox_manager_module
-from config.user_paths import user_home_path
 from sandbox.manager import SandboxManager
 from sandbox.providers.local import LocalSessionProvider
 from sandbox.volume_source import HostVolume, deserialize_volume_source
@@ -885,6 +884,7 @@ def test_sync_paths_use_workspace_file_channel_root_instead_of_volume_source(mon
     manager.volume = _FakeVolume()
     manager._get_thread_sandbox_runtime = lambda _thread_id: SimpleNamespace(sandbox_runtime_id="runtime-1")
     manager.resolve_volume_source = lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("volume source should stay unused"))
+    monkeypatch.setenv("LEON_FILE_CHANNEL_ROOT", "/tmp/mycel-file-channels")
 
     class _ThreadRepo:
         def get_by_id(self, _thread_id: str):
@@ -902,7 +902,7 @@ def test_sync_paths_use_workspace_file_channel_root_instead_of_volume_source(mon
     manager._sync_to_sandbox("thread-1", "instance-1")
     manager._sync_from_sandbox("thread-1", "instance-1")
 
-    expected_root = user_home_path("file_channels", "ws-1").expanduser().resolve()
+    expected_root = Path("/tmp/mycel-file-channels/ws-1").resolve()
     assert manager.volume.upload_calls == [("thread-1", "instance-1", expected_root, "/workspace")]
     assert manager.volume.download_calls == [("thread-1", "instance-1", expected_root, "/workspace")]
 
