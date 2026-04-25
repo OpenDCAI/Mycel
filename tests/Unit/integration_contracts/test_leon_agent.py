@@ -521,6 +521,51 @@ def test_leon_agent_rejects_process_local_config_source(tmp_path):
         )
 
 
+@_patch_env_api_key()
+def test_leon_agent_does_not_create_default_home_db_directory(monkeypatch, tmp_path):
+    from core.runtime.agent import LeonAgent
+    from sandbox import Sandbox
+
+    class _FakeLocalSandbox(Sandbox):
+        @property
+        def name(self) -> str:
+            return "local"
+
+        @property
+        def working_dir(self) -> str:
+            return str(tmp_path)
+
+        @property
+        def env_label(self) -> str:
+            return "Test local"
+
+        def fs(self):
+            return None
+
+        def shell(self):
+            return None
+
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.delenv("LEON_DB_PATH", raising=False)
+    monkeypatch.delenv("LEON_SANDBOX_DB_PATH", raising=False)
+
+    with (
+        patch("core.runtime.agent.LeonAgent._create_model", return_value=_mock_model("No default home DB dir")),
+        patch("core.runtime.agent.LeonAgent._init_async_components", return_value=(None, [])),
+    ):
+        agent = LeonAgent(
+            workspace_root=str(tmp_path),
+            sandbox=_FakeLocalSandbox(),
+            queue_manager=SimpleNamespace(drain_all=lambda _thread_id: [], enqueue=lambda *_args, **_kwargs: None),
+            api_key="sk-test-integration",
+        )
+
+    try:
+        assert not (tmp_path / ".leon").exists()
+    finally:
+        agent.close()
+
+
 @pytest.mark.asyncio
 @_patch_env_api_key()
 async def test_leon_agent_agent_config_id_registers_mcp_resource_tools(tmp_path):
