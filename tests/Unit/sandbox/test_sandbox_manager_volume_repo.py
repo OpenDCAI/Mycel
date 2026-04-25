@@ -736,6 +736,37 @@ def test_destroy_thread_resources_keeps_shared_lease_for_surviving_threads():
     assert deleted_leases == []
 
 
+def test_destroy_thread_resources_deletes_thread_residue_when_runtime_row_is_already_missing():
+    manager = _new_test_manager()
+    manager.provider_capability = SimpleNamespace(runtime_kind="local")
+    manager.provider = SimpleNamespace(name="local")
+    manager.volume = _FakeVolume()
+    deleted_thread_chats: list[tuple[str, str]] = []
+    deleted_terminals: list[str] = []
+    all_terminals = [{"terminal_id": "term-1", "sandbox_runtime_id": "runtime-missing", "thread_id": "thread-1"}]
+
+    manager._get_thread_sandbox_runtime = lambda _thread_id: None
+    manager._get_sandbox_runtime = lambda _sandbox_runtime_id: None
+    manager.terminal_store = SimpleNamespace(
+        list_by_thread=lambda thread_id: [row for row in all_terminals if row["thread_id"] == thread_id],
+        delete=lambda terminal_id: (
+            deleted_terminals.append(terminal_id),
+            all_terminals.__setitem__(slice(None), [row for row in all_terminals if row["terminal_id"] != terminal_id]),
+        ),
+        list_all=lambda: list(all_terminals),
+        db_path=Path("/tmp/fake-sandbox.db"),
+    )
+    manager.session_manager = SimpleNamespace(
+        delete_thread=lambda thread_id, reason="thread_deleted": deleted_thread_chats.append((thread_id, reason)),
+    )
+
+    assert manager.destroy_thread_resources("thread-1") is True
+    assert deleted_thread_chats == [("thread-1", "thread_deleted")]
+    assert deleted_terminals == ["term-1"]
+    assert manager.volume.cleared == ["thread-1"]
+    assert all_terminals == []
+
+
 def test_destroy_thread_resources_deletes_daytona_managed_volume_from_runtime_id(tmp_path):
     manager = _new_test_manager()
     provider = _FakeDaytonaProvider()

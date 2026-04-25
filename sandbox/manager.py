@@ -832,8 +832,16 @@ class SandboxManager:
             sandbox_runtime_in_use = any(row.get("sandbox_runtime_id") == sandbox_runtime_id for row in self.terminal_store.list_all())
             if sandbox_runtime_in_use:
                 continue
+            # @@@thread-delete-runtime-residue - direct runtime deletion must still fail
+            # when provider state cannot be destroyed. Here the thread terminal
+            # rows are already gone; a missing runtime row is stale control-plane
+            # residue and must not keep the visible thread undeletable.
             if not self.destroy_sandbox_runtime_resources(sandbox_runtime_id):
-                raise RuntimeError(f"Missing sandbox runtime {sandbox_runtime_id} for thread {thread_id}")
+                logger.warning(
+                    "Thread %s referenced sandbox runtime %s that was already absent during deletion",
+                    thread_id,
+                    sandbox_runtime_id,
+                )
         return True
 
     def destroy_sandbox_runtime_resources(self, sandbox_runtime_id: str) -> bool:

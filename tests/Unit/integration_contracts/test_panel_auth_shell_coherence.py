@@ -1490,6 +1490,119 @@ async def test_panel_library_used_by_route_uses_user_scope(monkeypatch: pytest.M
     }
 
 
+def test_library_used_by_reads_agent_configs_without_display_projection(monkeypatch: pytest.MonkeyPatch):
+    def explode(*_args, **_kwargs):
+        raise AssertionError("used-by must not depend on agent display projection")
+
+    monkeypatch.setattr(agent_user_service, "list_agent_users", explode)
+    agent = _agent_user(user_id="agent-1", owner_user_id="user-1")
+    fake_user_repo = SimpleNamespace(list_by_owner_user_id=lambda owner_user_id: [agent] if owner_user_id == "user-1" else [])
+    fake_agent_config_repo = SimpleNamespace(
+        get_agent_config=lambda _config_id: _agent_config(
+            skills=[
+                AgentSkill(
+                    skill_id="skill-1",
+                    package_id="skill-1-package",
+                    name="api-design-reviewer",
+                    content="---\nname: api-design-reviewer\n---\nBody",
+                    enabled=True,
+                )
+            ],
+        )
+    )
+
+    assert library_service.get_resource_used_by(
+        "skill",
+        "api-design-reviewer",
+        "user-1",
+        user_repo=fake_user_repo,
+        agent_config_repo=fake_agent_config_repo,
+    ) == ["Toad"]
+
+
+@pytest.mark.asyncio
+async def test_delete_skill_route_rejects_skill_still_selected_by_agent(monkeypatch: pytest.MonkeyPatch):
+    skill_repo = _MemorySkillRepo()
+    _put_skill(
+        skill_repo,
+        owner_user_id="user-1",
+        skill_id="skill-1",
+        name="api-design-reviewer",
+        description="API Design Reviewer",
+        content="---\nname: api-design-reviewer\n---\nBody",
+    )
+    agent = _agent_user(user_id="agent-1", owner_user_id="user-1")
+    fake_user_repo = SimpleNamespace(list_by_owner_user_id=lambda owner_user_id: [agent] if owner_user_id == "user-1" else [])
+    fake_agent_config_repo = SimpleNamespace(
+        get_agent_config=lambda _config_id: _agent_config(
+            skills=[
+                AgentSkill(
+                    skill_id="skill-1",
+                    package_id="skill-1-package",
+                    name="api-design-reviewer",
+                    content="---\nname: api-design-reviewer\n---\nBody",
+                    enabled=True,
+                )
+            ],
+        )
+    )
+
+    deleted: list[tuple[str, str]] = []
+    monkeypatch.setattr(skill_repo, "delete", lambda owner_user_id, skill_id: deleted.append((owner_user_id, skill_id)))
+
+    with pytest.raises(HTTPException) as excinfo:
+        await panel_router.delete_resource(
+            "skill",
+            "skill-1",
+            request=SimpleNamespace(
+                app=SimpleNamespace(
+                    state=SimpleNamespace(
+                        user_repo=fake_user_repo,
+                        runtime_storage_state=_runtime_storage_state(fake_agent_config_repo, skill_repo=skill_repo),
+                    )
+                )
+            ),
+            user_id="user-1",
+        )
+
+    assert excinfo.value.status_code == 409
+    assert excinfo.value.detail == "Skill is still assigned to Agent: Toad"
+    assert deleted == []
+
+
+@pytest.mark.asyncio
+async def test_delete_skill_route_allows_skill_after_agent_config_removal(monkeypatch: pytest.MonkeyPatch):
+    skill_repo = _MemorySkillRepo()
+    _put_skill(
+        skill_repo,
+        owner_user_id="user-1",
+        skill_id="skill-1",
+        name="api-design-reviewer",
+        description="API Design Reviewer",
+        content="---\nname: api-design-reviewer\n---\nBody",
+    )
+    agent = _agent_user(user_id="agent-1", owner_user_id="user-1")
+    fake_user_repo = SimpleNamespace(list_by_owner_user_id=lambda owner_user_id: [agent] if owner_user_id == "user-1" else [])
+    fake_agent_config_repo = SimpleNamespace(get_agent_config=lambda _config_id: _agent_config(skills=[]))
+
+    result = await panel_router.delete_resource(
+        "skill",
+        "skill-1",
+        request=SimpleNamespace(
+            app=SimpleNamespace(
+                state=SimpleNamespace(
+                    user_repo=fake_user_repo,
+                    runtime_storage_state=_runtime_storage_state(fake_agent_config_repo, skill_repo=skill_repo),
+                )
+            )
+        ),
+        user_id="user-1",
+    )
+
+    assert result == {"success": True}
+    assert skill_repo.get_by_id("user-1", "skill-1") is None
+
+
 def test_builtin_agent_surface_exposes_chat_tools():
     agent = agent_user_service._leon_builtin()
     tools = {item["name"]: item for item in agent["config"]["tools"]}

@@ -487,16 +487,21 @@ def get_resource_used_by(
     agent_config_repo: Any = None,
 ) -> list[str]:
     """Return agent user names under the owner that use a given resource."""
-    from backend.threads.agent_user_service import list_agent_users
-
-    config_key = {"skill": "skills", "mcp": "mcpServers", "agent": "subAgents"}.get(resource_type, "")
-    if not config_key:
+    if user_repo is None or agent_config_repo is None:
+        raise RuntimeError("user_repo and agent_config_repo are required for resource usage reads")
+    config_attr = {"skill": "skills", "mcp": "mcp_servers", "agent": "sub_agents"}.get(resource_type, "")
+    if not config_attr:
         return []
     names: list[str] = []
-    for agent in list_agent_users(owner_user_id, user_repo=user_repo, agent_config_repo=agent_config_repo):
-        items = agent.get("config", {}).get(config_key, [])
-        if any(i.get("name") == resource_name for i in items):
-            names.append(agent.get("name", agent.get("id", "unknown")))
+    for agent in user_repo.list_by_owner_user_id(owner_user_id):
+        agent_config_id = getattr(agent, "agent_config_id", None)
+        if not agent_config_id:
+            raise RuntimeError(f"Agent user {getattr(agent, 'id', 'unknown')} is missing agent_config_id")
+        config = agent_config_repo.get_agent_config(agent_config_id)
+        if config is None:
+            raise RuntimeError(f"Agent config {agent_config_id} is missing for {getattr(agent, 'id', 'unknown')}")
+        if any(getattr(item, "name", None) == resource_name for item in getattr(config, config_attr)):
+            names.append(str(getattr(config, "name", None) or getattr(agent, "display_name", None) or getattr(agent, "id", "unknown")))
     return names
 
 
