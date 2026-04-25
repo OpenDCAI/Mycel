@@ -12,11 +12,12 @@ def create_sandbox(
     config: SandboxConfig,
     workspace_root: str | None = None,
     db_path: Path | None = None,
+    thread_repo=None,
 ) -> Sandbox:
     p = config.provider
 
     if p == "local":
-        return LocalSandbox(workspace_root=workspace_root or str(Path.cwd()), db_path=db_path)
+        return LocalSandbox(workspace_root=workspace_root or str(Path.cwd()), db_path=db_path, thread_repo=thread_repo)
 
     if p == "agentbay":
         from sandbox.providers.agentbay import AgentBayProvider
@@ -36,6 +37,7 @@ def create_sandbox(
             config=config,
             default_cwd=ab.context_path,
             db_path=db_path,
+            thread_repo=thread_repo,
             name=config.name,
             working_dir=ab.context_path,
             env_label="Remote Linux sandbox (Ubuntu)",
@@ -50,6 +52,7 @@ def create_sandbox(
             config=config,
             default_cwd=dc.mount_path,
             db_path=db_path,
+            thread_repo=thread_repo,
             name=config.name,
             working_dir=dc.mount_path,
             env_label="Local Docker sandbox (Ubuntu)",
@@ -73,6 +76,7 @@ def create_sandbox(
             config=config,
             default_cwd=e.cwd,
             db_path=db_path,
+            thread_repo=thread_repo,
             name=config.name,
             working_dir=e.cwd,
             env_label="Remote Linux sandbox (E2B)",
@@ -96,6 +100,7 @@ def create_sandbox(
             config=config,
             default_cwd=dt.cwd,
             db_path=db_path,
+            thread_repo=thread_repo,
             name=config.name,
             working_dir=dt.cwd,
             env_label="Remote Linux sandbox (Daytona)",

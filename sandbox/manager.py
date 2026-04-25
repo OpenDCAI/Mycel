@@ -9,12 +9,18 @@ from config.user_paths import user_home_path
 from sandbox.capability import SandboxCapability
 from sandbox.chat_session import ChatSessionManager, ChatSessionPolicy
 from sandbox.clock import parse_runtime_datetime, utc_now
-from sandbox.control_plane_repos import make_chat_session_repo, make_sandbox_runtime_repo, make_terminal_repo, resolve_sandbox_db_path
+from sandbox.control_plane_repos import (
+    configured_sandbox_db_path,
+    make_chat_session_repo,
+    make_sandbox_runtime_repo,
+    make_terminal_repo,
+    resolve_sandbox_db_path,
+)
 from sandbox.provider import SandboxProvider
 from sandbox.recipes import bootstrap_recipe
 from sandbox.runtime_handle import sandbox_runtime_from_row
 from sandbox.terminal import TerminalState, terminal_from_row
-from storage.runtime import build_storage_container
+from storage.runtime import build_storage_container, uses_supabase_runtime_defaults
 
 logger = logging.getLogger(__name__)
 
@@ -33,6 +39,17 @@ def _build_provider_from_name(name: str):
     return build_provider_from_config_name(name)
 
 
+def _resolve_manager_db_path(db_path: Path | None) -> Path | None:
+    if db_path is not None:
+        return db_path
+    configured = configured_sandbox_db_path()
+    if configured is not None:
+        return configured
+    if uses_supabase_runtime_defaults():
+        return None
+    return resolve_sandbox_db_path(None)
+
+
 def lookup_sandbox_for_thread(
     thread_id: str,
     db_path: Path | None = None,
@@ -40,9 +57,8 @@ def lookup_sandbox_for_thread(
     terminal_repo: Any | None = None,
     sandbox_runtime_repo: Any | None = None,
 ) -> str | None:
-    target_db = resolve_sandbox_db_path(db_path) if terminal_repo is None or sandbox_runtime_repo is None else db_path
-    uses_strategy_default_sandbox = False
-    if terminal_repo is None and sandbox_runtime_repo is None and not target_db.exists() and not uses_strategy_default_sandbox:
+    target_db = _resolve_manager_db_path(db_path) if terminal_repo is None or sandbox_runtime_repo is None else db_path
+    if terminal_repo is None and sandbox_runtime_repo is None and target_db is not None and not target_db.exists():
         return None
 
     _terminal_repo = terminal_repo
@@ -77,7 +93,7 @@ def resolve_existing_sandbox_runtime_cwd(
     if requested_cwd:
         return requested_cwd
 
-    target_db = resolve_sandbox_db_path(db_path) if sandbox_runtime_repo is None else db_path
+    target_db = _resolve_manager_db_path(db_path) if sandbox_runtime_repo is None else db_path
     _sandbox_runtime_repo = sandbox_runtime_repo
     own_sandbox_runtime_repo = _sandbox_runtime_repo is None
     if _sandbox_runtime_repo is None:
@@ -103,7 +119,7 @@ def bind_thread_to_existing_sandbox_runtime(
     terminal_repo: Any | None = None,
     sandbox_runtime_repo: Any | None = None,
 ) -> str:
-    target_db = resolve_sandbox_db_path(db_path) if terminal_repo is None or sandbox_runtime_repo is None else db_path
+    target_db = _resolve_manager_db_path(db_path) if terminal_repo is None or sandbox_runtime_repo is None else db_path
     _terminal_repo = terminal_repo
     own_terminal_repo = _terminal_repo is None
     if _terminal_repo is None:
@@ -149,7 +165,7 @@ def resolve_existing_sandbox_runtime(
 
     # @@@existing-sandbox-runtime-identity - existing-sandbox reuse must bind
     # through live runtime identity; stored runtime config is not a resolution source.
-    target_db = resolve_sandbox_db_path(db_path) if sandbox_runtime_repo is None else db_path
+    target_db = _resolve_manager_db_path(db_path) if sandbox_runtime_repo is None else db_path
     _sandbox_runtime_repo = sandbox_runtime_repo
     own_sandbox_runtime_repo = _sandbox_runtime_repo is None
     if _sandbox_runtime_repo is None:
@@ -203,7 +219,7 @@ def bind_thread_to_existing_thread_sandbox_runtime(
     terminal_repo: Any | None = None,
     sandbox_runtime_repo: Any | None = None,
 ) -> str | None:
-    target_db = resolve_sandbox_db_path(db_path) if terminal_repo is None else db_path
+    target_db = _resolve_manager_db_path(db_path) if terminal_repo is None else db_path
     if not cwd:
         raise ValueError("thread reuse cwd is required")
     _terminal_repo = terminal_repo
@@ -236,12 +252,14 @@ class SandboxManager:
         provider: SandboxProvider,
         db_path: Path | None = None,
         on_session_ready: Callable[[str, str], None] | None = None,
+        thread_repo: Any | None = None,
     ):
         self.provider = provider
         self.provider_capability = provider.get_capability()
         self._on_session_ready = on_session_ready
+        self._thread_repo = thread_repo
 
-        self.db_path = resolve_sandbox_db_path(db_path)
+        self.db_path = _resolve_manager_db_path(db_path)
         self.terminal_store = make_terminal_repo(db_path=self.db_path)
         self.sandbox_runtime_store = make_sandbox_runtime_repo(db_path=self.db_path)
 
@@ -267,8 +285,25 @@ class SandboxManager:
             return None
         return sandbox_runtime_from_row(row, self.db_path)
 
-    def _create_sandbox_runtime(self, sandbox_runtime_id: str, provider_name: str):
-        row = self.sandbox_runtime_store.create(sandbox_runtime_id, provider_name)
+    def _owner_user_id_for_thread(self, thread_id: str) -> str | None:
+        if self._thread_repo is None:
+            return None
+        thread = self._thread_repo.get_by_id(thread_id)
+        if thread is None:
+            return None
+        if isinstance(thread, dict):
+            owner_user_id = thread.get("owner_user_id")
+        else:
+            owner_user_id = getattr(thread, "owner_user_id", None)
+        owner = str(owner_user_id or "").strip()
+        return owner or None
+
+    def _create_sandbox_runtime(self, sandbox_runtime_id: str, provider_name: str, *, thread_id: str | None = None):
+        row = self.sandbox_runtime_store.create(
+            sandbox_runtime_id,
+            provider_name,
+            owner_user_id=self._owner_user_id_for_thread(thread_id) if thread_id else None,
+        )
         return sandbox_runtime_from_row(row, self.db_path)
 
     def get_terminal(self, thread_id: str):
@@ -344,7 +379,7 @@ class SandboxManager:
     def _get_active_terminal(self, thread_id: str):
         row = self.terminal_store.get_active(thread_id)
         if row:
-            return terminal_from_row(row, self.db_path)
+            return terminal_from_row(row, self.db_path, terminal_repo=self.terminal_store)
         thread_terminals = self.terminal_store.list_by_thread(thread_id)
         # @@@thread-pointer-consistency - If terminals exist but no active pointer, DB is inconsistent and must fail loudly.
         if thread_terminals:
@@ -353,7 +388,7 @@ class SandboxManager:
 
     def _get_thread_terminals(self, thread_id: str):
         rows = self.terminal_store.list_by_thread(thread_id)
-        return [terminal_from_row(row, self.db_path) for row in rows]
+        return [terminal_from_row(row, self.db_path, terminal_repo=self.terminal_store) for row in rows]
 
     def _get_thread_sandbox_runtime(self, thread_id: str):
         terminals = self._get_thread_terminals(thread_id)
@@ -460,7 +495,7 @@ class SandboxManager:
         if not terminal:
             terminal_id = f"term-{uuid.uuid4().hex[:12]}"
             sandbox_runtime_id = f"runtime-{uuid.uuid4().hex[:12]}"
-            sandbox_runtime = self._create_sandbox_runtime(sandbox_runtime_id, self.provider.name)
+            sandbox_runtime = self._create_sandbox_runtime(sandbox_runtime_id, self.provider.name, thread_id=thread_id)
             initial_cwd = self._default_terminal_cwd()
             terminal = terminal_from_row(
                 self.terminal_store.create(
@@ -470,11 +505,12 @@ class SandboxManager:
                     initial_cwd=initial_cwd,
                 ),
                 self.db_path,
+                terminal_repo=self.terminal_store,
             )
         else:
             sandbox_runtime = self._get_sandbox_runtime(terminal.sandbox_runtime_id)
             if not sandbox_runtime:
-                sandbox_runtime = self._create_sandbox_runtime(terminal.sandbox_runtime_id, self.provider.name)
+                sandbox_runtime = self._create_sandbox_runtime(terminal.sandbox_runtime_id, self.provider.name, thread_id=thread_id)
             self._assert_sandbox_runtime_provider(sandbox_runtime, thread_id)
             if sandbox_runtime.observed_state == "paused":
                 # @@@paused-runtime-rehydrate - a persisted thread can lose its in-memory chat session
@@ -539,7 +575,7 @@ class SandboxManager:
         default_row = self.terminal_store.get_default(thread_id)
         if default_row is None:
             raise RuntimeError(f"Thread {thread_id} has no default terminal")
-        default_terminal = terminal_from_row(default_row, self.db_path)
+        default_terminal = terminal_from_row(default_row, self.db_path, terminal_repo=self.terminal_store)
         sandbox_runtime = self._get_sandbox_runtime(default_terminal.sandbox_runtime_id)
         if sandbox_runtime is None:
             raise RuntimeError(f"Missing sandbox runtime {default_terminal.sandbox_runtime_id} for thread {thread_id}")
@@ -555,6 +591,7 @@ class SandboxManager:
                 initial_cwd=initial_cwd,
             ),
             self.db_path,
+            terminal_repo=self.terminal_store,
         )
         # @@@async-terminal-inherit-state - non-blocking commands fork from default terminal cwd/env snapshot.
         terminal.update_state(
@@ -635,7 +672,7 @@ class SandboxManager:
 
             terminal_id = row.get("terminal_id")
             terminal_row = self.terminal_store.get_by_id(str(terminal_id)) if terminal_id else None
-            terminal = terminal_from_row(terminal_row, self.db_path) if terminal_row else None
+            terminal = terminal_from_row(terminal_row, self.db_path, terminal_repo=self.terminal_store) if terminal_row else None
             sandbox_runtime = self._get_sandbox_runtime(terminal.sandbox_runtime_id) if terminal else None
             if sandbox_runtime and sandbox_runtime.provider_name != self.provider.name:
                 continue
@@ -803,7 +840,7 @@ class SandboxManager:
 
     def destroy_thread_resources(self, thread_id: str) -> bool:
         terminal_rows = self.terminal_store.list_by_thread(thread_id)
-        terminals = [terminal_from_row(r, self.db_path) for r in terminal_rows]
+        terminals = [terminal_from_row(r, self.db_path, terminal_repo=self.terminal_store) for r in terminal_rows]
         if not terminals:
             return False
 

@@ -118,6 +118,7 @@ class RemoteSandbox(Sandbox):
         default_cwd: str,
         db_path: Path | None = None,
         *,
+        thread_repo: Any | None = None,
         name: str | None = None,
         working_dir: str | None = None,
         env_label: str = "Remote sandbox",
@@ -125,9 +126,10 @@ class RemoteSandbox(Sandbox):
         self._config = config
         self._default_cwd = default_cwd
         self._provider = provider
+        self._thread_repo = thread_repo
         from sandbox.manager import SandboxManager
 
-        self._manager = SandboxManager(provider=provider, db_path=db_path)
+        self._manager = SandboxManager(provider=provider, db_path=db_path, thread_repo=thread_repo)
         self._on_exit = config.on_exit
         self._name = name or config.name
         self._working_dir = working_dir or default_cwd
@@ -225,11 +227,12 @@ class _LazyLocalExecutor:
 
 
 class LocalSandbox(Sandbox):
-    def __init__(self, workspace_root: str, db_path: Path | None = None) -> None:
+    def __init__(self, workspace_root: str, db_path: Path | None = None, thread_repo: Any | None = None) -> None:
         from sandbox.providers.local import LocalSessionProvider
 
         self._workspace_root = workspace_root
         self._db_path = db_path
+        self._thread_repo = thread_repo
         self._provider = LocalSessionProvider(default_cwd=workspace_root)
         self._manager: SandboxManager | None = None
         self._capability_cache: dict[str, SandboxCapability] = {}
@@ -255,7 +258,7 @@ class LocalSandbox(Sandbox):
             # @@@lazy-local-control-plane - local Agent construction is allowed
             # without sandbox storage; terminal/session use is the boundary that
             # requires an explicit control-plane DB path.
-            self._manager = SandboxManager(provider=self._provider, db_path=self._db_path)
+            self._manager = SandboxManager(provider=self._provider, db_path=self._db_path, thread_repo=self._thread_repo)
         return self._manager
 
     def _get_capability(self) -> SandboxCapability:
