@@ -41,6 +41,15 @@ export interface AgentConfig {
   };
 }
 
+export interface SkillPatchItem {
+  id: string;
+  enabled?: boolean;
+}
+
+export type AgentConfigPatch = Partial<Omit<AgentConfig, "skills">> & {
+  skills?: SkillPatchItem[];
+};
+
 export interface Agent {
   id: string;
   name: string;

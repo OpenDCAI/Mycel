@@ -447,7 +447,7 @@ def test_agent_config_patch_saves_library_skill_package_choice() -> None:
 
     result = agent_user_service.update_agent_user_config(
         "agent-1",
-        {"skills": [{"id": "loadable-skill", "name": "Loadable Skill", "desc": "loadable", "enabled": True}]},
+        {"skills": [{"id": "loadable-skill", "enabled": True}]},
         user_repo=SimpleNamespace(
             get_by_id=lambda _agent_id: UserRow(
                 id="agent-1",
@@ -505,7 +505,7 @@ def test_agent_config_patch_keeps_package_source_out_of_agent_skill_binding() ->
 
     agent_user_service.update_agent_user_config(
         "agent-1",
-        {"skills": [{"id": "loadable-skill", "name": "Loadable Skill", "enabled": True}]},
+        {"skills": [{"id": "loadable-skill", "enabled": True}]},
         user_repo=SimpleNamespace(
             get_by_id=lambda _agent_id: UserRow(
                 id="agent-1",
@@ -551,7 +551,7 @@ def test_agent_config_patch_rejects_inline_skill_content() -> None:
     with pytest.raises(RuntimeError, match="Skill patch item must not include content or files"):
         agent_user_service.update_agent_user_config(
             "agent-1",
-            {"skills": [{"name": "Inline Skill", "content": "---\nname: Inline Skill\n---\nUse it.", "enabled": True}]},
+            {"skills": [{"id": "loadable-skill", "content": "---\nname: Inline Skill\n---\nUse it.", "enabled": True}]},
             user_repo=SimpleNamespace(
                 get_by_id=lambda _agent_id: UserRow(
                     id="agent-1",
@@ -580,7 +580,7 @@ def test_agent_config_patch_rejects_skill_content_identity_fields(field: str) ->
         def save_agent_config(self, config: AgentConfig) -> None:
             saved_configs.append(config)
 
-    patch_item = {"name": "Loadable Skill", "enabled": True, field: {"source_version": "patch"} if field == "source" else "9.9.9"}
+    patch_item = {"id": "loadable-skill", "enabled": True, field: {"source_version": "patch"} if field == "source" else "9.9.9"}
 
     with pytest.raises(RuntimeError, match="Skill patch item must not include source or version"):
         agent_user_service.update_agent_user_config(
@@ -616,7 +616,7 @@ def test_agent_config_patch_rejects_skill_disabled_flag() -> None:
     with pytest.raises(RuntimeError, match="Skill patch item must use enabled, not disabled"):
         agent_user_service.update_agent_user_config(
             "agent-1",
-            {"skills": [{"name": "Loadable Skill", "disabled": False}]},
+            {"skills": [{"id": "loadable-skill", "disabled": False}]},
             user_repo=SimpleNamespace(
                 get_by_id=lambda _agent_id: UserRow(
                     id="agent-1",
@@ -647,7 +647,7 @@ def test_agent_config_patch_rejects_skill_enabled_string() -> None:
     with pytest.raises(RuntimeError, match="Skill patch item enabled must be a boolean"):
         agent_user_service.update_agent_user_config(
             "agent-1",
-            {"skills": [{"name": "Loadable Skill", "enabled": "false"}]},
+            {"skills": [{"id": "loadable-skill", "enabled": "false"}]},
             user_repo=SimpleNamespace(
                 get_by_id=lambda _agent_id: UserRow(
                     id="agent-1",
@@ -687,7 +687,7 @@ def test_agent_config_patch_rejects_skill_item_without_library_skill_id() -> Non
     with pytest.raises(RuntimeError, match="Skill patch item must include id"):
         agent_user_service.update_agent_user_config(
             "agent-1",
-            {"skills": [{"name": "Loadable Skill", "enabled": True}]},
+            {"skills": [{"enabled": True}]},
             user_repo=SimpleNamespace(
                 get_by_id=lambda _agent_id: UserRow(
                     id="agent-1",
@@ -705,7 +705,7 @@ def test_agent_config_patch_rejects_skill_item_without_library_skill_id() -> Non
     assert saved_configs == []
 
 
-def test_agent_config_patch_rejects_library_id_in_skill_name_field() -> None:
+def test_agent_config_patch_rejects_skill_name_and_desc_fields() -> None:
     saved_configs: list[AgentConfig] = []
     skill_repo = _MemorySkillRepo()
     _put_skill(
@@ -724,10 +724,10 @@ def test_agent_config_patch_rejects_library_id_in_skill_name_field() -> None:
         def save_agent_config(self, config: AgentConfig) -> None:
             saved_configs.append(config)
 
-    with pytest.raises(RuntimeError, match="Skill patch item must include id"):
+    with pytest.raises(RuntimeError, match="Skill patch item must not include name or desc"):
         agent_user_service.update_agent_user_config(
             "agent-1",
-            {"skills": [{"name": "loadable-skill", "desc": "loadable", "enabled": True}]},
+            {"skills": [{"id": "loadable-skill", "name": "Loadable Skill", "desc": "loadable", "enabled": True}]},
             user_repo=SimpleNamespace(
                 get_by_id=lambda _agent_id: UserRow(
                     id="agent-1",
@@ -745,7 +745,7 @@ def test_agent_config_patch_rejects_library_id_in_skill_name_field() -> None:
     assert saved_configs == []
 
 
-def test_agent_config_patch_rejects_skill_item_without_name() -> None:
+def test_agent_config_patch_rejects_non_object_skill_item() -> None:
     saved_configs: list[AgentConfig] = []
 
     class _AgentConfigRepo:
@@ -755,10 +755,10 @@ def test_agent_config_patch_rejects_skill_item_without_name() -> None:
         def save_agent_config(self, config: AgentConfig) -> None:
             saved_configs.append(config)
 
-    with pytest.raises(RuntimeError, match="Skill patch item must include name"):
+    with pytest.raises(RuntimeError, match="Skill patch item must be an object"):
         agent_user_service.update_agent_user_config(
             "agent-1",
-            {"skills": [{"enabled": True}]},
+            {"skills": ["loadable-skill"]},
             user_repo=SimpleNamespace(
                 get_by_id=lambda _agent_id: UserRow(
                     id="agent-1",
@@ -776,7 +776,7 @@ def test_agent_config_patch_rejects_skill_item_without_name() -> None:
     assert saved_configs == []
 
 
-def test_agent_config_patch_rejects_duplicate_skill_names() -> None:
+def test_agent_config_patch_rejects_duplicate_skill_ids() -> None:
     saved_configs: list[AgentConfig] = []
 
     class _AgentConfigRepo:
@@ -786,13 +786,13 @@ def test_agent_config_patch_rejects_duplicate_skill_names() -> None:
         def save_agent_config(self, config: AgentConfig) -> None:
             saved_configs.append(config)
 
-    with pytest.raises(RuntimeError, match="Duplicate Skill name in patch: Loadable Skill"):
+    with pytest.raises(RuntimeError, match="Duplicate Skill id in patch: loadable-skill"):
         agent_user_service.update_agent_user_config(
             "agent-1",
             {
                 "skills": [
-                    {"id": "loadable-skill", "name": "Loadable Skill"},
-                    {"id": "loadable-skill-copy", "name": "Loadable Skill"},
+                    {"id": "loadable-skill"},
+                    {"id": "loadable-skill"},
                 ]
             },
             user_repo=SimpleNamespace(
@@ -832,7 +832,7 @@ def test_agent_config_patch_rejects_skill_after_library_delete() -> None:
     with pytest.raises(RuntimeError, match="Library skill not found: loadable-skill"):
         agent_user_service.update_agent_user_config(
             "agent-1",
-            {"skills": [{"id": "loadable-skill", "name": "Loadable Skill", "desc": "loadable", "enabled": False}]},
+            {"skills": [{"id": "loadable-skill", "enabled": False}]},
             user_repo=SimpleNamespace(
                 get_by_id=lambda _agent_id: UserRow(
                     id="agent-1",
@@ -860,14 +860,13 @@ def test_agent_config_patch_rejects_missing_explicit_library_skill_id() -> None:
         def save_agent_config(self, config: AgentConfig) -> None:
             saved_configs.append(config)
 
-    with pytest.raises(RuntimeError, match="Skill patch item must include id"):
+    with pytest.raises(RuntimeError, match="Skill patch item must use id"):
         agent_user_service.update_agent_user_config(
             "agent-1",
             {
                 "skills": [
                     {
                         "skill_id": "missing-skill",
-                        "name": "Inline Skill",
                     }
                 ]
             },
@@ -913,7 +912,6 @@ def test_agent_config_patch_explicit_library_id_uses_library_package_choice() ->
             "skills": [
                 {
                     "id": "loadable-skill",
-                    "name": "Loadable Skill",
                     "enabled": True,
                 }
             ]

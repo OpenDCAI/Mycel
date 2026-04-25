@@ -369,8 +369,12 @@ def select_agent_skill(
     library_skill = skill_repo.get_by_id(current_config.owner_user_id, skill_id)
     if library_skill is None:
         raise RuntimeError(f"Library skill not found: {skill_id}")
-    current_items = [item for item in _skills_from_repo(current_config) if item["id"] != library_skill.id]
-    current_items.append({"id": library_skill.id, "name": library_skill.name, "enabled": True})
+    current_items = [
+        {"id": skill.skill_id, "enabled": skill.enabled}
+        for skill in current_config.skills
+        if skill.skill_id != library_skill.id
+    ]
+    current_items.append({"id": library_skill.id, "enabled": True})
     return _sync_agent_config_patch_to_repo(
         agent_user_id,
         {"skills": current_items},
@@ -610,22 +614,26 @@ def _skills_from_patch(current_config: AgentConfig, config_patch: dict[str, Any]
 
     skills: list[AgentSkill] = []
     seen_names: set[str] = set()
+    seen_skill_ids: set[str] = set()
     skill_items = config_patch["skills"]
     for item in skill_items:
-        if not (isinstance(item, dict) and item.get("name")):
-            raise RuntimeError("Skill patch item must include name")
+        if not isinstance(item, dict):
+            raise RuntimeError("Skill patch item must be an object")
+        if "name" in item or "desc" in item:
+            raise RuntimeError("Skill patch item must not include name or desc")
         if "content" in item or "files" in item:
             raise RuntimeError("Skill patch item must not include content or files")
         if "source" in item or "version" in item:
             raise RuntimeError("Skill patch item must not include source or version")
+        if "skill_id" in item:
+            raise RuntimeError("Skill patch item must use id")
         if "disabled" in item:
             raise RuntimeError("Skill patch item must use enabled, not disabled")
         _enabled_from_patch_item(item, label="Skill patch item")
-        _patch_library_skill_id(item)
-        name = str(item["name"])
-        if name in seen_names:
-            raise RuntimeError(f"Duplicate Skill name in patch: {name}")
-        seen_names.add(name)
+        library_skill_id = _patch_library_skill_id(item)
+        if library_skill_id in seen_skill_ids:
+            raise RuntimeError(f"Duplicate Skill id in patch: {library_skill_id}")
+        seen_skill_ids.add(library_skill_id)
     for item in skill_items:
         enabled = _enabled_from_patch_item(item, label="Skill patch item")
         library_skill_id = _patch_library_skill_id(item)
@@ -633,6 +641,9 @@ def _skills_from_patch(current_config: AgentConfig, config_patch: dict[str, Any]
         library_skill = skill_repo.get_by_id(owner_user_id, library_skill_id)
         if library_skill is None:
             raise RuntimeError(f"Library skill not found: {library_skill_id}")
+        if library_skill.name in seen_names:
+            raise RuntimeError(f"Duplicate Skill name in patch: {library_skill.name}")
+        seen_names.add(library_skill.name)
         library_package = _selected_library_package(owner_user_id, library_skill, skill_repo)
         description = library_skill.description
         skills.append(
