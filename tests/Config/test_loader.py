@@ -24,42 +24,23 @@ class TestAgentLoader:
         result = loader._load_system_defaults()
         assert result == {}
 
-    def test_load_user_config_missing(self, tmp_path, monkeypatch):
-        monkeypatch.setenv("HOME", str(tmp_path))
-
-        loader = AgentLoader()
-        result = loader._load_user_config()
-        assert result == {}
-
-    def test_load_project_config_no_workspace(self):
-        loader = AgentLoader()
-        result = loader._load_project_config()
-        assert result == {}
-
-    def test_load_project_config_missing(self, tmp_path):
-        loader = AgentLoader(workspace_root=str(tmp_path))
-        result = loader._load_project_config()
-        assert result == {}
-
-    def test_load_project_config_rejects_invalid_runtime_json(self, tmp_path):
+    def test_load_does_not_read_project_runtime_json(self, tmp_path):
         project_dir = tmp_path / "project"
         (project_dir / ".leon").mkdir(parents=True)
         (project_dir / ".leon" / "runtime.json").write_text("{bad json", encoding="utf-8")
 
         loader = AgentLoader(workspace_root=str(project_dir))
 
-        with pytest.raises(ValueError, match="Runtime config must be valid JSON"):
-            loader._load_project_config()
+        assert isinstance(loader.load(), LeonSettings)
 
-    def test_load_project_config_rejects_non_object_runtime_json(self, tmp_path):
-        project_dir = tmp_path / "project"
-        (project_dir / ".leon").mkdir(parents=True)
-        (project_dir / ".leon" / "runtime.json").write_text("[]", encoding="utf-8")
+    def test_load_does_not_read_user_runtime_json(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("HOME", str(tmp_path))
+        (tmp_path / ".leon").mkdir(parents=True)
+        (tmp_path / ".leon" / "runtime.json").write_text("{bad json", encoding="utf-8")
 
-        loader = AgentLoader(workspace_root=str(project_dir))
+        loader = AgentLoader()
 
-        with pytest.raises(ValueError, match="Runtime config must be a JSON object"):
-            loader._load_project_config()
+        assert isinstance(loader.load(), LeonSettings)
 
     def test_deep_merge_simple(self):
         loader = AgentLoader()
@@ -198,9 +179,8 @@ def test_project_agent_file_does_not_override_builtin_runtime_agent(tmp_path: Pa
     assert agent.system_prompt != "project prompt"
 
 
-def test_user_agent_file_does_not_enter_runtime_agent_discovery(tmp_path: Path, monkeypatch):
+def test_user_agent_file_does_not_enter_runtime_agent_discovery(tmp_path: Path):
     home_root = tmp_path
-    monkeypatch.setattr("config.loader.user_home_read_candidates", lambda *parts: (home_root.joinpath(*parts),))
     agents_dir = home_root / "agents"
     agents_dir.mkdir(parents=True)
     (agents_dir / "custom.md").write_text(
@@ -211,9 +191,8 @@ def test_user_agent_file_does_not_enter_runtime_agent_discovery(tmp_path: Path, 
     assert "custom" not in AgentLoader(workspace_root=tmp_path).load_runtime_agents()
 
 
-def test_runtime_agent_discovery_excludes_member_dirs(tmp_path: Path, monkeypatch):
+def test_runtime_agent_discovery_excludes_member_dirs(tmp_path: Path):
     home_root = tmp_path
-    monkeypatch.setattr("config.loader.user_home_read_candidates", lambda *parts: (home_root.joinpath(*parts),))
     member_dir = home_root / "members" / "alice"
     member_dir.mkdir(parents=True)
     (member_dir / "agent.md").write_text(

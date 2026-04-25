@@ -816,9 +816,8 @@ async def test_agent_tool_model_priority_prefers_env_over_tool_and_parent(monkey
 
 
 def test_resolve_subagent_model_ignores_user_home_agent_files(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-    home_root = tmp_path
-    monkeypatch.setattr("config.loader.user_home_read_candidates", lambda *parts: (home_root.joinpath(*parts),))
-    agent_dir = home_root / "agents"
+    monkeypatch.setenv("HOME", str(tmp_path))
+    agent_dir = tmp_path / ".leon" / "agents"
     agent_dir.mkdir(parents=True)
     (agent_dir / "explore.md").write_text(
         "---\nname: explore\nmodel: user-model\ntools:\n  - Read\n---\nuser prompt\n",
