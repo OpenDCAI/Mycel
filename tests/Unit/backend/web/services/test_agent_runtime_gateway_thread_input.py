@@ -86,9 +86,9 @@ async def test_gateway_thread_input_requires_agent_runtime() -> None:
         patch("backend.threads.chat_adapters.bootstrap.get_or_create_agent", AsyncMock(return_value=SimpleNamespace())),
         patch("backend.threads.chat_adapters.bootstrap.start_agent_run", return_value="run-123"),
         patch("backend.threads.chat_adapters.bootstrap.clear_resource_overview_cache"),
+        pytest.raises(AttributeError),
     ):
-        with pytest.raises(AttributeError):
-            await build_agent_runtime_state(app, typing_tracker=typing_tracker).gateway.dispatch_thread_input(_thread_input())
+        await build_agent_runtime_state(app, typing_tracker=typing_tracker).gateway.dispatch_thread_input(_thread_input())
 
 
 @pytest.mark.asyncio
