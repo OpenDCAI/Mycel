@@ -11,7 +11,7 @@ interface AppState {
   // ── Data ──
   agentList: Agent[];
   librarySkills: ResourceItem[];
-  libraryMcps: ResourceItem[];
+  libraryMcpServers: ResourceItem[];
   libraryAgents: ResourceItem[];
   librarySandboxTemplates: ResourceItem[];
   userProfile: UserProfile;
@@ -61,12 +61,12 @@ interface AppState {
 }
 
 type LibraryType = "skill" | "mcp" | "agent" | "sandbox-template";
-type LibraryStateKey = "librarySkills" | "libraryMcps" | "libraryAgents" | "librarySandboxTemplates";
+type LibraryStateKey = "librarySkills" | "libraryMcpServers" | "libraryAgents" | "librarySandboxTemplates";
 
 const DEFAULT_PROFILE: UserProfile = { name: "User", initials: "U", email: "" };
 const LIBRARY_STATE_KEYS: Record<LibraryType, LibraryStateKey> = {
   skill: "librarySkills",
-  mcp: "libraryMcps",
+  mcp: "libraryMcpServers",
   agent: "libraryAgents",
   "sandbox-template": "librarySandboxTemplates",
 };
@@ -80,7 +80,7 @@ const EMPTY_AGENT_CONFIG: Agent["config"] = {
   prompt: "",
   rules: [],
   tools: [],
-  mcps: [],
+  mcpServers: [],
   skills: [],
   subAgents: [],
 };
@@ -98,7 +98,7 @@ function emptySessionState() {
   return {
     agentList: [],
     librarySkills: [],
-    libraryMcps: [],
+    libraryMcpServers: [],
     libraryAgents: [],
     librarySandboxTemplates: [],
     userProfile: DEFAULT_PROFILE,
@@ -141,7 +141,26 @@ async function api<T = unknown>(path: string, opts?: RequestInit): Promise<T> {
   const headers: Record<string, string> = { "Content-Type": "application/json" };
   if (token) headers["Authorization"] = `Bearer ${token}`;
   const res = await fetch(`${API}${path}`, { headers, ...opts });
-  if (!res.ok) throw new Error(`API error: ${res.status}`);
+  if (!res.ok) {
+    const text = await res.text();
+    let message = text || `API error: ${res.status}`;
+    try {
+      const parsed = JSON.parse(text) as { detail?: unknown; message?: unknown };
+      const detail = parsed.detail;
+      if (typeof detail === "string") {
+        message = detail;
+      } else if (Array.isArray(detail)) {
+        message = detail
+          .map((item: { msg?: string; loc?: string[] }) => `${item.loc?.at(-1) ?? "?"}: ${item.msg ?? "invalid"}`)
+          .join("; ");
+      } else if (typeof parsed.message === "string") {
+        message = parsed.message;
+      }
+    } catch {
+      // keep raw response text
+    }
+    throw new Error(message);
+  }
   return res.json();
 }
 
@@ -160,7 +179,6 @@ export const useAppStore = create<AppState>()((set, get) => ({
         await Promise.all([
           get().ensureAgents(),
           get().ensureLibrary("skill"),
-          get().ensureLibrary("mcp"),
           get().ensureLibrary("agent"),
           get().ensureLibrary("sandbox-template"),
           get().fetchProfile(),
@@ -374,7 +392,7 @@ export const useAppStore = create<AppState>()((set, get) => ({
 
   getResourceUsedBy: (type, name) => {
     if (type === "sandbox-template") return [];
-    const key = type === "skill" ? "skills" : type === "mcp" ? "mcps" : "subAgents";
+    const key = type === "skill" ? "skills" : type === "mcp" ? "mcpServers" : "subAgents";
     return get().agentList.filter((s) =>
       (s.config?.[key as keyof typeof s.config] as { name: string }[] | undefined)?.some((i) => i.name === name)
     ).map((s) => s.name);

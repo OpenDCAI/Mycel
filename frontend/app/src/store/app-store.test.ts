@@ -120,7 +120,7 @@ describe("app store agent panel contract", () => {
         id: "agent-1",
         name: "Toad",
         status: "draft",
-        config: { prompt: "hello", rules: [], tools: [], mcps: [], skills: [], subAgents: [] },
+        config: { prompt: "hello", rules: [], tools: [], mcpServers: [], skills: [], subAgents: [] },
       }),
     });
     vi.stubGlobal("fetch", fetchMock);
@@ -129,7 +129,7 @@ describe("app store agent panel contract", () => {
         id: "agent-1",
         name: "Toad",
         status: "draft",
-        config: { prompt: "", rules: [], tools: [], mcps: [], skills: [], subAgents: [] },
+        config: { prompt: "", rules: [], tools: [], mcpServers: [], skills: [], subAgents: [] },
         config_loaded: false,
       } as never],
     });
@@ -229,6 +229,38 @@ describe("app store agent panel contract", () => {
     await useAppStore.getState().fetchLibrary("skill");
 
     expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("loadAll does not load MCP library during global bootstrap", async () => {
+    const fetchMock = vi.fn().mockImplementation((url: string) => Promise.resolve({
+      ok: true,
+      json: async () => {
+        if (url.endsWith("/agents")) return { items: [] };
+        if (url.endsWith("/profile")) return { name: "User", initials: "U", email: "" };
+        return { items: [] };
+      },
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await useAppStore.getState().loadAll();
+
+    const urls = fetchMock.mock.calls.map(([url]) => String(url));
+    expect(urls).toContain("/api/panel/library/skill");
+    expect(urls).toContain("/api/panel/library/agent");
+    expect(urls).toContain("/api/panel/library/sandbox-template");
+    expect(urls).not.toContain("/api/panel/library/mcp");
+  });
+
+  it("surfaces backend detail text from panel API errors", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 400,
+      text: async () => JSON.stringify({ detail: "Skill name is immutable; create a new Skill for a new name" }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(useAppStore.getState().updateResource("skill", "skill-1", { name: "Renamed" }))
+      .rejects.toThrow("Skill name is immutable; create a new Skill for a new name");
   });
 
   it("resets loaded agent state when auth identity changes", () => {

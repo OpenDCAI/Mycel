@@ -1,12 +1,12 @@
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { ArrowLeft, Download, Clock, Tag, User, RefreshCw } from "lucide-react";
+import { ArrowLeft, Download, Clock, Tag, User, RefreshCw, UserPlus, PackagePlus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useMarketplaceStore } from "@/store/marketplace-store";
 import LineageTree from "@/components/marketplace/LineageTree";
-import InstallDialog from "@/components/marketplace/InstallDialog";
+import MarketplaceActionDialog from "@/components/marketplace/MarketplaceActionDialog";
 import { typeBadgeColors } from "@/components/marketplace/constants";
-import { marketplaceTypeLabel } from "@/lib/marketplace-types";
+import { canApplyMarketplaceType, HUB_AGENT_USER_ITEM_TYPE, marketplaceTypeLabel } from "@/lib/marketplace-types";
 
 export default function MarketplaceDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -22,10 +22,15 @@ export default function MarketplaceDetailPage() {
   const snapshotLoading = useMarketplaceStore((s) => s.snapshotLoading);
   const fetchVersionSnapshot = useMarketplaceStore((s) => s.fetchVersionSnapshot);
   const clearSnapshot = useMarketplaceStore((s) => s.clearSnapshot);
-  const [installOpen, setInstallOpen] = useState(false);
+  const [actionOpen, setActionOpen] = useState(false);
   const detailId = detail?.id;
   const detailType = detail?.type;
   const previewVersion = detail?.versions[0]?.version;
+  const isHubAgentUser = detailType === HUB_AGENT_USER_ITEM_TYPE;
+  const canApplyDetail = detailType ? canApplyMarketplaceType(detailType) : false;
+  const PrimaryActionIcon = isHubAgentUser ? UserPlus : PackagePlus;
+  const CountIcon = isHubAgentUser ? UserPlus : Download;
+  const countLabel = isHubAgentUser ? "次添加" : "次下载";
 
   useEffect(() => {
     if (id) {
@@ -89,13 +94,17 @@ export default function MarketplaceDetailPage() {
             <p className="text-sm text-muted-foreground mb-3">{detail.description || "No description"}</p>
             <div className="flex items-center gap-4 text-xs text-muted-foreground">
               <span className="flex items-center gap-1"><User className="w-3 h-3" />{detail.publisher_username}</span>
-              <span className="flex items-center gap-1"><Download className="w-3 h-3" />{detail.download_count} downloads</span>
+              <span className="flex items-center gap-1"><CountIcon className="w-3 h-3" />{detail.download_count} {countLabel}</span>
               <span className="flex items-center gap-1"><Clock className="w-3 h-3" />{new Date(detail.created_at).toLocaleDateString()}</span>
             </div>
           </div>
-          <Button onClick={() => setInstallOpen(true)} className="shrink-0">
-            <Download className="w-4 h-4 mr-2" />
-            下载
+          <Button
+            onClick={() => canApplyDetail && setActionOpen(true)}
+            disabled={!canApplyDetail}
+            className="shrink-0"
+          >
+            <PrimaryActionIcon className="w-4 h-4 mr-2" />
+            {!canApplyDetail ? "暂不支持保存" : isHubAgentUser ? "添加 Agent" : "保存到 Library"}
           </Button>
         </div>
 
@@ -161,8 +170,7 @@ export default function MarketplaceDetailPage() {
         </div>
       </div>
 
-      {/* Install dialog */}
-      <InstallDialog open={installOpen} onOpenChange={setInstallOpen} item={detail} />
+      <MarketplaceActionDialog open={actionOpen} onOpenChange={setActionOpen} item={detail} />
     </div>
   );
 }

@@ -24,11 +24,14 @@ interface ModuleDef {
   count?: (cfg: AgentConfig) => number;
 }
 
-const modules: ModuleDef[] = [
+const primaryModules: ModuleDef[] = [
   { id: "role", label: "角色", icon: FileText },
-  { id: "mcp", label: "MCP", icon: Plug, count: c => c.mcps.length },
   { id: "skills", label: "技能", icon: Zap, count: c => c.skills.length },
   { id: "subagents", label: "子 Agent", icon: Users, count: c => c.subAgents.length },
+];
+
+const advancedModules: ModuleDef[] = [
+  { id: "mcp", label: "MCP 高级", icon: Plug, count: c => c.mcpServers.length },
 ];
 
 function errorText(err: unknown): string {
@@ -47,8 +50,9 @@ export default function AgentDetail() {
   const fetchAgent = useAppStore(s => s.fetchAgent);
   const updateAgent = useAppStore(s => s.updateAgent);
   const updateAgentConfig = useAppStore(s => s.updateAgentConfig);
+  const ensureLibrary = useAppStore(s => s.ensureLibrary);
   const librarySkills = useAppStore(s => s.librarySkills);
-  const libraryMcps = useAppStore(s => s.libraryMcps);
+  const libraryMcpServers = useAppStore(s => s.libraryMcpServers);
   const libraryAgents = useAppStore(s => s.libraryAgents);
 
   const [pickerType, setPickerType] = useState<"skill" | "mcp" | "agent" | null>(null);
@@ -67,6 +71,13 @@ export default function AgentDetail() {
       cancelled = true;
     };
   }, [agent?.config_loaded, fetchAgent, id]);
+
+  useEffect(() => {
+    if (!pickerType) return;
+    ensureLibrary(pickerType).catch((err: unknown) => {
+      toast.error(`加载 Library 失败：${errorText(err)}`);
+    });
+  }, [ensureLibrary, pickerType]);
 
   const startRename = () => {
     if (!agent) return;
@@ -102,7 +113,7 @@ export default function AgentDetail() {
       if (mod === "tools") {
         await updateAgentConfig(agent.id, { tools: agent.config.tools.map(i => i.name === itemName ? { ...i, enabled } : i) });
       } else if (mod === "mcp") {
-        await updateAgentConfig(agent.id, { mcps: agent.config.mcps.map(i => i.name === itemName ? { ...i, disabled: !enabled } : i) });
+        await updateAgentConfig(agent.id, { mcpServers: agent.config.mcpServers.map(i => i.name === itemName ? { ...i, disabled: !enabled } : i) });
       } else if (mod === "skills") {
         await updateAgentConfig(agent.id, { skills: agent.config.skills.map(i => i.name === itemName ? { ...i, enabled } : i) });
       }
@@ -120,12 +131,12 @@ export default function AgentDetail() {
         });
         if (newSkills.length) await updateAgentConfig(agent.id, { skills: [...agent.config.skills, ...newSkills] });
       } else if (type === "mcp") {
-        const existing = new Set(agent.config.mcps.map(m => m.name));
-        const newMcps = names.filter(n => !existing.has(n)).map(n => {
-          const lib = libraryMcps.find(m => m.name === n);
+        const existing = new Set(agent.config.mcpServers.map(m => m.name));
+        const newMcpServers = names.filter(n => !existing.has(n)).map(n => {
+          const lib = libraryMcpServers.find(m => m.name === n);
           return { name: n, command: lib?.desc || "", args: [], env: {}, disabled: false };
         });
-        if (newMcps.length) await updateAgentConfig(agent.id, { mcps: [...agent.config.mcps, ...newMcps] });
+        if (newMcpServers.length) await updateAgentConfig(agent.id, { mcpServers: [...agent.config.mcpServers, ...newMcpServers] });
       } else {
         const existing = new Set(agent.config.subAgents.map(a => a.name));
         const newAgents = names.filter(n => !existing.has(n)).map(n => {
@@ -141,7 +152,7 @@ export default function AgentDetail() {
   const handleRemove = async (mod: string, itemName: string) => {
     if (!agent) return;
     try {
-      if (mod === "mcp") await updateAgentConfig(agent.id, { mcps: agent.config.mcps.filter(i => i.name !== itemName) });
+      if (mod === "mcp") await updateAgentConfig(agent.id, { mcpServers: agent.config.mcpServers.filter(i => i.name !== itemName) });
       else if (mod === "skills") await updateAgentConfig(agent.id, { skills: agent.config.skills.filter(i => i.name !== itemName) });
       else if (mod === "subagents") await updateAgentConfig(agent.id, { subAgents: agent.config.subAgents.filter(i => i.name !== itemName) });
       else if (mod === "rules") await updateAgentConfig(agent.id, { rules: agent.config.rules.filter(i => i.name !== itemName) });
@@ -192,7 +203,7 @@ export default function AgentDetail() {
         return (
           <ResourceCards
             type="mcp"
-            items={agent.config.mcps.map(m => ({ name: m.name, desc: m.command || "未配置", enabled: !m.disabled }))}
+            items={agent.config.mcpServers.map(m => ({ name: m.name, desc: m.command || "未配置", enabled: !m.disabled }))}
             onToggle={(name, en) => handleToggle("mcp", name, en)}
             onRemove={(name) => handleRemove("mcp", name)}
             onAdd={() => setPickerType("mcp")}
@@ -213,6 +224,28 @@ export default function AgentDetail() {
       default: return null;
     }
   };
+
+  const renderModuleButton = (m: ModuleDef) => {
+    const Icon = m.icon;
+    const count = m.count ? m.count(agent.config) : undefined;
+    const active = activeModule === m.id;
+    return (
+      <button
+        key={m.id}
+        onClick={() => setActiveModule(m.id)}
+        className={`w-full flex items-center gap-2 px-4 py-2 text-sm transition-colors duration-fast ${
+          active ? "bg-primary/10 text-primary font-medium" : "text-muted-foreground hover:bg-muted"
+        }`}
+      >
+        <Icon className="h-4 w-4 shrink-0" />
+        <span className="truncate">{m.label}</span>
+        {count !== undefined && (
+          <span className="ml-auto text-xs opacity-60">{count}</span>
+        )}
+      </button>
+    );
+  };
+
   return (
     <div className="h-full flex flex-col">
       {/* Header */}
@@ -247,26 +280,13 @@ export default function AgentDetail() {
       <div className="flex-1 flex min-h-0">
         {/* Flat sidebar */}
         <nav className="w-48 shrink-0 border-r bg-muted/30 py-2">
-          {modules.map(m => {
-            const Icon = m.icon;
-            const count = m.count ? m.count(agent.config) : undefined;
-            const active = activeModule === m.id;
-            return (
-              <button
-                key={m.id}
-                onClick={() => setActiveModule(m.id)}
-                className={`w-full flex items-center gap-2 px-4 py-2 text-sm transition-colors duration-fast ${
-                  active ? "bg-primary/10 text-primary font-medium" : "text-muted-foreground hover:bg-muted"
-                }`}
-              >
-                <Icon className="h-4 w-4 shrink-0" />
-                <span className="truncate">{m.label}</span>
-                {count !== undefined && (
-                  <span className="ml-auto text-xs opacity-60">{count}</span>
-                )}
-              </button>
-            );
-          })}
+          {primaryModules.map(renderModuleButton)}
+          <div className="mt-3 border-t pt-3">
+            <div className="px-4 pb-1 text-[11px] font-medium text-muted-foreground">
+              高级集成
+            </div>
+            {advancedModules.map(renderModuleButton)}
+          </div>
         </nav>
 
         {/* Content */}
@@ -277,10 +297,10 @@ export default function AgentDetail() {
 
       {showPublish && <PublishDialog open={showPublish} onOpenChange={setShowPublish} agentId={agent.id} />}
       {pickerType && (() => {
-        const libraryMap = { skill: librarySkills, mcp: libraryMcps, agent: libraryAgents };
+        const libraryMap = { skill: librarySkills, mcp: libraryMcpServers, agent: libraryAgents };
         const assignedMap = {
           skill: agent.config.skills.map(s => s.name),
-          mcp: agent.config.mcps.map(m => m.name),
+          mcp: agent.config.mcpServers.map(m => m.name),
           agent: agent.config.subAgents.map(a => a.name),
         };
         return (
@@ -580,7 +600,7 @@ function SubAgentsPanel({ agents, onSave, onAdd, onDelete }: {
       <div className="w-52 shrink-0 border-r flex flex-col">
         <div className="flex items-center justify-between px-3 py-2 border-b">
           <span className="text-xs font-medium text-muted-foreground">子 Agent</span>
-          <Button variant="ghost" size="icon" className="h-6 w-6" onClick={onAdd} title="添加 Agent">
+          <Button variant="ghost" size="icon" className="h-6 w-6" onClick={onAdd} title="添加子 Agent">
             <Plus className="h-3.5 w-3.5" />
           </Button>
         </div>
@@ -588,7 +608,7 @@ function SubAgentsPanel({ agents, onSave, onAdd, onDelete }: {
           {/* Builtin agents section */}
           {builtinAgents.length > 0 && (
             <div className="py-1">
-              <p className="px-3 py-1 text-2xs font-medium text-muted-foreground uppercase tracking-wider">内置</p>
+              <p className="px-3 py-1 text-2xs font-medium text-muted-foreground">内置</p>
               {builtinAgents.map(a => (
                 <button
                   key={a.name}
@@ -610,7 +630,7 @@ function SubAgentsPanel({ agents, onSave, onAdd, onDelete }: {
           {(customAgents.length > 0 || builtinAgents.length > 0) && (
             <div className="py-1">
               {builtinAgents.length > 0 && (
-                <p className="px-3 py-1 text-2xs font-medium text-muted-foreground uppercase tracking-wider">自定义</p>
+                <p className="px-3 py-1 text-2xs font-medium text-muted-foreground">自定义</p>
               )}
               {customAgents.length === 0 ? (
                 <p className="px-3 py-2 text-2xs text-muted-foreground/60">点击 + 添加</p>
@@ -669,7 +689,7 @@ function SubAgentsPanel({ agents, onSave, onAdd, onDelete }: {
                 <Input
                   value={draft.desc}
                   onChange={e => setDraft({ ...draft, desc: e.target.value })}
-                  placeholder="Agent 描述..."
+                  placeholder="子 Agent 描述..."
                   className="h-8 text-sm"
                 />
               )}
@@ -699,7 +719,7 @@ function SubAgentsPanel({ agents, onSave, onAdd, onDelete }: {
           </div>
         ) : (
           <div className="flex-1 flex items-center justify-center text-sm text-muted-foreground">
-            选择一个 Agent 查看详情
+            选择一个子 Agent 查看详情
           </div>
         )}
       </div>
@@ -790,7 +810,7 @@ function ResourceCards({ type, items, onToggle, onRemove, onAdd }: {
         <div className="text-sm text-muted-foreground py-8 text-center">
           {onAdd ? (
             <button onClick={onAdd} className="hover:text-primary transition-colors duration-fast">
-              点击 + 从 Library 添加{labels[type]}
+              点击 + 从 Library 添加 {labels[type]}
             </button>
           ) : (
             <>暂无{labels[type]}</>
@@ -832,7 +852,7 @@ function ResourcePicker({ type, library, assigned, onConfirm, onClose }: {
   onConfirm: (names: string[]) => void;
   onClose: () => void;
 }) {
-  const labels = { skill: "Skill", mcp: "MCP", agent: "Agent" };
+  const labels = { skill: "Skill", mcp: "MCP", agent: "子 Agent" };
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [filter, setFilter] = useState("");
   const assignedSet = useMemo(() => new Set(assigned), [assigned]);
@@ -855,7 +875,7 @@ function ResourcePicker({ type, library, assigned, onConfirm, onClose }: {
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>从 Library 添加 {labels[type]}</DialogTitle>
-          <DialogDescription className="sr-only">从资源库中选择要添加的{labels[type]}</DialogDescription>
+          <DialogDescription className="sr-only">从资源库中选择要添加的 {labels[type]}</DialogDescription>
         </DialogHeader>
         <div className="relative">
           <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />

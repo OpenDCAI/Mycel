@@ -41,9 +41,17 @@ export interface LineageNode {
 
 export interface UpdateAvailable {
   marketplace_item_id: string;
-  installed_version: string;
+  source_version: string;
   latest_version: string;
   release_notes: string;
+}
+
+export interface MarketplaceApplyResult {
+  type: string;
+  version: string;
+  resource_id?: string;
+  user_id?: string;
+  agent_user_id?: string;
 }
 
 interface MarketplaceVersionSnapshot {
@@ -80,7 +88,7 @@ interface MarketplaceState {
 
   // Updates
   updates: UpdateAvailable[];
-  checkUpdates: (installed: { marketplace_item_id: string; installed_version: string }[]) => Promise<void>;
+  checkUpdates: (items: { marketplace_item_id: string; source_version: string }[]) => Promise<void>;
 
   // Preview
   versionSnapshot: MarketplaceVersionSnapshot | null;
@@ -89,8 +97,8 @@ interface MarketplaceState {
   clearSnapshot: () => void;
 
   // Actions (go through Mycel backend)
-  downloading: boolean;
-  download: (itemId: string, agentUserId?: string) => Promise<{ resource_id: string; type: string; version: string; agent_user_id?: string }>;
+  applying: boolean;
+  applyItem: (itemId: string, agentUserId?: string) => Promise<MarketplaceApplyResult>;
   upgrade: (userId: string, itemId: string) => Promise<void>;
   publishAgentUserToMarketplace: (userId: string, bumpType: string, releaseNotes: string, tags: string[], visibility: string) => Promise<unknown>;
 }
@@ -239,16 +247,16 @@ export const useMarketplaceStore = create<MarketplaceState>()((set, get) => ({
 
   updates: [],
 
-  checkUpdates: async (installed) => {
+  checkUpdates: async (items) => {
     set({ error: null });
     try {
       const data = await backendApi<{ updates: UpdateAvailable[] }>("/check-updates", {
         method: "POST",
-        body: JSON.stringify({ items: installed }),
+        body: JSON.stringify({ items }),
       });
       set({ updates: data.updates || [] });
     } catch (e) {
-      // @@@marketplace-updates-route-teardown - installed update checks can
+      // @@@marketplace-updates-route-teardown - library update checks can
       // resolve after the user already left /marketplace. Only log if the
       // marketplace route is still active; otherwise this is stale UI noise.
       if (!isActiveMarketplaceRoute()) return;
@@ -257,18 +265,18 @@ export const useMarketplaceStore = create<MarketplaceState>()((set, get) => ({
     }
   },
 
-  downloading: false,
+  applying: false,
 
-  download: async (itemId, agentUserId) => {
-    set({ downloading: true });
+  applyItem: async (itemId, agentUserId) => {
+    set({ applying: true });
     try {
-      const data = await backendApi<{ resource_id: string; type: string; version: string; agent_user_id?: string }>("/download", {
+      const data = await backendApi<MarketplaceApplyResult>("/apply", {
         method: "POST",
         body: JSON.stringify({ item_id: itemId, ...(agentUserId ? { agent_user_id: agentUserId } : {}) }),
       });
       return data;
     } finally {
-      set({ downloading: false });
+      set({ applying: false });
     }
   },
 

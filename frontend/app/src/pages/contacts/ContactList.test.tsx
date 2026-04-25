@@ -56,7 +56,7 @@ describe("ContactList", () => {
           description: "owned agent",
           status: "active",
           version: "1.0.0",
-          config: { prompt: "", rules: [], tools: [], mcps: [], skills: [], subAgents: [] },
+          config: { prompt: "", rules: [], tools: [], mcpServers: [], skills: [], subAgents: [] },
           created_at: 0,
           updated_at: 0,
           avatar_url: "/api/users/agent-1/avatar",

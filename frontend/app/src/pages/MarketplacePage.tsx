@@ -11,18 +11,15 @@ import type { Agent, ResourceItem } from "@/store/types";
 import type { UpdateAvailable } from "@/store/marketplace-store";
 import { HUB_AGENT_USER_ITEM_TYPE } from "@/lib/marketplace-types";
 
-type Tab = "explore" | "installed";
-type InstalledSubTab = "agent-user" | "skill" | "agent" | "sandbox-template";
+type Tab = "explore" | "library";
+type LibrarySubTab = "agent-user" | "skill" | "agent" | "sandbox-template";
 type TypeFilter = "all" | typeof HUB_AGENT_USER_ITEM_TYPE | "agent" | "skill" | "env";
 
 function isTab(value: string | null): value is Tab {
-  return value === "explore" || value === "installed";
+  return value === "explore" || value === "library";
 }
 
-function normalizeInstalledSubTab(value: string | null): InstalledSubTab | null {
-  if (value === "subagent") return "agent";
-  if (value === "skill-template") return "skill";
-  if (value === "sandbox") return "sandbox-template";
+function normalizeLibrarySubTab(value: string | null): LibrarySubTab | null {
   if (value === "agent-user" || value === "skill" || value === "agent" || value === "sandbox-template") return value;
   return null;
 }
@@ -46,12 +43,12 @@ export default function MarketplacePage() {
   const [searchParams, setSearchParams] = useSearchParams();
 
   const rawTab = searchParams.get("tab");
-  const rawInstalledSubTab = searchParams.get("sub");
+  const rawLibrarySubTab = searchParams.get("sub");
   const tab = isTab(rawTab) ? rawTab : "explore";
-  const installedSubTab = normalizeInstalledSubTab(rawInstalledSubTab) ?? "agent-user";
+  const librarySubTab = normalizeLibrarySubTab(rawLibrarySubTab) ?? "agent-user";
 
   const setTab = (t: Tab) => setSearchParams((p) => { p.set("tab", t); p.delete("sub"); return p; }, { replace: true });
-  const setInstalledSubTab = (s: InstalledSubTab) => setSearchParams((p) => { p.set("sub", s); return p; }, { replace: true });
+  const setLibrarySubTab = (s: LibrarySubTab) => setSearchParams((p) => { p.set("sub", s); return p; }, { replace: true });
 
   // Explore state
   const items = useMarketplaceStore((s) => s.items);
@@ -62,7 +59,7 @@ export default function MarketplacePage() {
   const fetchItems = useMarketplaceStore((s) => s.fetchItems);
   const error = useMarketplaceStore((s) => s.error);
 
-  // Installed state
+  // Library state
   const agentList = useAppStore((s) => s.agentList);
   const librarySkills = useAppStore((s) => s.librarySkills);
   const libraryAgents = useAppStore((s) => s.libraryAgents);
@@ -75,7 +72,7 @@ export default function MarketplacePage() {
 
   // Search
   const [searchInput, setSearchInput] = useState("");
-  const [installedSearch, setInstalledSearch] = useState("");
+  const [librarySearch, setLibrarySearch] = useState("");
 
   // Update dialog
   const [updateDialogOpen, setUpdateDialogOpen] = useState(false);
@@ -105,20 +102,19 @@ export default function MarketplacePage() {
     setFilter("type", type === "all" ? null : type);
   };
 
-  // Installed agent users with marketplace source info
-  const installedAgentUsers: Agent[] = agentList.filter((agent) => !agent.builtin);
-  const updateCheckableAgentUsers = installedAgentUsers.filter((agent) => agent.source?.marketplace_item_id);
-  const filteredAgentUsers = installedAgentUsers.filter((agent) =>
-    !installedSearch || agent.name.toLowerCase().includes(installedSearch.toLowerCase())
+  const libraryAgentUsers: Agent[] = agentList.filter((agent) => !agent.builtin);
+  const updateCheckableAgentUsers = libraryAgentUsers.filter((agent) => agent.source?.marketplace_item_id);
+  const filteredAgentUsers = libraryAgentUsers.filter((agent) =>
+    !librarySearch || agent.name.toLowerCase().includes(librarySearch.toLowerCase())
   );
   const filteredSkills = librarySkills.filter((s) =>
-    !installedSearch || s.name.toLowerCase().includes(installedSearch.toLowerCase())
+    !librarySearch || s.name.toLowerCase().includes(librarySearch.toLowerCase())
   );
   const filteredAgents = libraryAgents.filter((a) =>
-    !installedSearch || a.name.toLowerCase().includes(installedSearch.toLowerCase())
+    !librarySearch || a.name.toLowerCase().includes(librarySearch.toLowerCase())
   );
   const filteredSandboxTemplates = librarySandboxTemplates.filter((sandboxTemplate) =>
-    !installedSearch || sandboxTemplate.name.toLowerCase().includes(installedSearch.toLowerCase())
+    !librarySearch || sandboxTemplate.name.toLowerCase().includes(librarySearch.toLowerCase())
   );
   const recipeProviderOptions = useMemo<ResourceItem[]>(() => {
     const seen = new Set<string>();
@@ -130,13 +126,13 @@ export default function MarketplacePage() {
     });
   }, [librarySandboxTemplates]);
 
-  const installedSubTabs: { id: InstalledSubTab; label: string; icon: React.ElementType; count: number }[] = [
-    { id: "agent-user", label: "Agent", icon: Package, count: installedAgentUsers.length },
+  const librarySubTabs: { id: LibrarySubTab; label: string; icon: React.ElementType; count: number }[] = [
+    { id: "agent-user", label: "Agent", icon: Package, count: libraryAgentUsers.length },
     { id: "skill", label: "Skill", icon: Zap, count: librarySkills.length },
     { id: "agent", label: "Subagent", icon: Users, count: libraryAgents.length },
     { id: "sandbox-template", label: "Sandbox", icon: Box, count: librarySandboxTemplates.length },
   ];
-  const installedSubTabLoaded = installedSubTab === "agent-user" ? agentsLoaded : librariesLoaded[installedSubTab];
+  const librarySubTabLoaded = librarySubTab === "agent-user" ? agentsLoaded : librariesLoaded[librarySubTab];
 
   const handleCheckUpdates = async () => {
     if (updateCheckableAgentUsers.length === 0) return;
@@ -146,7 +142,7 @@ export default function MarketplacePage() {
       if (!source?.marketplace_item_id) return [];
       return [{
         marketplace_item_id: source.marketplace_item_id,
-        installed_version: source.installed_version || "0.0.0",
+        source_version: source.source_version || "0.0.0",
       }];
     });
     if (payload.length > 0) await checkUpdates(payload);
@@ -154,7 +150,7 @@ export default function MarketplacePage() {
 
   const tabItems = [
     { id: "explore" as Tab, label: "Explore", icon: Store },
-    { id: "installed" as Tab, label: "Installed", icon: Package },
+    { id: "library" as Tab, label: "Library", icon: Package },
   ];
 
   return (
@@ -180,7 +176,7 @@ export default function MarketplacePage() {
                 >
                   <t.icon className={`w-4 h-4 ${isActive ? "text-primary" : ""}`} />
                   <span>{t.label}</span>
-                  {t.id === "installed" && updates.length > 0 && (
+                  {t.id === "library" && updates.length > 0 && (
                     <span className="ml-auto text-2xs px-1.5 py-0.5 rounded-full bg-primary text-primary-foreground font-medium">
                       {updates.length}
                     </span>
@@ -217,11 +213,11 @@ export default function MarketplacePage() {
             )}
             {!isMobile && (
               <h3 className="text-sm font-semibold text-foreground">
-                {tab === "explore" ? "Explore" : "Installed"}
+                {tab === "explore" ? "Explore" : "Library"}
               </h3>
             )}
           </div>
-          {tab === "installed" && installedSubTab === "agent-user" && (
+          {tab === "library" && librarySubTab === "agent-user" && (
             <button
               onClick={handleCheckUpdates}
               disabled={updateCheckableAgentUsers.length === 0}
@@ -339,27 +335,27 @@ export default function MarketplacePage() {
               </>
             )}
 
-            {tab === "installed" && (
+            {tab === "library" && (
               <>
                 {/* Search */}
                 <div className="relative mb-4">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
                   <input
-                    value={installedSearch}
-                    onChange={(e) => setInstalledSearch(e.target.value)}
-                    placeholder="搜索已安装..."
+                    value={librarySearch}
+                    onChange={(e) => setLibrarySearch(e.target.value)}
+                    placeholder="搜索库..."
                     className="w-full pl-9 pr-3 py-2 rounded-lg bg-card border border-border text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-primary/40 transition-colors duration-fast"
                   />
                 </div>
 
                 {/* Sub-tabs */}
                 <div className="flex gap-1 mb-4">
-                  {installedSubTabs.map((t) => (
+                  {librarySubTabs.map((t) => (
                     <button
                       key={t.id}
-                      onClick={() => setInstalledSubTab(t.id)}
+                      onClick={() => setLibrarySubTab(t.id)}
                       className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors duration-fast ${
-                        installedSubTab === t.id
+                        librarySubTab === t.id
                           ? "bg-primary/10 text-primary"
                           : "text-muted-foreground hover:text-foreground hover:bg-muted"
                       }`}
@@ -368,7 +364,7 @@ export default function MarketplacePage() {
                       {t.label}
                       {t.count > 0 && (
                         <span className={`px-1.5 py-0.5 rounded-full text-2xs font-medium ${
-                          installedSubTab === t.id ? "bg-primary/20 text-primary" : "bg-muted text-muted-foreground"
+                          librarySubTab === t.id ? "bg-primary/20 text-primary" : "bg-muted text-muted-foreground"
                         }`}>
                           {t.count}
                         </span>
@@ -377,7 +373,7 @@ export default function MarketplacePage() {
                   ))}
                 </div>
 
-                {installedSubTabLoaded && installedSubTab === "sandbox-template" && (
+                {librarySubTabLoaded && librarySubTab === "sandbox-template" && (
                   <div className="mb-4 flex items-center justify-between rounded-xl border border-border bg-card px-3 py-2">
                     <div>
                       <p className="text-sm font-medium text-foreground">Sandbox 模板</p>
@@ -395,16 +391,16 @@ export default function MarketplacePage() {
                   </div>
                 )}
 
-                {!installedSubTabLoaded && (
-                  <div className="text-center py-12 text-sm text-muted-foreground">正在加载已安装内容...</div>
+                {!librarySubTabLoaded && (
+                  <div className="text-center py-12 text-sm text-muted-foreground">正在加载库内容...</div>
                 )}
 
                 {/* Agent user list */}
-                {installedSubTabLoaded && installedSubTab === "agent-user" && (
+                {librarySubTabLoaded && librarySubTab === "agent-user" && (
                   <>
                     <div className={`grid ${isMobile ? "grid-cols-1" : "grid-cols-2"} gap-3`}>
                       {filteredAgentUsers.map((agent) => {
-                        const update = updates.find((u) => u.marketplace_item_id === agent.id);
+                        const update = updates.find((u) => u.marketplace_item_id === agent.source?.marketplace_item_id);
                         return (
                           <div key={agent.id} className="surface-interactive p-4 cursor-pointer group relative" onClick={() => navigate(`/contacts/agents/${agent.id}`)}>
                             <div className="flex items-start gap-3">
@@ -434,13 +430,13 @@ export default function MarketplacePage() {
                       })}
                     </div>
                     {filteredAgentUsers.length === 0 && (
-                      <div className="text-center py-12 text-sm text-muted-foreground">暂无已安装的 Agent</div>
+                      <div className="text-center py-12 text-sm text-muted-foreground">暂无 Agent</div>
                     )}
                   </>
                 )}
 
                 {/* Skill list */}
-                {installedSubTabLoaded && installedSubTab === "skill" && (
+                {librarySubTabLoaded && librarySubTab === "skill" && (
                   <>
                     <div className={`grid ${isMobile ? "grid-cols-1" : "grid-cols-2"} gap-3`}>
                       {filteredSkills.map((skill) => (
@@ -469,13 +465,13 @@ export default function MarketplacePage() {
                       ))}
                     </div>
                     {filteredSkills.length === 0 && (
-                      <div className="text-center py-12 text-sm text-muted-foreground">暂无已安装的 Skill</div>
+                      <div className="text-center py-12 text-sm text-muted-foreground">暂无 Skill</div>
                     )}
                   </>
                 )}
 
                 {/* Subagent list */}
-                {installedSubTabLoaded && installedSubTab === "agent" && (
+                {librarySubTabLoaded && librarySubTab === "agent" && (
                   <>
                     <div className={`grid ${isMobile ? "grid-cols-1" : "grid-cols-2"} gap-3`}>
                       {filteredAgents.map((agent) => (
@@ -504,13 +500,13 @@ export default function MarketplacePage() {
                       ))}
                     </div>
                     {filteredAgents.length === 0 && (
-                      <div className="text-center py-12 text-sm text-muted-foreground">暂无已安装的 Subagent</div>
+                      <div className="text-center py-12 text-sm text-muted-foreground">暂无 Subagent</div>
                     )}
                   </>
                 )}
 
                 {/* Sandbox template list */}
-                {installedSubTabLoaded && installedSubTab === "sandbox-template" && (
+                {librarySubTabLoaded && librarySubTab === "sandbox-template" && (
                   <>
                     <div className={`grid ${isMobile ? "grid-cols-1" : "grid-cols-2"} gap-3`}>
                       {filteredSandboxTemplates.map((sandboxTemplate) => (
@@ -544,7 +540,7 @@ export default function MarketplacePage() {
                       ))}
                     </div>
                     {filteredSandboxTemplates.length === 0 && (
-                      <div className="text-center py-12 text-sm text-muted-foreground">暂无已安装的 Sandbox</div>
+                      <div className="text-center py-12 text-sm text-muted-foreground">暂无 Sandbox</div>
                     )}
                   </>
                 )}

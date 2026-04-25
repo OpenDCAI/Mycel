@@ -7,11 +7,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import AgentDetailPage from "./AgentDetailPage";
 import { toast } from "sonner";
 
-const { getAgentById, fetchAgent, updateAgent, updateAgentConfig } = vi.hoisted(() => ({
+const { getAgentById, fetchAgent, updateAgent, updateAgentConfig, ensureLibrary, libraryAgents } = vi.hoisted(() => ({
   getAgentById: vi.fn(),
   fetchAgent: vi.fn(),
   updateAgent: vi.fn(),
   updateAgentConfig: vi.fn(),
+  ensureLibrary: vi.fn(),
+  libraryAgents: [] as Array<{ id: string; name: string; desc: string; type: string; created_at: number; updated_at: number }>,
 }));
 
 const { navigateMock } = vi.hoisted(() => ({
@@ -38,7 +40,7 @@ const agentFixture = {
     tools: [],
     rules: [],
     skills: [],
-    mcps: [],
+    mcpServers: [],
     subAgents: [],
   },
 };
@@ -50,10 +52,11 @@ vi.mock("@/store/app-store", () => ({
       fetchAgent,
       updateAgent,
       updateAgentConfig,
+      ensureLibrary,
       loadAll: vi.fn(),
       librarySkills: [],
-      libraryMcps: [],
-      libraryAgents: [],
+      libraryMcpServers: [],
+      libraryAgents,
     }),
 }));
 
@@ -77,6 +80,8 @@ describe("AgentDetailPage wording contract", () => {
   beforeEach(() => {
     getAgentById.mockReturnValue(agentFixture);
     fetchAgent.mockResolvedValue(agentFixture);
+    ensureLibrary.mockResolvedValue(undefined);
+    libraryAgents.splice(0, libraryAgents.length);
     navigateMock.mockReset();
   });
 
@@ -119,13 +124,29 @@ describe("AgentDetailPage wording contract", () => {
     expect(screen.queryByRole("button", { name: /^测试$/ })).toBeNull();
   });
 
+  it("keeps MCP out of the primary agent config modules", () => {
+    render(
+      <MemoryRouter initialEntries={["/contacts/agents/agent-1"]}>
+        <Routes>
+          <Route path="/contacts/agents/:id" element={<AgentDetailPage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByRole("button", { name: /^技能/ })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /^子 Agent/ })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /^MCP\s*\d*$/ })).toBeNull();
+    expect(screen.getByText("高级集成")).toBeTruthy();
+    expect(screen.getByRole("button", { name: /^MCP 高级/ })).toBeTruthy();
+  });
+
   it("loads full agent detail when the list item is only a summary", async () => {
     getAgentById.mockReturnValue({
       id: "agent-1",
       name: "Agent One",
       status: "active",
       config_loaded: false,
-      config: { prompt: "", rules: [], tools: [], mcps: [], skills: [], subAgents: [] },
+      config: { prompt: "", rules: [], tools: [], mcpServers: [], skills: [], subAgents: [] },
     });
 
     render(
@@ -189,5 +210,101 @@ describe("AgentDetailPage wording contract", () => {
         compact: { trigger_tokens: 100000 },
       });
     });
+  });
+
+  it("loads MCP library only when the advanced MCP picker is opened", async () => {
+    render(
+      <MemoryRouter initialEntries={["/contacts/agents/agent-1"]}>
+        <Routes>
+          <Route path="/contacts/agents/:id" element={<AgentDetailPage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    expect(ensureLibrary).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: /^MCP 高级/ }));
+    fireEvent.click(screen.getByText("点击 + 从 Library 添加 MCP 服务器"));
+
+    await waitFor(() => {
+      expect(ensureLibrary).toHaveBeenCalledWith("mcp");
+    });
+  });
+
+  it("uses subagent wording in the Library picker for Library agent resources", async () => {
+    render(
+      <MemoryRouter initialEntries={["/contacts/agents/agent-1"]}>
+        <Routes>
+          <Route path="/contacts/agents/:id" element={<AgentDetailPage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /^子 Agent/ }));
+    const addButton = document.querySelector(".lucide-plus")?.closest("button");
+    expect(addButton).toBeTruthy();
+    fireEvent.click(addButton as HTMLButtonElement);
+
+    expect(await screen.findByRole("heading", { name: "从 Library 添加 子 Agent" })).toBeTruthy();
+    expect(screen.queryByRole("heading", { name: ["从 Library 添加", "Agent"].join(" ") })).toBeNull();
+  });
+
+  it("uses subagent wording for the inline subagent add control", () => {
+    getAgentById.mockReturnValue({
+      ...agentFixture,
+      config: {
+        ...agentFixture.config,
+        subAgents: [{ name: "Helper", desc: "", tools: [], system_prompt: "" }],
+      },
+    });
+
+    render(
+      <MemoryRouter initialEntries={["/contacts/agents/agent-1"]}>
+        <Routes>
+          <Route path="/contacts/agents/:id" element={<AgentDetailPage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /^子 Agent/ }));
+
+    expect(screen.getByTitle("添加子 Agent")).toBeTruthy();
+    expect(screen.queryByTitle("添加 Agent")).toBeNull();
+  });
+
+  it("uses subagent wording for the empty subagent detail prompt", () => {
+    render(
+      <MemoryRouter initialEntries={["/contacts/agents/agent-1"]}>
+        <Routes>
+          <Route path="/contacts/agents/:id" element={<AgentDetailPage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /^子 Agent/ }));
+
+    expect(screen.getByText("选择一个子 Agent 查看详情")).toBeTruthy();
+  });
+
+  it("uses subagent wording for editable subagent fields", () => {
+    getAgentById.mockReturnValue({
+      ...agentFixture,
+      config: {
+        ...agentFixture.config,
+        subAgents: [{ name: "Helper", desc: "", tools: [], system_prompt: "" }],
+      },
+    });
+
+    render(
+      <MemoryRouter initialEntries={["/contacts/agents/agent-1"]}>
+        <Routes>
+          <Route path="/contacts/agents/:id" element={<AgentDetailPage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /^子 Agent/ }));
+
+    expect(screen.getByPlaceholderText("子 Agent 描述...")).toBeTruthy();
   });
 });
