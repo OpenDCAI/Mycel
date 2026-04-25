@@ -4,7 +4,6 @@ import asyncio
 import copy
 import inspect
 import json
-import logging
 import re
 import uuid
 from collections.abc import AsyncGenerator, Awaitable, Callable
@@ -29,8 +28,6 @@ from .permissions import ToolPermissionContext, evaluate_permission_rules
 from .registry import ToolMode, ToolRegistry
 from .state import AppState, BootstrapConfig, ToolPermissionState, ToolUseContext
 from .validator import _required_sets_match
-
-logger = logging.getLogger(__name__)
 
 _ESCALATED_MAX_OUTPUT_TOKENS = 64000
 _FLOOR_OUTPUT_TOKENS = 3000
@@ -1913,7 +1910,7 @@ class QueryLoop:
                 ),
             )
         except Exception:
-            logger.debug("QueryLoop: could not save checkpoint for thread %s", thread_id, exc_info=True)
+            pass
 
     def _collect_memory_system_notices(self, pending_notices: list[HumanMessage]) -> None:
         if self._memory_middleware is None:
