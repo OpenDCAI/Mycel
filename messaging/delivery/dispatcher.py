@@ -75,6 +75,9 @@ class ChatDeliveryDispatcher:
             # @@@same-owner-group-delivery - explicit group membership among the same owner
             # must reach sibling actors even when no relationship row exists yet.
             if sender_owner_id and getattr(recipient, "owner_user_id", None) == sender_owner_id:
+                if self._same_owner_delivery_is_muted(member, uid in mention_set):
+                    logger.info("[messaging] POLICY %s for %s", DeliveryAction.NOTIFY.value, uid[:15])
+                    continue
                 self._deliver(
                     uid,
                     recipient,
@@ -158,3 +161,11 @@ class ChatDeliveryDispatcher:
                 signal=signal,
             )
         )
+
+    def _same_owner_delivery_is_muted(self, member: dict[str, Any], is_mentioned: bool) -> bool:
+        # @@@same-owner-attention-control - same-owner group delivery skips
+        # relationship checks, but chat-level mute is still the owner-controlled
+        # attention switch; explicit mentions wake muted agents.
+        if is_mentioned:
+            return False
+        return bool(member.get("muted", False))

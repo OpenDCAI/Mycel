@@ -71,7 +71,7 @@ class SupabaseChatMemberRepo:
         return int(member_res.data[0].get("last_read_seq") or 0)
 
     def update_mute(self, chat_id: str, user_id: str, muted: bool, mute_until: str | None = None) -> None:
-        self._t().update({"muted": muted, "mute_until": mute_until}).eq("chat_id", chat_id).eq("user_id", user_id).execute()
+        self._t().update({"muted": int(muted), "mute_until": mute_until}).eq("chat_id", chat_id).eq("user_id", user_id).execute()
 
     def _t(self) -> Any:
         return q.schema_table(self._client, _SCHEMA, "chat_members", "chat member repo")

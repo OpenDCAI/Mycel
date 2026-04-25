@@ -282,6 +282,20 @@ def test_supabase_chat_member_repo_updates_last_read_seq() -> None:
     assert ("user_id", "user-1") in table.eq_calls
 
 
+def test_supabase_chat_member_repo_updates_mute_as_database_integer() -> None:
+    client = _FakeClient()
+    repo = SupabaseChatMemberRepo(client)
+
+    repo.update_mute("chat-1", "user-1", True, "2026-04-26T20:00:00+00:00")
+
+    table = client.tables["chat.chat_members"]
+    assert table.update_payload["muted"] == 1
+    assert type(table.update_payload["muted"]) is int
+    assert table.update_payload["mute_until"] == "2026-04-26T20:00:00+00:00"
+    assert ("chat_id", "chat-1") in table.eq_calls
+    assert ("user_id", "user-1") in table.eq_calls
+
+
 def test_supabase_chat_member_repo_add_member_persists_numeric_joined_at() -> None:
     client = _FakeClient()
     repo = SupabaseChatMemberRepo(client)
