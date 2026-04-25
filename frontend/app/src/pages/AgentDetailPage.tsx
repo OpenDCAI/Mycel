@@ -111,7 +111,7 @@ export default function AgentDetail() {
       if (mod === "tools") {
         await updateAgentConfig(agent.id, { tools: agent.config.tools.map(i => i.name === itemName ? { ...i, enabled } : i) });
       } else if (mod === "mcp") {
-        await updateAgentConfig(agent.id, { mcpServers: agent.config.mcpServers.map(i => i.name === itemName ? { ...i, disabled: !enabled } : i) });
+        await updateAgentConfig(agent.id, { mcpServers: agent.config.mcpServers.map(i => i.name === itemName ? { ...i, enabled } : i) });
       } else if (mod === "skills") {
         await updateAgentConfig(agent.id, { skills: agent.config.skills.map(i => i.name === itemName ? { ...i, enabled } : i) });
       }
@@ -187,7 +187,7 @@ export default function AgentDetail() {
         return (
           <ResourceCards
             type="mcp"
-            items={agent.config.mcpServers.map(m => ({ name: m.name, desc: m.command || "未配置", enabled: !m.disabled }))}
+            items={agent.config.mcpServers.map(m => ({ name: m.name, desc: m.command || "未配置", enabled: m.enabled }))}
             onToggle={(name, en) => handleToggle("mcp", name, en)}
             onRemove={(name) => handleRemove("mcp", name)}
           />

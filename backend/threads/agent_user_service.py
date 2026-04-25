@@ -77,10 +77,8 @@ def _mcp_servers_from_repo(config: AgentConfig) -> list[dict[str, Any]]:
     items: list[dict[str, Any]] = []
     for server in config.mcp_servers:
         exposed = server.model_dump(exclude_none=True)
-        exposed.pop("enabled", None)
         if exposed.get("args") == []:
             exposed.pop("args")
-        exposed["disabled"] = not server.enabled
         items.append(exposed)
     return items
 
@@ -442,6 +440,8 @@ def _mcp_from_patch(config_patch: dict[str, Any], current_config: AgentConfig) -
     for item in config_patch["mcpServers"]:
         if not (isinstance(item, dict) and item.get("name")):
             raise RuntimeError("MCP server patch item must include name")
+        if "disabled" in item:
+            raise RuntimeError("MCP server patch item must use enabled, not disabled")
         name = str(item["name"])
         if name in seen_names:
             raise RuntimeError(f"Duplicate MCP server name in patch: {name}")
@@ -459,7 +459,7 @@ def _mcp_from_patch(config_patch: dict[str, Any], current_config: AgentConfig) -
                 url=direct_config.get("url"),
                 instructions=direct_config.get("instructions"),
                 allowed_tools=direct_config.get("allowed_tools"),
-                enabled=not bool(item.get("disabled", False)),
+                enabled=bool(item.get("enabled", True)),
             )
         )
     return servers
@@ -553,13 +553,15 @@ def _skills_from_patch(current_config: AgentConfig, config_patch: dict[str, Any]
             raise RuntimeError("Skill patch item must include name")
         if "content" in item or "files" in item:
             raise RuntimeError("Skill patch item must not include content or files")
+        if "disabled" in item:
+            raise RuntimeError("Skill patch item must use enabled, not disabled")
         name = str(item["name"])
         if name in seen_names:
             raise RuntimeError(f"Duplicate Skill name in patch: {name}")
         seen_names.add(name)
     for item in skill_items:
         name = str(item["name"])
-        enabled = bool(item.get("enabled", not bool(item.get("disabled", False))))
+        enabled = bool(item.get("enabled", True))
         explicit_skill_id = item.get("id") or item.get("skill_id")
         explicit_skill_id_str = str(explicit_skill_id) if explicit_skill_id else None
         current_skill = _current_skill_by_name_or_id(current_config, name, explicit_skill_id_str)

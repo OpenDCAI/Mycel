@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-from types import SimpleNamespace
-
 import pytest
 
-from config.schema import MCPConfig, MCPServerConfig
+from config.agent_config_types import McpServerConfig as AgentMcpServerConfig
+from config.agent_config_types import ResolvedAgentConfig
+from config.schema import LeonSettings, MCPConfig, MCPServerConfig
 from core.runtime.agent import LeonAgent
 
 
@@ -23,16 +23,22 @@ async def test_init_mcp_tools_respects_explicit_websocket_transport(monkeypatch)
             return None
 
     agent = LeonAgent.__new__(LeonAgent)
-    agent.config = SimpleNamespace(
-        mcp=MCPConfig(
-            enabled=True,
-            servers={
-                "wsdemo": MCPServerConfig(
-                    transport="websocket",
-                    url="ws://example.test/mcp",
-                )
-            },
-        )
+    agent.config = LeonSettings.model_validate(
+        {
+            "mcp": MCPConfig.model_validate(
+                {
+                    "enabled": True,
+                    "servers": {
+                        "wsdemo": MCPServerConfig.model_validate(
+                            {
+                                "transport": "websocket",
+                                "url": "ws://example.test/mcp",
+                            }
+                        )
+                    },
+                }
+            )
+        }
     )
     agent._mcp_client = None
 
@@ -47,3 +53,73 @@ async def test_init_mcp_tools_respects_explicit_websocket_transport(monkeypatch)
             "url": "ws://example.test/mcp",
         }
     }
+
+
+@pytest.mark.asyncio
+async def test_resolved_agent_config_controls_mcp_enablement(monkeypatch):
+    captured: dict[str, object] = {}
+
+    async def fake_init_client_tools(*, enabled: bool, server_configs: dict[str, object]):
+        captured["enabled"] = enabled
+        captured["server_configs"] = server_configs
+        return None, []
+
+    agent = LeonAgent.__new__(LeonAgent)
+    agent.config = LeonSettings.model_validate({"mcp": MCPConfig.model_validate({"enabled": False, "servers": {}})})
+    agent._resolved_agent_config = ResolvedAgentConfig(
+        id="cfg-1",
+        name="Agent",
+        mcp_servers=[
+            AgentMcpServerConfig(
+                name="agent-mcp",
+                transport="websocket",
+                url="ws://example.test/mcp",
+            )
+        ],
+    )
+
+    monkeypatch.setattr("core.runtime.agent.mcp_gateway.init_client_tools", fake_init_client_tools)
+
+    await LeonAgent._init_mcp_tools(agent)
+
+    assert captured["enabled"] is True
+    server_configs = captured["server_configs"]
+    assert isinstance(server_configs, dict)
+    assert sorted(server_configs) == ["agent-mcp"]
+
+
+@pytest.mark.asyncio
+async def test_resolved_agent_config_without_mcp_disables_mcp(monkeypatch):
+    captured: dict[str, object] = {}
+
+    async def fake_init_client_tools(*, enabled: bool, server_configs: dict[str, object]):
+        captured["enabled"] = enabled
+        captured["server_configs"] = server_configs
+        return None, []
+
+    agent = LeonAgent.__new__(LeonAgent)
+    agent.config = LeonSettings.model_validate(
+        {
+            "mcp": MCPConfig.model_validate(
+                {
+                    "enabled": True,
+                    "servers": {
+                        "runtime-mcp": MCPServerConfig.model_validate(
+                            {
+                                "transport": "websocket",
+                                "url": "ws://runtime.example.test/mcp",
+                            }
+                        )
+                    },
+                }
+            )
+        }
+    )
+    agent._resolved_agent_config = ResolvedAgentConfig(id="cfg-1", name="Agent", mcp_servers=[])
+
+    monkeypatch.setattr("core.runtime.agent.mcp_gateway.init_client_tools", fake_init_client_tools)
+
+    await LeonAgent._init_mcp_tools(agent)
+
+    assert captured["enabled"] is False
+    assert captured["server_configs"] == {}
