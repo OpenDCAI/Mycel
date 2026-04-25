@@ -181,8 +181,6 @@ def test_get_agent_config_reads_full_aggregate_from_final_tables() -> None:
                 name="github",
                 description="GitHub guidance",
                 version="1.0.0",
-                content="---\nname: github\n---\n",
-                files={"references/query.md": "Prefer precise queries."},
                 source={"source_version": "1.0.0"},
             )
         ],
@@ -247,8 +245,6 @@ def test_save_agent_config_calls_single_rpc_with_full_payload() -> None:
                     skill_id="skill-1",
                     package_id="package-1",
                     name="github",
-                    content="---\nname: github\n---\n",
-                    files={"references/query.md": "Prefer precise queries."},
                 )
             ],
             rules=[AgentRule(id="rule-1", name="Cite", content="Always cite.")],
@@ -266,38 +262,9 @@ def test_save_agent_config_calls_single_rpc_with_full_payload() -> None:
     assert payload["runtime_settings"] == {"shell": {"enabled": False}}
     assert payload["compact"] == {"trigger_tokens": 1000}
     assert payload["skills"][0]["skill_id"] == "skill-1"
-    assert payload["skills"][0]["files"] == {"references/query.md": "Prefer precise queries."}
+    assert "content" not in payload["skills"][0]
+    assert "files" not in payload["skills"][0]
     assert "runtime_" + "settings_json" not in payload
-
-
-def test_save_agent_config_rejects_blank_enabled_skill_content() -> None:
-    repo = SupabaseAgentConfigRepo(_FakeClient())
-    config = AgentConfig(
-        id="cfg-1",
-        owner_user_id="owner-1",
-        agent_user_id="agent-1",
-        name="Researcher",
-        skills=[AgentSkill.model_construct(name="broken", content="", enabled=True)],
-    )
-
-    with pytest.raises(ValueError) as excinfo:
-        repo.save_agent_config(config)
-
-    assert "has blank content" in str(excinfo.value)
-
-
-def test_save_agent_config_rejects_skill_frontmatter_name_drift() -> None:
-    repo = SupabaseAgentConfigRepo(_FakeClient())
-    config = AgentConfig(
-        id="cfg-1",
-        owner_user_id="owner-1",
-        agent_user_id="agent-1",
-        name="Researcher",
-        skills=[AgentSkill.model_construct(name="Visible Skill", content="---\nname: Runtime Skill\n---\nBody")],
-    )
-
-    with pytest.raises(ValueError, match="frontmatter name must match AgentSkill.name"):
-        repo.save_agent_config(config)
 
 
 def test_save_agent_config_rejects_duplicate_skill_names_before_rpc() -> None:
@@ -309,8 +276,8 @@ def test_save_agent_config_rejects_duplicate_skill_names_before_rpc() -> None:
         agent_user_id="agent-1",
         name="Researcher",
         skills=[
-            AgentSkill(name="github", content="---\nname: github\n---\nOne"),
-            AgentSkill(name="github", content="---\nname: github\n---\nTwo"),
+            AgentSkill(skill_id="github", package_id="package-1", name="github"),
+            AgentSkill(skill_id="github-two", package_id="package-2", name="github"),
         ],
     )
 
@@ -349,8 +316,8 @@ def test_save_agent_config_rejects_duplicate_disabled_child_names_before_rpc() -
         agent_user_id="agent-1",
         name="Researcher",
         skills=[
-            AgentSkill(name="github", content="---\nname: github\n---\nOne", enabled=False),
-            AgentSkill(name="github", content="---\nname: github\n---\nTwo", enabled=False),
+            AgentSkill(skill_id="github", package_id="package-1", name="github", enabled=False),
+            AgentSkill(skill_id="github-two", package_id="package-2", name="github", enabled=False),
         ],
         mcp_servers=[
             McpServerConfig(name="filesystem", transport="stdio", command="fs-one", enabled=False),
