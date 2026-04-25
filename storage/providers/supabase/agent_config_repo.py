@@ -1,13 +1,30 @@
+"""Supabase repository for AgentConfig aggregates."""
+
 from __future__ import annotations
 
-import uuid
-from datetime import UTC, datetime
 from typing import Any
 
+from config.agent_config_resolver import resolve_agent_config, validate_agent_skill_content
+from config.agent_config_types import AgentConfig, AgentRule, AgentSkill, AgentSubAgent, McpServerConfig
 from storage.providers.supabase import _query as q
 
 _REPO = "agent_config repo"
 _SCHEMA = "agent"
+
+
+def _reject_duplicate_names(label: str, names: list[str]) -> None:
+    seen: set[str] = set()
+    for name in names:
+        if name in seen:
+            raise ValueError(f"Duplicate {label} name in AgentConfig: {name}")
+        seen.add(name)
+
+
+def _reject_duplicate_child_names(config: AgentConfig) -> None:
+    _reject_duplicate_names("Skill", [skill.name for skill in config.skills])
+    _reject_duplicate_names("Rule", [rule.name for rule in config.rules])
+    _reject_duplicate_names("SubAgent", [agent.name for agent in config.sub_agents])
+    _reject_duplicate_names("MCP server", [server.name for server in config.mcp_servers])
 
 
 class SupabaseAgentConfigRepo:
@@ -20,135 +37,124 @@ class SupabaseAgentConfigRepo:
     def _table(self, table: str) -> Any:
         return q.schema_table(self._client, _SCHEMA, table, _REPO)
 
-    def get_config(self, agent_config_id: str) -> dict[str, Any] | None:
+    def get_agent_config(self, agent_config_id: str) -> AgentConfig | None:
         rows = q.rows(
             self._table("agent_configs").select("*").eq("id", agent_config_id).execute(),
             _REPO,
-            "get_config",
+            "get_agent_config",
         )
         if not rows:
             return None
-        row = dict(rows[0])
-        meta = row.get("meta_json") or {}
-        if not isinstance(meta, dict):
-            raise RuntimeError(f"Supabase {_REPO} expected meta_json object for get_config.")
-        meta = dict(meta)
-        compact = meta.pop("compact", None)
-        result = {
-            **row,
-            "tools": row.get("tools_json", []),
-            "runtime": row.get("runtime_json", {}),
-            "mcp": row.get("mcp_json", {}),
-            "meta": meta,
-        }
-        if compact is not None:
-            result["compact"] = compact
-        return result
+        root = dict(rows[0])
+        return AgentConfig(
+            id=root["id"],
+            owner_user_id=root["owner_user_id"],
+            agent_user_id=root["agent_user_id"],
+            name=root["name"],
+            description=root.get("description") or "",
+            model=root.get("model"),
+            tools=list(root.get("tools_json") or ["*"]),
+            system_prompt=root.get("system_prompt") or "",
+            status=root.get("status") or "draft",
+            version=root.get("version") or "0.1.0",
+            runtime_settings=dict(root.get("runtime_json") or {}),
+            compact=dict(root.get("compact_json") or {}),
+            meta=dict(root.get("meta_json") or {}),
+            skills=self._list_skill_rows(agent_config_id),
+            rules=self._list_rule_rows(agent_config_id),
+            sub_agents=self._list_sub_agent_rows(agent_config_id),
+            mcp_servers=self._list_mcp_rows(agent_config_id),
+        )
 
-    def save_config(self, agent_config_id: str, data: dict[str, Any]) -> None:
-        payload = {"id": agent_config_id, **{k: v for k, v in data.items() if k != "id"}}
-        for timestamp_key in ("created_at", "updated_at"):
-            if timestamp_key in payload:
-                payload[timestamp_key] = _coerce_timestamptz(payload[timestamp_key])
-        if "tools" in payload:
-            payload["tools_json"] = payload.pop("tools")
-        if "runtime" in payload:
-            payload["runtime_json"] = payload.pop("runtime")
-        if "mcp" in payload:
-            payload["mcp_json"] = payload.pop("mcp")
-        meta = payload.pop("meta", {})
-        if meta is None:
-            meta = {}
-        if not isinstance(meta, dict):
-            raise RuntimeError(f"Supabase {_REPO} expected meta object for save_config.")
-        meta = dict(meta)
-        if "compact" in payload:
-            compact = payload.pop("compact")
-            if compact is None:
-                meta.pop("compact", None)
-            else:
-                meta["compact"] = compact
-        payload["meta_json"] = meta
-        self._table("agent_configs").upsert(payload).execute()
+    def save_agent_config(self, config: AgentConfig) -> None:
+        _reject_duplicate_child_names(config)
+        resolve_agent_config(config)
+        for skill in config.skills:
+            validate_agent_skill_content(skill)
+        payload = config.model_dump(mode="json")
+        q.schema_rpc(self._client, _SCHEMA, "save_agent_config", {"payload": payload}, _REPO).execute()
 
-    def delete_config(self, agent_config_id: str) -> None:
+    def delete_agent_config(self, agent_config_id: str) -> None:
+        self._table("agent_skills").delete().eq("agent_config_id", agent_config_id).execute()
+        self._table("agent_rules").delete().eq("agent_config_id", agent_config_id).execute()
+        self._table("agent_sub_agents").delete().eq("agent_config_id", agent_config_id).execute()
         self._table("agent_configs").delete().eq("id", agent_config_id).execute()
 
-    def list_rules(self, agent_config_id: str) -> list[dict[str, Any]]:
-        rows = q.rows(
-            self._table("agent_rules").select("*").eq("agent_config_id", agent_config_id).execute(),
-            _REPO,
-            "list_rules",
-        )
-        return [dict(r) for r in rows]
-
-    def save_rule(self, agent_config_id: str, filename: str, content: str, rule_id: str | None = None) -> dict[str, Any]:
-        rid = rule_id or str(uuid.uuid4())
-        payload = {"id": rid, "agent_config_id": agent_config_id, "filename": filename, "content": content}
-        self._table("agent_rules").upsert(payload).execute()
-        return payload
-
-    def delete_rule(self, rule_id: str) -> None:
-        self._table("agent_rules").delete().eq("id", rule_id).execute()
-
-    def list_skills(self, agent_config_id: str) -> list[dict[str, Any]]:
+    def _list_skill_rows(self, agent_config_id: str) -> list[AgentSkill]:
         rows = q.rows(
             self._table("agent_skills").select("*").eq("agent_config_id", agent_config_id).execute(),
             _REPO,
-            "list_skills",
+            "_list_skill_rows",
         )
-        return [dict(r) for r in rows]
+        return [
+            AgentSkill(
+                id=row.get("id"),
+                skill_id=row.get("skill_id"),
+                name=row["name"],
+                description=row.get("description") or "",
+                version=row.get("version") or "0.1.0",
+                content=row["content"],
+                files=dict(row.get("files_json") or {}),
+                enabled=bool(row.get("enabled", True)),
+                source=dict(row.get("source_json") or {}),
+            )
+            for row in rows
+        ]
 
-    def save_skill(
-        self, agent_config_id: str, name: str, content: str, meta: dict | None = None, skill_id: str | None = None
-    ) -> dict[str, Any]:
-        sid = skill_id or str(uuid.uuid4())
-        payload: dict[str, Any] = {"id": sid, "agent_config_id": agent_config_id, "name": name, "content": content}
-        if meta:
-            payload["meta_json"] = meta
-        self._table("agent_skills").upsert(payload, on_conflict="agent_config_id,name").execute()
-        return payload
+    def _list_rule_rows(self, agent_config_id: str) -> list[AgentRule]:
+        rows = q.rows(
+            self._table("agent_rules").select("*").eq("agent_config_id", agent_config_id).execute(),
+            _REPO,
+            "_list_rule_rows",
+        )
+        return [
+            AgentRule(
+                id=row.get("id"),
+                name=row.get("name") or row.get("filename") or "rule",
+                content=row.get("content") or "",
+                enabled=bool(row.get("enabled", True)),
+            )
+            for row in rows
+        ]
 
-    def delete_skill(self, skill_id: str) -> None:
-        self._table("agent_skills").delete().eq("id", skill_id).execute()
-
-    def list_sub_agents(self, agent_config_id: str) -> list[dict[str, Any]]:
+    def _list_sub_agent_rows(self, agent_config_id: str) -> list[AgentSubAgent]:
         rows = q.rows(
             self._table("agent_sub_agents").select("*").eq("agent_config_id", agent_config_id).execute(),
             _REPO,
-            "list_sub_agents",
+            "_list_sub_agent_rows",
         )
-        return [dict(r) for r in rows]
+        return [
+            AgentSubAgent(
+                id=row.get("id"),
+                name=row["name"],
+                description=row.get("description") or "",
+                model=row.get("model"),
+                tools=list(row.get("tools_json") or []),
+                system_prompt=row.get("system_prompt") or "",
+                enabled=bool(row.get("enabled", True)),
+            )
+            for row in rows
+        ]
 
-    def save_sub_agent(
-        self,
-        agent_config_id: str,
-        name: str,
-        *,
-        description: str | None = None,
-        model: str | None = None,
-        tools: list | None = None,
-        system_prompt: str | None = None,
-        sub_agent_id: str | None = None,
-    ) -> dict[str, Any]:
-        sid = sub_agent_id or str(uuid.uuid4())
-        payload: dict[str, Any] = {"id": sid, "agent_config_id": agent_config_id, "name": name}
-        if description is not None:
-            payload["description"] = description
-        if model is not None:
-            payload["model"] = model
-        if tools is not None:
-            payload["tools_json"] = tools
-        if system_prompt is not None:
-            payload["system_prompt"] = system_prompt
-        self._table("agent_sub_agents").upsert(payload, on_conflict="agent_config_id,name").execute()
-        return payload
-
-    def delete_sub_agent(self, sub_agent_id: str) -> None:
-        self._table("agent_sub_agents").delete().eq("id", sub_agent_id).execute()
-
-
-def _coerce_timestamptz(value: Any) -> Any:
-    if isinstance(value, int | float):
-        return datetime.fromtimestamp(value / 1000, UTC).isoformat()
-    return value
+    def _list_mcp_rows(self, agent_config_id: str) -> list[McpServerConfig]:
+        rows = q.rows(self._table("agent_configs").select("mcp_json").eq("id", agent_config_id).execute(), _REPO, "_list_mcp_rows")
+        if not rows:
+            raise RuntimeError(f"Agent config {agent_config_id} disappeared while reading mcp_json")
+        mcp_rows = rows[0].get("mcp_json") or []
+        if not isinstance(mcp_rows, list):
+            raise RuntimeError(f"Agent config {agent_config_id} mcp_json must be a JSON array")
+        return [
+            McpServerConfig(
+                id=row.get("id"),
+                name=row["name"],
+                transport=row.get("transport"),
+                command=row.get("command"),
+                args=list(row.get("args") or []),
+                env=dict(row.get("env") or {}),
+                url=row.get("url"),
+                instructions=row.get("instructions"),
+                allowed_tools=row.get("allowed_tools"),
+                enabled=bool(row.get("enabled", True)),
+            )
+            for row in mcp_rows
+        ]

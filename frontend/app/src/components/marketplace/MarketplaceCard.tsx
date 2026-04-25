@@ -6,11 +6,11 @@ import { marketplaceTypeLabel } from "@/lib/marketplace-types";
 interface Props {
   item: MarketplaceItemSummary;
   onClick?: () => void;
-  installed?: boolean;
+  inLibrary?: boolean;
   hasUpdate?: boolean;
 }
 
-export default function MarketplaceCard({ item, onClick, installed, hasUpdate }: Props) {
+export default function MarketplaceCard({ item, onClick, inLibrary, hasUpdate }: Props) {
   return (
     <div
       onClick={onClick}
@@ -40,12 +40,12 @@ export default function MarketplaceCard({ item, onClick, installed, hasUpdate }:
           </span>
         )}
       </div>
-      {installed && (
+      {inLibrary && (
         <div className="absolute top-2 right-2">
           <span className={`text-2xs px-1.5 py-0.5 rounded-full font-medium ${
             hasUpdate ? "bg-primary/10 text-primary" : "bg-success/10 text-success"
           }`}>
-            {hasUpdate ? "有可用更新" : "已安装"}
+            {hasUpdate ? "有可用更新" : "在库中"}
           </span>
         </div>
       )}

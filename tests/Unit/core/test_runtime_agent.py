@@ -237,7 +237,7 @@ def test_build_middleware_stack_skips_prompt_caching_for_non_anthropic_provider(
 
     monkeypatch.setattr("core.runtime.agent.PromptCachingMiddleware", _PromptCachingProbe)
     monkeypatch.setattr("core.runtime.agent.MonitorMiddleware", _MonitorProbe)
-    monkeypatch.setattr("core.runtime.agent.McpInstructionsDeltaMiddleware", lambda **_kwargs: mcp)
+    monkeypatch.setattr("core.runtime.agent.IntegrationInstructionsDeltaMiddleware", lambda **_kwargs: mcp)
     monkeypatch.setattr("core.runtime.agent.SteeringMiddleware", lambda **_kwargs: steering)
     monkeypatch.setattr("core.runtime.agent.ToolRunner", lambda **_kwargs: toolrunner)
     monkeypatch.setattr("core.runtime.agent.SpillBufferMiddleware", lambda **_kwargs: "spill")
@@ -259,7 +259,7 @@ def test_build_middleware_stack_skips_prompt_caching_for_non_anthropic_provider(
     agent.workspace_root = Path("/tmp")
     agent.queue_manager = SimpleNamespace()
     agent._tool_registry = SimpleNamespace()
-    agent._get_mcp_instruction_blocks = lambda: []
+    agent._get_integration_instruction_blocks = lambda: []
     agent.model_name = "gpt-5.4"
     agent.verbose = False
     agent._closed = True
@@ -290,7 +290,7 @@ def test_build_middleware_stack_keeps_prompt_caching_for_anthropic_provider(
 
     monkeypatch.setattr("core.runtime.agent.PromptCachingMiddleware", _PromptCachingProbe)
     monkeypatch.setattr("core.runtime.agent.MonitorMiddleware", _MonitorProbe)
-    monkeypatch.setattr("core.runtime.agent.McpInstructionsDeltaMiddleware", lambda **_kwargs: mcp)
+    monkeypatch.setattr("core.runtime.agent.IntegrationInstructionsDeltaMiddleware", lambda **_kwargs: mcp)
     monkeypatch.setattr("core.runtime.agent.SteeringMiddleware", lambda **_kwargs: steering)
     monkeypatch.setattr("core.runtime.agent.ToolRunner", lambda **_kwargs: toolrunner)
     monkeypatch.setattr("core.runtime.agent.SpillBufferMiddleware", lambda **_kwargs: "spill")
@@ -312,7 +312,7 @@ def test_build_middleware_stack_keeps_prompt_caching_for_anthropic_provider(
     agent.workspace_root = Path("/tmp")
     agent.queue_manager = SimpleNamespace()
     agent._tool_registry = SimpleNamespace()
-    agent._get_mcp_instruction_blocks = lambda: []
+    agent._get_integration_instruction_blocks = lambda: []
     agent.model_name = "claude-sonnet"
     agent.verbose = False
     agent._closed = True
@@ -347,7 +347,7 @@ def test_build_middleware_stack_skips_prompt_caching_when_provider_unknown(
 
     monkeypatch.setattr("core.runtime.agent.PromptCachingMiddleware", _PromptCachingProbe)
     monkeypatch.setattr("core.runtime.agent.MonitorMiddleware", _MonitorProbe)
-    monkeypatch.setattr("core.runtime.agent.McpInstructionsDeltaMiddleware", lambda **_kwargs: mcp)
+    monkeypatch.setattr("core.runtime.agent.IntegrationInstructionsDeltaMiddleware", lambda **_kwargs: mcp)
     monkeypatch.setattr("core.runtime.agent.SteeringMiddleware", lambda **_kwargs: steering)
     monkeypatch.setattr("core.runtime.agent.ToolRunner", lambda **_kwargs: toolrunner)
     monkeypatch.setattr("core.runtime.agent.SpillBufferMiddleware", lambda **_kwargs: "spill")
@@ -369,7 +369,7 @@ def test_build_middleware_stack_skips_prompt_caching_when_provider_unknown(
     agent.workspace_root = Path("/tmp")
     agent.queue_manager = SimpleNamespace()
     agent._tool_registry = SimpleNamespace()
-    agent._get_mcp_instruction_blocks = lambda: []
+    agent._get_integration_instruction_blocks = lambda: []
     agent.model_name = "gpt-5.4"
     agent.verbose = False
     agent._closed = True

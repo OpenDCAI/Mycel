@@ -64,7 +64,7 @@ class LangGraphCheckpointStore:
             pending_permission_requests=dict(channel_values.get("pending_permission_requests", {}) or {}),
             resolved_permission_requests=dict(channel_values.get("resolved_permission_requests", {}) or {}),
             memory_compaction_state=dict(channel_values.get("memory_compaction_state", {}) or {}),
-            mcp_instruction_state=dict(channel_values.get("mcp_instruction_state", {}) or {}),
+            integration_instruction_state=dict(channel_values.get("integration_instruction_state", {}) or {}),
         )
 
     async def save(self, thread_id: str, state: ThreadCheckpointState) -> None:
@@ -82,7 +82,7 @@ class LangGraphCheckpointStore:
             "pending_permission_requests": state.pending_permission_requests,
             "resolved_permission_requests": state.resolved_permission_requests,
             "memory_compaction_state": state.memory_compaction_state,
-            "mcp_instruction_state": state.mcp_instruction_state,
+            "integration_instruction_state": state.integration_instruction_state,
         }
         new_versions: dict[str, Any] = {}
         get_next_version = getattr(self._saver, "get_next_version", None)

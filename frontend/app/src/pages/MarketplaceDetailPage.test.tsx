@@ -22,7 +22,7 @@ vi.mock("@/components/marketplace/LineageTree", () => ({
   default: () => null,
 }));
 
-vi.mock("@/components/marketplace/InstallDialog", () => ({
+vi.mock("@/components/marketplace/MarketplaceActionDialog", () => ({
   default: () => null,
 }));
 
@@ -69,6 +69,11 @@ afterEach(() => {
 describe("MarketplaceDetailPage", () => {
   beforeEach(() => {
     navigateMock.mockReset();
+    marketplaceState.detail = {
+      ...marketplaceState.detail,
+      type: "skill",
+      name: "Skill One",
+    };
   });
 
   it("uses the marketplace explore route as the back target for direct-open detail", async () => {
@@ -84,5 +89,65 @@ describe("MarketplaceDetailPage", () => {
     fireEvent.click(screen.getByRole("button", { name: "返回" }));
 
     expect(navigateMock).toHaveBeenCalledWith("/marketplace?tab=explore");
+  });
+
+  it("uses add wording for Hub agent-user detail actions", async () => {
+    marketplaceState.detail = {
+      ...marketplaceState.detail,
+      type: "member",
+      name: "Agent Pack",
+    };
+
+    render(
+      <MemoryRouter initialEntries={["/marketplace/item-1"]}>
+        <Routes>
+          <Route path="/marketplace/:id" element={<MarketplaceDetailPage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByRole("heading", { name: "Agent Pack" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "添加 Agent" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "下载" })).toBeNull();
+    expect(document.body.textContent).toContain("0 次添加");
+    expect(document.body.textContent).not.toContain("downloads");
+  });
+
+  it("uses save wording for Skill detail actions", async () => {
+    render(
+      <MemoryRouter initialEntries={["/marketplace/item-1"]}>
+        <Routes>
+          <Route path="/marketplace/:id" element={<MarketplaceDetailPage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByRole("heading", { name: "Skill One" })).toBeTruthy();
+    const saveButton = screen.getByRole("button", { name: "保存到 Library" });
+    expect(saveButton).toBeTruthy();
+    expect(saveButton.querySelector(".lucide-package-plus")).toBeTruthy();
+    expect(saveButton.querySelector(".lucide-download")).toBeNull();
+    expect(screen.queryByRole("button", { name: "下载" })).toBeNull();
+  });
+
+  it("does not offer apply for unsupported Marketplace item types", async () => {
+    marketplaceState.detail = {
+      ...marketplaceState.detail,
+      type: "env",
+      name: "Env One",
+    };
+
+    render(
+      <MemoryRouter initialEntries={["/marketplace/item-1"]}>
+        <Routes>
+          <Route path="/marketplace/:id" element={<MarketplaceDetailPage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByRole("heading", { name: "Env One" })).toBeTruthy();
+    const button = screen.getByRole("button", { name: "暂不支持保存" }) as HTMLButtonElement;
+    expect(button.disabled).toBe(true);
+    expect(screen.queryByRole("button", { name: "保存到 Library" })).toBeNull();
   });
 });

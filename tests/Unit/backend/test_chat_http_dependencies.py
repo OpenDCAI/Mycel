@@ -18,7 +18,7 @@ def test_get_messaging_service_returns_service_when_present():
     assert chat_http_dependencies.get_messaging_service(app) is service
 
 
-def test_chat_http_dependencies_read_chat_runtime_state_bundle():
+def test_chat_http_dependencies_read_chat_runtime_state():
     messaging_service = object()
     relationship_service = object()
     contact_repo = object()
@@ -42,7 +42,7 @@ def test_chat_http_dependencies_read_chat_runtime_state_bundle():
     assert chat_http_dependencies.get_chat_event_bus(app) is chat_event_bus
 
 
-def test_chat_http_dependencies_require_chat_runtime_state_bundle():
+def test_chat_http_dependencies_require_chat_runtime_state():
     app = _app_state(
         messaging_service=object(),
         relationship_service=object(),

@@ -8,6 +8,32 @@ import MarketplaceCard from "./MarketplaceCard";
 afterEach(() => cleanup());
 
 describe("MarketplaceCard wording contract", () => {
+  it("renders first-class marketplace types with product labels", () => {
+    render(
+      <MarketplaceCard
+        item={{
+          id: "skill-1",
+          slug: "skill-one",
+          type: "skill",
+          name: "Skill One",
+          description: "A skill",
+          avatar_url: null,
+          publisher_user_id: "user-1",
+          publisher_username: "tester",
+          parent_id: null,
+          download_count: 0,
+          visibility: "public",
+          tags: [],
+          created_at: "2026-04-13T00:00:00Z",
+          updated_at: "2026-04-13T00:00:00Z",
+        }}
+      />,
+    );
+
+    expect(screen.getByText("Skill")).toBeTruthy();
+    expect(screen.queryByText("skill")).toBeNull();
+  });
+
   it("renders the Hub agent-user item type as Agent", () => {
     render(
       <MarketplaceCard

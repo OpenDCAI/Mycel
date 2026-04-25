@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from config.loader import AgentLoader, load_bundle_from_repo, load_config
+from config.loader import AgentLoader, load_config
 from config.schema import LeonSettings
 
 
@@ -41,6 +41,26 @@ class TestAgentLoader:
         loader = AgentLoader(workspace_root=str(tmp_path))
         result = loader._load_project_config()
         assert result == {}
+
+    def test_load_project_config_rejects_invalid_runtime_json(self, tmp_path):
+        project_dir = tmp_path / "project"
+        (project_dir / ".leon").mkdir(parents=True)
+        (project_dir / ".leon" / "runtime.json").write_text("{bad json", encoding="utf-8")
+
+        loader = AgentLoader(workspace_root=str(project_dir))
+
+        with pytest.raises(ValueError, match="Runtime config must be valid JSON"):
+            loader._load_project_config()
+
+    def test_load_project_config_rejects_non_object_runtime_json(self, tmp_path):
+        project_dir = tmp_path / "project"
+        (project_dir / ".leon").mkdir(parents=True)
+        (project_dir / ".leon" / "runtime.json").write_text("[]", encoding="utf-8")
+
+        loader = AgentLoader(workspace_root=str(project_dir))
+
+        with pytest.raises(ValueError, match="Runtime config must be a JSON object"):
+            loader._load_project_config()
 
     def test_deep_merge_simple(self):
         loader = AgentLoader()
@@ -171,8 +191,27 @@ class TestAgentLoader:
 
         result = AgentLoader._discover_mcp(tmp_path)
 
-        assert result["wsdemo"].transport == "websocket"
-        assert result["wsdemo"].url == "ws://example.test/mcp"
+        assert result[0].name == "wsdemo"
+        assert result[0].transport == "websocket"
+        assert result[0].url == "ws://example.test/mcp"
+
+    def test_discover_mcp_rejects_invalid_json(self, tmp_path):
+        (tmp_path / ".mcp.json").write_text("{bad json", encoding="utf-8")
+
+        with pytest.raises(ValueError, match="Local MCP config must be valid JSON"):
+            AgentLoader._discover_mcp(tmp_path)
+
+    def test_discover_mcp_rejects_non_object_servers(self, tmp_path):
+        (tmp_path / ".mcp.json").write_text('{"mcpServers":[]}', encoding="utf-8")
+
+        with pytest.raises(ValueError, match="Local MCP config mcpServers must be an object"):
+            AgentLoader._discover_mcp(tmp_path)
+
+    def test_discover_mcp_rejects_non_object_server_config(self, tmp_path):
+        (tmp_path / ".mcp.json").write_text('{"mcpServers":{"demo":[]}}', encoding="utf-8")
+
+        with pytest.raises(ValueError, match="Local MCP server config must be an object"):
+            AgentLoader._discover_mcp(tmp_path)
 
 
 class TestLoadConfigFunction:
@@ -186,7 +225,7 @@ class TestLoadConfigFunction:
         assert isinstance(settings, LeonSettings)
 
 
-def test_project_agent_file_does_not_claim_bundle_source_dir(tmp_path: Path):
+def test_project_agent_file_stays_runtime_definition_only(tmp_path: Path):
     agents_dir = tmp_path / ".leon" / "agents"
     agents_dir.mkdir(parents=True)
     (agents_dir / "explore.md").write_text(
@@ -197,7 +236,6 @@ def test_project_agent_file_does_not_claim_bundle_source_dir(tmp_path: Path):
     agent = AgentLoader(workspace_root=tmp_path).load_runtime_agents()["explore"]
 
     assert agent.model == "project-model"
-    assert agent.source_dir is None
 
 
 def test_runtime_agent_discovery_excludes_member_dirs(tmp_path: Path, monkeypatch):
@@ -213,133 +251,159 @@ def test_runtime_agent_discovery_excludes_member_dirs(tmp_path: Path, monkeypatc
     assert "alice" not in AgentLoader(workspace_root=tmp_path).load_runtime_agents()
 
 
-def test_load_bundle_from_repo_uses_agent_config_id_root_key() -> None:
-    seen: list[tuple[str, str]] = []
+def test_load_resolved_config_from_dir_reads_local_agent_config(tmp_path: Path) -> None:
+    agent_dir = tmp_path / "local-agent"
+    (agent_dir / "rules").mkdir(parents=True)
+    (agent_dir / "agents").mkdir()
+    (agent_dir / "skills" / "Search").mkdir(parents=True)
+    (agent_dir / "agent.md").write_text(
+        "---\nname: Local Agent\ndescription: test config\ntools:\n  - search\n---\nbe helpful\n",
+        encoding="utf-8",
+    )
+    (agent_dir / "runtime.json").write_text('{"tools:search":{"enabled":true,"desc":"Search"}}', encoding="utf-8")
+    (agent_dir / "meta.json").write_text('{"source":{"marketplace_item_id":"item-1","source_version":"1.0.0"}}', encoding="utf-8")
+    (agent_dir / "rules" / "default.md").write_text("Be careful.", encoding="utf-8")
+    (agent_dir / "agents" / "Scout.md").write_text(
+        "---\nname: Scout\ndescription: helper\ntools:\n  - search\n---\nlook around\n",
+        encoding="utf-8",
+    )
+    (agent_dir / "skills" / "Search" / "SKILL.md").write_text(
+        "---\nname: Search\ndescription: Repo Search\n---\nsearch skill",
+        encoding="utf-8",
+    )
+    (agent_dir / "skills" / "Search" / "notes.md").write_text("extra", encoding="utf-8")
+    (agent_dir / ".mcp.json").write_text(
+        '{"mcpServers":{"demo":{"transport":"stdio","command":"demo","disabled":true}}}',
+        encoding="utf-8",
+    )
 
-    class _Repo:
-        def get_config(self, agent_config_id: str):
-            seen.append(("config", agent_config_id))
-            return {
-                "id": agent_config_id,
-                "name": "Toad",
-                "description": "test config",
-                "tools": ["search"],
-                "system_prompt": "be helpful",
-                "status": "active",
-                "version": "1.0.0",
-                "created_at": 1,
-                "updated_at": 2,
-                "meta": {"source": {"marketplace_item_id": "item-1", "installed_version": "1.0.0"}},
-                "runtime": {"tools:search": {"enabled": True, "desc": "Search"}},
-                "mcp": {},
-            }
+    resolved = AgentLoader().load_resolved_config_from_dir(agent_dir)
 
-        def list_rules(self, agent_config_id: str):
-            seen.append(("rules", agent_config_id))
-            return [{"filename": "default.md", "content": "Be careful."}]
-
-        def list_sub_agents(self, agent_config_id: str):
-            seen.append(("sub_agents", agent_config_id))
-            return [{"name": "Scout", "description": "helper", "tools": ["search"], "system_prompt": "look around"}]
-
-        def list_skills(self, agent_config_id: str):
-            seen.append(("skills", agent_config_id))
-            return [{"name": "Search", "content": "search skill"}]
-
-    bundle = load_bundle_from_repo(_Repo(), "cfg-1")
-
-    assert bundle is not None
-    assert bundle.agent.name == "Toad"
-    assert bundle.meta["source"] == {"marketplace_item_id": "item-1", "installed_version": "1.0.0"}
-    assert bundle.rules == [{"name": "default", "content": "Be careful."}]
-    assert bundle.skills == [{"name": "Search", "content": "search skill"}]
-    agent_names = {agent.name for agent in bundle.agents}
+    assert resolved.name == "Local Agent"
+    assert resolved.meta["source"] == {"marketplace_item_id": "item-1", "source_version": "1.0.0"}
+    assert resolved.rules[0].name == "default"
+    assert resolved.skills[0].name == "Search"
+    assert resolved.skills[0].files == {"notes.md": "extra"}
+    agent_names = {agent.name for agent in resolved.sub_agents}
     assert {"bash", "explore", "general", "plan", "Scout"}.issubset(agent_names)
-    assert seen == [
-        ("config", "cfg-1"),
-        ("rules", "cfg-1"),
-        ("sub_agents", "cfg-1"),
-        ("skills", "cfg-1"),
-    ]
+    assert resolved.mcp_servers == []
 
 
-def test_load_bundle_from_repo_reads_sub_agent_tools_json() -> None:
-    class _Repo:
-        def get_config(self, _agent_config_id: str):
-            return {
-                "id": "cfg-1",
-                "name": "Toad",
-                "description": "test config",
-                "tools": ["search"],
-                "system_prompt": "be helpful",
-                "status": "active",
-                "version": "1.0.0",
-                "created_at": 1,
-                "updated_at": 2,
-                "meta": {},
-                "runtime": {},
-                "mcp": {},
-            }
+def test_load_resolved_config_from_dir_rejects_invalid_agent_md_yaml(tmp_path: Path) -> None:
+    agent_dir = tmp_path / "local-agent"
+    agent_dir.mkdir()
+    (agent_dir / "agent.md").write_text("---\nname: [broken\n---\nbe helpful\n", encoding="utf-8")
 
-        def list_rules(self, _agent_config_id: str):
-            return []
-
-        def list_sub_agents(self, _agent_config_id: str):
-            return [
-                {
-                    "name": "Scout",
-                    "description": "helper",
-                    "tools_json": ["search"],
-                    "system_prompt": "look around",
-                }
-            ]
-
-        def list_skills(self, _agent_config_id: str):
-            return []
-
-    bundle = load_bundle_from_repo(_Repo(), "cfg-1")
-
-    assert bundle is not None
-    scout = next(agent for agent in bundle.agents if agent.name == "Scout")
-    assert scout.tools == ["search"]
+    with pytest.raises(ValueError, match="agent.md frontmatter must be valid YAML"):
+        AgentLoader().load_resolved_config_from_dir(agent_dir)
 
 
-def test_load_bundle_from_repo_preserves_empty_sub_agent_tools_json() -> None:
-    class _Repo:
-        def get_config(self, _agent_config_id: str):
-            return {
-                "id": "cfg-1",
-                "name": "Toad",
-                "description": "test config",
-                "tools": ["search"],
-                "system_prompt": "be helpful",
-                "status": "active",
-                "version": "1.0.0",
-                "created_at": 1,
-                "updated_at": 2,
-                "meta": {},
-                "runtime": {},
-                "mcp": {},
-            }
+def test_load_resolved_config_from_dir_rejects_agent_md_without_name(tmp_path: Path) -> None:
+    agent_dir = tmp_path / "local-agent"
+    agent_dir.mkdir()
+    (agent_dir / "agent.md").write_text("---\ndescription: missing name\n---\nbe helpful\n", encoding="utf-8")
 
-        def list_rules(self, _agent_config_id: str):
-            return []
+    with pytest.raises(ValueError, match="agent.md frontmatter must include name"):
+        AgentLoader().load_resolved_config_from_dir(agent_dir)
 
-        def list_sub_agents(self, _agent_config_id: str):
-            return [
-                {
-                    "name": "Scout",
-                    "description": "helper",
-                    "tools_json": [],
-                    "system_prompt": "look around",
-                }
-            ]
 
-        def list_skills(self, _agent_config_id: str):
-            return []
+def test_load_resolved_config_from_dir_rejects_invalid_sub_agent_yaml(tmp_path: Path) -> None:
+    agent_dir = tmp_path / "local-agent"
+    (agent_dir / "agents").mkdir(parents=True)
+    (agent_dir / "agent.md").write_text("---\nname: Local Agent\n---\nbe helpful\n", encoding="utf-8")
+    (agent_dir / "agents" / "Scout.md").write_text("---\nname: [broken\n---\nlook around\n", encoding="utf-8")
 
-    bundle = load_bundle_from_repo(_Repo(), "cfg-1")
+    with pytest.raises(ValueError, match="agent.md frontmatter must be valid YAML"):
+        AgentLoader().load_resolved_config_from_dir(agent_dir)
 
-    assert bundle is not None
-    scout = next(agent for agent in bundle.agents if agent.name == "Scout")
-    assert scout.tools == []
+
+def test_load_resolved_config_from_dir_rejects_unreadable_rule_file(tmp_path: Path) -> None:
+    agent_dir = tmp_path / "local-agent"
+    (agent_dir / "rules").mkdir(parents=True)
+    (agent_dir / "agent.md").write_text("---\nname: Local Agent\n---\nbe helpful\n", encoding="utf-8")
+    (agent_dir / "rules" / "broken.md").write_bytes(b"\xff\xfe\xfa")
+
+    with pytest.raises(RuntimeError, match="Local rule file could not be read"):
+        AgentLoader().load_resolved_config_from_dir(agent_dir)
+
+
+def test_load_resolved_config_from_dir_rejects_skill_without_frontmatter_name(tmp_path: Path) -> None:
+    agent_dir = tmp_path / "local-agent"
+    (agent_dir / "skills" / "Search").mkdir(parents=True)
+    (agent_dir / "agent.md").write_text("---\nname: Local Agent\n---\nbe helpful\n", encoding="utf-8")
+    (agent_dir / "skills" / "Search" / "SKILL.md").write_text("search skill", encoding="utf-8")
+
+    with pytest.raises(ValueError, match="Local Skill content must include frontmatter name"):
+        AgentLoader().load_resolved_config_from_dir(agent_dir)
+
+
+def test_load_resolved_config_from_dir_rejects_skill_dir_without_skill_md(tmp_path: Path) -> None:
+    agent_dir = tmp_path / "local-agent"
+    (agent_dir / "skills" / "Search").mkdir(parents=True)
+    (agent_dir / "agent.md").write_text("---\nname: Local Agent\n---\nbe helpful\n", encoding="utf-8")
+    (agent_dir / "skills" / "Search" / "notes.md").write_text("notes", encoding="utf-8")
+
+    with pytest.raises(ValueError, match="Local Skill directory must contain SKILL.md"):
+        AgentLoader().load_resolved_config_from_dir(agent_dir)
+
+
+def test_load_resolved_config_from_dir_rejects_invalid_skill_frontmatter_yaml(tmp_path: Path) -> None:
+    agent_dir = tmp_path / "local-agent"
+    (agent_dir / "skills" / "Search").mkdir(parents=True)
+    (agent_dir / "agent.md").write_text("---\nname: Local Agent\n---\nbe helpful\n", encoding="utf-8")
+    (agent_dir / "skills" / "Search" / "SKILL.md").write_text("---\nname: [broken\n---\nsearch skill", encoding="utf-8")
+
+    with pytest.raises(ValueError, match="Local Skill frontmatter must be valid YAML"):
+        AgentLoader().load_resolved_config_from_dir(agent_dir)
+
+
+def test_load_resolved_config_from_dir_rejects_unreadable_skill_adjacent_file(tmp_path: Path) -> None:
+    agent_dir = tmp_path / "local-agent"
+    skill_dir = agent_dir / "skills" / "Search"
+    skill_dir.mkdir(parents=True)
+    (agent_dir / "agent.md").write_text("---\nname: Local Agent\n---\nbe helpful\n", encoding="utf-8")
+    (skill_dir / "SKILL.md").write_text("---\nname: Search\n---\nsearch skill", encoding="utf-8")
+    (skill_dir / "broken.bin").write_bytes(b"\xff\xfe\xfa")
+
+    with pytest.raises(RuntimeError, match="Local Skill adjacent file could not be read"):
+        AgentLoader().load_resolved_config_from_dir(agent_dir)
+
+
+def test_load_resolved_config_from_dir_rejects_invalid_runtime_json(tmp_path: Path) -> None:
+    agent_dir = tmp_path / "local-agent"
+    agent_dir.mkdir()
+    (agent_dir / "agent.md").write_text("---\nname: Local Agent\n---\nbe helpful\n", encoding="utf-8")
+    (agent_dir / "runtime.json").write_text("{bad json", encoding="utf-8")
+
+    with pytest.raises(ValueError, match="Local runtime config must be valid JSON"):
+        AgentLoader().load_resolved_config_from_dir(agent_dir)
+
+
+def test_load_resolved_config_from_dir_rejects_non_object_runtime_json(tmp_path: Path) -> None:
+    agent_dir = tmp_path / "local-agent"
+    agent_dir.mkdir()
+    (agent_dir / "agent.md").write_text("---\nname: Local Agent\n---\nbe helpful\n", encoding="utf-8")
+    (agent_dir / "runtime.json").write_text("[]", encoding="utf-8")
+
+    with pytest.raises(ValueError, match="Local runtime config must be a JSON object"):
+        AgentLoader().load_resolved_config_from_dir(agent_dir)
+
+
+def test_load_resolved_config_from_dir_rejects_invalid_meta_json(tmp_path: Path) -> None:
+    agent_dir = tmp_path / "local-agent"
+    agent_dir.mkdir()
+    (agent_dir / "agent.md").write_text("---\nname: Local Agent\n---\nbe helpful\n", encoding="utf-8")
+    (agent_dir / "meta.json").write_text("{bad json", encoding="utf-8")
+
+    with pytest.raises(ValueError, match="Local Agent metadata must be valid JSON"):
+        AgentLoader().load_resolved_config_from_dir(agent_dir)
+
+
+def test_load_resolved_config_from_dir_rejects_non_object_meta_json(tmp_path: Path) -> None:
+    agent_dir = tmp_path / "local-agent"
+    agent_dir.mkdir()
+    (agent_dir / "agent.md").write_text("---\nname: Local Agent\n---\nbe helpful\n", encoding="utf-8")
+    (agent_dir / "meta.json").write_text("[]", encoding="utf-8")
+
+    with pytest.raises(ValueError, match="Local Agent metadata must be a JSON object"):
+        AgentLoader().load_resolved_config_from_dir(agent_dir)

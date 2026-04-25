@@ -1,3 +1,5 @@
+"""Marketplace API router — publish, apply, upgrade, check updates."""
+
 import asyncio
 from typing import Annotated, Any
 
@@ -7,8 +9,8 @@ from backend.hub import client as marketplace_client
 from backend.identity.profile import get_profile
 from backend.web.core.dependencies import get_current_user_id
 from backend.web.models.marketplace import (
+    ApplyFromMarketplaceRequest,
     CheckUpdatesRequest,
-    InstallFromMarketplaceRequest,
     PublishAgentUserToMarketplaceRequest,
     UpgradeFromMarketplaceRequest,
 )
@@ -20,6 +22,13 @@ def _agent_config_repo(request: Request) -> Any | None:
     runtime_storage = getattr(request.app.state, "runtime_storage_state", None)
     storage_container = getattr(runtime_storage, "storage_container", None)
     repo_factory = getattr(storage_container, "agent_config_repo", None)
+    return repo_factory() if callable(repo_factory) else None
+
+
+def _skill_repo(request: Request) -> Any | None:
+    runtime_storage = getattr(request.app.state, "runtime_storage_state", None)
+    storage_container = getattr(runtime_storage, "storage_container", None)
+    repo_factory = getattr(storage_container, "skill_repo", None)
     return repo_factory() if callable(repo_factory) else None
 
 
@@ -99,24 +108,29 @@ async def publish_agent_user_to_marketplace(
     )
 
 
-@router.post("/download")
-async def download_from_marketplace(
-    req: InstallFromMarketplaceRequest,
+@router.post("/apply")
+async def apply_marketplace_item(
+    req: ApplyFromMarketplaceRequest,
     user_id: Annotated[str, Depends(get_current_user_id)],
     request: Request,
 ) -> dict[str, Any]:
     user_repo = request.app.state.user_repo
     agent_config_repo = _agent_config_repo(request)
+    skill_repo = _skill_repo(request)
     if req.agent_user_id is not None:
         await _verify_user_ownership(req.agent_user_id, user_id, user_repo)
-    return await asyncio.to_thread(
-        marketplace_client.download,
-        item_id=req.item_id,
-        owner_user_id=user_id,
-        user_repo=user_repo,
-        agent_config_repo=agent_config_repo,
-        agent_user_id=req.agent_user_id,
-    )
+    try:
+        return await asyncio.to_thread(
+            marketplace_client.apply_item,
+            item_id=req.item_id,
+            owner_user_id=user_id,
+            user_repo=user_repo,
+            agent_config_repo=agent_config_repo,
+            skill_repo=skill_repo,
+            agent_user_id=req.agent_user_id,
+        )
+    except ValueError as error:
+        raise HTTPException(400, str(error)) from error
 
 
 @router.post("/upgrade")

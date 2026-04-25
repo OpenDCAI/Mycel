@@ -19,7 +19,7 @@ afterEach(async () => {
     updates: [],
     versionSnapshot: null,
     snapshotLoading: false,
-    downloading: false,
+    applying: false,
   });
 });
 
@@ -162,7 +162,7 @@ describe("useMarketplaceStore", () => {
   });
 
   it("does not log a failed update check once navigation already left the marketplace route", async () => {
-    window.history.replaceState({}, "", "/marketplace?tab=installed");
+    window.history.replaceState({}, "", "/marketplace?tab=library");
     const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
     const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async () => {
       window.history.replaceState({}, "", "/chat");
@@ -172,7 +172,7 @@ describe("useMarketplaceStore", () => {
     const { useMarketplaceStore } = await import("./marketplace-store");
 
     await useMarketplaceStore.getState().checkUpdates([
-      { marketplace_item_id: "item-1", installed_version: "1.0.0" },
+      { marketplace_item_id: "item-1", source_version: "1.0.0" },
     ]);
 
     expect(fetchMock).toHaveBeenCalledOnce();
@@ -201,20 +201,33 @@ describe("useMarketplaceStore", () => {
     });
   });
 
-  it("passes agent_user_id when downloading a Skill into an Agent", async () => {
+  it("passes agent_user_id when applying a Skill to an Agent", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue({
       ok: true,
-      json: async () => ({ resource_id: "FastAPI", type: "skill", version: "1.0.0", agent_user_id: "agent-1" }),
+      json: async () => ({ resource_id: "fastapi", type: "skill", version: "1.0.0", agent_user_id: "agent-1" }),
     } as Response);
 
     const { useMarketplaceStore } = await import("./marketplace-store");
 
-    await useMarketplaceStore.getState().download("skill-1", "agent-1");
+    await useMarketplaceStore.getState().applyItem("skill-1", "agent-1");
 
     expect(fetchMock).toHaveBeenCalledOnce();
     const [url, init] = fetchMock.mock.calls[0];
-    expect(url).toBe("/api/marketplace/download");
+    expect(url).toBe("/api/marketplace/apply");
     expect(JSON.parse(String(init?.body))).toEqual({ item_id: "skill-1", agent_user_id: "agent-1" });
+  });
+
+  it("returns Agent User apply results with user_id", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue({
+      ok: true,
+      json: async () => ({ user_id: "agent-user-1", type: "user", version: "1.0.0" }),
+    } as Response);
+
+    const { useMarketplaceStore } = await import("./marketplace-store");
+
+    const result = await useMarketplaceStore.getState().applyItem("member-1");
+
+    expect(result).toEqual({ user_id: "agent-user-1", type: "user", version: "1.0.0" });
   });
 
   it("preserves backend detail when marketplace publish returns an honest 503", async () => {

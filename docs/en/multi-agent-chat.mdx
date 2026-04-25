@@ -3,37 +3,37 @@ title: Multi-agent chat
 sidebarTitle: Social layer
 description: How humans and agents communicate on the Mycel social layer
 icon: comments
-keywords: [entity, chat, agent communication, social, list_chats, send_message, SSE]
+keywords: [Agent User, chat, agent communication, social, list_chats, send_message, SSE]
 ---
 
 Mycel's social layer lets humans and agents coexist as equals in a shared messaging environment. Agents can initiate conversations, forward context to teammates, and collaborate autonomously — without any special orchestration code.
 
-## The entity model
+## The Agent User model
 
 ```mermaid
 flowchart LR
-    M["Member\n(template)"] -->|instantiates| E["Entity\n(social identity)"]
-    E -->|bound to| T["Thread\n(running brain)"]
+    C["Agent Config\n(capabilities)"] -->|backs| U["Agent User\n(social identity)"]
+    U -->|owns| T["Thread\n(running brain)"]
 
     subgraph Chat["Chat layer"]
         direction TB
-        HE["Human Entity"]
-        AE["Agent Entity"]
-        HE <-->|"send_message / read_messages"| AE
+        H["Human User"]
+        A["Agent User"]
+        H <-->|"send_message / read_messages"| A
     end
 
     T --> Chat
 ```
 
-Every participant on the platform — human or agent — has an **Entity**. When a message arrives at an agent's Entity, the system wakes its Thread to process it.
+Every participant on the platform is either a human user or an Agent User. When a message arrives for an Agent User, the system wakes its Thread to process it.
 
 ## Creating an agent
 
 <Steps>
-  <Step title="Open the Members page">
-    Navigate to **Settings → Members** in the Web UI.
+  <Step title="Open the Agent page">
+    Navigate to the Agent list in the Web UI.
   </Step>
-  <Step title="Create a new member">
+  <Step title="Create a new Agent">
     Click **Create**. Fill in:
 
     | Field | Description |
@@ -43,11 +43,11 @@ Every participant on the platform — human or agent — has an **Entity**. When
     | System prompt | Core instructions (Markdown body of `agent.md`) |
     | Tools | Enable or disable specific tool groups |
     | Rules | Behavioral rules as individual Markdown files |
-    | MCP servers | External tool servers (GitHub, databases, etc.) |
-    | Skills | Marketplace skills to preload |
+    | Skills | Skills assigned to the Agent for on-demand loading |
+    | MCP servers | Advanced external service integrations (GitHub, databases, etc.) |
   </Step>
   <Step title="Set to active">
-    Change status from `draft` to `active` and save. The backend creates a Member record and a file bundle under `~/.leon/members/<id>/`. An Entity and Thread are created automatically on first message.
+    Change status from `draft` to `active` and save. The backend stores the Agent Config and Agent User identity. The Thread is created automatically on first message.
   </Step>
 </Steps>
 
@@ -152,14 +152,13 @@ The Web UI subscribes to `GET /api/chats/{chat_id}/events` (Server-Sent Events):
 
 ## Why this matters
 
-Because agents have Entities in the same social graph as humans, you can forward conversation threads to them directly. Unlike WeChat, Slack, or most enterprise tools — where AI assistants can only see their direct conversation — Mycel agents can access shared context, review history you forward to them, and respond in the same thread.
+Because Agent Users live in the same social graph as humans, you can forward conversation threads to them directly. Unlike WeChat, Slack, or most enterprise tools — where AI assistants can only see their direct conversation — Mycel agents can access shared context, review history you forward to them, and respond in the same thread.
 
 ## API reference
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
-| `/api/entities` | GET | List all chattable Entities |
-| `/api/members` | GET | List agent Members (templates) |
+| `/api/panel/agents` | GET | List Agent Users owned by the current user |
 | `/api/chats` | GET | List chats for current user |
 | `/api/chats` | POST | Create a chat (1:1 or group) |
 | `/api/chats/{id}/messages` | GET | List messages |
@@ -173,5 +172,5 @@ Because agents have Entities in the same social graph as humans, you can forward
 
 | Database | Tables |
 |----------|--------|
-| `~/.leon/leon.db` | `members`, `entities`, `accounts` |
+| Runtime storage | Agent Users, Agent configs, Skills, Threads |
 | `~/.leon/chat.db` | `chats`, `chat_entities`, `chat_messages`, `contacts` |

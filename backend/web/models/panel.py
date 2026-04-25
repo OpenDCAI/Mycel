@@ -11,7 +11,7 @@ class AgentConfigPayload(BaseModel):
     prompt: str | None = None
     rules: list[dict] | None = None
     tools: list[dict] | None = None
-    mcps: list[dict] | None = None
+    mcpServers: list[dict] | None = None  # noqa: N815
     skills: list[dict] | None = None
     subAgents: list[dict] | None = None  # noqa: N815
     compact: CompactConfigPayload | None = None

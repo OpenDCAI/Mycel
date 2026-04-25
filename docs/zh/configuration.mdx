@@ -1,7 +1,7 @@
 ---
 title: 配置参考
 sidebarTitle: 配置
-description: runtime.json、models.json、MCP、Skills 和环境变量
+description: runtime.json、models.json、Skills、高级集成和环境变量
 icon: sliders
 keywords: [runtime.json, models.json, MCP, skills, 配置, 环境变量, 记忆]
 ---
@@ -12,7 +12,7 @@ Mycel 使用分层配置系统，三级合并：系统默认值 → 用户配置
 
 | 文件 | 用途 |
 |------|------|
-| `runtime.json` | 工具、记忆、MCP、Skills、安全 |
+| `runtime.json` | 工具、记忆、Skills、高级集成、安全 |
 | `models.json` | 模型身份、提供商、API Key、虚拟模型映射 |
 | `observation.json` | Langfuse / LangSmith 追踪 |
 | `config.env` | 快速 API Key 配置（加载为环境变量） |
@@ -28,7 +28,7 @@ Mycel 使用分层配置系统，三级合并：系统默认值 → 用户配置
 | 域 | 策略 |
 |----|------|
 | `runtime`、`memory`、`tools` | 深度合并 — 高优先级层的字段覆盖低优先级层 |
-| `mcp`、`skills` | 查找优先 — 首个定义某 key 的层级获胜，不合并 |
+| `skills`、`mcp` | 查找优先 — 首个定义某 key 的层级获胜，不合并 |
 | `system_prompt` | 查找 — 项目 → 用户 → 系统 |
 | `providers`、`mapping`（models.json） | 按 key 深度合并 |
 | `pool`（models.json） | 最后者胜 — 不合并列表 |
@@ -46,7 +46,7 @@ MODEL_NAME=claude-sonnet-4-5-20250929
 
 ## runtime.json
 
-控制 Agent 行为、工具、记忆、MCP 和 Skills。
+控制 Agent 行为、工具、记忆、Skills 和高级集成。
 
 ```json
 {
@@ -216,7 +216,28 @@ Mycel 提供四个 `leon:*` 别名：
 }
 ```
 
-## MCP 服务器
+## Skills
+
+Skills 是可加载的专业能力模块 — 按需注入专业指令的 Markdown 文件。
+
+```json
+{
+  "skills": {
+    "enabled": true,
+    "paths": ["~/.leon/skills"],
+    "skills": {
+      "code-review": true,
+      "debugging": false
+    }
+  }
+}
+```
+
+Skill 目录必须在磁盘上存在，Mycel 不会自动创建。
+
+Agent 在运行时加载：`load_skill("code-review")`。
+
+## 高级 MCP 服务器
 
 通过 Model Context Protocol 连接外部服务（GitHub、数据库、API 等）。
 
@@ -251,28 +272,7 @@ Mycel 提供四个 `leon:*` 别名：
 
 MCP 工具在 Agent 工具列表中显示为 `mcp__{server_name}__{tool_name}`。
 
-每个 Member 也可以有自己的 `.mcp.json`，路径为 `~/.leon/members/<id>/.mcp.json`。
-
-## Skills
-
-Skills 是可加载的专业能力模块 — 按需注入专业指令的 Markdown 文件。
-
-```json
-{
-  "skills": {
-    "enabled": true,
-    "paths": ["~/.leon/skills"],
-    "skills": {
-      "code-review": true,
-      "debugging": false
-    }
-  }
-}
-```
-
-Skill 目录必须在磁盘上存在，Mycel 不会自动创建。
-
-Agent 在运行时加载：`load_skill("code-review")`。
+本地运行配置也可以携带 `.mcp.json`。产品界面里，MCP 放在 Agent 配置页的高级集成入口。
 
 ## 可观测性（追踪）
 

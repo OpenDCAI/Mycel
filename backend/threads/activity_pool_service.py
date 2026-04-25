@@ -12,7 +12,7 @@ async def get_or_create_agent(*args, **kwargs):
     _registry.get_file_channel_binding = get_file_channel_binding
     _registry.resolve_thread_sandbox = _resolve_thread_sandbox
     if "messaging_service" not in kwargs and app is not None:
-        # @@@agent-pool-borrowed-runtime-bundle - thread runtime still needs a
+        # @@@agent-pool-borrowed-runtime-state - thread runtime still needs a
         # chat-owned messaging service for chat_repos construction, but the
         # borrow now happens through threads_runtime_state rather than a
         # separate chat-owned runtime accessor layer.

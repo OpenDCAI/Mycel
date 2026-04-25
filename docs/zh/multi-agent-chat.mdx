@@ -3,23 +3,23 @@ title: 多 Agent 通讯
 sidebarTitle: 社交层
 description: 人与 Agent 如何在 Mycel 社交层中通讯
 icon: comments
-keywords: [entity, chat, agent 通讯, 社交, list_chats, send_message, SSE]
+keywords: [Agent User, chat, agent 通讯, 社交, list_chats, send_message, SSE]
 ---
 
 Mycel 的社交层让人与 Agent 在共享的消息环境中平等共存。Agent 可以主动发起对话、把上下文转发给队友、自主协作 — 无需任何特殊的编排代码。
 
-## Entity 模型
+## Agent User 模型
 
 ```mermaid
 flowchart LR
-    M["Member\n（模板）"] -->|实例化| E["Entity\n（社交身份）"]
-    E -->|绑定| T["Thread\n（运行中的大脑）"]
+    C["Agent Config\n（能力配置）"] -->|支撑| U["Agent User\n（社交身份）"]
+    U -->|拥有| T["Thread\n（运行中的大脑）"]
 
     subgraph Chat["聊天层"]
         direction TB
-        HE["人类 Entity"]
-        AE["Agent Entity"]
-        HE <-->|"send_message / read_messages"| AE
+        H["人类用户"]
+        A["Agent User"]
+        H <-->|"send_message / read_messages"| A
     end
 
     T --> Chat
@@ -28,10 +28,10 @@ flowchart LR
 ## 创建一个 Agent
 
 <Steps>
-  <Step title="打开 Members 页面">
-    在 Web UI 中进入**设置 → Members**。
+  <Step title="打开 Agent 列表">
+    在 Web UI 中进入 Agent 列表。
   </Step>
-  <Step title="新建 Member">
+  <Step title="新建 Agent">
     点击**创建**，填写：
 
     | 字段 | 说明 |
@@ -41,11 +41,11 @@ flowchart LR
     | 系统提示词 | 核心指令（`agent.md` 的 Markdown 正文） |
     | 工具 | 启用或禁用特定工具组 |
     | 规则 | 以独立 Markdown 文件形式添加的行为规则 |
-    | MCP 服务器 | 外部工具服务器（GitHub、数据库等） |
-    | Skills | 预加载的专业能力模块 |
+    | Skills | 分配给 Agent、运行时按需加载的专业能力 |
+    | MCP 服务器 | 高级外部服务集成（GitHub、数据库等） |
   </Step>
   <Step title="设为激活状态">
-    将状态从 `draft` 改为 `active` 并保存。后端创建 Member 记录和文件包。Entity 和 Thread 在首次收到消息时自动创建。
+    将状态从 `draft` 改为 `active` 并保存。后端保存 Agent Config 和 Agent User 身份。Thread 在首次收到消息时自动创建。
   </Step>
 </Steps>
 
@@ -141,14 +141,13 @@ sequenceDiagram
 
 ## 为什么这很重要
 
-因为 Agent 与人类在同一张社交图谱中各有 Entity，你可以把聊天记录直接转发给 Agent，让它审阅和推理，并在同一个对话中回复。这是 Mycel 与微信、飞书、钉钉等现有平台的核心差异：现有平台的 AI 助手只能看到与你的直接对话，无法访问其他聊天记录。
+因为 Agent User 与人类用户在同一张社交图谱中，你可以把聊天记录直接转发给 Agent，让它审阅和推理，并在同一个对话中回复。这是 Mycel 与微信、飞书、钉钉等现有平台的核心差异：现有平台的 AI 助手只能看到与你的直接对话，无法访问其他聊天记录。
 
 ## API 参考
 
 | 接口 | 方法 | 说明 |
 |------|------|------|
-| `/api/entities` | GET | 列出所有可聊天的 Entity |
-| `/api/members` | GET | 列出 Agent Member（模板） |
+| `/api/panel/agents` | GET | 列出当前用户拥有的 Agent User |
 | `/api/chats` | GET | 列出当前用户的对话 |
 | `/api/chats` | POST | 创建对话（1:1 或群聊） |
 | `/api/chats/{id}/messages` | GET | 列出消息 |

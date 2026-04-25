@@ -12,6 +12,7 @@ function LocationProbe() {
 }
 
 let fetchItemsMock: ReturnType<typeof vi.fn>;
+let marketplaceState: Record<string, unknown>;
 
 vi.mock("@/hooks/use-mobile", () => ({
   useIsMobile: () => false,
@@ -27,17 +28,7 @@ vi.mock("@/components/marketplace/UpdateDialog", () => ({
 
 vi.mock("@/store/marketplace-store", () => ({
   useMarketplaceStore: (selector: (state: Record<string, unknown>) => unknown) =>
-    selector({
-      items: [],
-      total: 0,
-      loading: false,
-      error: null,
-      updates: [],
-      filters: { type: null, sort: "downloads" },
-      setFilter: vi.fn(),
-      fetchItems: fetchItemsMock,
-      checkUpdates: vi.fn(),
-  }),
+    selector(marketplaceState),
 }));
 
 const appStoreFetchLibrary = vi.fn();
@@ -58,6 +49,17 @@ describe("MarketplacePage wording contract", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
     fetchItemsMock = vi.fn();
+    marketplaceState = {
+      items: [],
+      total: 0,
+      loading: false,
+      error: null,
+      updates: [],
+      filters: { type: null, sort: "downloads" },
+      setFilter: vi.fn(),
+      fetchItems: fetchItemsMock,
+      checkUpdates: vi.fn(),
+    };
     appStoreFetchLibrary.mockReset();
     appStoreDeleteResource.mockReset();
     appStoreAddResource.mockReset();
@@ -100,9 +102,9 @@ describe("MarketplacePage wording contract", () => {
     };
   });
 
-  it("uses Agent wording for the installed local agent tab", () => {
+  it("uses Agent wording for the library agent tab", () => {
     render(
-      <MemoryRouter initialEntries={["/marketplace?tab=installed&sub=agent-user"]}>
+      <MemoryRouter initialEntries={["/marketplace?tab=library&sub=agent-user"]}>
         <Routes>
           <Route path="/marketplace" element={<MarketplacePage />} />
         </Routes>
@@ -110,13 +112,13 @@ describe("MarketplacePage wording contract", () => {
     );
 
     expect(screen.getAllByRole("button", { name: /Agent/ }).length).toBeGreaterThan(0);
-    expect(screen.getByText("暂无已安装的 Agent")).toBeTruthy();
+    expect(screen.getByText("暂无 Agent")).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Member" })).toBeNull();
   });
 
-  it("uses agent-user as the installed Agent tab URL key", () => {
+  it("uses agent-user as the library Agent tab URL key", () => {
     render(
-      <MemoryRouter initialEntries={["/marketplace?tab=installed"]}>
+      <MemoryRouter initialEntries={["/marketplace?tab=library"]}>
         <Routes>
           <Route path="/marketplace" element={<><MarketplacePage /><LocationProbe /></>} />
         </Routes>
@@ -129,9 +131,9 @@ describe("MarketplacePage wording contract", () => {
     expect(screen.getByLabelText("location").textContent).not.toContain("sub=member");
   });
 
-  it("shows 检查更新 only on the installed Agent tab", () => {
+  it("shows 检查更新 only on the library Agent tab", () => {
     const { unmount } = render(
-      <MemoryRouter initialEntries={["/marketplace?tab=installed&sub=agent-user"]}>
+      <MemoryRouter initialEntries={["/marketplace?tab=library&sub=agent-user"]}>
         <Routes>
           <Route path="/marketplace" element={<MarketplacePage />} />
         </Routes>
@@ -143,7 +145,7 @@ describe("MarketplacePage wording contract", () => {
     unmount();
 
     render(
-      <MemoryRouter initialEntries={["/marketplace?tab=installed&sub=skill"]}>
+      <MemoryRouter initialEntries={["/marketplace?tab=library&sub=skill"]}>
         <Routes>
           <Route path="/marketplace" element={<MarketplacePage />} />
         </Routes>
@@ -153,9 +155,9 @@ describe("MarketplacePage wording contract", () => {
     expect(screen.queryByRole("button", { name: "检查更新" })).toBeNull();
   });
 
-  it("does not show 检查更新 on the installed Sandbox tab", () => {
+  it("does not show 检查更新 on the library Sandbox tab", () => {
     render(
-      <MemoryRouter initialEntries={["/marketplace?tab=installed&sub=sandbox-template"]}>
+      <MemoryRouter initialEntries={["/marketplace?tab=library&sub=sandbox-template"]}>
         <Routes>
           <Route path="/marketplace" element={<MarketplacePage />} />
         </Routes>
@@ -165,20 +167,9 @@ describe("MarketplacePage wording contract", () => {
     expect(screen.queryByRole("button", { name: "检查更新" })).toBeNull();
   });
 
-  it("does not describe installed tab query aliases with old-framework wording", () => {
-    const queryAliasDescriptions = [
-      "accepts the installed skill-template query alias as the Skill tab",
-      "accepts the installed sandbox query alias as the Sandbox tab",
-      "accepts the installed subagent query alias as the Subagent tab",
-    ].join("\n");
-    const forbidden = ["leg", "acy"].join("");
-
-    expect(queryAliasDescriptions).not.toContain(forbidden);
-  });
-
-  it("accepts the installed skill-template query alias as the Skill tab", () => {
+  it("uses Skill wording for the library Skill tab", () => {
     render(
-      <MemoryRouter initialEntries={["/marketplace?tab=installed&sub=skill-template"]}>
+      <MemoryRouter initialEntries={["/marketplace?tab=library&sub=skill"]}>
         <Routes>
           <Route path="/marketplace" element={<MarketplacePage />} />
         </Routes>
@@ -186,12 +177,12 @@ describe("MarketplacePage wording contract", () => {
     );
 
     expect(screen.queryByRole("button", { name: "检查更新" })).toBeNull();
-    expect(screen.getByText("暂无已安装的 Skill")).toBeTruthy();
+    expect(screen.getByText("暂无 Skill")).toBeTruthy();
   });
 
-  it("accepts the installed sandbox query alias as the Sandbox tab", () => {
+  it("uses Sandbox wording for the library Sandbox tab", () => {
     render(
-      <MemoryRouter initialEntries={["/marketplace?tab=installed&sub=sandbox"]}>
+      <MemoryRouter initialEntries={["/marketplace?tab=library&sub=sandbox-template"]}>
         <Routes>
           <Route path="/marketplace" element={<MarketplacePage />} />
         </Routes>
@@ -201,7 +192,7 @@ describe("MarketplacePage wording contract", () => {
     expect(screen.queryByRole("button", { name: "检查更新" })).toBeNull();
   });
 
-  it("disables check-updates when no installed agents have marketplace source metadata", () => {
+  it("disables check-updates when no library agents have marketplace source metadata", () => {
     appStoreState = {
       ...appStoreState,
       agentList: [{
@@ -210,7 +201,7 @@ describe("MarketplacePage wording contract", () => {
         description: "local only",
         status: "active",
         version: "1.0.0",
-        config: { prompt: "", rules: [], tools: [], mcps: [], skills: [], subAgents: [] },
+        config: { prompt: "", rules: [], tools: [], mcpServers: [], skills: [], subAgents: [] },
         created_at: 1,
         updated_at: 1,
         builtin: false,
@@ -218,7 +209,7 @@ describe("MarketplacePage wording contract", () => {
     };
 
     render(
-      <MemoryRouter initialEntries={["/marketplace?tab=installed&sub=agent-user"]}>
+      <MemoryRouter initialEntries={["/marketplace?tab=library&sub=agent-user"]}>
         <Routes>
           <Route path="/marketplace" element={<MarketplacePage />} />
         </Routes>
@@ -228,9 +219,46 @@ describe("MarketplacePage wording contract", () => {
     expect(screen.getByRole("button", { name: "检查更新" }).hasAttribute("disabled")).toBe(true);
   });
 
+  it("matches Agent update badges by marketplace source id", () => {
+    marketplaceState = {
+      ...marketplaceState,
+      updates: [{
+        marketplace_item_id: "hub-item-1",
+        source_version: "1.0.0",
+        latest_version: "1.1.0",
+        release_notes: "new version",
+      }],
+    };
+    appStoreState = {
+      ...appStoreState,
+      agentList: [{
+        id: "agent-user-1",
+        name: "Market Agent",
+        description: "from hub",
+        status: "active",
+        version: "1.0.0",
+        source: { marketplace_item_id: "hub-item-1", source_version: "1.0.0" },
+        config: { prompt: "", rules: [], tools: [], mcpServers: [], skills: [], subAgents: [] },
+        created_at: 1,
+        updated_at: 1,
+        builtin: false,
+      }],
+    };
+
+    render(
+      <MemoryRouter initialEntries={["/marketplace?tab=library&sub=agent-user"]}>
+        <Routes>
+          <Route path="/marketplace" element={<MarketplacePage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByText("更新到 v1.1.0")).toBeTruthy();
+  });
+
   it("uses Subagent wording for marketplace agent resources", () => {
     render(
-      <MemoryRouter initialEntries={["/marketplace?tab=installed&sub=agent"]}>
+      <MemoryRouter initialEntries={["/marketplace?tab=library&sub=agent"]}>
         <Routes>
           <Route path="/marketplace" element={<MarketplacePage />} />
         </Routes>
@@ -238,12 +266,12 @@ describe("MarketplacePage wording contract", () => {
     );
 
     expect(screen.getByRole("button", { name: /Subagent/ })).toBeTruthy();
-    expect(screen.getByText("暂无已安装的 Subagent")).toBeTruthy();
+    expect(screen.getByText("暂无 Subagent")).toBeTruthy();
   });
 
-  it("accepts the installed subagent query alias as the Subagent tab", () => {
+  it("keeps the library Subagent tab distinct from Agent", () => {
     render(
-      <MemoryRouter initialEntries={["/marketplace?tab=installed&sub=subagent"]}>
+      <MemoryRouter initialEntries={["/marketplace?tab=library&sub=agent"]}>
         <Routes>
           <Route path="/marketplace" element={<MarketplacePage />} />
         </Routes>
@@ -251,13 +279,13 @@ describe("MarketplacePage wording contract", () => {
     );
 
     expect(screen.getByRole("button", { name: /Subagent/ })).toBeTruthy();
-    expect(screen.getByText("暂无已安装的 Subagent")).toBeTruthy();
-    expect(screen.queryByText("暂无已安装的 Agent")).toBeNull();
+    expect(screen.getByText("暂无 Subagent")).toBeTruthy();
+    expect(screen.queryByText("暂无 Agent")).toBeNull();
   });
 
-  it("does not bootstrap installed libraries because RootLayout owns panel loading", () => {
+  it("does not bootstrap marketplace libraries because RootLayout owns panel loading", () => {
     render(
-      <MemoryRouter initialEntries={["/marketplace?tab=installed&sub=agent"]}>
+      <MemoryRouter initialEntries={["/marketplace?tab=library&sub=agent"]}>
         <Routes>
           <Route path="/marketplace" element={<MarketplacePage />} />
         </Routes>
@@ -267,9 +295,9 @@ describe("MarketplacePage wording contract", () => {
     expect(appStoreFetchLibrary).not.toHaveBeenCalled();
   });
 
-  it("shows installed sandbox recipes as the sandbox library tab", () => {
+  it("shows sandbox recipes as the sandbox library tab", () => {
     render(
-      <MemoryRouter initialEntries={["/marketplace?tab=installed&sub=sandbox-template"]}>
+      <MemoryRouter initialEntries={["/marketplace?tab=library&sub=sandbox-template"]}>
         <Routes>
           <Route path="/marketplace" element={<MarketplacePage />} />
         </Routes>
@@ -282,7 +310,7 @@ describe("MarketplacePage wording contract", () => {
     expect(screen.getByText("Sandbox · daytona_selfhost")).toBeTruthy();
   });
 
-  it("does not show installed sandbox empty state before recipe library is loaded", () => {
+  it("does not show sandbox empty state before recipe library is loaded", () => {
     appStoreState = {
       ...appStoreState,
       librarySandboxTemplates: [],
@@ -290,20 +318,20 @@ describe("MarketplacePage wording contract", () => {
     };
 
     render(
-      <MemoryRouter initialEntries={["/marketplace?tab=installed&sub=sandbox-template"]}>
+      <MemoryRouter initialEntries={["/marketplace?tab=library&sub=sandbox-template"]}>
         <Routes>
           <Route path="/marketplace" element={<MarketplacePage />} />
         </Routes>
       </MemoryRouter>,
     );
 
-    expect(screen.queryByText("暂无已安装的 Sandbox")).toBeNull();
-    expect(screen.getByText("正在加载已安装内容...")).toBeTruthy();
+    expect(screen.queryByText("暂无 Sandbox")).toBeNull();
+    expect(screen.getByText("正在加载库内容...")).toBeTruthy();
   });
 
   it("creates sandbox recipes with concrete provider_name from backend-loaded recipes", async () => {
     render(
-      <MemoryRouter initialEntries={["/marketplace?tab=installed&sub=sandbox-template"]}>
+      <MemoryRouter initialEntries={["/marketplace?tab=library&sub=sandbox-template"]}>
         <Routes>
           <Route path="/marketplace" element={<MarketplacePage />} />
         </Routes>

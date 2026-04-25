@@ -33,7 +33,7 @@ export interface AgentConfig {
   prompt: string;
   rules: RuleItem[];
   tools: CrudItem[];
-  mcps: McpItem[];
+  mcpServers: McpItem[];
   skills: CrudItem[];
   subAgents: SubAgent[];
   compact?: {
@@ -49,7 +49,7 @@ export interface Agent {
   version: string;
   source?: {
     marketplace_item_id?: string;
-    installed_version?: string;
+    source_version?: string;
   };
   avatar_url?: string;
   config: AgentConfig;

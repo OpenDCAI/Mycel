@@ -1,3 +1,11 @@
+"""Thread-scoped integration instruction delta injection.
+
+Mycel does not have CC's attachment plane. Keep this contract smaller:
+- integration configs may carry `instructions`
+- the loop stores which server names have already been announced per thread
+- on the next turn after a change, inject one delta SystemMessage
+"""
+
 from __future__ import annotations
 
 import json
@@ -9,7 +17,7 @@ from langchain_core.messages import SystemMessage
 from core.runtime.middleware import AgentMiddleware
 from core.runtime.state import AppState
 
-_DELTA_TAG = "mcp_instructions_delta"
+_DELTA_TAG = "integration_instructions_delta"
 
 
 def _format_instruction_block(server_name: str, instructions: str) -> str:
@@ -24,19 +32,21 @@ def _render_delta_message(*, added: dict[str, str], removed: list[str]) -> Syste
     blocks = [
         "<system-reminder>",
         f"<{_DELTA_TAG}>{json.dumps(payload, ensure_ascii=False)}</{_DELTA_TAG}>",
-        "MCP server instructions changed for this thread.",
+        "Integration instructions changed for this thread.",
     ]
     if added:
-        blocks.append("Use the newly available MCP instructions below for subsequent turns:")
+        blocks.append("Use the newly available integration instructions below for subsequent turns:")
         blocks.extend(_format_instruction_block(name, added[name]) for name in sorted(added))
     if removed:
-        blocks.append("The following MCP servers are no longer active for this thread:")
+        blocks.append("The following integration sources are no longer active for this thread:")
         blocks.extend(f"- {name}" for name in sorted(removed))
     blocks.append("</system-reminder>")
     return SystemMessage(content="\n".join(blocks))
 
 
-class McpInstructionsDeltaMiddleware(AgentMiddleware):
+class IntegrationInstructionsDeltaMiddleware(AgentMiddleware):
+    """Injects integration instruction deltas once per thread when the connected set changes."""
+
     def __init__(
         self,
         *,
@@ -56,7 +66,7 @@ class McpInstructionsDeltaMiddleware(AgentMiddleware):
         current_blocks = {name: block for name, block in self._get_instruction_blocks().items() if block.strip()}
         announced_blocks = {
             name: block
-            for name, block in app_state.announced_mcp_instruction_blocks.get(thread_id, {}).items()
+            for name, block in app_state.announced_integration_instruction_blocks.get(thread_id, {}).items()
             if isinstance(name, str) and isinstance(block, str) and block.strip()
         }
 
@@ -65,6 +75,6 @@ class McpInstructionsDeltaMiddleware(AgentMiddleware):
         if not added_names and not removed_names:
             return None
 
-        app_state.announced_mcp_instruction_blocks[thread_id] = dict(current_blocks)
+        app_state.announced_integration_instruction_blocks[thread_id] = dict(current_blocks)
         added = {name: current_blocks[name] for name in added_names}
         return {"messages": [_render_delta_message(added=added, removed=removed_names)]}

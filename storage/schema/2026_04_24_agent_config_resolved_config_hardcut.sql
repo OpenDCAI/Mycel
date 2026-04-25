@@ -1,0 +1,423 @@
+create extension if not exists pgcrypto;
+
+create schema if not exists agent;
+
+create table if not exists agent.skills (
+    id text not null,
+    owner_user_id text not null,
+    name text not null,
+    description text not null default '',
+    version text not null default '0.1.0',
+    content text not null,
+    files_json jsonb not null default '{}'::jsonb,
+    source_json jsonb not null default '{}'::jsonb,
+    created_at timestamptz not null default now(),
+    updated_at timestamptz not null default now(),
+    primary key (owner_user_id, id)
+);
+
+grant usage on schema agent to service_role, authenticated, anon;
+revoke all on agent.skills from anon, authenticated;
+grant select, insert, update, delete on agent.skills to service_role;
+
+alter table if exists agent.agent_configs
+    add column if not exists owner_user_id text,
+    add column if not exists agent_user_id text,
+    add column if not exists runtime_json jsonb not null default '{}'::jsonb,
+    add column if not exists compact_json jsonb not null default '{}'::jsonb,
+    add column if not exists meta_json jsonb not null default '{}'::jsonb,
+    add column if not exists mcp_json jsonb not null default '[]'::jsonb;
+
+alter table if exists agent.agent_skills
+    add column if not exists skill_id text,
+    add column if not exists description text not null default '',
+    add column if not exists version text not null default '0.1.0',
+    add column if not exists files_json jsonb not null default '{}'::jsonb,
+    add column if not exists source_json jsonb not null default '{}'::jsonb,
+    add column if not exists enabled boolean not null default true;
+
+alter table if exists agent.agent_rules
+    add column if not exists name text,
+    add column if not exists enabled boolean not null default true;
+
+alter table if exists agent.agent_sub_agents
+    add column if not exists enabled boolean not null default true;
+
+alter table if exists agent.agent_skills
+    drop constraint if exists agent_skills_agent_config_id_fkey,
+    add constraint agent_skills_agent_config_id_fkey
+        foreign key (agent_config_id) references agent.agent_configs(id) on delete cascade;
+
+alter table if exists agent.agent_rules
+    drop constraint if exists agent_rules_agent_config_id_fkey,
+    add constraint agent_rules_agent_config_id_fkey
+        foreign key (agent_config_id) references agent.agent_configs(id) on delete cascade;
+
+alter table if exists agent.agent_sub_agents
+    drop constraint if exists agent_sub_agents_agent_config_id_fkey,
+    add constraint agent_sub_agents_agent_config_id_fkey
+        foreign key (agent_config_id) references agent.agent_configs(id) on delete cascade;
+
+do $$
+begin
+    if exists (
+        select 1
+        from agent.agent_configs
+        where owner_user_id is null
+           or btrim(owner_user_id) = ''
+           or agent_user_id is null
+           or btrim(agent_user_id) = ''
+           or name is null
+           or btrim(name) = ''
+    ) then
+        raise exception 'agent.agent_configs contains blank root identity before hard cut';
+    end if;
+
+    alter table agent.agent_configs
+        drop constraint if exists agent_configs_owner_user_id_required_ck,
+        add constraint agent_configs_owner_user_id_required_ck
+            check (owner_user_id is not null and btrim(owner_user_id) <> ''),
+        drop constraint if exists agent_configs_agent_user_id_required_ck,
+        add constraint agent_configs_agent_user_id_required_ck
+            check (agent_user_id is not null and btrim(agent_user_id) <> ''),
+        drop constraint if exists agent_configs_name_required_ck,
+        add constraint agent_configs_name_required_ck
+            check (name is not null and btrim(name) <> '');
+
+    if exists (
+        select 1
+        from agent.skills
+        group by owner_user_id, name
+        having count(*) > 1
+    ) then
+        raise exception 'agent.skills contains duplicate (owner_user_id, name) rows before hard cut';
+    end if;
+
+    if not exists (
+        select 1
+        from pg_constraint
+        where conname = 'skills_owner_name_uq'
+          and conrelid = 'agent.skills'::regclass
+    ) then
+        alter table agent.skills
+            add constraint skills_owner_name_uq unique (owner_user_id, name);
+    end if;
+
+    if exists (
+        select 1
+        from agent.agent_skills
+        group by agent_config_id, name
+        having count(*) > 1
+    ) then
+        raise exception 'agent.agent_skills contains duplicate (agent_config_id, name) rows before hard cut';
+    end if;
+
+    if not exists (
+        select 1
+        from pg_constraint
+        where conname = 'agent_skills_config_name_uq'
+          and conrelid = 'agent.agent_skills'::regclass
+    ) then
+        alter table agent.agent_skills
+            add constraint agent_skills_config_name_uq unique (agent_config_id, name);
+    end if;
+
+    if exists (
+        select 1
+        from agent.agent_rules
+        group by agent_config_id, name
+        having count(*) > 1
+    ) then
+        raise exception 'agent.agent_rules contains duplicate (agent_config_id, name) rows before hard cut';
+    end if;
+
+    if not exists (
+        select 1
+        from pg_constraint
+        where conname = 'agent_rules_config_name_uq'
+          and conrelid = 'agent.agent_rules'::regclass
+    ) then
+        alter table agent.agent_rules
+            add constraint agent_rules_config_name_uq unique (agent_config_id, name);
+    end if;
+
+    if exists (
+        select 1
+        from agent.agent_sub_agents
+        group by agent_config_id, name
+        having count(*) > 1
+    ) then
+        raise exception 'agent.agent_sub_agents contains duplicate (agent_config_id, name) rows before hard cut';
+    end if;
+
+    if not exists (
+        select 1
+        from pg_constraint
+        where conname = 'agent_sub_agents_config_name_uq'
+          and conrelid = 'agent.agent_sub_agents'::regclass
+    ) then
+        alter table agent.agent_sub_agents
+            add constraint agent_sub_agents_config_name_uq unique (agent_config_id, name);
+    end if;
+end $$;
+
+do $$
+begin
+    if exists (
+        select 1
+        from agent.agent_configs
+        where jsonb_typeof(mcp_json) not in ('array', 'object')
+    ) then
+        raise exception 'agent.agent_configs.mcp_json must be a JSON array or object before hard cut';
+    end if;
+
+    if exists (
+        select 1
+        from agent.agent_configs c,
+             jsonb_each(c.mcp_json) item
+        where jsonb_typeof(c.mcp_json) = 'object'
+          and jsonb_typeof(item.value) <> 'object'
+    ) then
+        raise exception 'agent.agent_configs.mcp_json object values must be JSON objects before hard cut';
+    end if;
+
+    update agent.agent_configs c
+    set mcp_json = coalesce(
+        (
+            select jsonb_agg(
+                (item.value - 'disabled')
+                || jsonb_build_object(
+                    'name', item.key,
+                    'enabled', not coalesce((item.value->>'disabled')::boolean, false)
+                )
+                order by item.key
+            )
+            from jsonb_each(c.mcp_json) item
+        ),
+        '[]'::jsonb
+    )
+    where jsonb_typeof(c.mcp_json) = 'object';
+end $$;
+
+create or replace function agent.save_agent_config(payload jsonb)
+returns void
+language plpgsql
+as $$
+declare
+    config_id text := payload->>'id';
+    owner_id text := payload->>'owner_user_id';
+    child jsonb;
+    child_skill_id text;
+begin
+    if config_id is null or btrim(config_id) = '' then
+        raise exception 'agent_config.id is required';
+    end if;
+    if owner_id is null or btrim(owner_id) = '' then
+        raise exception 'agent_config.owner_user_id is required';
+    end if;
+    if payload->>'agent_user_id' is null or btrim(payload->>'agent_user_id') = '' then
+        raise exception 'agent_config.agent_user_id is required';
+    end if;
+    if payload->>'name' is null or btrim(payload->>'name') = '' then
+        raise exception 'agent_config.name is required';
+    end if;
+    if jsonb_typeof(coalesce(payload->'skills', '[]'::jsonb)) <> 'array' then
+        raise exception 'agent_config.skills must be a JSON array';
+    end if;
+    if jsonb_typeof(coalesce(payload->'rules', '[]'::jsonb)) <> 'array' then
+        raise exception 'agent_config.rules must be a JSON array';
+    end if;
+    if jsonb_typeof(coalesce(payload->'sub_agents', '[]'::jsonb)) <> 'array' then
+        raise exception 'agent_config.sub_agents must be a JSON array';
+    end if;
+    if jsonb_typeof(coalesce(payload->'mcp_servers', '[]'::jsonb)) <> 'array' then
+        raise exception 'agent_config.mcp_servers must be a JSON array';
+    end if;
+    if exists (
+        select 1
+        from jsonb_array_elements(coalesce(payload->'skills', '[]'::jsonb)) as skill_item(value)
+        where btrim(coalesce(skill_item.value->>'name', '')) = ''
+    ) then
+        raise exception 'agent_config.skills child.name is required';
+    end if;
+    if exists (
+        select 1
+        from jsonb_array_elements(coalesce(payload->'rules', '[]'::jsonb)) as rule_item(value)
+        where btrim(coalesce(rule_item.value->>'name', '')) = ''
+    ) then
+        raise exception 'agent_config.rules child.name is required';
+    end if;
+    if exists (
+        select 1
+        from jsonb_array_elements(coalesce(payload->'sub_agents', '[]'::jsonb)) as sub_agent_item(value)
+        where btrim(coalesce(sub_agent_item.value->>'name', '')) = ''
+    ) then
+        raise exception 'agent_config.sub_agents child.name is required';
+    end if;
+    if exists (
+        select 1
+        from jsonb_array_elements(coalesce(payload->'mcp_servers', '[]'::jsonb)) as mcp_item(value)
+        where btrim(coalesce(mcp_item.value->>'name', '')) = ''
+    ) then
+        raise exception 'agent_config.mcp_servers child.name is required';
+    end if;
+    if exists (
+        select 1
+        from jsonb_array_elements(coalesce(payload->'skills', '[]'::jsonb)) as skill_item(value)
+        group by skill_item.value->>'name'
+        having count(*) > 1
+    ) then
+        raise exception 'agent_config.skills contains duplicate name';
+    end if;
+    if exists (
+        select 1
+        from jsonb_array_elements(coalesce(payload->'rules', '[]'::jsonb)) as rule_item(value)
+        group by rule_item.value->>'name'
+        having count(*) > 1
+    ) then
+        raise exception 'agent_config.rules contains duplicate name';
+    end if;
+    if exists (
+        select 1
+        from jsonb_array_elements(coalesce(payload->'sub_agents', '[]'::jsonb)) as sub_agent_item(value)
+        group by sub_agent_item.value->>'name'
+        having count(*) > 1
+    ) then
+        raise exception 'agent_config.sub_agents contains duplicate name';
+    end if;
+    if exists (
+        select 1
+        from jsonb_array_elements(coalesce(payload->'mcp_servers', '[]'::jsonb)) as mcp_item(value)
+        group by mcp_item.value->>'name'
+        having count(*) > 1
+    ) then
+        raise exception 'agent_config.mcp_servers contains duplicate name';
+    end if;
+
+    insert into agent.agent_configs (
+        id,
+        owner_user_id,
+        agent_user_id,
+        name,
+        description,
+        model,
+        tools_json,
+        system_prompt,
+        status,
+        version,
+        runtime_json,
+        compact_json,
+        meta_json,
+        mcp_json
+    )
+    values (
+        config_id,
+        payload->>'owner_user_id',
+        payload->>'agent_user_id',
+        payload->>'name',
+        coalesce(payload->>'description', ''),
+        payload->>'model',
+        coalesce(payload->'tools', '["*"]'::jsonb),
+        coalesce(payload->>'system_prompt', ''),
+        coalesce(payload->>'status', 'draft'),
+        coalesce(payload->>'version', '0.1.0'),
+        coalesce(payload->'runtime_settings', '{}'::jsonb),
+        coalesce(payload->'compact', '{}'::jsonb),
+        coalesce(payload->'meta', '{}'::jsonb),
+        coalesce(payload->'mcp_servers', '[]'::jsonb)
+    )
+    on conflict (id) do update set
+        owner_user_id = excluded.owner_user_id,
+        agent_user_id = excluded.agent_user_id,
+        name = excluded.name,
+        description = excluded.description,
+        model = excluded.model,
+        tools_json = excluded.tools_json,
+        system_prompt = excluded.system_prompt,
+        status = excluded.status,
+        version = excluded.version,
+        runtime_json = excluded.runtime_json,
+        compact_json = excluded.compact_json,
+        meta_json = excluded.meta_json,
+        mcp_json = excluded.mcp_json;
+
+    delete from agent.agent_skills where agent_config_id = config_id;
+    delete from agent.agent_rules where agent_config_id = config_id;
+    delete from agent.agent_sub_agents where agent_config_id = config_id;
+
+    for child in select * from jsonb_array_elements(coalesce(payload->'skills', '[]'::jsonb)) loop
+        child_skill_id := nullif(child->>'skill_id', '');
+        if child_skill_id is not null and not exists (
+            select 1
+            from agent.skills
+            where owner_user_id = owner_id
+              and id = child_skill_id
+        ) then
+            raise exception 'agent_skill.skill_id does not belong to owner: %', child_skill_id;
+        end if;
+
+        insert into agent.agent_skills (
+            id, agent_config_id, skill_id, name, description, version, content, files_json, source_json, enabled
+        )
+        values (
+            coalesce(nullif(child->>'id', ''), gen_random_uuid()::text),
+            config_id,
+            child_skill_id,
+            child->>'name',
+            coalesce(child->>'description', ''),
+            coalesce(child->>'version', '0.1.0'),
+            child->>'content',
+            coalesce(child->'files', '{}'::jsonb),
+            coalesce(child->'source', '{}'::jsonb),
+            coalesce((child->>'enabled')::boolean, true)
+        );
+    end loop;
+
+    for child in select * from jsonb_array_elements(coalesce(payload->'rules', '[]'::jsonb)) loop
+        insert into agent.agent_rules (id, agent_config_id, filename, name, content, enabled)
+        values (
+            coalesce(nullif(child->>'id', ''), gen_random_uuid()::text),
+            config_id,
+            child->>'name',
+            child->>'name',
+            coalesce(child->>'content', ''),
+            coalesce((child->>'enabled')::boolean, true)
+        );
+    end loop;
+
+    for child in select * from jsonb_array_elements(coalesce(payload->'sub_agents', '[]'::jsonb)) loop
+        insert into agent.agent_sub_agents (
+            id, agent_config_id, name, description, model, tools_json, system_prompt, enabled
+        )
+        values (
+            coalesce(nullif(child->>'id', ''), gen_random_uuid()::text),
+            config_id,
+            child->>'name',
+            coalesce(child->>'description', ''),
+            child->>'model',
+            coalesce(child->'tools', '[]'::jsonb),
+            coalesce(child->>'system_prompt', ''),
+            coalesce((child->>'enabled')::boolean, true)
+        );
+    end loop;
+end;
+$$;
+
+revoke all on function agent.save_agent_config(jsonb) from public, anon, authenticated;
+grant execute on function agent.save_agent_config(jsonb) to service_role;
+
+revoke all on table
+    agent.agent_configs,
+    agent.agent_skills,
+    agent.agent_rules,
+    agent.agent_sub_agents
+from anon, authenticated;
+
+grant select, insert, update, delete on table
+    agent.agent_configs,
+    agent.agent_skills,
+    agent.agent_rules,
+    agent.agent_sub_agents
+to service_role;
+
+notify pgrst, 'reload schema';

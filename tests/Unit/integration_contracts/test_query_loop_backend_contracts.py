@@ -714,7 +714,7 @@ async def test_get_thread_history_reads_checkpoint_without_creating_agent():
                 pending_permission_requests={},
                 resolved_permission_requests={},
                 memory_compaction_state={},
-                mcp_instruction_state={},
+                integration_instruction_state={},
             )
 
     fake_app = SimpleNamespace(

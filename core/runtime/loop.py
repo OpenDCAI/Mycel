@@ -1747,7 +1747,7 @@ class QueryLoop:
             "pending_permission_requests": dict(state.pending_permission_requests),
             "resolved_permission_requests": dict(state.resolved_permission_requests),
             "memory_compaction_state": dict(state.memory_compaction_state),
-            "mcp_instruction_state": dict(state.mcp_instruction_state),
+            "integration_instruction_state": dict(state.integration_instruction_state),
         }
 
     def _thread_permission_state_snapshot(
@@ -1781,10 +1781,10 @@ class QueryLoop:
             return {}
         return {str(key): value for key, value in raw_snapshot.items()}
 
-    def _thread_mcp_instruction_state_snapshot(self, thread_id: str) -> dict[str, Any]:
+    def _thread_integration_instruction_state_snapshot(self, thread_id: str) -> dict[str, Any]:
         if self._app_state is None:
             return {}
-        announced_blocks = dict(self._app_state.announced_mcp_instruction_blocks.get(thread_id, {}))
+        announced_blocks = dict(self._app_state.announced_integration_instruction_blocks.get(thread_id, {}))
         return {"announced_blocks": announced_blocks}
 
     def _is_runtime_active(self) -> bool:
@@ -1801,7 +1801,7 @@ class QueryLoop:
             "pending_permission_requests": pending,
             "resolved_permission_requests": resolved,
             "memory_compaction_state": memory_state,
-            "mcp_instruction_state": self._thread_mcp_instruction_state_snapshot(thread_id),
+            "integration_instruction_state": self._thread_integration_instruction_state_snapshot(thread_id),
         }
 
     def _restore_thread_permission_state(
@@ -1846,20 +1846,20 @@ class QueryLoop:
         if callable(restore):
             restore(thread_id, memory_state)
 
-    def _restore_thread_mcp_instruction_state(
+    def _restore_thread_integration_instruction_state(
         self,
         thread_id: str,
         *,
-        mcp_instruction_state: dict[str, Any],
+        integration_instruction_state: dict[str, Any],
     ) -> None:
         if self._app_state is None:
             return
-        announced_blocks = mcp_instruction_state.get("announced_blocks", {})
+        announced_blocks = integration_instruction_state.get("announced_blocks", {})
         if not isinstance(announced_blocks, dict):
             announced_blocks = {}
-        kept = {key: value for key, value in self._app_state.announced_mcp_instruction_blocks.items() if key != thread_id}
+        kept = {key: value for key, value in self._app_state.announced_integration_instruction_blocks.items() if key != thread_id}
         kept[thread_id] = {name: block for name, block in announced_blocks.items() if isinstance(name, str) and isinstance(block, str)}
-        self._app_state.announced_mcp_instruction_blocks = kept
+        self._app_state.announced_integration_instruction_blocks = kept
 
     async def _hydrate_thread_state_from_checkpoint(self, thread_id: str) -> dict[str, Any]:
         checkpoint_state = await self._load_thread_checkpoint_state(thread_id)
@@ -1868,7 +1868,7 @@ class QueryLoop:
         pending = dict(checkpoint_state.pending_permission_requests) if checkpoint_state is not None else {}
         resolved = dict(checkpoint_state.resolved_permission_requests) if checkpoint_state is not None else {}
         memory_state = dict(checkpoint_state.memory_compaction_state) if checkpoint_state is not None else {}
-        mcp_instruction_state = dict(checkpoint_state.mcp_instruction_state) if checkpoint_state is not None else {}
+        integration_instruction_state = dict(checkpoint_state.integration_instruction_state) if checkpoint_state is not None else {}
         turn_count = self._app_state.turn_count if self._app_state is not None else 0
         self._sync_app_state(messages=messages, turn_count=turn_count)
         self._restore_thread_permission_state(
@@ -1881,9 +1881,9 @@ class QueryLoop:
             thread_id,
             memory_state=memory_state,
         )
-        self._restore_thread_mcp_instruction_state(
+        self._restore_thread_integration_instruction_state(
             thread_id,
-            mcp_instruction_state=mcp_instruction_state,
+            integration_instruction_state=integration_instruction_state,
         )
         return {
             "messages": messages,
@@ -1891,7 +1891,7 @@ class QueryLoop:
             "pending_permission_requests": pending,
             "resolved_permission_requests": resolved,
             "memory_compaction_state": memory_state,
-            "mcp_instruction_state": mcp_instruction_state,
+            "integration_instruction_state": integration_instruction_state,
         }
 
     async def _save_messages(self, thread_id: str, messages: list) -> None:
@@ -1900,7 +1900,7 @@ class QueryLoop:
         try:
             permission_context, pending_requests, resolved_requests = self._thread_permission_state_snapshot(thread_id)
             memory_state = self._thread_memory_state_snapshot(thread_id)
-            mcp_instruction_state = self._thread_mcp_instruction_state_snapshot(thread_id)
+            integration_instruction_state = self._thread_integration_instruction_state_snapshot(thread_id)
             await self._checkpoint_store.save(
                 thread_id,
                 ThreadCheckpointState(
@@ -1909,7 +1909,7 @@ class QueryLoop:
                     pending_permission_requests=pending_requests,
                     resolved_permission_requests=resolved_requests,
                     memory_compaction_state=memory_state,
-                    mcp_instruction_state=mcp_instruction_state,
+                    integration_instruction_state=integration_instruction_state,
                 ),
             )
         except Exception:

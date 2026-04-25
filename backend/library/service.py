@@ -1,17 +1,24 @@
+"""Library CRUD for file-backed assets and DB-backed sandbox templates."""
+
 import json
-import shutil
+import re
 import time
 import uuid
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+import yaml
+
+from backend.library import mcp_library
 from backend.library.paths import LIBRARY_DIR
 from backend.sandboxes import provider_availability as sandbox_provider_availability
 from backend.sandboxes.recipe_bootstrap import seed_default_recipes as seed_builtin_recipes
+from config.agent_config_types import Skill
 from sandbox.recipes import FEATURE_CATALOG, default_recipe_snapshot, normalize_recipe_snapshot, provider_type_from_name
-from storage.contracts import RecipeRepo
+from storage.contracts import RecipeRepo, SkillRepo
 
-MCP_META_KEYS = {"desc", "category", "created_at", "updated_at", "name"}
+_SKILL_FRONTMATTER_RE = re.compile(r"^---\s*\n(.*?)\n---\s*\n", re.DOTALL)
 
 
 def _read_json(path: Path, default: Any = None) -> Any:
@@ -19,8 +26,10 @@ def _read_json(path: Path, default: Any = None) -> Any:
         return default if default is not None else {}
     try:
         return json.loads(path.read_text(encoding="utf-8"))
-    except (json.JSONDecodeError, OSError):
-        return default if default is not None else {}
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"Library JSON file must be valid JSON: {path}") from exc
+    except OSError as exc:
+        raise RuntimeError(f"Library JSON file could not be read: {path}") from exc
 
 
 def _write_json(path: Path, data: Any) -> None:
@@ -60,17 +69,47 @@ def _require_recipe_repo(recipe_repo: RecipeRepo | None) -> RecipeRepo:
     return recipe_repo
 
 
+def _require_skill_owner(owner_user_id: str | None) -> str:
+    if not owner_user_id:
+        raise ValueError("owner_user_id is required for skill operations")
+    return str(owner_user_id)
+
+
+def _require_skill_repo(skill_repo: SkillRepo | None) -> SkillRepo:
+    if skill_repo is None:
+        raise ValueError("skill_repo is required for skill operations")
+    return skill_repo
+
+
+def _skill_frontmatter_name(content: str) -> str:
+    # @@@skill-name-single-truth - runtime indexes Skills by SKILL.md frontmatter name, so Library name must not drift.
+    match = _SKILL_FRONTMATTER_RE.search(content)
+    if match is None:
+        raise ValueError("Skill content must be a SKILL.md document with frontmatter")
+    metadata = yaml.safe_load(match.group(1)) or {}
+    if not isinstance(metadata, dict):
+        raise ValueError("Skill content frontmatter must be a mapping")
+    name = metadata.get("name")
+    if not isinstance(name, str) or not name.strip():
+        raise ValueError("Skill content frontmatter name is required")
+    return name.strip()
+
+
+def _now_dt() -> datetime:
+    return datetime.now(UTC)
+
+
+def _dt_millis(value: datetime) -> int:
+    return int(value.timestamp() * 1000)
+
+
 def _file_resource_content_path(resource_type: str, resource_id: str) -> Path | None:
-    if resource_type == "skill":
-        return LIBRARY_DIR / "skills" / resource_id / "SKILL.md"
     if resource_type == "agent":
         return LIBRARY_DIR / "agents" / f"{resource_id}.md"
     return None
 
 
 def _file_resource_meta_path(resource_type: str, resource_id: str) -> Path | None:
-    if resource_type == "skill":
-        return LIBRARY_DIR / "skills" / resource_id / "meta.json"
     if resource_type == "agent":
         return LIBRARY_DIR / "agents" / f"{resource_id}.json"
     return None
@@ -98,6 +137,7 @@ def list_library(
     resource_type: str,
     owner_user_id: str | None = None,
     recipe_repo: RecipeRepo | None = None,
+    skill_repo: SkillRepo | None = None,
 ) -> list[dict[str, Any]]:
     results: list[dict[str, Any]] = []
     if resource_type == "sandbox-template":
@@ -108,12 +148,21 @@ def list_library(
             for row in sorted(recipe_repo.list_by_owner(owner_user_id), key=lambda item: str(item["recipe_id"]))
         ]
     if resource_type == "skill":
-        skills_dir = LIBRARY_DIR / "skills"
-        if skills_dir.exists():
-            for d in sorted(skills_dir.iterdir()):
-                if d.is_dir():
-                    meta = _read_json(d / "meta.json", {})
-                    results.append(_library_resource_item("skill", d.name, meta))
+        owner_user_id = _require_skill_owner(owner_user_id)
+        skill_repo = _require_skill_repo(skill_repo)
+        return [
+            _library_resource_item(
+                "skill",
+                skill.id,
+                {
+                    "name": skill.name,
+                    "desc": skill.description,
+                    "created_at": _dt_millis(skill.created_at),
+                    "updated_at": _dt_millis(skill.updated_at),
+                },
+            )
+            for skill in sorted(skill_repo.list_for_owner(owner_user_id), key=lambda item: item.name.lower())
+        ]
     elif resource_type == "agent":
         agents_dir = LIBRARY_DIR / "agents"
         if agents_dir.exists():
@@ -121,9 +170,7 @@ def list_library(
                 meta = _read_json(f.with_suffix(".json"), {})
                 results.append(_library_resource_item("agent", f.stem, meta))
     elif resource_type == "mcp":
-        mcp_data = _read_json(LIBRARY_DIR / ".mcp.json", {"mcpServers": {}})
-        for name, cfg in mcp_data.get("mcpServers", {}).items():
-            results.append(_library_resource_item("mcp", name, cfg, name=name))
+        results.extend(mcp_library.list_items())
     return results
 
 
@@ -165,6 +212,7 @@ def create_resource(
     provider_name: str | None = None,
     owner_user_id: str | None = None,
     recipe_repo: RecipeRepo | None = None,
+    skill_repo: SkillRepo | None = None,
 ) -> dict[str, Any]:
     now = int(time.time() * 1000)
     cat = category or "未分类"
@@ -197,7 +245,37 @@ def create_resource(
             created_at=now,
         )
         return item
-    if resource_type in {"skill", "agent"}:
+    if resource_type == "skill":
+        owner_user_id = _require_skill_owner(owner_user_id)
+        skill_repo = _require_skill_repo(skill_repo)
+        rid = name.lower().replace(" ", "-")
+        existing = skill_repo.get_by_id(owner_user_id, rid)
+        if existing is not None and existing.name != name:
+            raise ValueError("Skill id already exists with a different Skill name")
+        timestamp = _now_dt()
+        skill = skill_repo.upsert(
+            Skill(
+                id=rid,
+                owner_user_id=owner_user_id,
+                name=name,
+                description=desc,
+                content=f"---\nname: {name}\ndescription: {desc}\n---\n\n{desc}\n",
+                files={},
+                created_at=timestamp,
+                updated_at=timestamp,
+            )
+        )
+        return _library_resource_item(
+            "skill",
+            skill.id,
+            {
+                "name": skill.name,
+                "desc": skill.description,
+                "created_at": _dt_millis(skill.created_at),
+                "updated_at": _dt_millis(skill.updated_at),
+            },
+        )
+    if resource_type == "agent":
         rid = name.lower().replace(" ", "-")
         content_path = _file_resource_content_path(resource_type, rid)
         meta_path = _file_resource_meta_path(resource_type, rid)
@@ -206,25 +284,10 @@ def create_resource(
         content_path.parent.mkdir(parents=True, exist_ok=True)
         meta = {"name": name, "desc": desc, "category": cat, "created_at": now, "updated_at": now}
         _write_json(meta_path, meta)
-        content = (
-            f"---\nname: {name}\ndescription: {desc}\n---\n\n{desc}\n"
-            if resource_type == "skill"
-            else f"---\nname: {rid}\ndescription: {desc}\n---\n\n# {name}\n"
-        )
-        content_path.write_text(content, encoding="utf-8")
+        content_path.write_text(f"---\nname: {rid}\ndescription: {desc}\n---\n\n# {name}\n", encoding="utf-8")
         return _library_resource_item(resource_type, rid, meta)
     if resource_type == "mcp":
-        mcp_path = LIBRARY_DIR / ".mcp.json"
-        mcp_data = _read_json(mcp_path, {"mcpServers": {}})
-        meta = {
-            "desc": desc,
-            "category": cat,
-            "created_at": now,
-            "updated_at": now,
-        }
-        mcp_data["mcpServers"][name] = meta
-        _write_json(mcp_path, mcp_data)
-        return _library_resource_item("mcp", name, meta, name=name)
+        return mcp_library.create(name, desc, cat)
     raise ValueError(f"Unknown resource type: {resource_type}")
 
 
@@ -233,6 +296,7 @@ def update_resource(
     resource_id: str,
     owner_user_id: str | None = None,
     recipe_repo: RecipeRepo | None = None,
+    skill_repo: SkillRepo | None = None,
     *,
     name: str | None = None,
     desc: str | None = None,
@@ -258,7 +322,35 @@ def update_resource(
             created_at=int(row["created_at"]),
         )
         return _normalize_recipe_item(current, builtin=False)
-    if resource_type in {"skill", "agent"}:
+    if resource_type == "skill":
+        owner_user_id = _require_skill_owner(owner_user_id)
+        skill_repo = _require_skill_repo(skill_repo)
+        current = skill_repo.get_by_id(owner_user_id, resource_id)
+        if current is None:
+            return None
+        if name is not None and name != current.name:
+            raise ValueError("Skill name is immutable; create a new Skill for a new name")
+        updated = skill_repo.upsert(
+            current.model_copy(
+                update={
+                    "name": current.name,
+                    "description": desc if desc is not None else current.description,
+                    "updated_at": _now_dt(),
+                }
+            )
+        )
+        return _library_resource_item(
+            "skill",
+            updated.id,
+            {
+                "name": updated.name,
+                "desc": updated.description,
+                "created_at": _dt_millis(updated.created_at),
+                "updated_at": _dt_millis(updated.updated_at),
+            },
+            updated_at=_dt_millis(updated.updated_at),
+        )
+    if resource_type == "agent":
         meta_path = _file_resource_meta_path(resource_type, resource_id)
         if meta_path is None or not meta_path.exists():
             return None
@@ -268,15 +360,7 @@ def update_resource(
         _write_json(meta_path, meta)
         return _library_resource_item(resource_type, resource_id, meta, updated_at=now)
     if resource_type == "mcp":
-        mcp_path = LIBRARY_DIR / ".mcp.json"
-        mcp_data = _read_json(mcp_path, {"mcpServers": {}})
-        if resource_id not in mcp_data.get("mcpServers", {}):
-            return None
-        mcp_data["mcpServers"][resource_id].update(updates)
-        mcp_data["mcpServers"][resource_id]["updated_at"] = now
-        _write_json(mcp_path, mcp_data)
-        entry = mcp_data["mcpServers"][resource_id]
-        return _library_resource_item("mcp", resource_id, entry, name=entry.get("name", resource_id), updated_at=now)
+        return mcp_library.update(resource_id, updates)
     return None
 
 
@@ -285,6 +369,7 @@ def delete_resource(
     resource_id: str,
     owner_user_id: str | None = None,
     recipe_repo: RecipeRepo | None = None,
+    skill_repo: SkillRepo | None = None,
 ) -> bool:
     if resource_type == "sandbox-template":
         owner_user_id = _require_recipe_owner(owner_user_id)
@@ -318,10 +403,11 @@ def delete_resource(
         recipe_repo.delete(owner_user_id, resource_id)
         return True
     if resource_type == "skill":
-        target = LIBRARY_DIR / "skills" / resource_id
-        if not target.is_dir():
+        owner_user_id = _require_skill_owner(owner_user_id)
+        skill_repo = _require_skill_repo(skill_repo)
+        if skill_repo.get_by_id(owner_user_id, resource_id) is None:
             return False
-        shutil.rmtree(target)
+        skill_repo.delete(owner_user_id, resource_id)
         return True
     if resource_type == "agent":
         md_path = LIBRARY_DIR / "agents" / f"{resource_id}.md"
@@ -335,13 +421,7 @@ def delete_resource(
             found = True
         return found
     if resource_type == "mcp":
-        mcp_path = LIBRARY_DIR / ".mcp.json"
-        mcp_data = _read_json(mcp_path, {"mcpServers": {}})
-        if resource_id not in mcp_data.get("mcpServers", {}):
-            return False
-        del mcp_data["mcpServers"][resource_id]
-        _write_json(mcp_path, mcp_data)
-        return True
+        return mcp_library.delete(resource_id)
     return False
 
 
@@ -349,32 +429,13 @@ def list_library_names(
     resource_type: str,
     owner_user_id: str | None = None,
     recipe_repo: RecipeRepo | None = None,
+    skill_repo: SkillRepo | None = None,
 ) -> list[dict[str, str]]:
+    """Lightweight name+desc list for Picker UI."""
     return [
         {"name": item["name"], "desc": item["desc"]}
-        for item in list_library(resource_type, owner_user_id=owner_user_id, recipe_repo=recipe_repo)
+        for item in list_library(resource_type, owner_user_id=owner_user_id, recipe_repo=recipe_repo, skill_repo=skill_repo)
     ]
-
-
-def get_library_skill_desc(name: str) -> str:
-    return next((item["desc"] for item in list_library("skill") if item["name"] == name), "")
-
-
-def get_skill_content_by_name(name: str) -> str | None:
-    for item in list_library("skill"):
-        if item["name"] == name:
-            return get_resource_content("skill", item["id"])
-    return None
-
-
-def get_mcp_config_by_name(name: str) -> dict[str, Any] | None:
-    mcp_data = _read_json(LIBRARY_DIR / ".mcp.json", {"mcpServers": {}})
-    cfg = mcp_data.get("mcpServers", {}).get(name)
-    if cfg is None:
-        return None
-    if not isinstance(cfg, dict):
-        raise RuntimeError(f"Library MCP config must be a JSON object: {name}")
-    return {key: value for key, value in cfg.items() if key not in MCP_META_KEYS}
 
 
 def get_resource_used_by(
@@ -385,9 +446,10 @@ def get_resource_used_by(
     user_repo: Any = None,
     agent_config_repo: Any = None,
 ) -> list[str]:
+    """Return agent user names under the owner that use a given resource."""
     from backend.threads.agent_user_service import list_agent_users
 
-    config_key = {"skill": "skills", "mcp": "mcps", "agent": "subAgents"}.get(resource_type, "")
+    config_key = {"skill": "skills", "mcp": "mcpServers", "agent": "subAgents"}.get(resource_type, "")
     if not config_key:
         return []
     names: list[str] = []
@@ -403,32 +465,52 @@ def get_resource_content(
     resource_id: str,
     owner_user_id: str | None = None,
     recipe_repo: RecipeRepo | None = None,
+    skill_repo: SkillRepo | None = None,
 ) -> str | None:
+    """Read the .md content file for a skill or agent resource."""
     if resource_type == "sandbox-template":
         owner_user_id = _require_recipe_owner(owner_user_id)
         for item in list_library("sandbox-template", owner_user_id=owner_user_id, recipe_repo=recipe_repo):
             if item["id"] == resource_id:
                 return json.dumps(item, ensure_ascii=False, indent=2)
         return None
+    if resource_type == "skill":
+        owner_user_id = _require_skill_owner(owner_user_id)
+        skill_repo = _require_skill_repo(skill_repo)
+        skill = skill_repo.get_by_id(owner_user_id, resource_id)
+        return skill.content if skill is not None else None
     content_path = _file_resource_content_path(resource_type, resource_id)
     if content_path is not None:
         if content_path.exists():
             return content_path.read_text(encoding="utf-8")
         return ""
     if resource_type == "mcp":
-        config_only = get_mcp_config_by_name(resource_id)
-        if config_only is None:
-            return None
-        if not config_only:
-            config_only = {"command": "", "args": [], "env": {}}
-        return json.dumps(config_only, ensure_ascii=False, indent=2)
+        return mcp_library.get_content(resource_id)
     return None
 
 
-def update_resource_content(resource_type: str, resource_id: str, content: str) -> bool:
+def update_resource_content(
+    resource_type: str,
+    resource_id: str,
+    content: str,
+    owner_user_id: str | None = None,
+    skill_repo: SkillRepo | None = None,
+) -> bool:
+    """Write the .md content file for a skill or agent resource."""
     now = int(time.time() * 1000)
     if resource_type == "sandbox-template":
         return False
+    if resource_type == "skill":
+        owner_user_id = _require_skill_owner(owner_user_id)
+        skill_repo = _require_skill_repo(skill_repo)
+        current = skill_repo.get_by_id(owner_user_id, resource_id)
+        if current is None:
+            return False
+        frontmatter_name = _skill_frontmatter_name(content)
+        if frontmatter_name != current.name:
+            raise ValueError("Skill content frontmatter name must match Skill name")
+        skill_repo.upsert(current.model_copy(update={"content": content, "updated_at": _now_dt()}))
+        return True
     content_path = _file_resource_content_path(resource_type, resource_id)
     meta_path = _file_resource_meta_path(resource_type, resource_id)
     if content_path is not None and meta_path is not None:
@@ -442,18 +524,5 @@ def update_resource_content(resource_type: str, resource_id: str, content: str) 
         _write_json(meta_path, meta)
         return True
     if resource_type == "mcp":
-        mcp_path = LIBRARY_DIR / ".mcp.json"
-        mcp_data = _read_json(mcp_path, {"mcpServers": {}})
-        if resource_id not in mcp_data.get("mcpServers", {}):
-            return False
-        try:
-            parsed = json.loads(content)
-        except json.JSONDecodeError:
-            return False
-        # Preserve metadata before overwriting with parsed config
-        existing = mcp_data["mcpServers"][resource_id]
-        preserved = {k: existing[k] for k in MCP_META_KEYS if k in existing and k != "updated_at"}
-        mcp_data["mcpServers"][resource_id] = {**parsed, **preserved, "updated_at": now}
-        _write_json(mcp_path, mcp_data)
-        return True
+        return mcp_library.update_content(resource_id, content)
     return False

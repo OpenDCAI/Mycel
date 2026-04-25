@@ -2,9 +2,9 @@ import pytest
 from pydantic import ValidationError
 
 from backend.web.models.marketplace import (
+    ApplyFromMarketplaceRequest,
     CheckUpdatesRequest,
-    InstalledItemInfo,
-    InstallFromMarketplaceRequest,
+    MarketplaceSourceInfo,
     PublishAgentUserToMarketplaceRequest,
     UpgradeFromMarketplaceRequest,
 )
@@ -58,22 +58,22 @@ class TestPublishAgentUserToMarketplaceRequest:
             PublishAgentUserToMarketplaceRequest(user_id="")
 
 
-# ── InstallFromMarketplaceRequest ──
+# ── ApplyFromMarketplaceRequest ──
 
 
-class TestInstallFromMarketplaceRequest:
+class TestApplyFromMarketplaceRequest:
     def test_valid(self):
-        req = InstallFromMarketplaceRequest(item_id="abc-123")
+        req = ApplyFromMarketplaceRequest(item_id="abc-123")
         assert req.item_id == "abc-123"
         assert req.agent_user_id is None
 
     def test_accepts_agent_user_id(self):
-        req = InstallFromMarketplaceRequest(item_id="abc-123", agent_user_id="agent-1")
+        req = ApplyFromMarketplaceRequest(item_id="abc-123", agent_user_id="agent-1")
         assert req.agent_user_id == "agent-1"
 
     def test_missing_item_id_raises(self):
         with pytest.raises(ValidationError):
-            InstallFromMarketplaceRequest.model_validate({})
+            ApplyFromMarketplaceRequest.model_validate({})
 
 
 # ── CheckUpdatesRequest ──
@@ -83,13 +83,13 @@ class TestCheckUpdatesRequest:
     def test_valid_with_items(self):
         req = CheckUpdatesRequest(
             items=[
-                InstalledItemInfo(marketplace_item_id="item-1", installed_version="1.0.0"),
-                InstalledItemInfo(marketplace_item_id="item-2", installed_version="2.3.1"),
+                MarketplaceSourceInfo(marketplace_item_id="item-1", source_version="1.0.0"),
+                MarketplaceSourceInfo(marketplace_item_id="item-2", source_version="2.3.1"),
             ]
         )
         assert len(req.items) == 2
         assert req.items[0].marketplace_item_id == "item-1"
-        assert req.items[1].installed_version == "2.3.1"
+        assert req.items[1].source_version == "2.3.1"
 
     def test_empty_items_list(self):
         req = CheckUpdatesRequest(items=[])

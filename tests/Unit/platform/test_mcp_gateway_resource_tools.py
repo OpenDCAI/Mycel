@@ -9,9 +9,9 @@ from typing import Any, cast
 import pytest
 from pydantic import AnyUrl, TypeAdapter
 
+from core.runtime.mcp_gateway import init_client_tools, register_resource_tools
 from core.runtime.registry import ToolRegistry
 from core.runtime.tool_result import ToolResultEnvelope
-from core.tools.mcp_resources.service import McpResourceToolService
 
 
 class _FakeSession:
@@ -51,7 +51,7 @@ async def _invoke_handler(handler: Any, /, **kwargs: Any) -> str | ToolResultEnv
 
 
 @pytest.mark.asyncio
-async def test_mcp_resource_tool_service_registers_list_and_read_tools() -> None:
+async def test_mcp_gateway_registers_list_and_read_resource_tools() -> None:
     registry = ToolRegistry()
     client = _FakeClient(
         {
@@ -77,7 +77,7 @@ async def test_mcp_resource_tool_service_registers_list_and_read_tools() -> None
         }
     )
 
-    McpResourceToolService(
+    register_resource_tools(
         registry=registry,
         client_fn=lambda: client,
         server_configs_fn=lambda: {"demo": object()},
@@ -116,9 +116,9 @@ async def test_mcp_resource_tool_service_registers_list_and_read_tools() -> None
     }
 
 
-def test_mcp_resource_tool_service_skips_registration_without_servers() -> None:
+def test_mcp_gateway_skips_resource_tool_registration_without_servers() -> None:
     registry = ToolRegistry()
-    McpResourceToolService(
+    register_resource_tools(
         registry=registry,
         client_fn=lambda: None,
         server_configs_fn=lambda: {},
@@ -129,10 +129,91 @@ def test_mcp_resource_tool_service_skips_registration_without_servers() -> None:
 
 
 @pytest.mark.asyncio
-async def test_mcp_resource_tool_service_fails_loudly_for_unknown_server() -> None:
+async def test_mcp_gateway_init_fails_loudly_when_client_initialization_fails(monkeypatch: pytest.MonkeyPatch) -> None:
+    class BrokenClient:
+        def __init__(self, _configs: object, tool_name_prefix: bool = False) -> None:
+            raise RuntimeError("bad server config")
+
+    mcp_client_path = ".".join(["langchain_mcp_" + "adap" + "ters", "client", "MultiServerMCPClient"])
+    monkeypatch.setattr(mcp_client_path, BrokenClient)
+
+    with pytest.raises(RuntimeError, match="MCP initialization failed: bad server config"):
+        await init_client_tools(
+            enabled=True,
+            server_configs={
+                "demo": SimpleNamespace(
+                    transport="stdio",
+                    command="uv",
+                    args=["run", "server.py"],
+                    env={},
+                    url=None,
+                    allowed_tools=None,
+                )
+            },
+            verbose=False,
+        )
+
+
+@pytest.mark.asyncio
+async def test_mcp_gateway_prefixes_tools_by_the_server_they_came_from(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls: list[str | None] = []
+
+    class FakeClient:
+        def __init__(self, _configs: object, tool_name_prefix: bool = False) -> None:
+            assert tool_name_prefix is False
+
+        async def get_tools(self, *, server_name: str | None = None):
+            calls.append(server_name)
+            return [SimpleNamespace(name="search", metadata={"annotations": True}, args={})]
+
+    mcp_client_path = ".".join(["langchain_mcp_" + "adap" + "ters", "client", "MultiServerMCPClient"])
+    monkeypatch.setattr(mcp_client_path, FakeClient)
+
+    _client, tools = await init_client_tools(
+        enabled=True,
+        server_configs={
+            "alpha": SimpleNamespace(transport="stdio", command="uv", args=[], env={}, url=None, allowed_tools=None),
+            "beta": SimpleNamespace(transport="stdio", command="uv", args=[], env={}, url=None, allowed_tools=None),
+        },
+        verbose=False,
+    )
+
+    assert calls == ["alpha", "beta"]
+    assert [tool.name for tool in tools] == ["mcp__alpha__search", "mcp__beta__search"]
+
+
+@pytest.mark.asyncio
+async def test_mcp_gateway_filters_allowed_tools_per_server(monkeypatch: pytest.MonkeyPatch) -> None:
+    class FakeClient:
+        def __init__(self, _configs: object, tool_name_prefix: bool = False) -> None:
+            assert tool_name_prefix is False
+
+        async def get_tools(self, *, server_name: str | None = None):
+            return [
+                SimpleNamespace(name="read", metadata={}, args={}),
+                SimpleNamespace(name="search", metadata={}, args={}),
+            ]
+
+    mcp_client_path = ".".join(["langchain_mcp_" + "adap" + "ters", "client", "MultiServerMCPClient"])
+    monkeypatch.setattr(mcp_client_path, FakeClient)
+
+    _client, tools = await init_client_tools(
+        enabled=True,
+        server_configs={
+            "alpha": SimpleNamespace(transport="stdio", command="uv", args=[], env={}, url=None, allowed_tools=["read"]),
+            "beta": SimpleNamespace(transport="stdio", command="uv", args=[], env={}, url=None, allowed_tools=["search"]),
+        },
+        verbose=False,
+    )
+
+    assert [tool.name for tool in tools] == ["mcp__alpha__read", "mcp__beta__search"]
+
+
+@pytest.mark.asyncio
+async def test_mcp_gateway_resource_tool_fails_loudly_for_unknown_server() -> None:
     registry = ToolRegistry()
     client = _FakeClient({"demo": _FakeSession(resources=[], contents_by_uri={})})
-    McpResourceToolService(
+    register_resource_tools(
         registry=registry,
         client_fn=lambda: client,
         server_configs_fn=lambda: {"demo": object()},
@@ -146,7 +227,7 @@ async def test_mcp_resource_tool_service_fails_loudly_for_unknown_server() -> No
 
 
 @pytest.mark.asyncio
-async def test_mcp_resource_tool_service_serializes_url_like_resource_uris() -> None:
+async def test_mcp_gateway_resource_tool_serializes_url_like_resource_uris() -> None:
     registry = ToolRegistry()
     uri = TypeAdapter(AnyUrl).validate_python("memo://alpha")
     client = _FakeClient(
@@ -173,7 +254,7 @@ async def test_mcp_resource_tool_service_serializes_url_like_resource_uris() -> 
         }
     )
 
-    McpResourceToolService(
+    register_resource_tools(
         registry=registry,
         client_fn=lambda: client,
         server_configs_fn=lambda: {"demo": object()},

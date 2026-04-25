@@ -47,7 +47,7 @@ describe("frontend agent wording contract", () => {
     useAppStore.setState({
       agentList: [],
       librarySkills: [],
-      libraryMcps: [],
+      libraryMcpServers: [],
       libraryAgents: [],
       librarySandboxTemplates: [],
       userProfile: { name: "User", initials: "U", email: "" },

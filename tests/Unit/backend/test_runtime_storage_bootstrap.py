@@ -26,7 +26,7 @@ def test_build_runtime_storage_state_uses_shared_supabase_client(monkeypatch):
     assert calls == [fake_client]
 
 
-def test_attach_runtime_storage_state_returns_bundle_without_loose_state_mirrors(monkeypatch):
+def test_attach_runtime_storage_state_returns_state_without_loose_state_mirrors(monkeypatch):
     fake_state = SimpleNamespace(supabase_client=object(), storage_container=object(), recipe_repo=object())
     app = type("_App", (), {"state": type("_State", (), {})()})()
 

@@ -75,7 +75,7 @@ describe("LibraryItemDetailPage", () => {
     });
   });
 
-  it("uses the canonical installed route for the back button on sandbox detail pages", async () => {
+  it("uses the canonical library route for the back button on sandbox detail pages", async () => {
     render(
       <MemoryRouter initialEntries={["/library/sandbox-template/daytona:default"]}>
         <Routes>
@@ -87,10 +87,10 @@ describe("LibraryItemDetailPage", () => {
     expect(await screen.findByRole("heading", { name: "Daytona Default" })).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "返回" }));
 
-    expect(navigateMock).toHaveBeenCalledWith("/marketplace?tab=installed&sub=sandbox-template");
+    expect(navigateMock).toHaveBeenCalledWith("/marketplace?tab=library&sub=sandbox-template");
   });
 
-  it("uses the canonical installed route for the back button on agent detail pages", async () => {
+  it("uses the canonical library route for the back button on agent detail pages", async () => {
     render(
       <MemoryRouter initialEntries={["/library/agent/agent-lib-1"]}>
         <Routes>
@@ -102,10 +102,23 @@ describe("LibraryItemDetailPage", () => {
     expect(await screen.findByRole("heading", { name: "Explorer" })).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "返回" }));
 
-    expect(navigateMock).toHaveBeenCalledWith("/marketplace?tab=installed&sub=agent");
+    expect(navigateMock).toHaveBeenCalledWith("/marketplace?tab=library&sub=agent");
   });
 
-  it("uses the canonical installed route for the back button on skill detail pages", async () => {
+  it("labels library agent resources as Subagent", async () => {
+    render(
+      <MemoryRouter initialEntries={["/library/agent/agent-lib-1"]}>
+        <Routes>
+          <Route path="/library/:type/:id" element={<LibraryItemDetailPage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByRole("heading", { name: "Explorer" })).toBeTruthy();
+    expect(screen.getByText("Subagent")).toBeTruthy();
+  });
+
+  it("uses the canonical library route for the back button on skill detail pages", async () => {
     fetchResourceContent.mockResolvedValue("# Skill doc");
 
     render(
@@ -119,7 +132,7 @@ describe("LibraryItemDetailPage", () => {
     expect(await screen.findByRole("heading", { name: "Skill One" })).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "返回" }));
 
-    expect(navigateMock).toHaveBeenCalledWith("/marketplace?tab=installed&sub=skill");
+    expect(navigateMock).toHaveBeenCalledWith("/marketplace?tab=library&sub=skill");
   });
 
   it("uses bootstrapped library state instead of refetching the whole list", async () => {
@@ -165,7 +178,7 @@ describe("LibraryItemDetailPage", () => {
     });
   });
 
-  it("returns sandbox detail deletions to the sandbox installed subtab", async () => {
+  it("returns sandbox detail deletions to the sandbox library subtab", async () => {
     const deleteResource = vi.fn<(type: string, id: string) => Promise<void>>().mockResolvedValue(undefined);
     vi.spyOn(window, "confirm").mockReturnValue(true);
     useAppStore.setState({
@@ -198,7 +211,7 @@ describe("LibraryItemDetailPage", () => {
 
     await waitFor(() => {
       expect(deleteResource).toHaveBeenCalledWith("sandbox-template", "daytona:custom");
-      expect(navigateMock).toHaveBeenCalledWith("/marketplace?tab=installed&sub=sandbox-template");
+      expect(navigateMock).toHaveBeenCalledWith("/marketplace?tab=library&sub=sandbox-template");
     });
   });
 });

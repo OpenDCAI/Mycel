@@ -145,7 +145,7 @@ class TestMonitorUpdateModel:
         assert cost_calculator is not None
         assert cost_calculator.costs != {}
 
-    def test_empty_cached_pricing_falls_back_to_bundled_models(self, monkeypatch: pytest.MonkeyPatch):
+    def test_empty_cached_pricing_uses_packaged_models(self, monkeypatch: pytest.MonkeyPatch):
         importlib.reload(cost_module)
 
         monkeypatch.setattr(
@@ -166,7 +166,7 @@ class TestMonitorUpdateModel:
 
 
 class TestThreeLevelPriority:
-    """Level 1 用户配置 > Level 2 OpenRouter > Level 3 Bundled"""
+    """Level 1 用户配置 > Level 2 OpenRouter > Level 3 packaged defaults"""
 
     def test_user_context_limit_overrides_lookup(self):
         mw = MonitorMiddleware(model_name="claude-sonnet-4.5")

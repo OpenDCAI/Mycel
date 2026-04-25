@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { ArrowLeft, Zap, Users, RefreshCw } from "lucide-react";
 import SandboxTemplateEditor from "@/components/SandboxTemplateEditor";
+import { marketplaceTypeLabel } from "@/lib/marketplace-types";
 import { useAppStore } from "@/store/app-store";
 import type { ResourceItem } from "@/store/types";
 
@@ -11,10 +12,10 @@ function detailLibraryType(value: string | undefined): DetailLibraryType | null 
   return value === "skill" || value === "agent" || value === "sandbox-template" ? value : null;
 }
 
-function installedDetailReturnTarget(type: DetailLibraryType | null): string {
-  if (type === "skill") return "/marketplace?tab=installed&sub=skill";
-  if (type === "agent") return "/marketplace?tab=installed&sub=agent";
-  return "/marketplace?tab=installed&sub=sandbox-template";
+function libraryDetailReturnTarget(type: DetailLibraryType | null): string {
+  if (type === "skill") return "/marketplace?tab=library&sub=skill";
+  if (type === "agent") return "/marketplace?tab=library&sub=agent";
+  return "/marketplace?tab=library&sub=sandbox-template";
 }
 
 export default function LibraryItemDetailPage() {
@@ -82,6 +83,7 @@ export default function LibraryItemDetailPage() {
   const isSkill = type === "skill";
   const isSandboxTemplate = type === "sandbox-template";
   const filename = isSkill ? "SKILL.md" : "agent.md";
+  const typeLabel = type ? marketplaceTypeLabel(type) : "";
   const loadingLibrary = !!libraryType && !librariesLoaded[libraryType] && !libraryError;
   const loading = loadingLibrary || (!isSandboxTemplate && !!contentKey && contentState.key !== contentKey);
   const content = contentState.key === contentKey ? contentState.content : "";
@@ -100,7 +102,7 @@ export default function LibraryItemDetailPage() {
       <div className="max-w-3xl mx-auto py-6 px-4 md:px-6">
         {/* Back */}
         <button
-          onClick={() => navigate(installedDetailReturnTarget(libraryType))}
+          onClick={() => navigate(libraryDetailReturnTarget(libraryType))}
           className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors duration-fast mb-6"
         >
           <ArrowLeft className="w-3.5 h-3.5" />
@@ -118,7 +120,7 @@ export default function LibraryItemDetailPage() {
                 </div>
                 <h1 className="text-xl font-semibold text-foreground">{item?.name ?? id}</h1>
                 <span className="text-xs px-2 py-0.5 rounded-full bg-muted text-muted-foreground font-medium">
-                  {type}
+                  {typeLabel}
                 </span>
               </div>
               {item?.desc && (
@@ -129,7 +131,7 @@ export default function LibraryItemDetailPage() {
         )}
 
         {isSandboxTemplate && item ? (
-          <SandboxTemplateEditor item={item} onDeleted={() => navigate("/marketplace?tab=installed&sub=sandbox-template")} />
+          <SandboxTemplateEditor item={item} onDeleted={() => navigate("/marketplace?tab=library&sub=sandbox-template")} />
         ) : (
           <div className="surface-card p-4">
           <div className="flex items-center gap-2 mb-3">

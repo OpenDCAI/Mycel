@@ -1,5 +1,8 @@
+"""Tests for marketplace_client business logic (publish/apply)."""
+
 import importlib
 import json
+from datetime import UTC, datetime
 from types import SimpleNamespace
 from unittest.mock import patch
 
@@ -9,6 +12,9 @@ from fastapi import HTTPException
 
 import backend.library.paths as _lib_paths
 from backend.hub.versioning import bump_semver
+from config.agent_config_types import AgentConfig, AgentRule, AgentSkill, AgentSubAgent, McpServerConfig, Skill
+
+# ── Version Bump (tested via publish internals) ──
 
 
 class TestVersionBump:
@@ -70,6 +76,7 @@ def test_hub_api_preserves_hub_bad_request_detail(monkeypatch):
 
 
 def _make_hub_response(item_type: str, slug: str, content: str = "# Hello", version: str = "1.0.0", publisher: str = "tester") -> dict:
+    """Build a fake Hub /download response."""
     return {
         "item": {
             "name": slug.replace("-", " ").title(),
@@ -87,65 +94,255 @@ def _make_hub_response(item_type: str, slug: str, content: str = "# Hello", vers
     }
 
 
-# ── Download — skill ──
+def _agent_config(**overrides: object) -> AgentConfig:
+    data = {
+        "id": "cfg-1",
+        "owner_user_id": "owner-1",
+        "agent_user_id": "agent-user-1",
+        "name": "Repo Agent",
+        "description": "from repo",
+        "tools": ["search"],
+        "system_prompt": "be helpful",
+        "status": "draft",
+        "version": "0.1.0",
+        "runtime_settings": {"tools:search": {"enabled": True, "desc": "Search"}},
+        "meta": {"source": {"marketplace_item_id": "item-parent", "source_version": "0.1.0"}},
+        "mcp_servers": [McpServerConfig(name="demo", transport="stdio", command="demo")],
+    }
+    data.update(overrides)
+    return AgentConfig(**data)
 
 
-class TestDownloadSkill:
-    def test_writes_skill_md(self, tmp_path, monkeypatch):
-        lib = tmp_path / "library"
-        monkeypatch.setattr(_lib_paths, "LIBRARY_DIR", lib)
+# ── Apply — skill ──
+
+
+class TestApplySkill:
+    def test_writes_skill_to_skill_repo(self):
+        saved: list[Skill] = []
         hub_resp = _make_hub_response("skill", "my-skill", content="---\nname: My Skill\n---\n# My Skill\nDo stuff")
-
-        with patch("backend.hub.client._hub_api", return_value=hub_resp):
-            from backend.hub.client import download
-
-            result = download("item-123")
-
-        assert result["type"] == "skill"
-        assert result["resource_id"] == "my-skill"
-        skill_md = lib / "skills" / "my-skill" / "SKILL.md"
-        assert skill_md.exists()
-        assert skill_md.read_text(encoding="utf-8") == "---\nname: My Skill\n---\n# My Skill\nDo stuff"
-
-    def test_meta_json_has_source_tracking(self, tmp_path, monkeypatch):
-        lib = tmp_path / "library"
-        monkeypatch.setattr(_lib_paths, "LIBRARY_DIR", lib)
-        hub_resp = _make_hub_response(
-            "skill", "tracked-skill", content="---\nname: Tracked Skill\n---\n# Hello", version="2.1.0", publisher="alice"
+        hub_resp["snapshot"]["files"] = {"references/usage.md": "Use carefully"}
+        skill_repo = SimpleNamespace(
+            get_by_id=lambda _owner_user_id, _skill_id: None,
+            list_for_owner=lambda _owner_user_id: [],
+            upsert=lambda skill: saved.append(skill) or skill,
         )
 
         with patch("backend.hub.client._hub_api", return_value=hub_resp):
-            from backend.hub.client import download
+            from backend.hub.client import apply_item
 
-            download("item-456")
+            result = apply_item("item-123", owner_user_id="owner-1", skill_repo=skill_repo)
 
-        meta = json.loads((lib / "skills" / "tracked-skill" / "meta.json").read_text(encoding="utf-8"))
-        assert meta["source"]["marketplace_item_id"] == "item-456"
-        assert meta["source"]["installed_version"] == "2.1.0"
-        assert meta["source"]["publisher"] == "alice"
+        assert result["type"] == "skill"
+        assert result["resource_id"] == "my-skill"
+        assert saved[0].id == "my-skill"
+        assert saved[0].owner_user_id == "owner-1"
+        assert saved[0].name == "My Skill"
+        assert saved[0].content == "---\nname: My Skill\n---\n# My Skill\nDo stuff"
+        assert saved[0].files == {"references/usage.md": "Use carefully"}
 
-    def test_path_traversal_blocked(self, tmp_path, monkeypatch):
-        lib = tmp_path / "library"
-        monkeypatch.setattr(_lib_paths, "LIBRARY_DIR", lib)
-        hub_resp = _make_hub_response("skill", "../../evil", content="---\nname: Evil\n---\n# Hello")
+    def test_skill_repo_payload_has_source_tracking(self):
+        saved: list[Skill] = []
+        hub_resp = _make_hub_response(
+            "skill", "tracked-skill", content="---\nname: Tracked Skill\n---\n# Hello", version="2.1.0", publisher="alice"
+        )
+        skill_repo = SimpleNamespace(
+            get_by_id=lambda _owner_user_id, _skill_id: None,
+            list_for_owner=lambda _owner_user_id: [],
+            upsert=lambda skill: saved.append(skill) or skill,
+        )
 
         with patch("backend.hub.client._hub_api", return_value=hub_resp):
-            from backend.hub.client import download
+            from backend.hub.client import apply_item
+
+            apply_item("item-456", owner_user_id="owner-1", skill_repo=skill_repo)
+
+        assert saved[0].source["marketplace_item_id"] == "item-456"
+        assert saved[0].source["source_version"] == "2.1.0"
+        assert saved[0].source["publisher"] == "alice"
+
+    def test_apply_to_library_rejects_name_drift_for_existing_skill_id(self):
+        existing = Skill(
+            id="same-slug",
+            owner_user_id="owner-1",
+            name="Original Skill",
+            content="---\nname: Original Skill\n---\nBody",
+            created_at=datetime(2026, 4, 24, tzinfo=UTC),
+            updated_at=datetime(2026, 4, 24, tzinfo=UTC),
+        )
+        hub_resp = _make_hub_response("skill", "same-slug", content="---\nname: Renamed Skill\n---\nBody")
+        skill_repo = SimpleNamespace(
+            get_by_id=lambda owner_user_id, skill_id: existing if (owner_user_id, skill_id) == ("owner-1", "same-slug") else None,
+            upsert=lambda _skill: (_ for _ in ()).throw(AssertionError("must not rename existing Skill")),
+        )
+
+        with patch("backend.hub.client._hub_api", return_value=hub_resp):
+            from backend.hub.client import apply_item
+
+            with pytest.raises(ValueError, match="frontmatter name must match existing Skill name"):
+                apply_item("item-rename", owner_user_id="owner-1", skill_repo=skill_repo)
+
+    def test_apply_to_library_rejects_same_name_under_different_skill_id(self):
+        existing = Skill(
+            id="original-slug",
+            owner_user_id="owner-1",
+            name="Shared Name",
+            content="---\nname: Shared Name\n---\nBody",
+            created_at=datetime(2026, 4, 24, tzinfo=UTC),
+            updated_at=datetime(2026, 4, 24, tzinfo=UTC),
+        )
+        hub_resp = _make_hub_response("skill", "new-slug", content="---\nname: Shared Name\n---\nBody")
+        skill_repo = SimpleNamespace(
+            get_by_id=lambda _owner_user_id, _skill_id: None,
+            list_for_owner=lambda _owner_user_id: [existing],
+            upsert=lambda _skill: (_ for _ in ()).throw(AssertionError("must not create a second id for the same Skill name")),
+        )
+
+        with patch("backend.hub.client._hub_api", return_value=hub_resp):
+            from backend.hub.client import apply_item
+
+            with pytest.raises(ValueError, match="Skill name already exists under a different Library id"):
+                apply_item("item-duplicate-name", owner_user_id="owner-1", skill_repo=skill_repo)
+
+    def test_apply_to_library_rejects_invalid_skill_frontmatter_yaml(self):
+        hub_resp = _make_hub_response("skill", "broken-skill", content="---\nname: [broken\n---\nBody")
+        skill_repo = SimpleNamespace(
+            get_by_id=lambda _owner_user_id, _skill_id: None,
+            list_for_owner=lambda _owner_user_id: [],
+            upsert=lambda _skill: (_ for _ in ()).throw(AssertionError("must not save broken Skill")),
+        )
+
+        with patch("backend.hub.client._hub_api", return_value=hub_resp):
+            from backend.hub.client import apply_item
+
+            with pytest.raises(ValueError, match="Skill snapshot frontmatter must be valid YAML"):
+                apply_item("item-broken", owner_user_id="owner-1", skill_repo=skill_repo)
+
+    def test_apply_to_library_rejects_non_string_skill_frontmatter_name(self):
+        hub_resp = _make_hub_response("skill", "broken-skill", content="---\nname:\n  - broken\n---\nBody")
+        skill_repo = SimpleNamespace(
+            get_by_id=lambda _owner_user_id, _skill_id: None,
+            list_for_owner=lambda _owner_user_id: [],
+            upsert=lambda _skill: (_ for _ in ()).throw(AssertionError("must not save broken Skill")),
+        )
+
+        with patch("backend.hub.client._hub_api", return_value=hub_resp):
+            from backend.hub.client import apply_item
+
+            with pytest.raises(ValueError, match="Skill snapshot frontmatter must include name"):
+                apply_item("item-broken", owner_user_id="owner-1", skill_repo=skill_repo)
+
+    def test_apply_to_library_rejects_blank_skill_frontmatter_name(self):
+        hub_resp = _make_hub_response("skill", "broken-skill", content="---\nname: '   '\n---\nBody")
+        skill_repo = SimpleNamespace(
+            get_by_id=lambda _owner_user_id, _skill_id: None,
+            list_for_owner=lambda _owner_user_id: [],
+            upsert=lambda _skill: (_ for _ in ()).throw(AssertionError("must not save broken Skill")),
+        )
+
+        with patch("backend.hub.client._hub_api", return_value=hub_resp):
+            from backend.hub.client import apply_item
+
+            with pytest.raises(ValueError, match="Skill snapshot frontmatter must include name"):
+                apply_item("item-broken", owner_user_id="owner-1", skill_repo=skill_repo)
+
+    def test_apply_to_library_rejects_non_object_skill_snapshot_meta(self):
+        hub_resp = _make_hub_response("skill", "broken-skill", content="---\nname: Broken Skill\n---\nBody")
+        hub_resp["snapshot"]["meta"] = []
+        skill_repo = SimpleNamespace(
+            get_by_id=lambda _owner_user_id, _skill_id: None,
+            list_for_owner=lambda _owner_user_id: [],
+            upsert=lambda _skill: (_ for _ in ()).throw(AssertionError("must not save broken Skill")),
+        )
+
+        with patch("backend.hub.client._hub_api", return_value=hub_resp):
+            from backend.hub.client import apply_item
+
+            with pytest.raises(ValueError, match="Skill snapshot meta must be an object"):
+                apply_item("item-broken", owner_user_id="owner-1", skill_repo=skill_repo)
+
+    def test_path_traversal_blocked(self):
+        hub_resp = _make_hub_response("skill", "../../evil", content="---\nname: Evil\n---\n# Hello")
+        skill_repo = SimpleNamespace(upsert=lambda _skill: (_ for _ in ()).throw(AssertionError("must not save invalid slug")))
+
+        with patch("backend.hub.client._hub_api", return_value=hub_resp):
+            from backend.hub.client import apply_item
 
             with pytest.raises(ValueError, match="Invalid slug"):
-                download("item-evil")
+                apply_item("item-evil", owner_user_id="owner-1", skill_repo=skill_repo)
 
-        assert not (tmp_path / "evil").exists()
-
-    def test_installs_skill_to_agent_config_when_agent_user_id_is_provided(self):
+    def test_apply_with_agent_user_id_pins_skill_to_agent_config(self):
         import backend.hub.client as marketplace_client
 
-        saved: list[tuple[str, str, str, dict[str, object] | None]] = []
+        saved: list[AgentConfig] = []
+        saved_skills: list[Skill] = []
         user_repo = SimpleNamespace(get_by_id=lambda user_id: SimpleNamespace(id=user_id, agent_config_id="cfg-1", owner_user_id="owner-1"))
+        skill_repo = SimpleNamespace(
+            get_by_id=lambda _owner_user_id, _skill_id: None,
+            list_for_owner=lambda _owner_user_id: [],
+            upsert=lambda skill: saved_skills.append(skill) or skill,
+        )
 
         class _AgentConfigRepo:
-            def save_skill(self, agent_config_id: str, name: str, content: str, meta: dict[str, object] | None = None) -> None:
-                saved.append((agent_config_id, name, content, meta))
+            def get_agent_config(self, agent_config_id: str) -> AgentConfig | None:
+                assert agent_config_id == "cfg-1"
+                return _agent_config(skills=[AgentSkill(name="Existing", content="---\nname: Existing\n---\nBody")])
+
+            def save_agent_config(self, config: AgentConfig) -> None:
+                saved.append(config)
+
+        hub_resp = _make_hub_response(
+            "skill",
+            "fastapi",
+            version="1.2.3",
+            publisher="skillsmp",
+            content="---\nname: FastAPI\ndescription: Build FastAPI APIs\n---\nAlways use APIRouter.",
+        )
+        hub_resp["snapshot"]["meta"]["desc"] = "Meta FastAPI description"
+        hub_resp["snapshot"]["files"] = {"references/routing.md": "Prefer APIRouter."}
+
+        with patch("backend.hub.client._hub_api", return_value=hub_resp):
+            result = marketplace_client.apply_item(
+                "skillsmp:fastapi",
+                owner_user_id="owner-1",
+                user_repo=user_repo,
+                agent_config_repo=_AgentConfigRepo(),
+                skill_repo=skill_repo,
+                agent_user_id="agent-user-1",
+            )
+
+        assert result == {"resource_id": "fastapi", "type": "skill", "version": "1.2.3", "agent_user_id": "agent-user-1"}
+        assert saved_skills[0].name == "FastAPI"
+        assert saved_skills[0].description == "Meta FastAPI description"
+        assert saved[0].id == "cfg-1"
+        assert [skill.name for skill in saved[0].skills] == ["Existing", "FastAPI"]
+        assert saved[0].skills[1].skill_id == "fastapi"
+        assert saved[0].skills[1].description == "Meta FastAPI description"
+        assert saved[0].skills[1].content == "---\nname: FastAPI\ndescription: Build FastAPI APIs\n---\nAlways use APIRouter."
+        assert saved[0].skills[1].files == {"references/routing.md": "Prefer APIRouter."}
+        assert saved[0].skills[1].source == {
+            "marketplace_item_id": "skillsmp:fastapi",
+            "source_version": "1.2.3",
+            "publisher": "skillsmp",
+        }
+
+    def test_saves_skill_to_library_when_agent_user_id_is_provided(self):
+        import backend.hub.client as marketplace_client
+
+        saved_configs: list[AgentConfig] = []
+        saved_skills: list[Skill] = []
+        user_repo = SimpleNamespace(get_by_id=lambda user_id: SimpleNamespace(id=user_id, agent_config_id="cfg-1", owner_user_id="owner-1"))
+        skill_repo = SimpleNamespace(
+            get_by_id=lambda _owner_user_id, _skill_id: None,
+            list_for_owner=lambda _owner_user_id: [],
+            upsert=lambda skill: saved_skills.append(skill) or skill,
+        )
+
+        class _AgentConfigRepo:
+            def get_agent_config(self, _agent_config_id: str) -> AgentConfig | None:
+                return _agent_config(skills=[])
+
+            def save_agent_config(self, config: AgentConfig) -> None:
+                saved_configs.append(config)
 
         hub_resp = _make_hub_response(
             "skill",
@@ -156,46 +353,86 @@ class TestDownloadSkill:
         )
 
         with patch("backend.hub.client._hub_api", return_value=hub_resp):
-            result = marketplace_client.download(
+            result = marketplace_client.apply_item(
                 "skillsmp:fastapi",
                 owner_user_id="owner-1",
                 user_repo=user_repo,
                 agent_config_repo=_AgentConfigRepo(),
+                skill_repo=skill_repo,
                 agent_user_id="agent-user-1",
             )
 
-        assert result == {"resource_id": "FastAPI", "type": "skill", "version": "1.2.3", "agent_user_id": "agent-user-1"}
-        assert saved == [
-            (
-                "cfg-1",
-                "FastAPI",
-                "---\nname: FastAPI\ndescription: Build FastAPI APIs\n---\nAlways use APIRouter.",
-                {
-                    "name": "FastAPI",
-                    "desc": "A test item",
-                    "source": {
-                        "marketplace_item_id": "skillsmp:fastapi",
-                        "installed_version": "1.2.3",
-                        "publisher": "skillsmp",
-                    },
-                },
+        assert saved_skills[0].id == "fastapi"
+        assert saved_skills[0].name == "FastAPI"
+        assert result == {"resource_id": "fastapi", "type": "skill", "version": "1.2.3", "agent_user_id": "agent-user-1"}
+        assert saved_configs[0].skills[0].name == "FastAPI"
+        assert saved_configs[0].skills[0].skill_id == "fastapi"
+
+    def test_apply_with_agent_user_id_pins_trimmed_frontmatter_name(self):
+        import backend.hub.client as marketplace_client
+
+        saved: list[AgentConfig] = []
+        saved_skills: list[Skill] = []
+        user_repo = SimpleNamespace(get_by_id=lambda user_id: SimpleNamespace(id=user_id, agent_config_id="cfg-1", owner_user_id="owner-1"))
+        skill_repo = SimpleNamespace(
+            get_by_id=lambda _owner_user_id, _skill_id: None,
+            list_for_owner=lambda _owner_user_id: [],
+            upsert=lambda skill: saved_skills.append(skill) or skill,
+        )
+
+        class _AgentConfigRepo:
+            def get_agent_config(self, _agent_config_id: str) -> AgentConfig | None:
+                return _agent_config(skills=[])
+
+            def save_agent_config(self, config: AgentConfig) -> None:
+                saved.append(config)
+
+        hub_resp = _make_hub_response(
+            "skill",
+            "fastapi",
+            version="1.2.3",
+            content='---\nname: " FastAPI "\n---\nAlways use APIRouter.',
+        )
+
+        with patch("backend.hub.client._hub_api", return_value=hub_resp):
+            result = marketplace_client.apply_item(
+                "skillsmp:fastapi",
+                owner_user_id="owner-1",
+                user_repo=user_repo,
+                agent_config_repo=_AgentConfigRepo(),
+                skill_repo=skill_repo,
+                agent_user_id="agent-user-1",
             )
-        ]
+
+        assert result["resource_id"] == "fastapi"
+        assert saved_skills[0].name == "FastAPI"
+        assert saved[0].skills[0].name == "FastAPI"
 
 
-# ── Download — agent ──
+# ── Apply — agent ──
 
 
-class TestDownloadAgent:
+class TestApplyAgent:
+    def test_apply_agent_rejects_non_string_snapshot_content(self, tmp_path, monkeypatch):
+        import backend.hub.client as marketplace_client
+
+        monkeypatch.setattr(_lib_paths, "LIBRARY_DIR", tmp_path)
+        hub_resp = _make_hub_response("agent", "broken-agent", content="# Agent")
+        hub_resp["snapshot"]["content"] = []
+
+        with patch("backend.hub.client._hub_api", return_value=hub_resp):
+            with pytest.raises(ValueError, match="Agent snapshot content must be a string"):
+                marketplace_client.apply_item("item-agent")
+
     def test_writes_agent_md(self, tmp_path, monkeypatch):
         lib = tmp_path / "library"
         monkeypatch.setattr(_lib_paths, "LIBRARY_DIR", lib)
         hub_resp = _make_hub_response("agent", "cool-agent", content="# Cool Agent")
 
         with patch("backend.hub.client._hub_api", return_value=hub_resp):
-            from backend.hub.client import download
+            from backend.hub.client import apply_item
 
-            result = download("item-a1")
+            result = apply_item("item-a1")
 
         assert result["type"] == "agent"
         assert result["resource_id"] == "cool-agent"
@@ -209,30 +446,30 @@ class TestDownloadAgent:
         hub_resp = _make_hub_response("agent", "meta-agent", version="3.0.0", publisher="bob")
 
         with patch("backend.hub.client._hub_api", return_value=hub_resp):
-            from backend.hub.client import download
+            from backend.hub.client import apply_item
 
-            download("item-a2")
+            apply_item("item-a2")
 
         meta = json.loads((lib / "agents" / "meta-agent.json").read_text(encoding="utf-8"))
         assert meta["source"]["marketplace_item_id"] == "item-a2"
-        assert meta["source"]["installed_version"] == "3.0.0"
+        assert meta["source"]["source_version"] == "3.0.0"
         assert meta["source"]["publisher"] == "bob"
 
 
-class TestDownloadUser:
-    def test_member_type_installs_as_user_contract(self, monkeypatch):
+class TestApplyUser:
+    def test_member_type_applies_as_user_contract(self, monkeypatch):
         hub_resp = _make_hub_response("member", "agent-user")
         seen: dict[str, object] = {}
 
         monkeypatch.setattr(
-            "backend.hub.client._snapshot_install_owner.install_from_snapshot",
+            "backend.hub.client._snapshot_apply.apply_snapshot",
             lambda **kwargs: seen.update(kwargs) or "agent-user-1",
         )
 
         with patch("backend.hub.client._hub_api", return_value=hub_resp):
-            from backend.hub.client import download
+            from backend.hub.client import apply_item
 
-            result = download(
+            result = apply_item(
                 "item-u1",
                 owner_user_id="owner-1",
                 user_repo=SimpleNamespace(),
@@ -243,47 +480,60 @@ class TestDownloadUser:
         assert seen["user_repo"] is not None
         assert seen["agent_config_repo"] is not None
 
-    def test_member_type_download_requires_repos(self):
+    def test_member_type_apply_requires_repos(self):
         hub_resp = _make_hub_response("member", "agent-user")
 
         with patch("backend.hub.client._hub_api", return_value=hub_resp):
-            from backend.hub.client import download
+            from backend.hub.client import apply_item
 
             with pytest.raises(RuntimeError, match="user_repo and agent_config_repo are required"):
-                download("item-u1", owner_user_id="owner-1")
+                apply_item("item-u1", owner_user_id="owner-1")
 
 
-# ── Download idempotency ──
+class TestApplyUnsupportedType:
+    def test_apply_unsupported_item_type_raises_clear_error(self):
+        hub_resp = _make_hub_response("env", "env-pack")
+
+        with patch("backend.hub.client._hub_api", return_value=hub_resp):
+            from backend.hub.client import apply_item
+
+            with pytest.raises(ValueError, match="Unsupported item type: env"):
+                apply_item("item-env")
 
 
-class TestDownloadIdempotency:
-    def test_download_twice_overwrites_cleanly(self, tmp_path, monkeypatch):
-        lib = tmp_path / "library"
-        monkeypatch.setattr(_lib_paths, "LIBRARY_DIR", lib)
+# ── Apply idempotency ──
 
+
+class TestApplyIdempotency:
+    def test_apply_twice_upserts_same_skill_id(self):
+        saved: dict[str, Skill] = {}
         v1 = _make_hub_response("skill", "idem-skill", content="---\nname: Idem Skill\n---\nV1", version="1.0.0")
         v2 = _make_hub_response("skill", "idem-skill", content="---\nname: Idem Skill\n---\nV2", version="1.0.1")
+        skill_repo = SimpleNamespace(
+            get_by_id=lambda _owner_user_id, skill_id: saved.get(skill_id),
+            list_for_owner=lambda _owner_user_id: list(saved.values()),
+            upsert=lambda skill: saved.__setitem__(skill.id, skill) or skill,
+        )
 
-        from backend.hub.client import download
+        from backend.hub.client import apply_item
 
         with patch("backend.hub.client._hub_api", return_value=v1):
-            download("item-idem")
+            apply_item("item-idem", owner_user_id="owner-1", skill_repo=skill_repo)
 
         with patch("backend.hub.client._hub_api", return_value=v2):
-            result = download("item-idem")
+            result = apply_item("item-idem", owner_user_id="owner-1", skill_repo=skill_repo)
 
         assert result["version"] == "1.0.1"
-        content = (lib / "skills" / "idem-skill" / "SKILL.md").read_text(encoding="utf-8")
-        assert content == "---\nname: Idem Skill\n---\nV2"
-        meta = json.loads((lib / "skills" / "idem-skill" / "meta.json").read_text(encoding="utf-8"))
-        assert meta["source"]["installed_version"] == "1.0.1"
+        assert list(saved) == ["idem-skill"]
+        assert saved["idem-skill"].content == "---\nname: Idem Skill\n---\nV2"
+        assert saved["idem-skill"].source["source_version"] == "1.0.1"
 
 
 def test_upgrade_returns_user_id_contract(monkeypatch):
     seen: dict[str, object] = {}
 
     monkeypatch.setattr(
-        "backend.hub.client._snapshot_install_owner.install_from_snapshot",
+        "backend.hub.client._snapshot_apply.apply_snapshot",
         lambda **kwargs: seen.update(kwargs) or "agent-user-1",
     )
 
@@ -303,16 +553,16 @@ def test_upgrade_returns_user_id_contract(monkeypatch):
     assert seen["agent_config_repo"] is not None
 
 
-def test_upgrade_passes_existing_user_id_to_snapshot_install(monkeypatch):
+def test_upgrade_passes_existing_user_id_to_snapshot_apply(monkeypatch):
     seen: dict[str, object] = {}
 
-    def fake_install_from_snapshot(**kwargs):
+    def fake_apply_snapshot(**kwargs):
         seen.update(kwargs)
         return "agent-user-1"
 
     monkeypatch.setattr(
-        "backend.hub.client._snapshot_install_owner.install_from_snapshot",
-        fake_install_from_snapshot,
+        "backend.hub.client._snapshot_apply.apply_snapshot",
+        fake_apply_snapshot,
     )
 
     with patch("backend.hub.client._hub_api", return_value=_make_hub_response("member", "agent-user", version="2.0.0")):
@@ -338,49 +588,32 @@ def test_upgrade_requires_repos():
             upgrade(user_id="agent-user-1", item_id="item-u2", owner_user_id="owner-1")
 
 
-def test_publish_uses_repo_bundle_when_member_dir_is_absent(tmp_path, monkeypatch):
+def test_publish_uses_repo_material_when_member_dir_is_absent(tmp_path, monkeypatch):
     import backend.hub.client as marketplace_client
 
-    saved: dict[str, object] = {}
+    saved: dict[str, AgentConfig] = {}
     captured: dict[str, object] = {}
 
     user_repo = SimpleNamespace(get_by_id=lambda user_id: SimpleNamespace(id=user_id, agent_config_id="cfg-1", owner_user_id="owner-1"))
 
     class _AgentConfigRepo:
-        def get_config(self, agent_config_id: str):
+        def get_agent_config(self, agent_config_id: str):
             if agent_config_id != "cfg-1":
                 return None
-            return {
-                "id": "cfg-1",
-                "agent_user_id": "agent-user-1",
-                "name": "Repo Agent",
-                "description": "from repo",
-                "tools": ["search"],
-                "system_prompt": "be helpful",
-                "status": "draft",
-                "version": "0.1.0",
-                "created_at": 1,
-                "updated_at": 2,
-                "meta": {"source": {"marketplace_item_id": "item-parent", "installed_version": "0.1.0"}},
-                "runtime": {"tools:search": {"enabled": True, "desc": "Search"}},
-                "mcp": {"demo": {"transport": "stdio", "command": "demo"}},
-            }
+            return _agent_config(
+                rules=[AgentRule(name="default", content="Rule content")],
+                sub_agents=[AgentSubAgent(name="Scout", description="helper", tools=["search"], system_prompt="look around")],
+                skills=[
+                    AgentSkill(
+                        name="Search",
+                        content="---\nname: Search\n---\nskill content",
+                        source={"name": "Search", "desc": "Repo Search"},
+                    )
+                ],
+            )
 
-        def list_rules(self, agent_config_id: str):
-            assert agent_config_id == "cfg-1"
-            return [{"filename": "default.md", "content": "Rule content"}]
-
-        def list_sub_agents(self, agent_config_id: str):
-            assert agent_config_id == "cfg-1"
-            return [{"name": "Scout", "description": "helper", "tools": ["search"], "system_prompt": "look around"}]
-
-        def list_skills(self, agent_config_id: str):
-            assert agent_config_id == "cfg-1"
-            return [{"name": "Search", "content": "skill content", "meta_json": {"name": "Search", "desc": "Repo Search"}}]
-
-        def save_config(self, agent_config_id: str, data: dict):
-            saved["agent_config_id"] = agent_config_id
-            saved["data"] = data
+        def save_agent_config(self, config: AgentConfig) -> None:
+            saved["config"] = config
 
     monkeypatch.setattr(
         marketplace_client,
@@ -409,23 +642,23 @@ def test_publish_uses_repo_bundle_when_member_dir_is_absent(tmp_path, monkeypatc
     assert payload["version"] == "0.1.1"
     assert payload["parent_item_id"] == "item-parent"
     assert payload["parent_version"] == "0.1.0"
-    assert payload["snapshot"]["agent_md"].startswith("---\n")
-    assert payload["snapshot"]["meta"]["version"] == "0.1.0"
-    assert payload["snapshot"]["meta"]["source"] == {"marketplace_item_id": "item-parent", "installed_version": "0.1.0"}
-    assert payload["snapshot"]["rules"] == [{"name": "default", "content": "Rule content"}]
-    assert payload["snapshot"]["skills"][0]["meta"] == {"name": "Search", "desc": "Repo Search"}
-    assert saved["agent_config_id"] == "cfg-1"
-    assert saved["data"]["owner_user_id"] == "owner-1"
-    assert saved["data"]["version"] == "0.1.1"
-    assert saved["data"]["status"] == "active"
-    assert saved["data"]["meta"]["source"]["marketplace_item_id"] == "item-123"
-    assert saved["data"]["meta"]["source"]["installed_version"] == "0.1.1"
+    assert payload["snapshot"]["schema_version"] == "agent-snapshot/v1"
+    assert payload["snapshot"]["agent"]["name"] == "Repo Agent"
+    assert payload["snapshot"]["agent"]["meta"]["source"] == {"marketplace_item_id": "item-parent", "source_version": "0.1.0"}
+    assert payload["snapshot"]["agent"]["rules"] == [{"id": None, "name": "default", "content": "Rule content", "enabled": True}]
+    assert payload["snapshot"]["agent"]["skills"][0]["source"] == {"name": "Search", "desc": "Repo Search"}
+    assert saved["config"].id == "cfg-1"
+    assert saved["config"].owner_user_id == "owner-1"
+    assert saved["config"].version == "0.1.1"
+    assert saved["config"].status == "active"
+    assert saved["config"].meta["source"]["marketplace_item_id"] == "item-123"
+    assert saved["config"].meta["source"]["source_version"] == "0.1.1"
 
 
 def test_publish_prefers_repo_lineage_even_when_stale_member_dir_exists(tmp_path, monkeypatch):
     import backend.hub.client as marketplace_client
 
-    saved: dict[str, object] = {}
+    saved: dict[str, AgentConfig] = {}
     captured: dict[str, object] = {}
     members_root = tmp_path / "members"
     member_dir = members_root / "agent-user-1"
@@ -435,47 +668,20 @@ def test_publish_prefers_repo_lineage_even_when_stale_member_dir_exists(tmp_path
         "version": "9.9.9",
         "created_at": 1,
         "updated_at": 2,
-        "source": {"marketplace_item_id": "stale-item", "installed_version": "9.9.9"},
+        "source": {"marketplace_item_id": "stale-item", "source_version": "9.9.9"},
     }
     (member_dir / "meta.json").write_text(json.dumps(stale_meta, indent=2), encoding="utf-8")
 
     user_repo = SimpleNamespace(get_by_id=lambda user_id: SimpleNamespace(id=user_id, agent_config_id="cfg-1", owner_user_id="owner-1"))
 
     class _AgentConfigRepo:
-        def get_config(self, agent_config_id: str):
+        def get_agent_config(self, agent_config_id: str):
             if agent_config_id != "cfg-1":
                 return None
-            return {
-                "id": "cfg-1",
-                "agent_user_id": "agent-user-1",
-                "name": "Repo Agent",
-                "description": "from repo",
-                "tools": ["search"],
-                "system_prompt": "be helpful",
-                "status": "draft",
-                "version": "0.1.0",
-                "created_at": 1,
-                "updated_at": 2,
-                "meta": {"source": {"marketplace_item_id": "item-parent", "installed_version": "0.1.0"}},
-                "runtime": {"tools:search": {"enabled": True, "desc": "Search"}},
-                "mcp": {"demo": {"transport": "stdio", "command": "demo"}},
-            }
+            return _agent_config()
 
-        def list_rules(self, agent_config_id: str):
-            assert agent_config_id == "cfg-1"
-            return []
-
-        def list_sub_agents(self, agent_config_id: str):
-            assert agent_config_id == "cfg-1"
-            return []
-
-        def list_skills(self, agent_config_id: str):
-            assert agent_config_id == "cfg-1"
-            return []
-
-        def save_config(self, agent_config_id: str, data: dict):
-            saved["agent_config_id"] = agent_config_id
-            saved["data"] = data
+        def save_agent_config(self, config: AgentConfig) -> None:
+            saved["config"] = config
 
     monkeypatch.setattr(
         marketplace_client,
@@ -501,11 +707,11 @@ def test_publish_prefers_repo_lineage_even_when_stale_member_dir_exists(tmp_path
     assert payload["version"] == "0.1.1"
     assert payload["parent_item_id"] == "item-parent"
     assert payload["parent_version"] == "0.1.0"
-    assert payload["snapshot"]["meta"]["source"] == {"marketplace_item_id": "item-parent", "installed_version": "0.1.0"}
-    assert saved["agent_config_id"] == "cfg-1"
-    assert saved["data"]["owner_user_id"] == "owner-1"
-    assert saved["data"]["meta"]["source"]["marketplace_item_id"] == "item-123"
-    assert saved["data"]["meta"]["source"]["installed_version"] == "0.1.1"
+    assert payload["snapshot"]["agent"]["meta"]["source"] == {"marketplace_item_id": "item-parent", "source_version": "0.1.0"}
+    assert saved["config"].id == "cfg-1"
+    assert saved["config"].owner_user_id == "owner-1"
+    assert saved["config"].meta["source"]["marketplace_item_id"] == "item-123"
+    assert saved["config"].meta["source"]["source_version"] == "0.1.1"
     assert json.loads((member_dir / "meta.json").read_text(encoding="utf-8")) == stale_meta
 
 
