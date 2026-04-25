@@ -7,10 +7,10 @@ import argparse
 from datetime import UTC, datetime
 from pathlib import Path
 
-from config.agent_config_types import Skill, SkillPackage
+from config.agent_config_types import Skill
 from config.skill_document import SkillDocument, parse_skill_document, skill_description, skill_version
 from config.skill_files import normalize_skill_file_entries
-from config.skill_package import build_skill_package_hash, build_skill_package_manifest
+from config.skill_package import build_skill_package
 from storage.runtime import build_storage_container
 from storage.utils import generate_skill_id
 
@@ -58,7 +58,6 @@ def import_skills(owner_user_id: str, library_dir: Path) -> int:
             raise RuntimeError("Generated Skill id already exists")
         version = skill_version(document)
         files = _read_files(skill_dir)
-        package_hash = build_skill_package_hash(content, files)
         skill = repo.upsert(
             Skill(
                 id=skill_id,
@@ -71,13 +70,10 @@ def import_skills(owner_user_id: str, library_dir: Path) -> int:
             )
         )
         package = repo.create_package(
-            SkillPackage(
-                id=package_hash.removeprefix("sha256:"),
+            build_skill_package(
                 owner_user_id=owner_user_id,
                 skill_id=skill.id,
                 version=version,
-                hash=package_hash,
-                manifest=build_skill_package_manifest(content, files),
                 skill_md=content,
                 files=files,
                 source=dict(FILE_IMPORT_SOURCE),
