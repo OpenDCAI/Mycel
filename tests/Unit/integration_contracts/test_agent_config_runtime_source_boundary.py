@@ -28,6 +28,14 @@ def test_config_loading_does_not_create_skill_directories() -> None:
     assert "mkdir" not in loader_source
 
 
+def test_runtime_config_loading_has_no_local_runtime_sources() -> None:
+    loader_source = inspect.getsource(AgentLoader.load)
+
+    assert "_load_user_config" not in loader_source
+    assert "_load_project_config" not in loader_source
+    assert "user_home_read_candidates" not in loader_source
+
+
 def test_runtime_defaults_do_not_define_skill_runtime_config() -> None:
     runtime_defaults_path = Path(__file__).parents[3] / "config" / "defaults" / "runtime.json"
     runtime_defaults = json.loads(runtime_defaults_path.read_text())

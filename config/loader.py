@@ -1,14 +1,12 @@
 """Unified agent & runtime configuration loader.
 
 Combines:
-- Three-tier runtime config merge (system > user > project) — for default agent
+- System runtime defaults plus explicit call-site overrides
 - Built-in runtime agent .md parsing (YAML frontmatter + system prompt)
 
 Configuration priority (highest to lowest):
 1. CLI overrides
-2. Project config (.leon/runtime.json in workspace)
-3. User config (~/.leon/runtime.json)
-4. System defaults (config/defaults/runtime.json)
+2. System defaults (config/defaults/runtime.json)
 """
 
 from __future__ import annotations
@@ -22,7 +20,7 @@ import yaml
 
 from config.schema import LeonSettings
 from config.types import RuntimeAgentDefinition
-from config.user_paths import remap_default_user_home_string, user_home_read_candidates
+from config.user_paths import remap_default_user_home_string
 
 logger = logging.getLogger(__name__)
 
@@ -35,46 +33,14 @@ class AgentLoader:
         self._system_defaults_dir = Path(__file__).parent / "defaults"
         self._agents: dict[str, RuntimeAgentDefinition] = {}
 
-    # ── Three-tier runtime config (unchanged) ──
+    # ── Runtime config ──
 
     def load(self, cli_overrides: dict[str, Any] | None = None) -> LeonSettings:
-        """Load runtime configuration with three-tier merge."""
+        """Load runtime configuration from system defaults and explicit overrides."""
         system_config = self._load_system_defaults()
-        user_config = self._load_user_config()
-        project_config = self._load_project_config()
+        self._reject_removed_runtime_key("skills", system_config, cli_overrides or {})
 
-        # Deep merge: runtime, memory, tools
-        merged_runtime = self._deep_merge(
-            system_config.get("runtime", {}),
-            user_config.get("runtime", {}),
-            project_config.get("runtime", {}),
-        )
-
-        merged_memory = self._deep_merge(
-            system_config.get("memory", {}),
-            user_config.get("memory", {}),
-            project_config.get("memory", {}),
-        )
-        merged_tools = self._deep_merge(
-            system_config.get("tools", {}),
-            user_config.get("tools", {}),
-            project_config.get("tools", {}),
-        )
-
-        self._reject_removed_runtime_key("skills", system_config, user_config, project_config)
-
-        # Lookup strategy for mcp (first found wins)
-        merged_mcp = self._lookup_merge("mcp", project_config, user_config, system_config)
-
-        system_prompt = project_config.get("system_prompt") or user_config.get("system_prompt") or system_config.get("system_prompt")
-
-        final_config: dict[str, Any] = {
-            "runtime": merged_runtime,
-            "memory": merged_memory,
-            "tools": merged_tools,
-            "mcp": merged_mcp,
-            "system_prompt": system_prompt,
-        }
+        final_config: dict[str, Any] = dict(system_config)
 
         if cli_overrides:
             final_config = self._deep_merge(final_config, cli_overrides)
@@ -163,19 +129,6 @@ class AgentLoader:
     def _load_system_defaults(self) -> dict[str, Any]:
         """Load system defaults from runtime.json."""
         return self._load_json(self._system_defaults_dir / "runtime.json")
-
-    def _load_user_config(self) -> dict[str, Any]:
-        """Load user config from ~/.leon/runtime.json."""
-        merged: dict[str, Any] = {}
-        for path in user_home_read_candidates("runtime.json"):
-            merged = self._deep_merge(merged, self._load_json(path))
-        return merged
-
-    def _load_project_config(self) -> dict[str, Any]:
-        """Load project config from .leon/runtime.json."""
-        if not self.workspace_root:
-            return {}
-        return self._load_json(self.workspace_root / ".leon" / "runtime.json")
 
     @staticmethod
     def _load_json(path: Path) -> dict[str, Any]:

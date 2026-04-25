@@ -207,14 +207,12 @@ class MCPConfig(BaseModel):
 class LeonSettings(BaseModel):
     """Main Mycel runtime configuration.
 
-    Contains non-model runtime settings: memory, tools, mcp, skills, behavior params.
+    Contains non-model runtime settings: memory, tools, mcp, and behavior params.
     Model identity (model name, provider, API keys) lives in ModelsConfig.
 
     Configuration priority (highest to lowest):
     1. CLI overrides
-    2. Project config (.leon/runtime.json)
-    3. User config (~/.leon/runtime.json)
-    4. System defaults (config/defaults/runtime.json)
+    2. System defaults (config/defaults/runtime.json)
     """
 
     # Runtime behavior (replaces APIConfig model-identity fields)
