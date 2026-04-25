@@ -402,6 +402,7 @@ async def test_apply_member_snapshot_materializes_skill_through_router(monkeypat
         }
 
     monkeypatch.setattr(marketplace_router.marketplace_client, "_hub_api", hub_response)
+    monkeypatch.setattr(marketplace_router.marketplace_client._snapshot_apply, "generate_skill_id", lambda: "skill_generated123")
     skill_repo = _SkillRepo()
     agent_config_repo = _AgentConfigRepo()
     request = SimpleNamespace(
@@ -422,11 +423,12 @@ async def test_apply_member_snapshot_materializes_skill_through_router(monkeypat
     saved_config = agent_config_repo.saved[0]
     saved_skill = saved_config.skills[0]
     assert result == {"user_id": saved_config.agent_user_id, "type": "user", "version": "1.2.3"}
-    assert saved_skill.skill_id == "snapshot-core"
+    assert saved_skill.skill_id == "skill_generated123"
     assert saved_skill.package_id
     package = skill_repo.get_package("owner-1", saved_skill.package_id)
     assert package is not None
     assert getattr(package, "files") == {"references/routing.md": "route narrowly"}
+    assert getattr(package, "source")["snapshot_skill_id"] == "snapshot-core"
 
 
 @pytest.mark.asyncio
