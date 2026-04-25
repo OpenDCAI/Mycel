@@ -74,7 +74,7 @@ MODEL_NAME=claude-sonnet-4-5-20250929
   "system_prompt": null,
   "tools": { ... },
   "mcp": { "enabled": true, "servers": {} },
-  "skills": { "enabled": true, "paths": ["~/.leon/skills"], "skills": {} }
+  "skills": { "enabled": true, "paths": [], "skills": {} }
 }
 ```
 
@@ -224,7 +224,7 @@ Skills 是可加载的专业能力模块 — 按需注入专业指令的 Markdow
 {
   "skills": {
     "enabled": true,
-    "paths": ["~/.leon/skills"],
+    "paths": [],
     "skills": {
       "code-review": true,
       "debugging": false
@@ -233,7 +233,7 @@ Skills 是可加载的专业能力模块 — 按需注入专业指令的 Markdow
 }
 ```
 
-Skill 目录必须在磁盘上存在，Mycel 不会自动创建。
+运行时配置不会读取默认宿主机目录。产品链路应使用 Hub/Library 管理的 Skills；只有受控的文件开发和导入流程才显式声明 `paths`。
 
 Agent 在运行时加载：`load_skill("code-review")`。
 
