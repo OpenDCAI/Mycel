@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field, ValidationInfo, field_validator
+from pydantic import BaseModel, ConfigDict, Field, ValidationInfo, field_validator
 
 from config.skill_files import normalize_skill_file_map
 
@@ -14,7 +14,11 @@ def _require_enabled_bool(value: Any) -> bool:
     return value
 
 
-class Skill(BaseModel):
+class AgentConfigSchemaModel(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+
+class Skill(AgentConfigSchemaModel):
     id: str
     owner_user_id: str
     name: str
@@ -32,7 +36,7 @@ class Skill(BaseModel):
         return value
 
 
-class SkillPackage(BaseModel):
+class SkillPackage(AgentConfigSchemaModel):
     id: str
     owner_user_id: str
     skill_id: str
@@ -57,7 +61,7 @@ class SkillPackage(BaseModel):
         return normalize_skill_file_map(value, context="Skill package files") if isinstance(value, dict) else value
 
 
-class AgentSkill(BaseModel):
+class AgentSkill(AgentConfigSchemaModel):
     id: str | None = None
     skill_id: str | None = None
     package_id: str | None = None
@@ -80,7 +84,7 @@ class AgentSkill(BaseModel):
         return _require_enabled_bool(value)
 
 
-class ResolvedSkill(BaseModel):
+class ResolvedSkill(AgentConfigSchemaModel):
     name: str
     description: str = ""
     version: str = "0.1.0"
@@ -101,7 +105,7 @@ class ResolvedSkill(BaseModel):
         return normalize_skill_file_map(value, context="Skill files") if isinstance(value, dict) else value
 
 
-class AgentRule(BaseModel):
+class AgentRule(AgentConfigSchemaModel):
     id: str | None = None
     name: str
     content: str
@@ -120,7 +124,7 @@ class AgentRule(BaseModel):
         return _require_enabled_bool(value)
 
 
-class AgentSubAgent(BaseModel):
+class AgentSubAgent(AgentConfigSchemaModel):
     id: str | None = None
     name: str
     description: str = ""
@@ -142,7 +146,7 @@ class AgentSubAgent(BaseModel):
         return _require_enabled_bool(value)
 
 
-class McpServerConfig(BaseModel):
+class McpServerConfig(AgentConfigSchemaModel):
     id: str | None = None
     name: str
     transport: Literal["stdio", "streamable_http", "sse", "websocket"] | None = None
@@ -167,7 +171,7 @@ class McpServerConfig(BaseModel):
         return _require_enabled_bool(value)
 
 
-class AgentConfig(BaseModel):
+class AgentConfig(AgentConfigSchemaModel):
     id: str
     owner_user_id: str
     agent_user_id: str  # @@@aggregate-owner - DB column is not null; aggregate saves must persist it.
@@ -194,7 +198,7 @@ class AgentConfig(BaseModel):
         return value
 
 
-class ResolvedAgentConfig(BaseModel):
+class ResolvedAgentConfig(AgentConfigSchemaModel):
     id: str
     name: str
     description: str = ""
@@ -210,6 +214,6 @@ class ResolvedAgentConfig(BaseModel):
     meta: dict[str, Any] = Field(default_factory=dict)
 
 
-class AgentSnapshot(BaseModel):
+class AgentSnapshot(AgentConfigSchemaModel):
     schema_version: Literal["agent-snapshot/v1"] = "agent-snapshot/v1"
     agent: ResolvedAgentConfig
