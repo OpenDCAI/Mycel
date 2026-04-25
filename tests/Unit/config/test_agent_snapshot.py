@@ -10,6 +10,7 @@ def test_snapshot_contains_resolved_agent_config_only():
             owner_user_id="owner-1",
             agent_user_id="agent-1",
             name="Researcher",
+            version="1.0.0",
             skills=[
                 AgentSkill(
                     skill_id="github",

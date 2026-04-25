@@ -77,8 +77,34 @@ def test_agent_config_model_rejects_unknown_fields() -> None:
                 "owner_user_id": "owner-1",
                 "agent_user_id": "agent-1",
                 "name": "Researcher",
+                "version": "1.0.0",
                 "skill_packages": [],
             }
+        )
+
+
+def test_agent_config_model_requires_version() -> None:
+    with pytest.raises(ValueError) as excinfo:
+        AgentConfig.model_validate(
+            {
+                "id": "cfg-1",
+                "owner_user_id": "owner-1",
+                "agent_user_id": "agent-1",
+                "name": "Researcher",
+            }
+        )
+
+    assert "version" in str(excinfo.value)
+
+
+def test_agent_config_model_rejects_blank_version() -> None:
+    with pytest.raises(ValueError, match="agent_config.version must not be blank"):
+        AgentConfig(
+            id="cfg-1",
+            owner_user_id="owner-1",
+            agent_user_id="agent-1",
+            name="Researcher",
+            version=" ",
         )
 
 
