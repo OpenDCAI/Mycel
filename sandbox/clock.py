@@ -12,10 +12,7 @@ def utc_now_iso() -> str:
 
 
 def parse_runtime_datetime(raw: str | datetime) -> datetime:
-    if isinstance(raw, datetime):
-        parsed = raw
-    else:
-        parsed = datetime.fromisoformat(str(raw))
+    parsed = raw if isinstance(raw, datetime) else datetime.fromisoformat(str(raw))
     if parsed.tzinfo is None:
         parsed = parsed.replace(tzinfo=UTC)
     return parsed
