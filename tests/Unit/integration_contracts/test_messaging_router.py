@@ -595,6 +595,83 @@ def test_send_message_still_rejects_unowned_explicit_sender_id() -> None:
     assert "does not belong" in str(exc_info.value.detail)
 
 
+def test_send_message_can_enforce_authenticated_user_caught_up_state() -> None:
+    seen: list[dict[str, object]] = []
+    messaging_service = SimpleNamespace(
+        resolve_display_user=lambda uid: SimpleNamespace(id=uid, owner_user_id=None),
+        send=lambda chat_id, sender_id, content, **kwargs: (
+            seen.append({"chat_id": chat_id, "sender_id": sender_id, "content": content, **kwargs})
+            or {
+                "id": "msg-1",
+                "chat_id": chat_id,
+                "sender_id": sender_id,
+                "content": content,
+                "message_type": "human",
+                "created_at": "2026-04-07T00:00:00Z",
+            }
+        ),
+        project_message_response=lambda msg: msg,
+    )
+
+    chats_router.send_message(
+        "chat-1",
+        chats_router.SendMessageBody(content="hello", enforce_caught_up=True, reply_to="msg-0"),
+        user_id="external-user-1",
+        messaging_service=messaging_service,
+    )
+
+    assert seen == [
+        {
+            "chat_id": "chat-1",
+            "sender_id": "external-user-1",
+            "content": "hello",
+            "mentions": None,
+            "signal": None,
+            "message_type": "human",
+            "reply_to": "msg-0",
+            "enforce_caught_up": True,
+        }
+    ]
+
+
+def test_send_message_maps_caught_up_conflict_to_409() -> None:
+    from messaging.errors import ChatNotCaughtUpError
+
+    messaging_service = SimpleNamespace(
+        resolve_display_user=lambda uid: SimpleNamespace(id=uid, owner_user_id=None),
+        send=lambda *_args, **_kwargs: (_ for _ in ()).throw(ChatNotCaughtUpError("read unread messages first")),
+    )
+
+    with pytest.raises(HTTPException) as exc_info:
+        chats_router.send_message(
+            "chat-1",
+            chats_router.SendMessageBody(content="hello", enforce_caught_up=True),
+            user_id="external-user-1",
+            messaging_service=messaging_service,
+        )
+
+    assert exc_info.value.status_code == 409
+    assert "read unread" in str(exc_info.value.detail)
+
+
+def test_list_unread_messages_uses_authenticated_user_membership() -> None:
+    seen: list[tuple[str, str]] = []
+    messaging_service = SimpleNamespace(
+        is_chat_member=lambda chat_id, user_id: seen.append((chat_id, user_id)) or True,
+        list_unread=lambda chat_id, user_id: [{"id": "msg-1", "chat_id": chat_id, "sender_id": "human-1"}],
+        project_message_response=lambda msg: {"id": msg["id"], "chat_id": msg["chat_id"], "sender_id": msg["sender_id"]},
+    )
+
+    result = chats_router.list_unread_messages(
+        "chat-1",
+        user_id="external-user-1",
+        messaging_service=messaging_service,
+    )
+
+    assert seen == [("chat-1", "external-user-1")]
+    assert result == [{"id": "msg-1", "chat_id": "chat-1", "sender_id": "human-1"}]
+
+
 def test_send_message_accepts_owned_thread_user_sender_id_via_thread_repo():
     seen: list[tuple[str, str, str]] = []
     app = SimpleNamespace(
