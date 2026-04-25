@@ -228,9 +228,72 @@ def test_get_agent_config_preserves_empty_tool_list() -> None:
     assert config.tools == []
 
 
+def test_get_agent_config_fails_loudly_when_tools_json_is_not_an_array() -> None:
+    tables = _tables()
+    tables["agent.agent_configs"][0]["tools_json"] = {"Read": True}
+    repo = SupabaseAgentConfigRepo(_FakeClient(tables))
+
+    with pytest.raises(RuntimeError, match="tools_json must be a JSON array"):
+        repo.get_agent_config("cfg-1")
+
+
+def test_get_agent_config_fails_loudly_when_runtime_json_is_not_an_object() -> None:
+    tables = _tables()
+    tables["agent.agent_configs"][0]["runtime_json"] = []
+    repo = SupabaseAgentConfigRepo(_FakeClient(tables))
+
+    with pytest.raises(RuntimeError, match="runtime_json must be a JSON object"):
+        repo.get_agent_config("cfg-1")
+
+
+def test_get_agent_config_fails_loudly_when_compact_json_is_not_an_object() -> None:
+    tables = _tables()
+    tables["agent.agent_configs"][0]["compact_json"] = []
+    repo = SupabaseAgentConfigRepo(_FakeClient(tables))
+
+    with pytest.raises(RuntimeError, match="compact_json must be a JSON object"):
+        repo.get_agent_config("cfg-1")
+
+
+def test_get_agent_config_fails_loudly_when_meta_json_is_not_an_object() -> None:
+    tables = _tables()
+    tables["agent.agent_configs"][0]["meta_json"] = []
+    repo = SupabaseAgentConfigRepo(_FakeClient(tables))
+
+    with pytest.raises(RuntimeError, match="meta_json must be a JSON object"):
+        repo.get_agent_config("cfg-1")
+
+
+def test_get_agent_config_fails_loudly_when_skill_source_json_is_not_an_object() -> None:
+    tables = _tables()
+    tables["library.skill_packages"][0]["source_json"] = ["bad"]
+    repo = SupabaseAgentConfigRepo(_FakeClient(tables))
+
+    with pytest.raises(RuntimeError, match="skill source_json must be a JSON object"):
+        repo.get_agent_config("cfg-1")
+
+
+def test_get_agent_config_fails_loudly_when_sub_agent_tools_json_is_not_an_array() -> None:
+    tables = _tables()
+    tables["agent.agent_sub_agents"][0]["tools_json"] = {"Read": True}
+    repo = SupabaseAgentConfigRepo(_FakeClient(tables))
+
+    with pytest.raises(RuntimeError, match="agent_sub_agents tools_json must be a JSON array"):
+        repo.get_agent_config("cfg-1")
+
+
 def test_get_agent_config_fails_loudly_when_mcp_json_is_not_an_array() -> None:
     tables = _tables()
     tables["agent.agent_configs"][0]["mcp_json"] = {"filesystem": {"command": "fs"}}
+    repo = SupabaseAgentConfigRepo(_FakeClient(tables))
+
+    with pytest.raises(RuntimeError, match="mcp_json must be a JSON array"):
+        repo.get_agent_config("cfg-1")
+
+
+def test_get_agent_config_fails_loudly_when_mcp_json_is_empty_object() -> None:
+    tables = _tables()
+    tables["agent.agent_configs"][0]["mcp_json"] = {}
     repo = SupabaseAgentConfigRepo(_FakeClient(tables))
 
     with pytest.raises(RuntimeError, match="mcp_json must be a JSON array"):
@@ -252,6 +315,24 @@ def test_get_agent_config_fails_loudly_when_mcp_json_enabled_is_not_boolean() ->
     repo = SupabaseAgentConfigRepo(_FakeClient(tables))
 
     with pytest.raises(RuntimeError, match="mcp_json item enabled must be a boolean"):
+        repo.get_agent_config("cfg-1")
+
+
+def test_get_agent_config_fails_loudly_when_mcp_args_is_not_an_array() -> None:
+    tables = _tables()
+    tables["agent.agent_configs"][0]["mcp_json"] = [{"name": "filesystem", "transport": "stdio", "command": "fs", "args": {"root": "."}}]
+    repo = SupabaseAgentConfigRepo(_FakeClient(tables))
+
+    with pytest.raises(RuntimeError, match="mcp_json item args must be a JSON array"):
+        repo.get_agent_config("cfg-1")
+
+
+def test_get_agent_config_fails_loudly_when_mcp_env_is_not_an_object() -> None:
+    tables = _tables()
+    tables["agent.agent_configs"][0]["mcp_json"] = [{"name": "filesystem", "transport": "stdio", "command": "fs", "env": ["A=B"]}]
+    repo = SupabaseAgentConfigRepo(_FakeClient(tables))
+
+    with pytest.raises(RuntimeError, match="mcp_json item env must be a JSON object"):
         repo.get_agent_config("cfg-1")
 
 

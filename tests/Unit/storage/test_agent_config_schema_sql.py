@@ -44,13 +44,21 @@ def test_agent_config_schema_rejects_duplicate_child_names_inside_rpc() -> None:
     sql = Path("storage/schema/2026_04_24_agent_config_resolved_config_hardcut.sql").read_text(encoding="utf-8")
 
     assert "agent_config.name is required" in sql
+    assert "agent_config.tools must be a JSON array" in sql
+    assert "agent_config.runtime_settings must be a JSON object" in sql
+    assert "agent_config.compact must be a JSON object" in sql
+    assert "agent_config.meta must be a JSON object" in sql
     assert "agent_config.skills must be a JSON array" in sql
     assert "agent_config.rules must be a JSON array" in sql
     assert "agent_config.sub_agents must be a JSON array" in sql
+    assert "agent_config.mcp_servers must be a JSON array" in sql
     assert "agent_config.skills child.name is required" in sql
     assert "agent_config.rules child.name is required" in sql
     assert "agent_config.sub_agents child.name is required" in sql
     assert "agent_config.mcp_servers child.name is required" in sql
+    assert "agent_config.sub_agents child.tools must be a JSON array" in sql
+    assert "agent_config.mcp_servers child.args must be a JSON array" in sql
+    assert "agent_config.mcp_servers child.env must be a JSON object" in sql
     assert "agent_config.skills contains duplicate name" in sql
     assert "agent_config.rules contains duplicate name" in sql
     assert "agent_config.sub_agents contains duplicate name" in sql
@@ -94,6 +102,14 @@ def test_agent_config_schema_constrains_named_child_tables() -> None:
 def test_agent_config_schema_constrains_root_identity_fields() -> None:
     sql = Path("storage/schema/2026_04_24_agent_config_resolved_config_hardcut.sql").read_text(encoding="utf-8")
 
+    assert "library.skills.source_json must be a JSON object before hard cut" in sql
+    assert "library.skill_packages.manifest_json must be a JSON object before hard cut" in sql
+    assert "library.skill_packages.files_json must be a JSON object before hard cut" in sql
+    assert "library.skill_packages.source_json must be a JSON object before hard cut" in sql
+    assert "agent.agent_configs.tools_json must be a JSON array before hard cut" in sql
+    assert "agent.agent_configs.runtime_json must be a JSON object before hard cut" in sql
+    assert "agent.agent_configs.compact_json must be a JSON object before hard cut" in sql
+    assert "agent.agent_configs.meta_json must be a JSON object before hard cut" in sql
     assert "agent_configs_owner_user_id_required_ck" in sql
     assert "agent_configs_agent_user_id_required_ck" in sql
     assert "agent_configs_name_required_ck" in sql
