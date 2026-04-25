@@ -34,6 +34,13 @@ def _enabled_from_row(row: dict[str, Any], *, label: str) -> bool:
     return enabled
 
 
+def _required_text(row: dict[str, Any], column: str, *, label: str) -> str:
+    value = row[column]
+    if not isinstance(value, str):
+        raise RuntimeError(f"{label} must be text")
+    return value
+
+
 def _json_array(value: Any, *, label: str, default: list[Any] | None = None) -> list[Any]:
     if value is None:
         return list(default or [])
@@ -89,10 +96,10 @@ class SupabaseAgentConfigRepo:
             owner_user_id=root["owner_user_id"],
             agent_user_id=root["agent_user_id"],
             name=root["name"],
-            description=root.get("description") or "",
+            description=_required_text(root, "description", label="agent_configs description"),
             model=root.get("model"),
             tools=_required_json_array(root.get("tools_json"), label="tools_json"),
-            system_prompt=root.get("system_prompt") or "",
+            system_prompt=_required_text(root, "system_prompt", label="agent_configs system_prompt"),
             status=root.get("status") or "draft",
             version=root.get("version") or "0.1.0",
             runtime_settings=_required_json_object(root.get("runtime_json"), label="runtime_json"),
