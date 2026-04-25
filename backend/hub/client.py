@@ -83,7 +83,7 @@ def _skill_files_from_snapshot(snapshot: dict[str, Any]) -> dict[str, str]:
         return {}
     if not isinstance(files, dict):
         raise ValueError("Skill snapshot files must be an object")
-    return {str(path): str(content) for path, content in files.items()}
+    return {str(path).replace("\\", "/"): str(content) for path, content in files.items()}
 
 
 def list_items(

@@ -140,6 +140,23 @@ class TestApplySkill:
         assert saved[0].content == "---\nname: My Skill\n---\n# My Skill\nDo stuff"
         assert saved[0].files == {"references/usage.md": "Use carefully"}
 
+    def test_writes_hub_skill_files_as_posix_paths(self):
+        saved: list[Skill] = []
+        hub_resp = _make_hub_response("skill", "my-skill", content="---\nname: My Skill\n---\n# My Skill\nDo stuff")
+        hub_resp["snapshot"]["files"] = {"references\\usage.md": "Use carefully"}
+        skill_repo = SimpleNamespace(
+            get_by_id=lambda _owner_user_id, _skill_id: None,
+            list_for_owner=lambda _owner_user_id: [],
+            upsert=lambda skill: saved.append(skill) or skill,
+        )
+
+        with patch("backend.hub.client._hub_api", return_value=hub_resp):
+            from backend.hub.client import apply_item
+
+            apply_item("item-123", owner_user_id="owner-1", skill_repo=skill_repo)
+
+        assert saved[0].files == {"references/usage.md": "Use carefully"}
+
     def test_skill_repo_payload_has_source_tracking(self):
         saved: list[Skill] = []
         hub_resp = _make_hub_response(
