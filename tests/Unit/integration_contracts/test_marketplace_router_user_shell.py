@@ -172,14 +172,24 @@ def test_skill_marketplace_to_agent_library_delete_backend_api_yatu(monkeypatch:
         beta_apply = client.post("/api/marketplace/apply", json={"item_id": "skillsmp:beta"})
         library_after_apply = client.get("/api/panel/library/skill")
         agent_after_apply = client.get("/api/panel/agents/agent-1")
+        library_by_name = {item["name"]: item for item in library_after_apply.json()["items"]}
+        assigned_by_name = {item["name"]: item for item in agent_after_apply.json()["config"]["skills"]}
 
         assign_both = client.put(
             "/api/panel/agents/agent-1/config",
-            json={"skills": [{"name": "Alpha Skill", "enabled": True}, {"name": "Beta Skill", "enabled": True}]},
+            json={
+                "skills": [
+                    {"id": assigned_by_name["Alpha Skill"]["id"], "name": "Alpha Skill", "enabled": True},
+                    {"id": library_by_name["Beta Skill"]["id"], "name": "Beta Skill", "enabled": True},
+                ]
+            },
         )
         blocked_alpha_delete = client.delete("/api/panel/library/skill/alpha-skill")
 
-        keep_beta = client.put("/api/panel/agents/agent-1/config", json={"skills": [{"name": "Beta Skill", "enabled": True}]})
+        keep_beta = client.put(
+            "/api/panel/agents/agent-1/config",
+            json={"skills": [{"id": library_by_name["Beta Skill"]["id"], "name": "Beta Skill", "enabled": True}]},
+        )
         deleted_alpha = client.delete("/api/panel/library/skill/alpha-skill")
         blocked_beta_delete = client.delete("/api/panel/library/skill/beta-skill")
 
