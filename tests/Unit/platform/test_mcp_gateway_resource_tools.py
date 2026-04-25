@@ -150,7 +150,6 @@ async def test_mcp_gateway_init_fails_loudly_when_client_initialization_fails(mo
                     allowed_tools=None,
                 )
             },
-            verbose=False,
         )
 
 
@@ -175,7 +174,6 @@ async def test_mcp_gateway_prefixes_tools_by_the_server_they_came_from(monkeypat
             "alpha": SimpleNamespace(transport="stdio", command="uv", args=[], env={}, url=None, allowed_tools=None),
             "beta": SimpleNamespace(transport="stdio", command="uv", args=[], env={}, url=None, allowed_tools=None),
         },
-        verbose=False,
     )
 
     assert calls == ["alpha", "beta"]
@@ -203,7 +201,6 @@ async def test_mcp_gateway_filters_allowed_tools_per_server(monkeypatch: pytest.
             "alpha": SimpleNamespace(transport="stdio", command="uv", args=[], env={}, url=None, allowed_tools=["read"]),
             "beta": SimpleNamespace(transport="stdio", command="uv", args=[], env={}, url=None, allowed_tools=["search"]),
         },
-        verbose=False,
     )
 
     assert [tool.name for tool in tools] == ["mcp__alpha__read", "mcp__beta__search"]

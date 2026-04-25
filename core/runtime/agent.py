@@ -1247,7 +1247,6 @@ class LeonAgent:
         client, tools = await mcp_gateway.init_client_tools(
             enabled=self.config.mcp.enabled,
             server_configs=self._get_mcp_server_configs(),
-            verbose=self.verbose,
         )
         self._mcp_client = client
         return tools

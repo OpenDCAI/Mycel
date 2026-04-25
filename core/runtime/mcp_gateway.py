@@ -75,7 +75,6 @@ async def init_client_tools(
     *,
     enabled: bool,
     server_configs: dict[str, Any],
-    verbose: bool,
 ) -> tuple[Any | None, list[Any]]:
     if not enabled or not server_configs:
         return None, []
@@ -93,8 +92,6 @@ async def init_client_tools(
         tools = _filter_allowed_tools(tools, server_configs)
         return client, tools
     except Exception as exc:
-        if verbose:
-            print(f"[LeonAgent] MCP initialization failed: {exc}")
         raise RuntimeError(f"MCP initialization failed: {exc}") from exc
 
 
