@@ -58,10 +58,7 @@ class MarkdownifyFetcher(BaseFetcher):
             response = await self._do_fetch(url)
             content_type = response.headers.get("Content-Type", "")
 
-            if "text/html" in content_type:
-                content = self._process_html(response.text, result)
-            else:
-                content = response.text
+            content = self._process_html(response.text, result) if "text/html" in content_type else response.text
 
             if len(content) > self.limits.max_chars:
                 content = content[: self.limits.max_chars]
@@ -143,11 +140,7 @@ class MarkdownifyFetcher(BaseFetcher):
             tag.decompose()
 
         main_content = soup.find("main") or soup.find("article") or soup.find("div", class_="content") or soup.find("body")
-
-        if main_content:
-            text = main_content.get_text(separator="\n\n", strip=True)
-        else:
-            text = soup.get_text(separator="\n\n", strip=True)
+        text = main_content.get_text(separator="\n\n", strip=True) if main_content else soup.get_text(separator="\n\n", strip=True)
 
         return re.sub(r"\n{3,}", "\n\n", text)
 
