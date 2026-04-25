@@ -4,6 +4,7 @@ import importlib
 import json
 from datetime import UTC, datetime
 from types import SimpleNamespace
+from typing import Any
 from unittest.mock import patch
 
 import httpx
@@ -239,9 +240,7 @@ class TestApplySkill:
         assert saved[0].description == "Frontmatter description"
 
     def test_apply_skill_requires_snapshot_version(self):
-        hub_resp = _make_hub_response(
-            "skill", "broken-skill", content="---\nname: Broken Skill\ndescription: Broken\n---\nBody"
-        )
+        hub_resp = _make_hub_response("skill", "broken-skill", content="---\nname: Broken Skill\ndescription: Broken\n---\nBody")
         del hub_resp["version"]
         skill_repo = SimpleNamespace(
             get_by_id=lambda _owner_user_id, _skill_id: None,
@@ -256,9 +255,7 @@ class TestApplySkill:
                 apply_item("item-broken", owner_user_id="owner-1", skill_repo=skill_repo)
 
     def test_apply_skill_requires_item_slug(self):
-        hub_resp = _make_hub_response(
-            "skill", "broken-skill", content="---\nname: Broken Skill\ndescription: Broken\n---\nBody"
-        )
+        hub_resp = _make_hub_response("skill", "broken-skill", content="---\nname: Broken Skill\ndescription: Broken\n---\nBody")
         del hub_resp["item"]["slug"]
         skill_repo = SimpleNamespace(
             get_by_id=lambda _owner_user_id, _skill_id: None,
@@ -273,9 +270,7 @@ class TestApplySkill:
                 apply_item("item-broken", owner_user_id="owner-1", skill_repo=skill_repo)
 
     def test_apply_skill_requires_publisher(self):
-        hub_resp = _make_hub_response(
-            "skill", "broken-skill", content="---\nname: Broken Skill\ndescription: Broken\n---\nBody"
-        )
+        hub_resp = _make_hub_response("skill", "broken-skill", content="---\nname: Broken Skill\ndescription: Broken\n---\nBody")
         del hub_resp["item"]["publisher_username"]
         skill_repo = SimpleNamespace(
             get_by_id=lambda _owner_user_id, _skill_id: None,
@@ -732,7 +727,7 @@ def test_publish_uses_repo_material_when_member_dir_is_absent(tmp_path, monkeypa
     import backend.hub.client as marketplace_client
 
     saved: dict[str, AgentConfig] = {}
-    captured: dict[str, object] = {}
+    captured: dict[str, Any] = {}
 
     user_repo = SimpleNamespace(get_by_id=lambda user_id: SimpleNamespace(id=user_id, agent_config_id="cfg-1", owner_user_id="owner-1"))
 
@@ -782,7 +777,7 @@ def test_publish_uses_repo_material_when_member_dir_is_absent(tmp_path, monkeypa
                 hash="sha256:search",
                 skill_md="---\nname: Search\n---\nskill content",
                 source={"name": "Search", "desc": "Repo Search"},
-                created_at="2026-04-25T00:00:00+00:00",
+                created_at=datetime(2026, 4, 25, tzinfo=UTC),
             )
         ),
     )
@@ -812,7 +807,7 @@ def test_publish_prefers_repo_lineage_even_when_stale_member_dir_exists(tmp_path
     import backend.hub.client as marketplace_client
 
     saved: dict[str, AgentConfig] = {}
-    captured: dict[str, object] = {}
+    captured: dict[str, Any] = {}
     members_root = tmp_path / "members"
     member_dir = members_root / "agent-user-1"
     member_dir.mkdir(parents=True)
