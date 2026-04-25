@@ -50,12 +50,9 @@ def instruction_blocks(server_configs: dict[str, Any]) -> dict[str, str]:
     return blocks
 
 
-def register_mcp_tools(registry: ToolRegistry, mcp_tools: list[Any], *, logger: Any) -> None:
+def register_mcp_tools(registry: ToolRegistry, mcp_tools: list[Any]) -> None:
     for tool in mcp_tools:
-        try:
-            registry.register(make_tool_entry(tool))
-        except Exception as exc:
-            logger.warning("[LeonAgent] Failed to register MCP tool %s: %s", getattr(tool, "name", "<unknown>"), exc)
+        registry.register(make_tool_entry(tool))
 
 
 def register_resource_tools(

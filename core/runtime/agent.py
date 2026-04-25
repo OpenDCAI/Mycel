@@ -424,7 +424,7 @@ class LeonAgent:
     def _register_mcp_tools(self, mcp_tools: list) -> None:
         if not mcp_tools:
             return
-        mcp_gateway.register_mcp_tools(self._tool_registry, mcp_tools, logger=logger)
+        mcp_gateway.register_mcp_tools(self._tool_registry, mcp_tools)
 
     def _get_agent_blocked_tools(self) -> set[str]:
         """Return disabled tool names, respecting catalog defaults.
