@@ -15,6 +15,7 @@ def test_snapshot_contains_resolved_agent_config_only():
                     skill_id="github",
                     package_id="github-package",
                     name="github",
+                    version="1.0.0",
                 )
             ],
         ),

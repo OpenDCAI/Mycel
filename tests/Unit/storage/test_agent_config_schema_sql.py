@@ -12,6 +12,7 @@ def test_agent_config_schema_uses_library_package_storage() -> None:
     assert "drop table if exists agent.agent_skills cascade" in sql
     assert "drop table if exists agent.skills cascade" in sql
     assert "skill_md text not null" in sql
+    assert "version text not null default" not in sql
     assert "files_json jsonb not null default '{}'::jsonb" in sql
     assert "manifest_json jsonb not null default '{}'::jsonb" in sql
     assert "artifact_uri" not in sql
@@ -104,6 +105,7 @@ def test_agent_config_schema_constrains_root_identity_fields() -> None:
 
     assert "library.skills.source_json must be a JSON object before hard cut" in sql
     assert "library.skill_packages.manifest_json must be a JSON object before hard cut" in sql
+    assert "library.skill_packages.version must be present before hard cut" in sql
     assert "library.skill_packages.files_json must be a JSON object before hard cut" in sql
     assert "library.skill_packages.files_json values must be strings before hard cut" in sql
     assert "library.skill_packages.files_json keys must be package-relative paths before hard cut" in sql

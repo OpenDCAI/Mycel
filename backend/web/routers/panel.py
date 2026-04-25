@@ -290,6 +290,7 @@ async def create_resource(
             user_id,
             _recipe_repo_for(resource_type, request),
             _skill_repo_for(resource_type, request),
+            content=req.content,
         )
     except ValueError as error:
         raise HTTPException(400, str(error)) from error
@@ -332,6 +333,8 @@ async def delete_resource(
     recipe_repo = _recipe_repo_for(resource_type, request)
     skill_repo = _skill_repo_for(resource_type, request)
     if resource_type == "skill":
+        if skill_repo is None:
+            raise HTTPException(500, "skill_repo is required for panel library routes")
         skill = await asyncio.to_thread(skill_repo.get_by_id, user_id, resource_id)
         if skill is not None:
             used_by = await asyncio.to_thread(

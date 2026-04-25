@@ -121,6 +121,10 @@ def _put_skill(
     return skill_repo.get_by_id(owner_user_id, skill_id) or skill
 
 
+def _editable_skill_md(name: str = "Loadable Skill", description: str = "Use this skill", version: str = "1.0.0") -> str:
+    return f"---\nname: {name}\ndescription: {description}\nversion: {version}\n---\n\n{description}\n"
+
+
 @pytest.mark.asyncio
 async def test_panel_agents_uses_injected_user_repo_for_owner_scope(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
     agent = UserRow(
@@ -450,6 +454,7 @@ def test_agent_config_patch_uses_selected_package_source_only() -> None:
                         skill_id="loadable-skill",
                         package_id=library_skill.package_id,
                         name="Loadable Skill",
+                        version="1.0.0",
                         source={"source_version": "current-stale"},
                     )
                 ]
@@ -732,6 +737,7 @@ def test_agent_config_patch_rejects_skill_after_library_delete() -> None:
         package_id="loadable-package",
         name="Loadable Skill",
         description="loadable",
+        version="1.0.0",
         source={"source_version": "1.0.0"},
     )
 
@@ -859,7 +865,10 @@ def test_panel_library_skill_routes_use_skill_repo_without_recipe_repo() -> None
     app.state.runtime_storage_state = _runtime_storage_state(SimpleNamespace(), skill_repo=skill_repo)
 
     with TestClient(app) as client:
-        created = client.post("/api/panel/library/skill", json={"name": "Loadable Skill", "desc": "Use this skill"})
+        created = client.post(
+            "/api/panel/library/skill",
+            json={"name": "Loadable Skill", "desc": "Use this skill", "content": _editable_skill_md()},
+        )
         assert created.status_code == 200
         assert created.json()["id"] == "loadable-skill"
 
@@ -869,7 +878,7 @@ def test_panel_library_skill_routes_use_skill_repo_without_recipe_repo() -> None
 
         content = client.get("/api/panel/library/skill/loadable-skill/content")
         assert content.status_code == 200
-        assert content.json()["content"] == "---\nname: Loadable Skill\ndescription: Use this skill\n---\n\nUse this skill\n"
+        assert content.json()["content"] == _editable_skill_md()
 
 
 def test_library_skill_content_update_rejects_frontmatter_name_drift() -> None:
@@ -880,23 +889,63 @@ def test_library_skill_content_update_rejects_frontmatter_name_drift() -> None:
         "Use this skill",
         owner_user_id="owner-1",
         skill_repo=skill_repo,
+        content=_editable_skill_md(),
     )
 
     with pytest.raises(ValueError, match="frontmatter name must match Skill name"):
         library_service.update_resource_content(
             "skill",
             created["id"],
-            "---\nname: Runtime Skill\n---\n\nUse it.",
+            "---\nname: Runtime Skill\ndescription: Use it.\nversion: 1.0.1\n---\n\nUse it.",
             owner_user_id="owner-1",
             skill_repo=skill_repo,
         )
 
     stored = skill_repo.get_by_id("owner-1", created["id"])
     assert stored is not None and stored.package_id is not None
-    assert (
-        skill_repo.get_package("owner-1", stored.package_id).skill_md
-        == "---\nname: Loadable Skill\ndescription: Use this skill\n---\n\nUse this skill\n"
+    assert skill_repo.get_package("owner-1", stored.package_id).skill_md == _editable_skill_md()
+
+
+def test_library_skill_create_requires_version_frontmatter() -> None:
+    skill_repo = _MemorySkillRepo()
+
+    with pytest.raises(ValueError, match="frontmatter version is required"):
+        library_service.create_resource(
+            "skill",
+            "Loadable Skill",
+            "Use this skill",
+            owner_user_id="owner-1",
+            skill_repo=skill_repo,
+            content="---\nname: Loadable Skill\ndescription: Use this skill\n---\n\nUse this skill.",
+        )
+
+    assert skill_repo.skills == {}
+    assert skill_repo.packages == {}
+
+
+def test_library_skill_content_update_requires_version_frontmatter() -> None:
+    skill_repo = _MemorySkillRepo()
+    created = library_service.create_resource(
+        "skill",
+        "Loadable Skill",
+        "Use this skill",
+        owner_user_id="owner-1",
+        skill_repo=skill_repo,
+        content=_editable_skill_md(),
     )
+
+    with pytest.raises(ValueError, match="frontmatter version is required"):
+        library_service.update_resource_content(
+            "skill",
+            created["id"],
+            "---\nname: Loadable Skill\ndescription: Use this skill\n---\n\nUse it.",
+            owner_user_id="owner-1",
+            skill_repo=skill_repo,
+        )
+
+    stored = skill_repo.get_by_id("owner-1", created["id"])
+    assert stored is not None and stored.package_id is not None
+    assert skill_repo.get_package("owner-1", stored.package_id).version == "1.0.0"
 
 
 def test_library_skill_name_is_immutable_after_creation() -> None:
@@ -907,6 +956,7 @@ def test_library_skill_name_is_immutable_after_creation() -> None:
         "Use this skill",
         owner_user_id="owner-1",
         skill_repo=skill_repo,
+        content=_editable_skill_md(),
     )
 
     with pytest.raises(ValueError, match="Skill name is immutable"):
@@ -929,6 +979,7 @@ def test_library_skill_create_rejects_slug_collision_with_different_name() -> No
         "Use this skill",
         owner_user_id="owner-1",
         skill_repo=skill_repo,
+        content=_editable_skill_md(),
     )
 
     with pytest.raises(ValueError, match="Skill id already exists with a different Skill name"):
@@ -938,6 +989,7 @@ def test_library_skill_create_rejects_slug_collision_with_different_name() -> No
             "Different name, same slug",
             owner_user_id="owner-1",
             skill_repo=skill_repo,
+            content=_editable_skill_md("Loadable-Skill", "Different name, same slug"),
         )
 
     stored = skill_repo.get_by_id("owner-1", created["id"])
@@ -1582,7 +1634,9 @@ def test_get_agent_user_uses_repo_skill_desc():
                 description="probe",
                 model="leon:large",
                 system_prompt="",
-                skills=[AgentSkill(skill_id="search", package_id="search-package", name="Search", description="repo desc")],
+                skills=[
+                    AgentSkill(skill_id="search", package_id="search-package", name="Search", description="repo desc", version="1.0.0")
+                ],
             )
 
     result = agent_user_service.get_agent_user(
@@ -1612,7 +1666,9 @@ def test_get_agent_user_ignores_runtime_skill_desc_override():
                 model="leon:large",
                 system_prompt="",
                 runtime_settings={"skills:Search": {"desc": "runtime desc", "enabled": False}},
-                skills=[AgentSkill(skill_id="search", package_id="search-package", name="Search", description="repo desc")],
+                skills=[
+                    AgentSkill(skill_id="search", package_id="search-package", name="Search", description="repo desc", version="1.0.0")
+                ],
             )
 
     result = agent_user_service.get_agent_user(
@@ -1757,7 +1813,7 @@ def test_get_agent_user_preserves_explicit_empty_repo_skill_desc():
                 description="probe",
                 model="leon:large",
                 system_prompt="",
-                skills=[AgentSkill(skill_id="search", package_id="search-package", name="Search", description="")],
+                skills=[AgentSkill(skill_id="search", package_id="search-package", name="Search", description="", version="1.0.0")],
             )
 
     result = agent_user_service.get_agent_user(
@@ -1797,6 +1853,7 @@ def test_apply_snapshot_saves_one_agent_config_aggregate():
                 "skills": [
                     {
                         "name": "Search",
+                        "version": "1.0.0",
                         "content": "---\nname: Search\n---\nbody",
                         "description": "skill desc",
                         "source": {"source_version": "snapshot-stale", "extra": "drop"},
@@ -1847,7 +1904,7 @@ def test_apply_snapshot_with_skills_requires_skill_repo():
                 "agent": {
                     "id": "cfg-source",
                     "name": "Repo Agent",
-                    "skills": [{"name": "Search", "content": "---\nname: Search\n---\nbody"}],
+                    "skills": [{"name": "Search", "version": "1.0.0", "content": "---\nname: Search\n---\nbody"}],
                 },
             },
             marketplace_item_id="item-1",
@@ -1876,7 +1933,7 @@ def test_apply_snapshot_requires_source_identity(field: str, value: object, mess
             "agent": {
                 "id": "cfg-source",
                 "name": "Repo Agent",
-                "skills": [{"name": "Search", "content": "---\nname: Search\n---\nbody"}],
+                "skills": [{"name": "Search", "version": "1.0.0", "content": "---\nname: Search\n---\nbody"}],
             },
         },
         "marketplace_item_id": "item-1",
@@ -1915,8 +1972,8 @@ def test_apply_snapshot_rejects_duplicate_skill_names_before_library_write():
                     "id": "cfg-source",
                     "name": "Repo Agent",
                     "skills": [
-                        {"name": "Search", "content": "---\nname: Search\n---\none"},
-                        {"name": "Search", "content": "---\nname: Search\n---\ntwo"},
+                        {"name": "Search", "version": "1.0.0", "content": "---\nname: Search\n---\none"},
+                        {"name": "Search", "version": "1.0.0", "content": "---\nname: Search\n---\ntwo"},
                     ],
                 },
             },
@@ -2046,6 +2103,7 @@ def test_library_used_by_reads_agent_configs_without_display_projection(monkeypa
                     skill_id="skill-1",
                     package_id="skill-1-package",
                     name="api-design-reviewer",
+                    version="1.0.0",
                     enabled=True,
                 )
             ],
@@ -2081,6 +2139,7 @@ async def test_delete_skill_route_rejects_skill_still_selected_by_agent(monkeypa
                     skill_id="skill-1",
                     package_id="skill-1-package",
                     name="api-design-reviewer",
+                    version="1.0.0",
                     enabled=True,
                 )
             ],

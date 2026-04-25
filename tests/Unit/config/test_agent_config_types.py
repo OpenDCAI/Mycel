@@ -8,6 +8,7 @@ from config.agent_config_types import AgentConfig, AgentRule, AgentSkill, AgentS
 def test_resolved_skill_model_normalizes_file_paths() -> None:
     resolved_skill = ResolvedSkill(
         name="query-helper",
+        version="1.0.0",
         content="---\nname: query-helper\n---\nUse exact terms.",
         files={"references\\query.md": "Prefer precise queries."},
     )
@@ -38,7 +39,7 @@ def test_resolved_skill_model_rejects_blank_version() -> None:
 
 
 def test_agent_skill_model_has_no_resolved_content() -> None:
-    agent_skill = AgentSkill(skill_id="query-helper", package_id="package-1", name="query-helper")
+    agent_skill = AgentSkill(skill_id="query-helper", package_id="package-1", name="query-helper", version="1.0.0")
 
     assert "content" not in agent_skill.model_dump()
     assert "files" not in agent_skill.model_dump()
@@ -46,7 +47,15 @@ def test_agent_skill_model_has_no_resolved_content() -> None:
 
 def test_agent_skill_model_rejects_resolved_content_fields() -> None:
     with pytest.raises(ValueError, match="content"):
-        AgentSkill.model_validate({"name": "query-helper", "skill_id": "skill-1", "package_id": "package-1", "content": "Use exact terms."})
+        AgentSkill.model_validate(
+            {
+                "name": "query-helper",
+                "skill_id": "skill-1",
+                "package_id": "package-1",
+                "version": "1.0.0",
+                "content": "Use exact terms.",
+            }
+        )
 
     with pytest.raises(ValueError, match="files"):
         AgentSkill.model_validate(
@@ -54,6 +63,7 @@ def test_agent_skill_model_rejects_resolved_content_fields() -> None:
                 "name": "query-helper",
                 "skill_id": "skill-1",
                 "package_id": "package-1",
+                "version": "1.0.0",
                 "files": {"references/query.md": "Use exact terms."},
             }
         )
@@ -75,7 +85,7 @@ def test_agent_config_model_rejects_unknown_fields() -> None:
 @pytest.mark.parametrize(
     ("model_cls", "kwargs"),
     [
-        (AgentSkill, {"name": "query-helper"}),
+        (AgentSkill, {"name": "query-helper", "version": "1.0.0"}),
         (AgentRule, {"name": "cite", "content": "cite sources"}),
         (AgentSubAgent, {"name": "worker"}),
         (McpServerConfig, {"name": "filesystem", "command": "fs"}),
@@ -89,7 +99,7 @@ def test_agent_config_child_models_reject_string_enabled(model_cls, kwargs) -> N
 @pytest.mark.parametrize(
     ("model_cls", "kwargs"),
     [
-        (AgentSkill, {"name": "query-helper"}),
+        (AgentSkill, {"name": "query-helper", "version": "1.0.0"}),
         (AgentRule, {"name": "cite", "content": "cite sources"}),
         (AgentSubAgent, {"name": "worker"}),
         (McpServerConfig, {"name": "filesystem", "command": "fs"}),
@@ -130,3 +140,28 @@ def test_skill_package_rejects_blank_skill_md() -> None:
 
     with pytest.raises(ValueError, match="skill_package.skill_md must not be blank"):
         SkillPackage(skill_md=" ", **common)
+
+
+@pytest.mark.parametrize(
+    ("model_cls", "payload"),
+    [
+        (
+            SkillPackage,
+            {
+                "id": "package-1",
+                "owner_user_id": "owner-1",
+                "skill_id": "skill-1",
+                "hash": "sha256:abc",
+                "skill_md": "---\nname: query-helper\n---\nUse exact terms.",
+                "created_at": datetime(2026, 4, 25, tzinfo=UTC),
+            },
+        ),
+        (AgentSkill, {"skill_id": "query-helper", "package_id": "package-1", "name": "query-helper"}),
+        (ResolvedSkill, {"name": "query-helper", "content": "---\nname: query-helper\n---\nUse exact terms."}),
+    ],
+)
+def test_skill_package_and_runtime_skill_models_require_version(model_cls, payload) -> None:
+    with pytest.raises(ValueError) as excinfo:
+        model_cls.model_validate(payload)
+
+    assert "version" in str(excinfo.value)

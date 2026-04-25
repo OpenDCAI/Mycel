@@ -36,6 +36,7 @@ class PublishAgentRequest(BaseModel):
 class CreateResourceRequest(BaseModel):
     name: str
     desc: str = ""
+    content: str | None = None
     provider_name: str | None = None
     provider_type: str | None = None
     features: dict[str, bool] | None = None
