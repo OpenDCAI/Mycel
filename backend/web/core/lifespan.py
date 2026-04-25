@@ -1,6 +1,6 @@
 import asyncio
 import os
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, suppress
 from dataclasses import is_dataclass, replace
 from types import SimpleNamespace
 
@@ -123,10 +123,8 @@ async def lifespan(app: FastAPI):
             task = getattr(app.state, task_name, None)
             if task:
                 task.cancel()
-                try:
+                with suppress(asyncio.CancelledError):
                     await task
-                except asyncio.CancelledError:
-                    pass
 
         if hasattr(app.state, "recipe_repo"):
             runtime_storage.recipe_repo.close()

@@ -536,10 +536,8 @@ class DaytonaSessionRuntime(_RemoteRuntimeBase):
 
     def _close_shell_sync(self) -> None:
         if self._pty_handle is not None:
-            try:
+            with suppress(Exception):
                 self._pty_handle.disconnect()
-            except Exception:
-                pass
         self._pty_handle = None
         self._hydrated = False
         if not self._bound_instance_id:
