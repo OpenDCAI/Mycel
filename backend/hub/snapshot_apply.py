@@ -7,8 +7,8 @@ from datetime import UTC, datetime
 from typing import Any
 
 from config.agent_config_resolver import validate_resolved_skill_content
-from config.agent_config_types import AgentConfig, AgentSkill, AgentSnapshot, ResolvedSkill, Skill, SkillPackage
-from config.skill_package import build_skill_package_hash, build_skill_package_manifest
+from config.agent_config_types import AgentConfig, AgentSkill, AgentSnapshot, ResolvedSkill, Skill
+from config.skill_package import build_skill_package
 from storage.utils import generate_skill_id
 
 SNAPSHOT_SKILL_SOURCE_ID_KEY = "snapshot_skill_id"
@@ -91,15 +91,11 @@ def _materialize_snapshot_skills(
                 updated_at=timestamp,
             )
         )
-        package_hash = build_skill_package_hash(snapshot_skill.content, snapshot_skill.files)
         package = skill_repo.create_package(
-            SkillPackage(
-                id=package_hash.removeprefix("sha256:"),
+            build_skill_package(
                 owner_user_id=owner_user_id,
                 skill_id=skill.id,
                 version=snapshot_skill.version,
-                hash=package_hash,
-                manifest=build_skill_package_manifest(snapshot_skill.content, snapshot_skill.files),
                 skill_md=snapshot_skill.content,
                 files=snapshot_skill.files,
                 source=source,

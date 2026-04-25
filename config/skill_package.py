@@ -2,7 +2,35 @@ from __future__ import annotations
 
 import hashlib
 import json
+from datetime import datetime
 from typing import Any
+
+from config.agent_config_types import SkillPackage
+
+
+def build_skill_package(
+    *,
+    owner_user_id: str,
+    skill_id: str,
+    version: str,
+    skill_md: str,
+    files: dict[str, str],
+    source: dict[str, Any],
+    created_at: datetime,
+) -> SkillPackage:
+    package_hash = build_skill_package_hash(skill_md, files)
+    return SkillPackage(
+        id=package_hash.removeprefix("sha256:"),
+        owner_user_id=owner_user_id,
+        skill_id=skill_id,
+        version=version,
+        hash=package_hash,
+        manifest=build_skill_package_manifest(skill_md, files),
+        skill_md=skill_md,
+        files=files,
+        source=source,
+        created_at=created_at,
+    )
 
 
 def build_skill_package_manifest(skill_md: str, files: dict[str, str]) -> dict[str, Any]:

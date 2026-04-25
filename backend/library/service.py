@@ -11,7 +11,7 @@ from backend.sandboxes import provider_availability as sandbox_provider_availabi
 from backend.sandboxes.recipe_bootstrap import seed_default_recipes as seed_builtin_recipes
 from config.agent_config_types import Skill, SkillPackage
 from config.skill_document import parse_skill_document, skill_version
-from config.skill_package import build_skill_package_hash, build_skill_package_manifest
+from config.skill_package import build_skill_package
 from sandbox.recipes import FEATURE_CATALOG, default_recipe_snapshot, normalize_recipe_snapshot, provider_type_from_name
 from storage.contracts import RecipeRepo, SkillRepo
 from storage.utils import generate_skill_id
@@ -85,10 +85,6 @@ def _dt_millis(value: datetime) -> int:
     return int(value.timestamp() * 1000)
 
 
-def _package_id(package_hash: str) -> str:
-    return package_hash.removeprefix("sha256:")
-
-
 def _selected_skill_package(owner_user_id: str, skill: Skill, skill_repo: SkillRepo) -> SkillPackage | None:
     if not skill.package_id:
         return None
@@ -108,15 +104,11 @@ def _write_skill_package(
     version: str,
     source: dict[str, Any] | None = None,
 ) -> SkillPackage:
-    package_hash = build_skill_package_hash(content, files)
     package = skill_repo.create_package(
-        SkillPackage(
-            id=_package_id(package_hash),
+        build_skill_package(
             owner_user_id=owner_user_id,
             skill_id=skill.id,
             version=version,
-            hash=package_hash,
-            manifest=build_skill_package_manifest(content, files),
             skill_md=content,
             files=files,
             source=source or {},
