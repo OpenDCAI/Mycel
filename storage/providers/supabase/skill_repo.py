@@ -81,6 +81,11 @@ class SupabaseSkillRepo:
         return _package_from_row(rows[0])
 
     def select_package(self, owner_user_id: str, skill_id: str, package_id: str) -> None:
+        package = self.get_package(owner_user_id, package_id)
+        if package is None:
+            raise RuntimeError(f"Skill package not found: {package_id}")
+        if package.skill_id != skill_id:
+            raise RuntimeError(f"Skill package {package_id} does not belong to Skill {skill_id}")
         self._skills_table().update({"package_id": package_id}).eq("owner_user_id", owner_user_id).eq("id", skill_id).execute()
 
     def delete(self, owner_user_id: str, skill_id: str) -> None:
