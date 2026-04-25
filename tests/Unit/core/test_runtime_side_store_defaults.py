@@ -172,3 +172,14 @@ def test_memory_middleware_repo_injection_does_not_pass_default_home_db_path(mon
     assert middleware.summary_store is not None
     assert captured["summary_repo"] is fake_repo
     assert captured["db_path"] is None
+
+
+def test_memory_middleware_without_storage_source_has_no_summary_store(monkeypatch, tmp_path) -> None:
+    monkeypatch.delenv("LEON_STORAGE_STRATEGY", raising=False)
+    monkeypatch.delenv("LEON_SUPABASE_CLIENT_FACTORY", raising=False)
+    monkeypatch.setenv("HOME", str(tmp_path))
+
+    middleware = MemoryMiddleware()
+
+    assert middleware.summary_store is None
+    assert not (tmp_path / ".leon").exists()
