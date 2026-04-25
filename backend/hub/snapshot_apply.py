@@ -80,7 +80,7 @@ def _materialize_snapshot_skills(
                 id=package_hash.removeprefix("sha256:"),
                 owner_user_id=owner_user_id,
                 skill_id=skill.id,
-                version=snapshot_skill.version or source_version,
+                version=snapshot_skill.version,
                 hash=package_hash,
                 manifest=build_skill_package_manifest(snapshot_skill.content, snapshot_skill.files),
                 skill_md=snapshot_skill.content,
