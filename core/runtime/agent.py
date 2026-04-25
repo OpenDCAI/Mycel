@@ -396,9 +396,6 @@ class LeonAgent:
 
             self._monitor_middleware.mark_ready()
 
-            if self.verbose:
-                print("[LeonAgent] Async initialization completed")
-
         if not self._session_started:
             await self._run_session_hooks("SessionStart")
             self._session_started = True
