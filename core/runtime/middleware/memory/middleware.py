@@ -40,7 +40,6 @@ class MemoryMiddleware(AgentMiddleware):
         compaction_threshold: float = 0.7,
         verbose: bool = False,
     ):
-        self.verbose = verbose
         self._context_limit = context_limit
         self._compaction_threshold = compaction_threshold
         trigger_tokens = getattr(compaction_config, "trigger_tokens", None)
@@ -139,7 +138,6 @@ class MemoryMiddleware(AgentMiddleware):
         handler: Callable[[ModelRequest], Awaitable[ModelResponse]],
     ) -> ModelCallResult:
         messages = list(request.messages)
-        original_count = len(messages)
         thread_id = self._extract_thread_id(request)
 
         # Restore summary from store if not already done
@@ -156,34 +154,12 @@ class MemoryMiddleware(AgentMiddleware):
         sys_tokens = self._estimate_system_tokens(request)
 
         # Layer 1: Prune old ToolMessage content
-        pre_prune_tokens = self._estimate_tokens(messages) + sys_tokens
         messages = self.pruner.prune(messages)
-        post_prune_tokens = self._estimate_tokens(messages) + sys_tokens
-
-        if self.verbose:
-            pruned_saved = pre_prune_tokens - post_prune_tokens
-            if pruned_saved > 0:
-                print(f"[Memory] Pruned: {pre_prune_tokens} → {post_prune_tokens} tokens (saved ~{pruned_saved})")
-            for i, (orig, pruned) in enumerate(zip(request.messages, messages)):
-                if orig is not pruned and orig.__class__.__name__ == "ToolMessage":
-                    orig_len = len(getattr(orig, "content", ""))
-                    new_len = len(getattr(pruned, "content", ""))
-                    action = "hard-clear" if "[Tool output cleared" in pruned.content else "soft-trim"
-                    print(f"[Memory]   msg[{i}] ToolMessage: {orig_len} → {new_len} chars ({action})")
 
         # Layer 2: Compaction
         summarized_messages = self._messages_with_cached_summary(messages)
         estimate_source = summarized_messages if summarized_messages is not None else messages
         estimated = self._estimate_tokens(estimate_source) + sys_tokens
-        if self.verbose:
-            threshold = self._compaction_threshold_tokens()
-            should_compact = self._should_compact(estimated)
-            print(
-                f"[Memory] Context: ~{estimated} tokens "
-                f"(sys={sys_tokens}, msgs={estimated - sys_tokens}), "
-                f"limit={self._context_limit}, threshold={threshold}, "
-                f"compact={'YES' if should_compact else 'no'}"
-            )
 
         if self._should_compact(estimated) and self._model:
             compacted = await self._attempt_compaction(messages, thread_id=thread_id)
@@ -191,10 +167,6 @@ class MemoryMiddleware(AgentMiddleware):
                 messages = compacted
         elif summarized_messages is not None:
             messages = summarized_messages
-
-        if self.verbose:
-            final_tokens = self._estimate_tokens(messages) + sys_tokens
-            print(f"[Memory] Final: {len(messages)} msgs (~{final_tokens} tokens) sent to LLM (original: {original_count} msgs)")
 
         response = await handler(request.override(messages=messages))
         if response.request_messages is None:
@@ -219,16 +191,9 @@ class MemoryMiddleware(AgentMiddleware):
             if is_split_turn:
                 summary_text, prefix_summary = await self.compactor.compact_with_split_turn(to_summarize, turn_prefix, self._resolved_model)
                 to_keep = to_keep[len(turn_prefix) :]
-                if self.verbose:
-                    print(
-                        f"[Memory] Split turn detected: {len(to_summarize)} history msgs + "
-                        f"{len(turn_prefix)} prefix msgs → summary + {len(to_keep)} suffix msgs"
-                    )
             else:
                 summary_text = await self.compactor.compact(to_summarize, self._resolved_model)
                 prefix_summary = None
-                if self.verbose:
-                    print(f"[Memory] Compacted: {len(to_summarize)} msgs → summary + {len(to_keep)} recent")
 
             self._cached_summary = summary_text
             self._compact_up_to_index = len(messages) - len(to_keep)
@@ -238,7 +203,7 @@ class MemoryMiddleware(AgentMiddleware):
 
             if self.summary_store and thread_id:
                 try:
-                    summary_id = self.summary_store.save_summary(
+                    self.summary_store.save_summary(
                         thread_id=thread_id,
                         summary_text=summary_text,
                         compact_up_to_index=self._compact_up_to_index,
@@ -246,8 +211,6 @@ class MemoryMiddleware(AgentMiddleware):
                         is_split_turn=is_split_turn,
                         split_turn_prefix=prefix_summary,
                     )
-                    if self.verbose:
-                        print(f"[Memory] Saved summary {summary_id} to store")
                 except Exception as e:
                     logger.error(f"[Memory] Failed to save summary to store: {e}")
 
@@ -347,8 +310,6 @@ class MemoryMiddleware(AgentMiddleware):
             return None
         summary_msg = SystemMessage(content=f"[Conversation Summary]\n{self._cached_summary}")
         summarized = [summary_msg] + messages[self._compact_up_to_index :]
-        if self.verbose:
-            print(f"[Memory] Using cached summary: {self._compact_up_to_index} old msgs replaced, {len(summarized) - 1} msgs sent to LLM")
         return summarized
 
     def snapshot_thread_state(self, thread_id: str) -> dict[str, Any]:
@@ -479,8 +440,6 @@ class MemoryMiddleware(AgentMiddleware):
             summary_data = self.summary_store.get_latest_summary(thread_id)
 
             if not summary_data:
-                if self.verbose:
-                    print(f"[Memory] No summary found in store for thread {thread_id}")
                 # @@@no-rebuild-on-missing — don't rebuild from checkpointer here.
                 # _rebuild_summary_from_checkpointer calls checkpointer.get() which
                 # blocks the event loop when checkpointer is AsyncSqliteSaver (the
@@ -496,14 +455,6 @@ class MemoryMiddleware(AgentMiddleware):
             self._compact_up_to_index = summary_data.compact_up_to_index
             self._summary_thread_id = thread_id
 
-            if self.verbose:
-                print(
-                    f"[Memory] Restored summary from store: "
-                    f"compact_up_to_index={summary_data.compact_up_to_index}, "
-                    f"compacted_at={summary_data.compacted_at}, "
-                    f"is_split_turn={summary_data.is_split_turn}"
-                )
-
         except Exception as e:
             self._cached_summary = None
             self._compact_up_to_index = 0
@@ -513,32 +464,22 @@ class MemoryMiddleware(AgentMiddleware):
         try:
             if self.summary_store is None or self._checkpoint_store is None:
                 return
-            if self.verbose:
-                print(f"[Memory] Rebuilding summary from checkpointer for thread {thread_id}...")
 
             checkpoint_state = await self._checkpoint_store.load(thread_id)
             if checkpoint_state is None:
-                if self.verbose:
-                    print("[Memory] No checkpoint found, skipping rebuild")
                 return
 
             messages = list(checkpoint_state.messages)
             if not messages:
-                if self.verbose:
-                    print("[Memory] No messages in checkpoint, skipping rebuild")
                 return
 
             estimated = self._estimate_tokens(messages)
             if not self._should_compact(estimated):
-                if self.verbose:
-                    print("[Memory] Context below threshold, no rebuild needed")
                 return
 
             pruned = self.pruner.prune(messages)
             to_summarize, to_keep = self.compactor.split_messages(pruned)
             if len(to_summarize) < 2:
-                if self.verbose:
-                    print("[Memory] Not enough messages to summarize, skipping rebuild")
                 return
 
             is_split_turn, turn_prefix = self.compactor.detect_split_turn(pruned, to_keep, self._context_limit)
@@ -553,7 +494,7 @@ class MemoryMiddleware(AgentMiddleware):
             self._cached_summary = summary_text
             self._compact_up_to_index = len(messages) - len(to_keep)
 
-            summary_id = self.summary_store.save_summary(
+            self.summary_store.save_summary(
                 thread_id=thread_id,
                 summary_text=summary_text,
                 compact_up_to_index=self._compact_up_to_index,
@@ -561,9 +502,6 @@ class MemoryMiddleware(AgentMiddleware):
                 is_split_turn=is_split_turn,
                 split_turn_prefix=prefix_summary,
             )
-
-            if self.verbose:
-                print(f"[Memory] Rebuilt and saved summary {summary_id}")
 
         except Exception as e:
             logger.error(f"[Memory] Failed to rebuild summary from checkpointer: {e}")
