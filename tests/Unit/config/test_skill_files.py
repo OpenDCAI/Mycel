@@ -34,3 +34,8 @@ def test_normalize_skill_file_entries_rejects_duplicate_paths_after_normalizatio
 def test_normalize_skill_file_map_rejects_non_string_content() -> None:
     with pytest.raises(ValueError, match="Skill files content must be a string: references/query.md"):
         normalize_skill_file_map({"references/query.md": {"text": "Use exact queries."}}, context="Skill files")
+
+
+def test_normalize_skill_file_map_rejects_non_string_paths() -> None:
+    with pytest.raises(ValueError, match="Skill files path must be a string"):
+        normalize_skill_file_map({123: "Use exact queries."}, context="Skill files")
