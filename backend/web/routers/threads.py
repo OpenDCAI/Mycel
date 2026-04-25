@@ -1,4 +1,5 @@
 import asyncio
+import contextlib
 import json
 import logging
 import time
@@ -1324,10 +1325,8 @@ async def stream_thread_events(
 
     last_id = request.headers.get("Last-Event-ID")
     if last_id:
-        try:
+        with contextlib.suppress(ValueError):
             after = max(after, int(last_id))
-        except ValueError:
-            pass
 
     thread_buf = app.state.thread_event_buffers.get(thread_id)
 
