@@ -97,6 +97,16 @@ def test_seed_skill_payload_publishes_snapshot_files(tmp_path: Path) -> None:
     assert payload["snapshot"]["files"] == {"references/routing.md": "Prefer explicit routes."}
 
 
+def test_seed_skill_slug_is_hub_item_path_not_library_identity(tmp_path: Path) -> None:
+    repo_root = tmp_path / "repo"
+    skill_dir = repo_root / "skills" / "backend" / "api-design"
+    skill_dir.mkdir(parents=True)
+
+    slug = seed_github_skills.build_skill_slug(repo_root, skill_dir)
+
+    assert slug == "skills--backend--api-design"
+
+
 def test_seed_skill_parser_does_not_swallow_parse_errors() -> None:
     source = inspect.getsource(seed_github_skills.parse_skill_md)
 

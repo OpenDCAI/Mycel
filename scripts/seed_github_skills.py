@@ -144,6 +144,12 @@ def find_skill_dirs(repo_root: Path, skill_roots: list[Path] | None) -> list[Pat
     return sorted(set(results))
 
 
+def build_skill_slug(repo_root: Path, skill_dir: Path) -> str:
+    rel = skill_dir.relative_to(repo_root)
+    parts = [part for part in rel.parts if part not in SKIP_DIRS]
+    return "--".join(parts) if len(parts) > 1 else skill_dir.name
+
+
 def build_skill_payload(
     *,
     slug: str,
@@ -219,10 +225,8 @@ def main():
         print(f"\n=== {repo_key} ({len(skill_dirs)} skills found) ===")
 
         for skill_dir in skill_dirs:
-            # Use relative path as slug to avoid collisions in nested repos
-            rel = skill_dir.relative_to(repo_root)
-            parts = [p for p in rel.parts if p not in SKIP_DIRS]
-            slug = "--".join(parts) if len(parts) > 1 else skill_dir.name
+            # Hub item slug is marketplace address only; Library Skill id is generated downstream.
+            slug = build_skill_slug(repo_root, skill_dir)
 
             # Skip if already exists
             if (uname, slug) in existing_slugs:
