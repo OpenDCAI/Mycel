@@ -569,10 +569,6 @@ class LeonAgent:
             self._agent_override = None
             self._resolved_agent_config = None
 
-        if self.verbose:
-            active_name = models_config.active.model if models_config.active else model_name
-            print(f"[LeonAgent] Config: agent={agent_name or 'default'}, model={active_name}")
-
         return config, models_config
 
     @staticmethod
@@ -826,9 +822,6 @@ class LeonAgent:
             lookup_name = model_overrides.get("based_on") or resolved_model
             self._memory_middleware.set_context_limit(model_overrides.get("context_limit") or get_model_context_limit(lookup_name))
             self._memory_middleware.set_model(self.model, self._current_model_config)
-
-        if self.verbose:
-            print(f"[LeonAgent] Config updated: model={resolved_model}")
 
     @property
     def observation_config(self) -> ObservationConfig:
