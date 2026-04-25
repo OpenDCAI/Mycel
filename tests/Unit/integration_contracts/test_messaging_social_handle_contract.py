@@ -1068,6 +1068,7 @@ def test_messaging_service_chat_detail_fails_on_unknown_member_identity() -> Non
 
     chat = SimpleNamespace(
         id="chat-1",
+        type="group",
         title=None,
         status="active",
         created_by_user_id="human-user-1",
@@ -1719,6 +1720,7 @@ def test_messaging_service_get_chat_detail_exposes_agent_user_participant_id() -
     detail = service.get_chat_detail(
         SimpleNamespace(
             id="chat-1",
+            type="group",
             title="Chat title",
             status="active",
             created_by_user_id="human-user-1",
@@ -1728,6 +1730,7 @@ def test_messaging_service_get_chat_detail_exposes_agent_user_participant_id() -
 
     assert detail == {
         "id": "chat-1",
+        "type": "group",
         "title": "Chat title",
         "status": "active",
         "created_by_user_id": "human-user-1",
