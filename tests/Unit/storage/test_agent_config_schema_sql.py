@@ -60,6 +60,24 @@ def test_agent_config_schema_rejects_duplicate_child_names_inside_rpc() -> None:
     assert "group by child->>'name'" not in sql
 
 
+def test_agent_config_schema_requires_enabled_direction_for_skill_and_mcp_state() -> None:
+    sql = Path("storage/schema/2026_04_24_agent_config_resolved_config_hardcut.sql").read_text(encoding="utf-8")
+
+    assert "agent_config.skills child state must use enabled" in sql
+    assert "agent_config.mcp_servers child state must use enabled" in sql
+    assert "skill_item.value ? 'disabled'" in sql
+    assert "mcp_item.value ? 'disabled'" in sql
+
+
+def test_agent_config_schema_does_not_convert_object_mcp_json() -> None:
+    sql = Path("storage/schema/2026_04_24_agent_config_resolved_config_hardcut.sql").read_text(encoding="utf-8")
+
+    assert "agent.agent_configs.mcp_json must be a JSON array before hard cut" in sql
+    assert "jsonb_typeof(mcp_json) not in ('array', 'object')" not in sql
+    assert "jsonb_each(c.mcp_json)" not in sql
+    assert "(item.value - 'disabled')" not in sql
+
+
 def test_agent_config_schema_constrains_named_child_tables() -> None:
     sql = Path("storage/schema/2026_04_24_agent_config_resolved_config_hardcut.sql").read_text(encoding="utf-8")
 
