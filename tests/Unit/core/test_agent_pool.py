@@ -297,7 +297,7 @@ async def test_get_or_create_agent_ignores_unavailable_local_cwd(monkeypatch: py
 
 
 @pytest.mark.asyncio
-async def test_get_or_create_agent_honors_fresh_local_thread_cwd_even_when_missing(monkeypatch: pytest.MonkeyPatch, tmp_path):
+async def test_get_or_create_agent_does_not_create_unavailable_live_local_cwd(monkeypatch: pytest.MonkeyPatch, tmp_path):
     captured: dict[str, object] = {}
     requested = tmp_path / "fresh-workspace"
 
@@ -341,9 +341,9 @@ async def test_get_or_create_agent_honors_fresh_local_thread_cwd_even_when_missi
 
     await agent_pool.get_or_create_agent(cast(Any, app), "local", thread_id="thread-3")
 
-    assert captured["workspace_root"] == requested.resolve()
-    assert requested.is_dir()
-    assert app.state.thread_cwd["thread-3"] == str(requested.resolve())
+    assert captured["workspace_root"] is None
+    assert not requested.exists()
+    assert "thread-3" not in app.state.thread_cwd
 
 
 @pytest.mark.asyncio
