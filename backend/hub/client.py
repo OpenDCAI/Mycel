@@ -110,6 +110,13 @@ def _skill_files_from_snapshot(snapshot: dict[str, Any]) -> dict[str, str]:
     return normalize_skill_file_map(files, context="Skill snapshot files")
 
 
+def _hub_source_skill(skills: list[Skill], item_id: str) -> Skill | None:
+    for skill in skills:
+        if skill.source.get("marketplace_item_id") == item_id:
+            return skill
+    return None
+
+
 def list_items(
     *,
     type: str | None = None,
@@ -257,12 +264,19 @@ def apply_item(
         if "/" in slug or "\\" in slug or slug in {"", ".", ".."}:
             raise ValueError(f"Invalid slug: {slug}")
         skill_name = str(skill_metadata["name"]).strip()
-        skill_id = generate_skill_id()
-        if skill_repo.get_by_id(owner_user_id, skill_id) is not None:
-            raise RuntimeError("Generated Skill id already exists")
-        for skill in skill_repo.list_for_owner(owner_user_id):
-            if skill.name == skill_name:
-                raise ValueError("Skill name already exists under a different Library id")
+        owner_skills = skill_repo.list_for_owner(owner_user_id)
+        existing_skill = _hub_source_skill(owner_skills, item_id)
+        if existing_skill is not None and existing_skill.name != skill_name:
+            raise ValueError("Skill snapshot frontmatter name must match existing Skill name")
+        if existing_skill is None:
+            skill_id = generate_skill_id()
+            if skill_repo.get_by_id(owner_user_id, skill_id) is not None:
+                raise RuntimeError("Generated Skill id already exists")
+            for skill in owner_skills:
+                if skill.name == skill_name:
+                    raise ValueError("Skill name already exists under a different Library id")
+        else:
+            skill_id = existing_skill.id
         skill_description = _skill_description_from_metadata(skill_metadata)
         publisher = _required_text(item.get("publisher_username"), label="Hub item publisher_username")
         timestamp = datetime.now(UTC)
