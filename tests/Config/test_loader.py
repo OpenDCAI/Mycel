@@ -2,7 +2,7 @@ import json
 import os
 import sys
 from os import PathLike
-from pathlib import Path, PureWindowsPath
+from pathlib import Path, PurePosixPath, PureWindowsPath
 
 import pytest
 
@@ -309,6 +309,31 @@ def test_load_resolved_config_from_dir_stores_skill_adjacent_files_as_posix_path
     resolved = AgentLoader().load_resolved_config_from_dir(agent_dir)
 
     assert resolved.skills[0].files == {"references/query.md": "extra"}
+
+
+def test_load_resolved_config_from_dir_rejects_skill_adjacent_file_path_collision(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    agent_dir = tmp_path / "local-agent"
+    skill_dir = agent_dir / "skills" / "Search"
+    refs_dir = skill_dir / "references"
+    refs_dir.mkdir(parents=True)
+    (agent_dir / "agent.md").write_text("---\nname: Local Agent\n---\nbe helpful\n", encoding="utf-8")
+    (skill_dir / "SKILL.md").write_text("---\nname: Search\n---\nsearch skill", encoding="utf-8")
+    (refs_dir / "a.md").write_text("Windows-shaped key.", encoding="utf-8")
+    (refs_dir / "b.md").write_text("POSIX-shaped key.", encoding="utf-8")
+    original_relative_to = Path.relative_to
+
+    def colliding_relative_to(self: Path, *other: str | PathLike[str]) -> PureWindowsPath | PurePosixPath:
+        if self.name == "a.md":
+            return PureWindowsPath("references", "query.md")
+        if self.name == "b.md":
+            return PurePosixPath("references/query.md")
+        relative_path = original_relative_to(self, *other)
+        return PurePosixPath(*relative_path.parts)
+
+    monkeypatch.setattr(Path, "relative_to", colliding_relative_to)
+
+    with pytest.raises(ValueError, match="Local Skill files contain duplicate path after normalization: references/query.md"):
+        AgentLoader().load_resolved_config_from_dir(agent_dir)
 
 
 def test_load_resolved_config_from_dir_rejects_invalid_agent_md_yaml(tmp_path: Path) -> None:

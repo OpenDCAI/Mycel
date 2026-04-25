@@ -7,6 +7,7 @@ from typing import Any
 
 import yaml
 
+from config.skill_files import normalize_skill_file_map
 from core.runtime.registry import ToolEntry, ToolMode, ToolRegistry, make_tool_schema
 
 
@@ -54,7 +55,7 @@ class SkillsService:
             self._inline_skills[skill_name] = content
             files = skill.get("files")
             if isinstance(files, dict):
-                self._inline_skill_files[skill_name] = {str(path).replace("\\", "/"): str(body) for path, body in files.items()}
+                self._inline_skill_files[skill_name] = normalize_skill_file_map(files, context="Inline Skill files")
             elif files is not None:
                 raise ValueError("Inline Skill files must be an object")
 

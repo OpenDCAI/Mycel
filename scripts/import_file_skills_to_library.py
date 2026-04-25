@@ -12,6 +12,7 @@ import yaml
 
 from backend.library.paths import LIBRARY_DIR
 from config.agent_config_types import Skill
+from config.skill_files import normalize_skill_file_entries
 from storage.runtime import build_storage_container
 
 
@@ -30,15 +31,15 @@ def _frontmatter(content: str) -> dict[str, Any]:
 
 
 def _read_files(skill_dir: Path) -> dict[str, str]:
-    files: dict[str, str] = {}
+    file_entries: list[tuple[Path, str]] = []
     for path in sorted(skill_dir.rglob("*")):
         if not path.is_file() or path.name == "SKILL.md":
             continue
         try:
-            files[path.relative_to(skill_dir).as_posix()] = path.read_text(encoding="utf-8")
+            file_entries.append((path.relative_to(skill_dir), path.read_text(encoding="utf-8")))
         except UnicodeDecodeError as exc:
             raise RuntimeError(f"Skill adjacent file could not be read: {path}") from exc
-    return files
+    return normalize_skill_file_entries(file_entries, context="File Skill files")
 
 
 def import_skills(owner_user_id: str, library_dir: Path) -> int:

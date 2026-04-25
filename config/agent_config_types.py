@@ -5,11 +5,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field, ValidationInfo, field_validator
 
-
-def _normalize_skill_file_paths(value: Any) -> Any:
-    if not isinstance(value, dict):
-        return value
-    return {str(path).replace("\\", "/"): content for path, content in value.items()}
+from config.skill_files import normalize_skill_file_map
 
 
 class Skill(BaseModel):
@@ -34,7 +30,7 @@ class Skill(BaseModel):
     @field_validator("files", mode="before")
     @classmethod
     def _normalize_files(cls, value: Any) -> Any:
-        return _normalize_skill_file_paths(value)
+        return normalize_skill_file_map(value, context="Skill files") if isinstance(value, dict) else value
 
 
 class AgentSkill(BaseModel):
@@ -58,7 +54,7 @@ class AgentSkill(BaseModel):
     @field_validator("files", mode="before")
     @classmethod
     def _normalize_files(cls, value: Any) -> Any:
-        return _normalize_skill_file_paths(value)
+        return normalize_skill_file_map(value, context="Skill files") if isinstance(value, dict) else value
 
 
 class AgentRule(BaseModel):

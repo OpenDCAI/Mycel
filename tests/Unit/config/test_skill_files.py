@@ -1,0 +1,31 @@
+import pytest
+
+from config.skill_files import normalize_skill_file_entries, normalize_skill_file_map
+
+
+def test_normalize_skill_file_map_converts_paths_to_posix_keys() -> None:
+    assert normalize_skill_file_map({"references\\query.md": "Use exact queries."}, context="Skill files") == {
+        "references/query.md": "Use exact queries."
+    }
+
+
+def test_normalize_skill_file_map_rejects_duplicate_paths_after_normalization() -> None:
+    with pytest.raises(ValueError, match="Skill files contain duplicate path after normalization: references/query.md"):
+        normalize_skill_file_map(
+            {
+                "references\\query.md": "Windows-shaped key.",
+                "references/query.md": "POSIX-shaped key.",
+            },
+            context="Skill files",
+        )
+
+
+def test_normalize_skill_file_entries_rejects_duplicate_paths_after_normalization() -> None:
+    with pytest.raises(ValueError, match="Local Skill files contain duplicate path after normalization: references/query.md"):
+        normalize_skill_file_entries(
+            [
+                ("references\\query.md", "Windows-shaped key."),
+                ("references/query.md", "POSIX-shaped key."),
+            ],
+            context="Local Skill files",
+        )
