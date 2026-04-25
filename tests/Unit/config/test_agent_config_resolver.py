@@ -23,7 +23,6 @@ def _skill(name: str = "github", *, enabled: bool = True) -> AgentSkill:
         description="GitHub guidance",
         version="1.0.0",
         enabled=enabled,
-        source={"marketplace_item_id": "skill-github", "source_version": "1.0.0"},
     )
 
 
@@ -322,7 +321,7 @@ def test_resolver_rejects_duplicate_enabled_skill_names():
     assert "Duplicate Skill name in AgentConfig: github" in str(excinfo.value)
 
 
-def test_resolver_uses_selected_package_source_not_agent_skill_source():
+def test_resolver_uses_selected_package_source():
     config = _config(
         skills=[
             AgentSkill(
@@ -330,7 +329,6 @@ def test_resolver_uses_selected_package_source_not_agent_skill_source():
                 package_id="github-package",
                 name="github",
                 version="1.0.0",
-                source={"source_version": "agent-stale"},
             )
         ]
     )

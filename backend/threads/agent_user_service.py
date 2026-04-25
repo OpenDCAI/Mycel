@@ -643,7 +643,6 @@ def _skills_from_patch(current_config: AgentConfig, config_patch: dict[str, Any]
                 name=library_skill.name,
                 description=description,
                 version=library_package.version,
-                source=dict(library_package.source),
                 enabled=enabled,
             )
         )

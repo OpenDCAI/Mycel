@@ -69,7 +69,6 @@ class AgentSkill(AgentConfigSchemaModel):
     description: str = ""
     version: str
     enabled: bool = True
-    source: dict[str, Any] = Field(default_factory=dict)
 
     @field_validator("skill_id", "package_id", "name")
     @classmethod

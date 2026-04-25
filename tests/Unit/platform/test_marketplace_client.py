@@ -796,7 +796,6 @@ def test_publish_uses_repo_material_when_member_dir_is_absent(tmp_path, monkeypa
                         package_id="search-package",
                         name="Search",
                         version="1.0.0",
-                        source={"name": "Search", "desc": "Repo Search"},
                     )
                 ],
             )

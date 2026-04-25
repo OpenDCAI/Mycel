@@ -476,7 +476,7 @@ def test_agent_config_patch_saves_library_skill_package_choice() -> None:
     ]
 
 
-def test_agent_config_patch_uses_selected_package_source_only() -> None:
+def test_agent_config_patch_keeps_package_source_out_of_agent_skill_binding() -> None:
     saved_configs: list[AgentConfig] = []
     skill_repo = _MemorySkillRepo()
     library_skill = _put_skill(
@@ -499,7 +499,6 @@ def test_agent_config_patch_uses_selected_package_source_only() -> None:
                         package_id=library_skill.package_id,
                         name="Loadable Skill",
                         version="1.0.0",
-                        source={"source_version": "current-stale"},
                     )
                 ]
             )
@@ -524,7 +523,7 @@ def test_agent_config_patch_uses_selected_package_source_only() -> None:
         skill_repo=skill_repo,
     )
 
-    assert saved_configs[-1].skills[0].source == {}
+    assert "source" not in saved_configs[-1].skills[0].model_dump()
 
 
 def test_agent_config_patch_does_not_fill_skill_identity_from_patch_or_current_binding() -> None:
@@ -825,7 +824,6 @@ def test_agent_config_patch_rejects_skill_after_library_delete() -> None:
         name="Loadable Skill",
         description="loadable",
         version="1.0.0",
-        source={"source_version": "1.0.0"},
     )
 
     class _AgentConfigRepo:
@@ -2076,9 +2074,9 @@ def test_apply_snapshot_saves_one_agent_config_aggregate():
         "marketplace_item_id": "item-1",
         "snapshot_skill_id": "search-core",
         "source_version": "1.0.0",
-        "source_at": saved_configs[0].skills[0].source["source_at"],
+        "source_at": package.source["source_at"],
     }
-    assert saved_configs[0].skills[0].source == package.source
+    assert "source" not in saved_configs[0].skills[0].model_dump()
     library_skill = skill_repo.get_by_id("user-1", saved_configs[0].skills[0].skill_id)
     assert library_skill is not None
     assert library_skill.source == package.source
@@ -2241,7 +2239,9 @@ def test_apply_snapshot_treats_snapshot_skill_id_as_source_metadata(monkeypatch:
     assert saved_configs[0].skills[0].skill_id == "skill_generated123"
     assert skill_repo.get_by_id("user-1", "nested/search") is None
     assert skill_repo.get_by_id("user-1", "skill_generated123") is not None
-    assert saved_configs[0].skills[0].source["snapshot_skill_id"] == "nested/search"
+    package = skill_repo.get_package("user-1", saved_configs[0].skills[0].package_id)
+    assert package is not None
+    assert package.source["snapshot_skill_id"] == "nested/search"
 
 
 def test_apply_snapshot_reuses_existing_skill_by_snapshot_source(monkeypatch: pytest.MonkeyPatch):
@@ -2285,7 +2285,9 @@ def test_apply_snapshot_reuses_existing_skill_by_snapshot_source(monkeypatch: py
 
     assert saved_configs[0].skills[0].skill_id == "skill_existing123"
     assert skill_repo.get_by_id("user-1", "skill_existing123").description == ""
-    assert saved_configs[0].skills[0].source["snapshot_skill_id"] == "search-core"
+    package = skill_repo.get_package("user-1", saved_configs[0].skills[0].package_id)
+    assert package is not None
+    assert package.source["snapshot_skill_id"] == "search-core"
 
 
 def test_apply_snapshot_fails_when_generated_skill_id_exists(monkeypatch: pytest.MonkeyPatch):

@@ -114,7 +114,6 @@ def _materialize_snapshot_skills(
                 name=snapshot_skill.name,
                 description=snapshot_skill.description,
                 version=package.version,
-                source=source,
             )
         )
     return result

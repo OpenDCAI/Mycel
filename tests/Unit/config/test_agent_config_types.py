@@ -111,6 +111,19 @@ def test_agent_skill_model_rejects_resolved_content_fields() -> None:
         )
 
 
+def test_agent_skill_model_rejects_package_source() -> None:
+    with pytest.raises(ValueError, match="source"):
+        AgentSkill.model_validate(
+            {
+                "skill_id": "skill-1",
+                "package_id": "package-1",
+                "name": "query-helper",
+                "version": "1.0.0",
+                "source": {"source_version": "1.0.0"},
+            }
+        )
+
+
 def test_agent_config_model_rejects_unknown_fields() -> None:
     with pytest.raises(ValueError, match="skill_packages"):
         AgentConfig.model_validate(

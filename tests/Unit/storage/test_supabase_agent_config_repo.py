@@ -181,7 +181,6 @@ def test_get_agent_config_reads_full_aggregate_from_final_tables() -> None:
                 name="github",
                 description="GitHub guidance",
                 version="1.0.0",
-                source={"source_version": "1.0.0"},
             )
         ],
         rules=[AgentRule(id="rule-1", name="Cite", content="Always cite.")],
@@ -336,25 +335,27 @@ def test_get_agent_config_fails_loudly_when_meta_json_is_null() -> None:
         repo.get_agent_config("cfg-1")
 
 
-def test_get_agent_config_fails_loudly_when_skill_source_json_is_not_an_object() -> None:
+def test_get_agent_config_does_not_read_skill_package_source_json() -> None:
     tables = _tables()
     tables["library.skill_packages"][0]["source_json"] = ["bad"]
-    repo = SupabaseAgentConfigRepo(_FakeClient(tables))
-
-    with pytest.raises(RuntimeError, match="skill package source_json must be a JSON object"):
-        repo.get_agent_config("cfg-1")
-
-
-def test_get_agent_config_reads_agent_skill_source_from_selected_package_only() -> None:
-    tables = _tables()
-    tables["library.skills"][0]["source_json"] = {"source_version": "library"}
-    tables["library.skill_packages"][0]["source_json"] = {}
     repo = SupabaseAgentConfigRepo(_FakeClient(tables))
 
     config = repo.get_agent_config("cfg-1")
 
     assert config is not None
-    assert config.skills[0].source == {}
+    assert "source" not in config.skills[0].model_dump()
+
+
+def test_get_agent_config_keeps_package_source_out_of_agent_skill_binding() -> None:
+    tables = _tables()
+    tables["library.skills"][0]["source_json"] = {"source_version": "library"}
+    tables["library.skill_packages"][0]["source_json"] = {"source_version": "package"}
+    repo = SupabaseAgentConfigRepo(_FakeClient(tables))
+
+    config = repo.get_agent_config("cfg-1")
+
+    assert config is not None
+    assert "source" not in config.skills[0].model_dump()
 
 
 def test_get_agent_config_fails_loudly_when_skill_package_version_is_null() -> None:

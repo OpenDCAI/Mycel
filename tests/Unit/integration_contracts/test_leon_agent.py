@@ -740,7 +740,6 @@ async def test_leon_agent_resolved_config_registers_skills(tmp_path):
                 package_id="fastapi-package",
                 name="FastAPI",
                 version="1.0.0",
-                source={"desc": "Build FastAPI services"},
             )
         ],
     )
