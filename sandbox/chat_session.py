@@ -8,13 +8,17 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from sandbox.clock import parse_runtime_datetime, utc_now, utc_now_iso
-from sandbox.control_plane_repos import make_chat_session_repo, make_sandbox_runtime_repo, make_terminal_repo
+from sandbox.control_plane_repos import (
+    make_chat_session_repo,
+    make_sandbox_runtime_repo,
+    make_terminal_repo,
+    resolve_sandbox_db_path,
+)
 from sandbox.lifecycle import (
     ChatSessionState,
     assert_chat_session_transition,
     parse_chat_session_state,
 )
-from storage.providers.sqlite.kernel import SQLiteDBRole, resolve_role_db_path
 
 if TYPE_CHECKING:
     from sandbox.provider import SandboxProvider
@@ -86,7 +90,7 @@ class ChatSession:
         self.budget_json = budget_json
         self.ended_at = ended_at
         self.close_reason = close_reason
-        self._db_path = db_path or resolve_role_db_path(SQLiteDBRole.SANDBOX)
+        self._db_path = resolve_sandbox_db_path(db_path) if session_repo is None else db_path
         self._session_repo = session_repo or make_chat_session_repo(db_path=self._db_path)
 
     def is_expired(self) -> bool:
@@ -131,7 +135,8 @@ class ChatSessionManager:
         sandbox_runtime_repo=None,
     ):
         self.provider = provider
-        self.db_path = db_path or resolve_role_db_path(SQLiteDBRole.SANDBOX)
+        needs_db_path = chat_session_repo is None or terminal_repo is None or sandbox_runtime_repo is None
+        self.db_path = resolve_sandbox_db_path(db_path) if needs_db_path else db_path
         self.default_policy = default_policy or ChatSessionPolicy()
         self._live_sessions: dict[str, ChatSession] = {}
         if chat_session_repo:

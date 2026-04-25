@@ -14,8 +14,7 @@ from sandbox.provider import SandboxProvider
 from sandbox.recipes import bootstrap_recipe
 from sandbox.runtime_handle import sandbox_runtime_from_row
 from sandbox.terminal import TerminalState, terminal_from_row
-from storage.providers.sqlite.kernel import SQLiteDBRole, resolve_role_db_path
-from storage.runtime import build_storage_container, uses_supabase_runtime_defaults
+from storage.runtime import build_storage_container
 
 logger = logging.getLogger(__name__)
 
@@ -41,8 +40,8 @@ def lookup_sandbox_for_thread(
     terminal_repo: Any | None = None,
     sandbox_runtime_repo: Any | None = None,
 ) -> str | None:
-    target_db = db_path or resolve_role_db_path(SQLiteDBRole.SANDBOX)
-    uses_strategy_default_sandbox = uses_supabase_runtime_defaults() and target_db == resolve_role_db_path(SQLiteDBRole.SANDBOX)
+    target_db = resolve_sandbox_db_path(db_path) if terminal_repo is None or sandbox_runtime_repo is None else db_path
+    uses_strategy_default_sandbox = False
     if terminal_repo is None and sandbox_runtime_repo is None and not target_db.exists() and not uses_strategy_default_sandbox:
         return None
 
@@ -78,7 +77,7 @@ def resolve_existing_sandbox_runtime_cwd(
     if requested_cwd:
         return requested_cwd
 
-    target_db = db_path or resolve_role_db_path(SQLiteDBRole.SANDBOX)
+    target_db = resolve_sandbox_db_path(db_path) if sandbox_runtime_repo is None else db_path
     _sandbox_runtime_repo = sandbox_runtime_repo
     own_sandbox_runtime_repo = _sandbox_runtime_repo is None
     if _sandbox_runtime_repo is None:
@@ -104,7 +103,7 @@ def bind_thread_to_existing_sandbox_runtime(
     terminal_repo: Any | None = None,
     sandbox_runtime_repo: Any | None = None,
 ) -> str:
-    target_db = db_path or resolve_role_db_path(SQLiteDBRole.SANDBOX)
+    target_db = resolve_sandbox_db_path(db_path) if terminal_repo is None or sandbox_runtime_repo is None else db_path
     _terminal_repo = terminal_repo
     own_terminal_repo = _terminal_repo is None
     if _terminal_repo is None:
@@ -150,7 +149,7 @@ def resolve_existing_sandbox_runtime(
 
     # @@@existing-sandbox-runtime-identity - existing-sandbox reuse must bind
     # through live runtime identity; stored runtime config is not a resolution source.
-    target_db = db_path or resolve_role_db_path(SQLiteDBRole.SANDBOX)
+    target_db = resolve_sandbox_db_path(db_path) if sandbox_runtime_repo is None else db_path
     _sandbox_runtime_repo = sandbox_runtime_repo
     own_sandbox_runtime_repo = _sandbox_runtime_repo is None
     if _sandbox_runtime_repo is None:
@@ -204,7 +203,7 @@ def bind_thread_to_existing_thread_sandbox_runtime(
     terminal_repo: Any | None = None,
     sandbox_runtime_repo: Any | None = None,
 ) -> str | None:
-    target_db = db_path or resolve_role_db_path(SQLiteDBRole.SANDBOX)
+    target_db = resolve_sandbox_db_path(db_path) if terminal_repo is None else db_path
     if not cwd:
         raise ValueError("thread reuse cwd is required")
     _terminal_repo = terminal_repo
