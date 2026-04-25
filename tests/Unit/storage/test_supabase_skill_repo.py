@@ -210,6 +210,16 @@ def test_get_package_filters_owner_and_package_id() -> None:
     assert ("id", "package-1") in client.table_queries["library.skill_packages"][0].eq_calls
 
 
+def test_get_package_rejects_non_object_manifest_json() -> None:
+    row = _package_row()
+    row["manifest_json"] = []
+    client = _FakeClient({"library.skill_packages": [row]})
+    repo = SupabaseSkillRepo(client)
+
+    with pytest.raises(RuntimeError, match="library.skill_packages.manifest_json must be a JSON object"):
+        repo.get_package("owner-1", "package-1")
+
+
 def test_select_package_updates_library_skill_pointer() -> None:
     client = _FakeClient({"library.skills": [_row()]})
     repo = SupabaseSkillRepo(client)
