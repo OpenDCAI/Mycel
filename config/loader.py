@@ -307,7 +307,7 @@ class AgentLoader:
                 if not file_path.is_file() or file_path.name == "SKILL.md":
                     continue
                 try:
-                    files[str(file_path.relative_to(skill_dir))] = file_path.read_text(encoding="utf-8")
+                    files[file_path.relative_to(skill_dir).as_posix()] = file_path.read_text(encoding="utf-8")
                 except UnicodeDecodeError as exc:
                     raise RuntimeError(f"Local Skill adjacent file could not be read: {file_path}") from exc
             skills.append(

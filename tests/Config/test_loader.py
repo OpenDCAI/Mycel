@@ -1,7 +1,8 @@
 import json
 import os
 import sys
-from pathlib import Path
+from os import PathLike
+from pathlib import Path, PureWindowsPath
 
 import pytest
 
@@ -287,6 +288,27 @@ def test_load_resolved_config_from_dir_reads_local_agent_config(tmp_path: Path) 
     agent_names = {agent.name for agent in resolved.sub_agents}
     assert {"bash", "explore", "general", "plan", "Scout"}.issubset(agent_names)
     assert resolved.mcp_servers == []
+
+
+def test_load_resolved_config_from_dir_stores_skill_adjacent_files_as_posix_paths(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    agent_dir = tmp_path / "local-agent"
+    skill_dir = agent_dir / "skills" / "Search"
+    refs_dir = skill_dir / "references"
+    refs_dir.mkdir(parents=True)
+    (agent_dir / "agent.md").write_text("---\nname: Local Agent\n---\nbe helpful\n", encoding="utf-8")
+    (skill_dir / "SKILL.md").write_text("---\nname: Search\n---\nsearch skill", encoding="utf-8")
+    (refs_dir / "query.md").write_text("extra", encoding="utf-8")
+    original_relative_to = Path.relative_to
+
+    def windows_relative_to(self: Path, *other: str | PathLike[str]) -> PureWindowsPath:
+        relative_path = original_relative_to(self, *other)
+        return PureWindowsPath(*relative_path.parts)
+
+    monkeypatch.setattr(Path, "relative_to", windows_relative_to)
+
+    resolved = AgentLoader().load_resolved_config_from_dir(agent_dir)
+
+    assert resolved.skills[0].files == {"references/query.md": "extra"}
 
 
 def test_load_resolved_config_from_dir_rejects_invalid_agent_md_yaml(tmp_path: Path) -> None:
