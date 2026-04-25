@@ -23,6 +23,7 @@ def _patch_lifespan_runtime_contract(
     attach_auth_runtime,
     attach_threads_runtime,
     wire_chat_delivery,
+    wire_relationship_request_notifications,
 ):
     monkeypatch.setattr(web_lifespan, "_require_web_runtime_contract", lambda: None)
     monkeypatch.setenv("LEON_POSTGRES_URL", "postgres://unit-test")
@@ -71,6 +72,7 @@ def _patch_lifespan_runtime_contract(
     )
     monkeypatch.setattr("backend.chat.bootstrap.attach_chat_runtime", attach_chat_runtime)
     monkeypatch.setattr("backend.chat.bootstrap.wire_chat_delivery", wire_chat_delivery)
+    monkeypatch.setattr("backend.chat.bootstrap.wire_relationship_request_notifications", wire_relationship_request_notifications)
     monkeypatch.setattr("backend.threads.bootstrap.attach_threads_runtime", attach_threads_runtime)
     monkeypatch.setattr("backend.threads.display.builder.DisplayBuilder", lambda: object())
     monkeypatch.setattr("backend.sandboxes.service.init_providers_and_managers", lambda: None)
@@ -82,6 +84,7 @@ def _patch_lifespan_runtime_contract(
 async def test_web_lifespan_attaches_chat_runtime_before_threads_runtime(monkeypatch):
     returned_typing_tracker = object()
     returned_messaging_service = SimpleNamespace(set_delivery_fn=lambda _fn: None)
+    returned_relationship_service = object()
 
     def _attach_chat_runtime(app, _storage_container, *, user_repo, thread_repo):
         contact_repo = object()
@@ -89,6 +92,7 @@ async def test_web_lifespan_attaches_chat_runtime_before_threads_runtime(monkeyp
             contact_repo=contact_repo,
             typing_tracker=returned_typing_tracker,
             messaging_service=returned_messaging_service,
+            relationship_service=returned_relationship_service,
         )
 
     def _attach_threads_runtime(app, _storage_container, *, typing_tracker, messaging_service):
@@ -103,6 +107,7 @@ async def test_web_lifespan_attaches_chat_runtime_before_threads_runtime(monkeyp
         attach_auth_runtime=lambda *_args, **_kwargs: object(),
         attach_threads_runtime=_attach_threads_runtime,
         wire_chat_delivery=lambda *_args, **_kwargs: None,
+        wire_relationship_request_notifications=lambda *_args, **_kwargs: None,
     )
 
     app = SimpleNamespace(state=SimpleNamespace())
@@ -116,6 +121,7 @@ async def test_web_lifespan_wires_chat_delivery_after_threads_runtime(monkeypatc
     call_log: list[str] = []
     returned_typing_tracker = object()
     returned_messaging_service = SimpleNamespace(set_delivery_fn=lambda _fn: None)
+    returned_relationship_service = object()
     returned_contact_repo = object()
     returned_activity_reader = object()
 
@@ -125,6 +131,7 @@ async def test_web_lifespan_wires_chat_delivery_after_threads_runtime(monkeypatc
             contact_repo=returned_contact_repo,
             typing_tracker=returned_typing_tracker,
             messaging_service=returned_messaging_service,
+            relationship_service=returned_relationship_service,
         )
 
     def _attach_auth_runtime(_app, *, storage_state, contact_repo):
@@ -140,8 +147,13 @@ async def test_web_lifespan_wires_chat_delivery_after_threads_runtime(monkeypatc
         return SimpleNamespace(activity_reader=returned_activity_reader)
 
     def _wire_chat_delivery(_app, *, messaging_service, activity_reader, thread_repo):
-        call_log.append("wire")
+        call_log.append("wire-chat")
         assert messaging_service is returned_messaging_service
+        assert activity_reader is returned_activity_reader
+
+    def _wire_relationship_request_notifications(_app, *, relationship_service, activity_reader, thread_repo, user_repo):
+        call_log.append("wire-relationship")
+        assert relationship_service is returned_relationship_service
         assert activity_reader is returned_activity_reader
 
     _patch_lifespan_runtime_contract(
@@ -150,12 +162,13 @@ async def test_web_lifespan_wires_chat_delivery_after_threads_runtime(monkeypatc
         attach_auth_runtime=_attach_auth_runtime,
         attach_threads_runtime=_attach_threads_runtime,
         wire_chat_delivery=_wire_chat_delivery,
+        wire_relationship_request_notifications=_wire_relationship_request_notifications,
     )
 
     app = SimpleNamespace(state=SimpleNamespace())
 
     async with web_lifespan.lifespan(app):
-        assert call_log == ["chat", "auth", "threads", "wire"]
+        assert call_log == ["chat", "auth", "threads", "wire-chat", "wire-relationship"]
 
 
 @pytest.mark.asyncio
@@ -211,6 +224,7 @@ async def test_web_lifespan_passes_borrowed_contact_repo_into_auth_runtime(monke
             contact_repo=contact_repo,
             typing_tracker=object(),
             messaging_service=SimpleNamespace(set_delivery_fn=lambda _fn: None),
+            relationship_service=object(),
         ),
     )
     monkeypatch.setattr(
@@ -218,6 +232,7 @@ async def test_web_lifespan_passes_borrowed_contact_repo_into_auth_runtime(monke
         lambda app, *_args, **_kwargs: setattr(app.state, "agent_pool", {}) or SimpleNamespace(activity_reader=object()),
     )
     monkeypatch.setattr("backend.chat.bootstrap.wire_chat_delivery", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr("backend.chat.bootstrap.wire_relationship_request_notifications", lambda *_args, **_kwargs: None)
     monkeypatch.setattr("backend.threads.display.builder.DisplayBuilder", lambda: object())
     monkeypatch.setattr("backend.sandboxes.service.init_providers_and_managers", lambda: None)
     monkeypatch.setattr("backend.threads.pool.idle_reaper.idle_reaper_loop", lambda _app: _never())

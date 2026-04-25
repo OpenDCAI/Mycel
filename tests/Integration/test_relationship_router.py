@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import inspect
 from datetime import UTC, datetime
 from types import SimpleNamespace
 
@@ -43,8 +44,11 @@ def test_relationship_public_openapi_uses_token_identity_only() -> None:
     assert action_properties == {}
 
 
-@pytest.mark.asyncio
-async def test_request_relationship_uses_current_token_user() -> None:
+def test_relationship_request_route_is_sync_for_runtime_notification_delivery() -> None:
+    assert inspect.iscoroutinefunction(owner_relationship_router.request_relationship) is False
+
+
+def test_request_relationship_uses_current_token_user() -> None:
     seen: list[tuple[str, str]] = []
     relationship_service = SimpleNamespace(
         request=lambda requester_id, target_id: (
@@ -57,7 +61,7 @@ async def test_request_relationship_uses_current_token_user() -> None:
         )
     )
 
-    result = await owner_relationship_router.request_relationship(
+    result = owner_relationship_router.request_relationship(
         owner_relationship_router.RelationshipRequestBody(target_user_id="requester-user-1"),
         user_id="owner-user-1",
         relationship_service=relationship_service,
@@ -68,8 +72,7 @@ async def test_request_relationship_uses_current_token_user() -> None:
     assert result["is_requester"] is True
 
 
-@pytest.mark.asyncio
-async def test_approve_relationship_uses_current_token_user() -> None:
+def test_approve_relationship_uses_current_token_user() -> None:
     seen: list[tuple[str, str]] = []
     existing = {
         "id": "hire_visit:agent-user-1:requester-user-1",
@@ -85,7 +88,7 @@ async def test_approve_relationship_uses_current_token_user() -> None:
         ),
     )
 
-    result = await owner_relationship_router.approve_relationship(
+    result = owner_relationship_router.approve_relationship(
         existing["id"],
         owner_relationship_router.RelationshipActionBody(),
         user_id="agent-user-1",
@@ -97,8 +100,7 @@ async def test_approve_relationship_uses_current_token_user() -> None:
     assert result["state"] == "visit"
 
 
-@pytest.mark.asyncio
-async def test_reject_relationship_uses_current_token_user() -> None:
+def test_reject_relationship_uses_current_token_user() -> None:
     seen: list[tuple[str, str]] = []
     existing = {
         "id": "hire_visit:agent-user-1:requester-user-1",
@@ -114,7 +116,7 @@ async def test_reject_relationship_uses_current_token_user() -> None:
         ),
     )
 
-    result = await owner_relationship_router.reject_relationship(
+    result = owner_relationship_router.reject_relationship(
         existing["id"],
         owner_relationship_router.RelationshipActionBody(),
         user_id="agent-user-1",
@@ -126,8 +128,7 @@ async def test_reject_relationship_uses_current_token_user() -> None:
     assert result["state"] == "none"
 
 
-@pytest.mark.asyncio
-async def test_downgrade_relationship_uses_current_token_user() -> None:
+def test_downgrade_relationship_uses_current_token_user() -> None:
     seen: list[tuple[str, str]] = []
     existing = {
         "id": "hire_visit:agent-user-1:requester-user-1",
@@ -143,7 +144,7 @@ async def test_downgrade_relationship_uses_current_token_user() -> None:
         ),
     )
 
-    result = await owner_relationship_router.downgrade_relationship(
+    result = owner_relationship_router.downgrade_relationship(
         existing["id"],
         owner_relationship_router.RelationshipActionBody(),
         user_id="agent-user-1",

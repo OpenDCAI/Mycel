@@ -58,7 +58,7 @@ def _row_to_dict(row: RelationshipRow, viewer_id: str) -> dict:
 
 
 @router.get("")
-async def list_relationships(
+def list_relationships(
     user_id: Annotated[str, Depends(get_current_user_id)],
     relationship_service: Annotated[Any, Depends(get_relationship_service)],
 ):
@@ -67,7 +67,7 @@ async def list_relationships(
 
 
 @router.post("/request")
-async def request_relationship(
+def request_relationship(
     body: RelationshipRequestBody,
     user_id: Annotated[str, Depends(get_current_user_id)],
     relationship_service: Annotated[Any, Depends(get_relationship_service)],
@@ -82,7 +82,7 @@ async def request_relationship(
 
 
 @router.post("/{relationship_id}/approve")
-async def approve_relationship(
+def approve_relationship(
     relationship_id: str,
     body: RelationshipActionBody,
     user_id: Annotated[str, Depends(get_current_user_id)],
@@ -99,7 +99,7 @@ async def approve_relationship(
 
 
 @router.post("/{relationship_id}/reject")
-async def reject_relationship(
+def reject_relationship(
     relationship_id: str,
     body: RelationshipActionBody,
     user_id: Annotated[str, Depends(get_current_user_id)],
@@ -116,7 +116,7 @@ async def reject_relationship(
 
 
 @router.post("/{relationship_id}/upgrade")
-async def upgrade_relationship(
+def upgrade_relationship(
     relationship_id: str,
     body: RelationshipActionBody,
     user_id: Annotated[str, Depends(get_current_user_id)],
@@ -131,7 +131,7 @@ async def upgrade_relationship(
 
 
 @router.post("/{relationship_id}/revoke")
-async def revoke_relationship(
+def revoke_relationship(
     relationship_id: str,
     body: RelationshipActionBody,
     user_id: Annotated[str, Depends(get_current_user_id)],
@@ -146,7 +146,7 @@ async def revoke_relationship(
 
 
 @router.post("/{relationship_id}/downgrade")
-async def downgrade_relationship(
+def downgrade_relationship(
     relationship_id: str,
     body: RelationshipActionBody,
     user_id: Annotated[str, Depends(get_current_user_id)],

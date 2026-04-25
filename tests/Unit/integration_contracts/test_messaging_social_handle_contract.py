@@ -143,6 +143,38 @@ def test_relationship_request_uses_single_pending_state_and_initiator() -> None:
     assert row.initiator_user_id == "human-user-1"
 
 
+def test_relationship_request_notifies_after_persisting_pending_row() -> None:
+    class _RequestRepo:
+        def __init__(self) -> None:
+            self.persisted = False
+
+        def get(self, _requester_id: str, _target_id: str):
+            return None
+
+        def upsert(self, _requester_id: str, _target_id: str, **fields: Any):
+            self.persisted = True
+            return {
+                "id": "hire_visit:agent-user-1:human-user-1",
+                "user_low": "agent-user-1",
+                "user_high": "human-user-1",
+                "kind": "hire_visit",
+                "created_at": "2026-04-07T00:00:00Z",
+                "updated_at": "2026-04-07T00:00:01Z",
+                **fields,
+            }
+
+    repo = _RequestRepo()
+    notifications = []
+    service = RelationshipService(repo, on_relationship_requested=notifications.append)
+
+    row = service.request("human-user-1", "agent-user-1")
+
+    assert repo.persisted is True
+    assert notifications == [row]
+    assert notifications[0].state == "pending"
+    assert notifications[0].initiator_user_id == "human-user-1"
+
+
 def test_relationship_list_for_user_fails_on_invalid_row() -> None:
     service = RelationshipService(
         SimpleNamespace(
