@@ -34,6 +34,13 @@ def _enabled_from_row(row: dict[str, Any], *, label: str) -> bool:
     return enabled
 
 
+def _required_text(row: dict[str, Any], column: str, *, label: str) -> str:
+    value = row[column]
+    if not isinstance(value, str):
+        raise RuntimeError(f"{label} must be text")
+    return value
+
+
 def _json_array(value: Any, *, label: str, default: list[Any] | None = None) -> list[Any]:
     if value is None:
         return list(default or [])
@@ -89,12 +96,12 @@ class SupabaseAgentConfigRepo:
             owner_user_id=root["owner_user_id"],
             agent_user_id=root["agent_user_id"],
             name=root["name"],
-            description=root.get("description") or "",
+            description=_required_text(root, "description", label="agent_configs description"),
             model=root.get("model"),
             tools=_required_json_array(root.get("tools_json"), label="tools_json"),
-            system_prompt=root.get("system_prompt") or "",
-            status=root.get("status") or "draft",
-            version=root.get("version") or "0.1.0",
+            system_prompt=_required_text(root, "system_prompt", label="agent_configs system_prompt"),
+            status=_required_text(root, "status", label="agent_configs status"),
+            version=_required_text(root, "version", label="agent_configs version"),
             runtime_settings=_required_json_object(root.get("runtime_json"), label="runtime_json"),
             compact=_required_json_object(root.get("compact_json"), label="compact_json"),
             meta=_required_json_object(root.get("meta_json"), label="meta_json"),
@@ -133,7 +140,7 @@ class SupabaseAgentConfigRepo:
                     skill_id=skill_id,
                     package_id=package_id,
                     name=skill["name"],
-                    description=skill.get("description") or "",
+                    description=_required_text(skill, "description", label="library.skills description"),
                     version=package["version"],
                     enabled=_enabled_from_row(row, label="skill_bindings"),
                     source=_required_json_object(package.get("source_json"), label="skill package source_json"),
@@ -170,8 +177,8 @@ class SupabaseAgentConfigRepo:
         return [
             AgentRule(
                 id=row.get("id"),
-                name=row.get("name") or row.get("filename") or "rule",
-                content=row.get("content") or "",
+                name=_required_text(row, "name", label="agent_rules name"),
+                content=_required_text(row, "content", label="agent_rules content"),
                 enabled=_enabled_from_row(row, label="agent_rules"),
             )
             for row in rows
@@ -187,10 +194,10 @@ class SupabaseAgentConfigRepo:
             AgentSubAgent(
                 id=row.get("id"),
                 name=row["name"],
-                description=row.get("description") or "",
+                description=_required_text(row, "description", label="agent_sub_agents description"),
                 model=row.get("model"),
                 tools=_json_array(row.get("tools_json"), label="agent_sub_agents tools_json"),
-                system_prompt=row.get("system_prompt") or "",
+                system_prompt=_required_text(row, "system_prompt", label="agent_sub_agents system_prompt"),
                 enabled=_enabled_from_row(row, label="agent_sub_agents"),
             )
             for row in rows
