@@ -158,7 +158,6 @@ class CommandService:
         from sandbox.thread_context import get_current_thread_id
 
         parent_thread_id = get_current_thread_id()
-        logger.debug("[CommandService] _execute_async: parent_thread_id=%s task_id=%s", parent_thread_id, task_id)
         if parent_thread_id and self._event_bus_factory is not None:
             event_bus = self._event_bus_factory()
             emit_fn = event_bus.make_emitter(

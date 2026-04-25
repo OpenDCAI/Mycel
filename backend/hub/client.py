@@ -1,6 +1,5 @@
 import copy
 import json
-import logging
 import os
 import time
 from pathlib import Path
@@ -15,8 +14,6 @@ import backend.library.paths as _lib_paths
 from backend.hub.versioning import BumpType, bump_semver
 from config.loader import load_bundle_from_repo
 from config.types import AgentBundle
-
-logger = logging.getLogger(__name__)
 
 HUB_URL = os.environ.get("MYCEL_HUB_URL", "https://hub.mycel.nextmind.space")
 # @@@hub-agent-user-item-type - Hub still names published Agent users "member";
@@ -289,7 +286,6 @@ def download(
                     },
                 },
             )
-            logger.info("Installed skill %s to agent user %s", skill_name, agent_user_id)
             return {"resource_id": skill_name, "type": "skill", "version": installed_version, "agent_user_id": agent_user_id}
 
         slug = item.get("slug", item["name"].lower().replace(" ", "-"))
@@ -315,7 +311,6 @@ def download(
             },
         }
         _write_json(skill_dir / "meta.json", meta_data)
-        logger.info("Downloaded skill %s to library", slug)
         return {"resource_id": slug, "type": "skill", "version": installed_version}
 
     if item_type == "agent":
@@ -341,7 +336,6 @@ def download(
             },
         }
         _write_json(agent_dir / f"{slug}.json", meta_data)
-        logger.info("Downloaded agent %s to library", slug)
         return {"resource_id": slug, "type": "agent", "version": installed_version}
 
     if item_type == HUB_AGENT_USER_ITEM_TYPE:
