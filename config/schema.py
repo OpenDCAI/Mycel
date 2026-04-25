@@ -200,19 +200,6 @@ class MCPConfig(BaseModel):
 
 
 # ============================================================================
-# Skills Configuration
-# ============================================================================
-
-
-class SkillsConfig(BaseModel):
-    """Skills configuration."""
-
-    enabled: bool = True
-    paths: list[str] = Field(default_factory=list, description="Explicit Skill search paths")
-    skills: dict[str, bool] = Field(default_factory=dict, description="Skill enable/disable map")
-
-
-# ============================================================================
 # Main Settings
 # ============================================================================
 
@@ -237,7 +224,6 @@ class LeonSettings(BaseModel):
     memory: MemoryConfig = Field(default_factory=lambda: MemoryConfig(), description="Memory management")
     tools: ToolsConfig = Field(default_factory=lambda: ToolsConfig(), description="Tools configuration")
     mcp: MCPConfig = Field(default_factory=lambda: MCPConfig(), description="MCP configuration")
-    skills: SkillsConfig = Field(default_factory=lambda: SkillsConfig(), description="Skills configuration")
 
     # Agent configuration
     system_prompt: str | None = Field(None, description="Custom system prompt")

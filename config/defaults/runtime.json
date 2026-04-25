@@ -64,10 +64,5 @@
   "mcp": {
     "enabled": true,
     "servers": {}
-  },
-  "skills": {
-    "enabled": true,
-    "paths": [],
-    "skills": {}
   }
 }
