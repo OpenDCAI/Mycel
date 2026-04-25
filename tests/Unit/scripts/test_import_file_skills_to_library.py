@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import inspect
 from datetime import UTC, datetime
 from os import PathLike
 from pathlib import Path, PurePosixPath, PureWindowsPath
@@ -168,6 +169,13 @@ def test_import_file_skill_requires_version_frontmatter(monkeypatch: pytest.Monk
         import_file_skills_to_library.import_skills("owner-1", library_dir)
 
     assert repo.saved == []
+
+
+def test_import_file_skill_has_no_default_package_version() -> None:
+    source = inspect.getsource(import_file_skills_to_library)
+
+    assert "INITIAL_SKILL_PACKAGE_VERSION" not in source
+    assert 'return "0.1.0"' not in source
 
 
 def test_import_file_skill_rejects_adjacent_file_path_collision(monkeypatch: pytest.MonkeyPatch, tmp_path):
