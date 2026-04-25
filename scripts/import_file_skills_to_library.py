@@ -31,12 +31,12 @@ def _frontmatter(content: str) -> dict[str, Any]:
 
 
 def _read_files(skill_dir: Path) -> dict[str, str]:
-    file_entries: list[tuple[Path, str]] = []
+    file_entries: list[tuple[str, str]] = []
     for path in sorted(skill_dir.rglob("*")):
         if not path.is_file() or path.name == "SKILL.md":
             continue
         try:
-            file_entries.append((path.relative_to(skill_dir), path.read_text(encoding="utf-8")))
+            file_entries.append((path.relative_to(skill_dir).as_posix(), path.read_text(encoding="utf-8")))
         except UnicodeDecodeError as exc:
             raise RuntimeError(f"Skill adjacent file could not be read: {path}") from exc
     return normalize_skill_file_entries(file_entries, context="File Skill files")

@@ -7,6 +7,8 @@ from typing import Any
 def _normalize_skill_file_path(path: str, *, context: str) -> str:
     normalized_path = path.replace("\\", "/")
     parts = normalized_path.split("/")
+    if normalized_path.startswith("/") or any(part in {".", ".."} for part in parts):
+        raise ValueError(f"{context} path must stay inside the Skill package")
     if not normalized_path.strip() or any(part == "" for part in parts):
         raise ValueError(f"{context} path must be a relative file path")
     return normalized_path

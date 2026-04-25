@@ -45,3 +45,9 @@ def test_normalize_skill_file_map_rejects_non_string_paths() -> None:
 def test_normalize_skill_file_map_rejects_blank_or_empty_segment_paths(path: str) -> None:
     with pytest.raises(ValueError, match="Skill files path must be a relative file path"):
         normalize_skill_file_map({path: "Use exact queries."}, context="Skill files")
+
+
+@pytest.mark.parametrize("path", ["/references/query.md", "references/../secret.md", "./references/query.md"])
+def test_normalize_skill_file_map_rejects_paths_outside_package(path: str) -> None:
+    with pytest.raises(ValueError, match="Skill files path must stay inside the Skill package"):
+        normalize_skill_file_map({path: "Use exact queries."}, context="Skill files")
