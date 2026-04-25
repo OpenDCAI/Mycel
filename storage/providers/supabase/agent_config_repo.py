@@ -42,6 +42,12 @@ def _json_array(value: Any, *, label: str, default: list[Any] | None = None) -> 
     return list(value)
 
 
+def _required_json_array(value: Any, *, label: str) -> list[Any]:
+    if value is None:
+        raise RuntimeError(f"{label} must be a JSON array")
+    return _json_array(value, label=label)
+
+
 def _json_object(value: Any, *, label: str, default: dict[str, Any] | None = None) -> dict[str, Any]:
     if value is None:
         return dict(default or {})
@@ -79,7 +85,7 @@ class SupabaseAgentConfigRepo:
             name=root["name"],
             description=root.get("description") or "",
             model=root.get("model"),
-            tools=_json_array(root.get("tools_json"), label="tools_json", default=["*"]),
+            tools=_required_json_array(root.get("tools_json"), label="tools_json"),
             system_prompt=root.get("system_prompt") or "",
             status=root.get("status") or "draft",
             version=root.get("version") or "0.1.0",

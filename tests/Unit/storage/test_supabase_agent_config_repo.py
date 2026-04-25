@@ -237,6 +237,15 @@ def test_get_agent_config_fails_loudly_when_tools_json_is_not_an_array() -> None
         repo.get_agent_config("cfg-1")
 
 
+def test_get_agent_config_fails_loudly_when_tools_json_is_null() -> None:
+    tables = _tables()
+    tables["agent.agent_configs"][0]["tools_json"] = None
+    repo = SupabaseAgentConfigRepo(_FakeClient(tables))
+
+    with pytest.raises(RuntimeError, match="tools_json must be a JSON array"):
+        repo.get_agent_config("cfg-1")
+
+
 def test_get_agent_config_fails_loudly_when_runtime_json_is_not_an_object() -> None:
     tables = _tables()
     tables["agent.agent_configs"][0]["runtime_json"] = []
