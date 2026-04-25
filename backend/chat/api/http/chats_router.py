@@ -168,6 +168,18 @@ def get_chat(
     return messaging_service.get_chat_detail(chat)
 
 
+@router.get("/{chat_id}/join-target")
+def get_chat_join_target(
+    chat_id: str,
+    user_id: Annotated[str, Depends(get_current_user_id)],
+    chat_join_request_service: Annotated[Any, Depends(get_chat_join_request_service)],
+):
+    try:
+        return chat_join_request_service.join_target(chat_id, user_id)
+    except Exception as exc:
+        raise _map_chat_join_error(exc) from exc
+
+
 @router.get("/{chat_id}/messages")
 def list_messages(
     chat_id: str,

@@ -57,6 +57,11 @@ class _Messaging:
         self.sent.append((chat_id, sender_id, content, message_type, mentions))
         return {"id": "msg-1"}
 
+    def resolve_display_user(self, user_id: str):
+        if user_id == "visitor-1":
+            return SimpleNamespace(id="visitor-1", display_name="Visitor One", type="external")
+        return None
+
 
 def _service() -> tuple[ChatJoinRequestService, _Members, _Requests, _Messaging]:
     members = _Members()
@@ -67,6 +72,7 @@ def _service() -> tuple[ChatJoinRequestService, _Members, _Requests, _Messaging]
             SimpleNamespace(
                 id=chat_id,
                 type="group",
+                title="Group",
                 status="active",
                 created_by_user_id="owner-1",
             )
@@ -103,6 +109,70 @@ def test_chat_join_request_records_pending_row_and_notifies_owner() -> None:
             ["owner-1"],
         )
     ]
+
+
+def test_chat_join_request_list_projects_requester_display_fields() -> None:
+    service, _members, requests, _messaging = _service()
+    requests.rows["chat_join:chat-1:visitor-1"] = {
+        "id": "chat_join:chat-1:visitor-1",
+        "chat_id": "chat-1",
+        "requester_user_id": "visitor-1",
+        "state": "pending",
+        "message": "please add me",
+        "created_at": 1.0,
+        "updated_at": 1.0,
+    }
+
+    rows = service.list_for_chat("chat-1", "owner-1")
+
+    assert rows == [
+        {
+            "id": "chat_join:chat-1:visitor-1",
+            "chat_id": "chat-1",
+            "requester_user_id": "visitor-1",
+            "requester_name": "Visitor One",
+            "requester_type": "external",
+            "state": "pending",
+            "message": "please add me",
+            "created_at": 1.0,
+            "updated_at": 1.0,
+        }
+    ]
+
+
+def test_chat_join_target_exposes_minimal_non_member_state() -> None:
+    service, _members, requests, _messaging = _service()
+    requests.rows["chat_join:chat-1:visitor-1"] = {
+        "id": "chat_join:chat-1:visitor-1",
+        "chat_id": "chat-1",
+        "requester_user_id": "visitor-1",
+        "state": "pending",
+        "message": "please add me",
+        "created_at": 1.0,
+        "updated_at": 1.0,
+    }
+
+    target = service.join_target("chat-1", "visitor-1")
+
+    assert target == {
+        "id": "chat-1",
+        "type": "group",
+        "title": "Group",
+        "status": "active",
+        "created_by_user_id": "owner-1",
+        "is_member": False,
+        "current_request": {
+            "id": "chat_join:chat-1:visitor-1",
+            "chat_id": "chat-1",
+            "requester_user_id": "visitor-1",
+            "requester_name": "Visitor One",
+            "requester_type": "external",
+            "state": "pending",
+            "message": "please add me",
+            "created_at": 1.0,
+            "updated_at": 1.0,
+        },
+    }
 
 
 def test_chat_join_approve_requires_owner_and_adds_member_before_notification() -> None:

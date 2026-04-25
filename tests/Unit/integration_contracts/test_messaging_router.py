@@ -17,6 +17,7 @@ from storage.contracts import ContactEdgeRow
 def _chat(chat_id: str) -> SimpleNamespace:
     return SimpleNamespace(
         id=chat_id,
+        type="group",
         title="Chat title",
         status="active",
         created_at="2026-04-07T00:00:00Z",
@@ -173,6 +174,29 @@ def test_request_chat_join_uses_current_token_user() -> None:
     assert result == expected
 
 
+def test_get_chat_join_target_uses_current_token_user() -> None:
+    seen: list[tuple[str, str]] = []
+    expected = {
+        "id": "chat-1",
+        "type": "group",
+        "title": "Group",
+        "status": "active",
+        "created_by_user_id": "owner-1",
+        "is_member": False,
+        "current_request": None,
+    }
+    chat_join_request_service = SimpleNamespace(join_target=lambda chat_id, user_id: seen.append((chat_id, user_id)) or expected)
+
+    result = chats_router.get_chat_join_target(
+        "chat-1",
+        user_id="human-user-2",
+        chat_join_request_service=chat_join_request_service,
+    )
+
+    assert seen == [("chat-1", "human-user-2")]
+    assert result == expected
+
+
 def test_approve_chat_join_uses_current_token_user() -> None:
     seen: list[tuple[str, str, str]] = []
     expected = {
@@ -266,6 +290,7 @@ def test_get_chat_uses_access_helper(monkeypatch: pytest.MonkeyPatch):
                 messaging_service=SimpleNamespace(
                     get_chat_detail=lambda chat_obj: {
                         "id": chat_obj.id,
+                        "type": chat_obj.type,
                         "title": chat_obj.title,
                         "status": chat_obj.status,
                         "created_at": chat_obj.created_at,
@@ -289,6 +314,7 @@ def test_get_chat_uses_access_helper(monkeypatch: pytest.MonkeyPatch):
 
     assert result == {
         "id": "chat-1",
+        "type": "group",
         "title": "Chat title",
         "status": "active",
         "created_at": "2026-04-07T00:00:00Z",

@@ -351,6 +351,7 @@ class MessagingService:
     def get_chat_detail(self, chat: Any) -> dict[str, Any]:
         return {
             "id": chat.id,
+            "type": chat.type,
             "title": chat.title,
             "status": chat.status,
             "created_by_user_id": chat.created_by_user_id,
