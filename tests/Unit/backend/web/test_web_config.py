@@ -26,3 +26,17 @@ def test_sandbox_modules_do_not_resolve_workspace_root_at_import(monkeypatch) ->
 
     importlib.reload(inventory)
     importlib.reload(service)
+
+
+def test_web_config_requires_explicit_local_workspace_root(monkeypatch, tmp_path) -> None:
+    monkeypatch.setenv("LEON_LOCAL_WORKSPACE_ROOT", str(tmp_path))
+    from backend.web.core import config
+
+    importlib.reload(config)
+    monkeypatch.delenv("LEON_LOCAL_WORKSPACE_ROOT", raising=False)
+    try:
+        with pytest.raises(RuntimeError, match="LEON_LOCAL_WORKSPACE_ROOT is required"):
+            importlib.reload(config)
+    finally:
+        monkeypatch.setenv("LEON_LOCAL_WORKSPACE_ROOT", str(tmp_path))
+        importlib.reload(config)
