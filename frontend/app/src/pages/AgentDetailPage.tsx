@@ -38,6 +38,11 @@ function errorText(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
 }
 
+function skillId(item: CrudItem): string {
+  if (!item.id) throw new Error(`Agent Skill is missing id: ${item.name}`);
+  return item.id;
+}
+
 // ==================== Main Component ====================
 
 export default function AgentDetail() {
@@ -118,15 +123,14 @@ export default function AgentDetail() {
     } catch (err) { toast.error(`更新失败：${errorText(err)}`); }
   };
 
-  const handleAssign = async (type: "skill", names: string[]) => {
+  const handleAssign = async (type: "skill", items: ResourceItem[]) => {
     if (!agent) return;
     try {
       if (type === "skill") {
-        const existing = new Set(agent.config.skills.map(s => s.name));
-        const newSkills = names.filter(n => !existing.has(n)).map(n => {
-          const lib = librarySkills.find(s => s.name === n);
-          return { name: n, desc: lib?.desc || "", enabled: true };
-        });
+        const existing = new Set(agent.config.skills.map(skillId));
+        const newSkills = items
+          .filter(item => !existing.has(item.id))
+          .map(item => ({ id: item.id, name: item.name, desc: item.desc || "", enabled: true }));
         if (newSkills.length) await updateAgentConfig(agent.id, { skills: [...agent.config.skills, ...newSkills] });
       }
       toast.success("已添加");
@@ -283,8 +287,8 @@ export default function AgentDetail() {
           <ResourcePicker
             type={pickerType}
             library={librarySkills}
-            assigned={agent.config.skills.map(s => s.name)}
-            onConfirm={(names) => { handleAssign(pickerType, names); setPickerType(null); }}
+            assigned={agent.config.skills.map(skillId)}
+            onConfirm={(items) => { handleAssign(pickerType, items); setPickerType(null); }}
             onClose={() => setPickerType(null)}
           />
         );
@@ -827,7 +831,7 @@ function ResourcePicker({ type, library, assigned, onConfirm, onClose }: {
   type: "skill";
   library: ResourceItem[];
   assigned: string[];
-  onConfirm: (names: string[]) => void;
+  onConfirm: (items: ResourceItem[]) => void;
   onClose: () => void;
 }) {
   const labels = { skill: "Skill" };
@@ -836,14 +840,14 @@ function ResourcePicker({ type, library, assigned, onConfirm, onClose }: {
   const assignedSet = useMemo(() => new Set(assigned), [assigned]);
 
   const available = useMemo(() =>
-    library.filter(item => !assignedSet.has(item.name) && (!filter || item.name.toLowerCase().includes(filter.toLowerCase()))),
+    library.filter(item => !assignedSet.has(item.id) && (!filter || item.name.toLowerCase().includes(filter.toLowerCase()))),
     [library, assignedSet, filter]
   );
 
-  const toggle = (name: string) => {
+  const toggle = (id: string) => {
     setSelected(prev => {
       const next = new Set(prev);
-      if (next.has(name)) next.delete(name); else next.add(name);
+      if (next.has(id)) next.delete(id); else next.add(id);
       return next;
     });
   };
@@ -867,15 +871,15 @@ function ResourcePicker({ type, library, assigned, onConfirm, onClose }: {
           ) : available.map(item => (
             <button
               key={item.id}
-              onClick={() => toggle(item.name)}
+              onClick={() => toggle(item.id)}
               className={`w-full flex items-center gap-2 px-3 py-2 rounded-md text-sm text-left transition-colors duration-fast ${
-                selected.has(item.name) ? "bg-primary/10 text-primary" : "hover:bg-muted"
+                selected.has(item.id) ? "bg-primary/10 text-primary" : "hover:bg-muted"
               }`}
             >
               <div className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 ${
-                selected.has(item.name) ? "bg-primary border-primary" : "border-muted-foreground/30"
+                selected.has(item.id) ? "bg-primary border-primary" : "border-muted-foreground/30"
               }`}>
-                {selected.has(item.name) && <Check className="h-3 w-3 text-primary-foreground" />}
+                {selected.has(item.id) && <Check className="h-3 w-3 text-primary-foreground" />}
               </div>
               <div className="min-w-0 flex-1">
                 <p className="font-medium truncate">{item.name}</p>
@@ -886,7 +890,7 @@ function ResourcePicker({ type, library, assigned, onConfirm, onClose }: {
         </div>
         <DialogFooter>
           <Button variant="outline" size="sm" onClick={onClose}>取消</Button>
-          <Button size="sm" disabled={selected.size === 0} onClick={() => onConfirm([...selected])}>
+          <Button size="sm" disabled={selected.size === 0} onClick={() => onConfirm(library.filter(item => selected.has(item.id)))}>
             添加 {selected.size > 0 && `(${selected.size})`}
           </Button>
         </DialogFooter>
