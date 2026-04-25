@@ -42,6 +42,8 @@ _REPO_REGISTRY: dict[str, tuple[str, str]] = {
     "queue_repo": ("storage.providers.supabase.queue_repo", "SupabaseQueueRepo"),
     "provider_event_repo": ("storage.providers.supabase.provider_event_repo", "SupabaseProviderEventRepo"),
     "sandbox_runtime_repo": ("storage.providers.supabase.sandbox_runtime_repo", "SupabaseSandboxRuntimeRepo"),
+    "terminal_repo": ("storage.providers.supabase.terminal_repo", "SupabaseTerminalRepo"),
+    "chat_session_repo": ("storage.providers.supabase.chat_session_repo", "SupabaseChatSessionRepo"),
     "tool_task_repo": ("storage.providers.supabase.tool_task_repo", "SupabaseToolTaskRepo"),
     "resource_snapshot_repo": ("storage.providers.supabase.resource_snapshot_repo", "SupabaseResourceSnapshotRepo"),
     "user_repo": ("storage.providers.supabase.user_repo", "SupabaseUserRepo"),
@@ -105,6 +107,12 @@ class StorageContainer:
 
     def sandbox_runtime_repo(self) -> SandboxRuntimeRepo:
         return self._build("sandbox_runtime_repo")
+
+    def terminal_repo(self) -> Any:
+        return self._build("terminal_repo")
+
+    def chat_session_repo(self) -> Any:
+        return self._build("chat_session_repo")
 
     def tool_task_repo(self) -> ToolTaskRepo:
         return self._build("tool_task_repo")

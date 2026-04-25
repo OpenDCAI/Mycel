@@ -71,15 +71,18 @@ def test_delete_thread_in_db_uses_runtime_repo_factories_without_db_path(monkeyp
     assert sync_state.closed
 
 
-def test_delete_thread_in_db_cleans_runtime_repos_when_supabase_defaults_without_local_db(monkeypatch, tmp_path):
-    sandbox_db = tmp_path / "missing-sandbox.db"
+def test_delete_thread_in_db_cleans_runtime_repos_when_supabase_defaults_without_local_db(monkeypatch):
     container = _FakeContainer()
     session_repo = _ThreadRepo()
     terminal_repo = _ThreadRepo()
     sync_state_holder: dict[str, _SyncState] = {}
 
     monkeypatch.setattr(convergence, "_get_container", lambda: container)
-    monkeypatch.setattr(convergence, "resolve_sandbox_db_path", lambda: sandbox_db)
+    monkeypatch.setattr(
+        convergence,
+        "resolve_sandbox_db_path",
+        lambda: (_ for _ in ()).throw(AssertionError("supabase delete must not resolve sandbox db path")),
+    )
     monkeypatch.setattr(convergence, "uses_supabase_runtime_defaults", lambda: True)
     monkeypatch.setattr(convergence, "make_chat_session_repo", lambda: session_repo)
     monkeypatch.setattr(convergence, "make_terminal_repo", lambda: terminal_repo)

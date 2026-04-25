@@ -113,12 +113,41 @@ class SQLiteTerminal(AbstractTerminal):
             conn.commit()
 
 
-def terminal_from_row(row: dict, db_path: Path) -> AbstractTerminal:
+class RepoBackedTerminal(AbstractTerminal):
+    def __init__(
+        self,
+        terminal_id: str,
+        thread_id: str,
+        sandbox_runtime_id: str,
+        state: TerminalState,
+        terminal_repo,
+    ):
+        super().__init__(terminal_id, thread_id, sandbox_runtime_id, state)
+        self._terminal_repo = terminal_repo
+
+    def _persist_state(self) -> None:
+        self._terminal_repo.persist_state(
+            terminal_id=self.terminal_id,
+            cwd=self._state.cwd,
+            env_delta_json=json.dumps(self._state.env_delta),
+            state_version=self._state.state_version,
+        )
+
+
+def terminal_from_row(row: dict, db_path: Path | None = None, *, terminal_repo=None) -> AbstractTerminal:
     state = TerminalState(
         cwd=row.get("cwd", "/root"),
         env_delta=json.loads(row.get("env_delta_json", "{}")),
         state_version=int(row.get("state_version", 0)),
     )
+    if terminal_repo is not None:
+        return RepoBackedTerminal(
+            terminal_id=row["terminal_id"],
+            thread_id=row["thread_id"],
+            sandbox_runtime_id=row["sandbox_runtime_id"],
+            state=state,
+            terminal_repo=terminal_repo,
+        )
     return SQLiteTerminal(
         terminal_id=row["terminal_id"],
         thread_id=row["thread_id"],

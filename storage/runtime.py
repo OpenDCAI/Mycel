@@ -76,6 +76,18 @@ def build_sandbox_runtime_repo(*, supabase_client: Any | None = None, supabase_c
     )
 
 
+def build_terminal_repo(*, supabase_client: Any | None = None, supabase_client_factory: str | None = None):
+    return _build_storage_repo("terminal_repo", supabase_client=supabase_client, supabase_client_factory=supabase_client_factory)
+
+
+def build_chat_session_repo(*, supabase_client: Any | None = None, supabase_client_factory: str | None = None):
+    return _build_storage_repo(
+        "chat_session_repo",
+        supabase_client=supabase_client,
+        supabase_client_factory=supabase_client_factory,
+    )
+
+
 def build_resource_snapshot_repo(*, supabase_client: Any | None = None, supabase_client_factory: str | None = None):
     return _build_storage_repo(
         "resource_snapshot_repo",

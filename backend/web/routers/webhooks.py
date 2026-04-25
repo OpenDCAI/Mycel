@@ -4,7 +4,6 @@ from typing import Any
 from fastapi import APIRouter, HTTPException, Query
 
 from backend.sandboxes.inventory import init_providers_and_managers
-from sandbox.control_plane_repos import resolve_sandbox_db_path
 from sandbox.runtime_handle import sandbox_runtime_from_row
 from storage.container_cache import get_storage_container as _get_container
 from storage.runtime import build_sandbox_runtime_repo as make_sandbox_runtime_repo
@@ -38,7 +37,7 @@ async def ingest_provider_webhook(provider_name: str, payload: dict[str, Any]) -
     event_repo = _get_container().provider_event_repo()
     try:
         runtime_row = await asyncio.to_thread(runtime_repo.find_by_instance, provider_name=provider_name, instance_id=instance_id)
-        sandbox_runtime = sandbox_runtime_from_row(runtime_row, resolve_sandbox_db_path()) if runtime_row else None
+        sandbox_runtime = sandbox_runtime_from_row(runtime_row) if runtime_row else None
         matched_runtime_handle = sandbox_runtime.sandbox_runtime_id if sandbox_runtime else None
         matched_sandbox_id = str((runtime_row or {}).get("sandbox_id") or "").strip() or None
 

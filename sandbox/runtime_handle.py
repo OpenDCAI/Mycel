@@ -73,7 +73,7 @@ def _connect(db_path: Path) -> sqlite3.Connection:
 
 
 def _use_supabase_storage(db_path: Path | None = None) -> bool:
-    return uses_supabase_runtime_defaults() and resolve_sandbox_db_path(db_path) == resolve_sandbox_db_path()
+    return db_path is None and uses_supabase_runtime_defaults()
 
 
 def _make_sandbox_runtime_repo(db_path: Path | None = None):
@@ -210,7 +210,7 @@ class SQLiteSandboxRuntimeHandle(SandboxRuntimeHandle):
             needs_refresh=needs_refresh,
             refresh_hint_at=refresh_hint_at,
         )
-        self.db_path = resolve_sandbox_db_path(db_path)
+        self.db_path = None if _use_supabase_storage(db_path) else resolve_sandbox_db_path(db_path)
         self._detached_instance: SandboxInstance | None = None
 
     def _instance_lock(self) -> threading.RLock:
@@ -1091,7 +1091,7 @@ class SQLiteSandboxRuntimeHandle(SandboxRuntimeHandle):
         self._persist_runtime_metadata()
 
 
-def sandbox_runtime_from_row(row: dict, db_path: Path) -> SQLiteSandboxRuntimeHandle:
+def sandbox_runtime_from_row(row: dict, db_path: Path | None = None) -> SQLiteSandboxRuntimeHandle:
     instance = None
     inst_data = row.get("_instance")
     if inst_data:

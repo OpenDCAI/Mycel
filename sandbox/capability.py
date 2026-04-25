@@ -2,12 +2,11 @@ from __future__ import annotations
 
 import shlex
 import uuid
-from pathlib import Path, PurePosixPath
+from pathlib import PurePosixPath
 from typing import TYPE_CHECKING
 
 from sandbox.interfaces.executor import BaseExecutor
 from sandbox.interfaces.filesystem import FileSystemBackend
-from storage.providers.sqlite.kernel import connect_sqlite
 
 if TYPE_CHECKING:
     from sandbox.chat_session import ChatSession
@@ -52,8 +51,6 @@ class _CommandWrapper(BaseExecutor):
         super().__init__(default_cwd=session.terminal.get_state().cwd)
         self._session = session
         self._manager = manager
-        db_path = getattr(session.terminal, "db_path", None)
-        self._db_path: Path | None = Path(db_path) if db_path else None
 
     def _wrap_command(self, command: str, cwd: str | None, env: dict[str, str] | None) -> tuple[str, str]:
         wrapped = command
@@ -85,27 +82,13 @@ class _CommandWrapper(BaseExecutor):
 
     def _lookup_command_terminal_id(self, command_id: str) -> str | None:
         command_repo = getattr(self._session, "_session_repo", None)
-        if command_repo is not None:
-            terminal_id = command_repo.find_command_terminal_id(
-                command_id=command_id,
-                thread_id=self._session.thread_id,
-            )
-            if terminal_id is not None:
-                return terminal_id
-            return None
-        if self._db_path is None:
-            return None
-        with connect_sqlite(self._db_path) as conn:
-            row = conn.execute(
-                """
-                SELECT tc.terminal_id
-                FROM terminal_commands tc
-                JOIN abstract_terminals at ON at.terminal_id = tc.terminal_id
-                WHERE tc.command_id = ? AND at.thread_id = ?
-                """,
-                (command_id, self._session.thread_id),
-            ).fetchone()
-        return str(row[0]) if row else None
+        if command_repo is None:
+            raise RuntimeError("Command lookup requires chat session repo")
+        terminal_id = command_repo.find_command_terminal_id(
+            command_id=command_id,
+            thread_id=self._session.thread_id,
+        )
+        return str(terminal_id) if terminal_id is not None else None
 
     def _resolve_session_for_terminal(self, terminal_id: str):
         if terminal_id == self._session.terminal.terminal_id:
@@ -120,7 +103,7 @@ class _CommandWrapper(BaseExecutor):
             raise RuntimeError(f"Terminal {terminal_id} not found")
         from sandbox.terminal import terminal_from_row
 
-        terminal = terminal_from_row(terminal_row, self._manager.db_path)
+        terminal = terminal_from_row(terminal_row, self._manager.db_path, terminal_repo=self._manager.terminal_store)
         if terminal.thread_id != self._session.thread_id:
             raise RuntimeError(f"Terminal {terminal_id} belongs to thread {terminal.thread_id}, not {self._session.thread_id}")
         sandbox_runtime = self._manager.get_sandbox_runtime(terminal.sandbox_runtime_id)

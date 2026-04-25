@@ -616,6 +616,7 @@ class LeonAgent:
                 sandbox_config,
                 workspace_root=str(self.workspace_root),
                 db_path=self.sandbox_db_path,
+                thread_repo=self._thread_repo,
             )
 
         raise TypeError(f"sandbox must be Sandbox, str, or None, got {type(sandbox)}")

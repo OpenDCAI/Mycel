@@ -103,6 +103,8 @@ class SQLiteSandboxRuntimeRepo:
         provider_name: str,
         recipe_id: str | None = None,
         recipe_json: str | None = None,
+        *,
+        owner_user_id: str | None = None,
     ) -> dict[str, Any]:
         now = datetime.now().isoformat()
         with self._lock:
