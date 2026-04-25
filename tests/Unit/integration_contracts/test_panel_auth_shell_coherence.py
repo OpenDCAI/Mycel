@@ -1490,6 +1490,36 @@ async def test_panel_library_used_by_route_uses_user_scope(monkeypatch: pytest.M
     }
 
 
+def test_library_used_by_reads_agent_configs_without_display_projection(monkeypatch: pytest.MonkeyPatch):
+    def explode(*_args, **_kwargs):
+        raise AssertionError("used-by must not depend on agent display projection")
+
+    monkeypatch.setattr(agent_user_service, "list_agent_users", explode)
+    agent = _agent_user(user_id="agent-1", owner_user_id="user-1")
+    fake_user_repo = SimpleNamespace(list_by_owner_user_id=lambda owner_user_id: [agent] if owner_user_id == "user-1" else [])
+    fake_agent_config_repo = SimpleNamespace(
+        get_agent_config=lambda _config_id: _agent_config(
+            skills=[
+                AgentSkill(
+                    skill_id="skill-1",
+                    package_id="skill-1-package",
+                    name="api-design-reviewer",
+                    content="---\nname: api-design-reviewer\n---\nBody",
+                    enabled=True,
+                )
+            ],
+        )
+    )
+
+    assert library_service.get_resource_used_by(
+        "skill",
+        "api-design-reviewer",
+        "user-1",
+        user_repo=fake_user_repo,
+        agent_config_repo=fake_agent_config_repo,
+    ) == ["Toad"]
+
+
 @pytest.mark.asyncio
 async def test_delete_skill_route_rejects_skill_still_selected_by_agent(monkeypatch: pytest.MonkeyPatch):
     skill_repo = _MemorySkillRepo()
