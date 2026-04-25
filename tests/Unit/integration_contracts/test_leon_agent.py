@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from langchain_core.messages import AIMessage, AIMessageChunk, HumanMessage, SystemMessage, ToolMessage
 
-from config.agent_config_types import AgentConfig, AgentSkill, McpServerConfig
+from config.agent_config_types import AgentConfig, AgentSkill, McpServerConfig, SkillPackage
 
 
 def _mock_model(text="Integration test response"):
@@ -57,6 +57,25 @@ def _agent_config(**overrides: object) -> AgentConfig:
     }
     data.update(overrides)
     return AgentConfig(**data)
+
+
+class _SkillRepo:
+    def __init__(self, *, files: dict[str, str] | None = None) -> None:
+        self.files = files or {}
+
+    def get_package(self, _owner_user_id: str, package_id: str) -> SkillPackage | None:
+        if package_id != "fastapi-package":
+            return None
+        return SkillPackage(
+            id=package_id,
+            owner_user_id="owner-1",
+            skill_id="fastapi",
+            version="1.0.0",
+            hash="sha256:fastapi",
+            skill_md="---\nname: FastAPI\ndescription: Build FastAPI services\n---\nAlways use APIRouter.",
+            files=self.files,
+            created_at="2026-04-25T00:00:00+00:00",
+        )
 
 
 def _write_file_skill_dir(tmp_path, *, name: str, body: str, description: str = "file skill") -> None:
@@ -718,9 +737,9 @@ async def test_leon_agent_agent_config_id_registers_repo_backed_skills(tmp_path)
                 runtime_settings={"skills:FastAPI": {"enabled": True, "desc": "Use FastAPI conventions"}},
                 skills=[
                     AgentSkill(
+                        skill_id="fastapi",
+                        package_id="fastapi-package",
                         name="FastAPI",
-                        content="---\nname: FastAPI\ndescription: Build FastAPI services\n---\nAlways use APIRouter.",
-                        files={"references/routing.md": "Prefer APIRouter over app-level route decorators."},
                         source={"desc": "Build FastAPI services"},
                     )
                 ],
@@ -738,6 +757,7 @@ async def test_leon_agent_agent_config_id_registers_repo_backed_skills(tmp_path)
             workspace_root=str(tmp_path),
             agent_config_id="cfg-1",
             agent_config_repo=_Repo(),
+            skill_repo=_SkillRepo(files={"references/routing.md": "Prefer APIRouter over app-level route decorators."}),
             api_key="sk-test-integration",
         )
         await agent.ainit()
@@ -776,8 +796,9 @@ async def test_leon_agent_agent_config_id_does_not_register_host_file_skills(tmp
                 system_prompt="You are Repo Toad.",
                 skills=[
                     AgentSkill(
+                        skill_id="fastapi",
+                        package_id="fastapi-package",
                         name="FastAPI",
-                        content="---\nname: FastAPI\ndescription: Build FastAPI services\n---\nAlways use APIRouter.",
                     )
                 ],
             )
@@ -794,6 +815,7 @@ async def test_leon_agent_agent_config_id_does_not_register_host_file_skills(tmp
             workspace_root=str(tmp_path),
             agent_config_id="cfg-1",
             agent_config_repo=_Repo(),
+            skill_repo=_SkillRepo(),
             api_key="sk-test-integration",
         )
         await agent.ainit()
@@ -926,8 +948,9 @@ async def test_leon_agent_agent_config_id_does_not_read_stale_runtime_skill_togg
                 system_prompt="You are Repo Toad.",
                 skills=[
                     AgentSkill(
+                        skill_id="fastapi",
+                        package_id="fastapi-package",
                         name="FastAPI",
-                        content="---\nname: FastAPI\ndescription: Build FastAPI services\n---\nAlways use APIRouter.",
                     )
                 ],
             )
@@ -944,6 +967,7 @@ async def test_leon_agent_agent_config_id_does_not_read_stale_runtime_skill_togg
             workspace_root=str(tmp_path),
             agent_config_id="cfg-1",
             agent_config_repo=_Repo(),
+            skill_repo=_SkillRepo(),
             api_key="sk-test-integration",
         )
         await agent.ainit()
