@@ -1663,6 +1663,12 @@ def create_leon_agent(
         # Custom workspace
         agent = create_leon_agent(workspace_root="/path/to/workspace")
     """
+    removed_runtime_args = {"agent_config_id", "agent_config_repo", "skill_repo"}
+    present_removed_args = sorted(removed_runtime_args.intersection(kwargs))
+    if present_removed_args:
+        joined = ", ".join(present_removed_args)
+        raise TypeError(f"create_leon_agent no longer accepts runtime repository arguments: {joined}")
+
     # Filter out kwargs that LeonAgent.__init__ doesn't accept (e.g. profile from CLI)
     import inspect as _inspect
 
