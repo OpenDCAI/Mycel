@@ -12,15 +12,12 @@ from backend.chat.api.http.dependencies import (
     get_chat_event_bus,
     get_chat_join_request_service,
     get_chat_repo,
-    get_contact_repo,
     get_current_user_id,
     get_messaging_service,
-    get_relationship_service,
     get_thread_repo,
     get_user_repo,
 )
 from messaging.errors import ChatNotCaughtUpError
-from messaging.social_access import can_group_chat_with_participant
 from messaging.user_ownership import is_owned_by_viewer
 
 router = APIRouter(prefix="/api/chats", tags=["chats"])
@@ -127,31 +124,6 @@ def _validate_requester_is_participant(user_repo: Any, participant_ids: list[str
     raise ValueError("Chat participants must include the requester or a requester-owned participant")
 
 
-def _validate_group_chat_relationships(
-    relationship_service: Any,
-    contact_repo: Any,
-    user_repo: Any,
-    participant_ids: list[str],
-    requester_user_id: str,
-) -> None:
-    for participant_id in dict.fromkeys(participant_ids):
-        if participant_id == requester_user_id or _is_owned_participant(user_repo, participant_id, requester_user_id):
-            continue
-        try:
-            participant_user = user_repo.get_by_id(participant_id)
-            if can_group_chat_with_participant(
-                viewer_user_id=requester_user_id,
-                participant_user_id=participant_id,
-                participant_user=participant_user,
-                contact_repo=contact_repo,
-                relationship_service=relationship_service,
-            ):
-                continue
-        except RuntimeError as exc:
-            raise ValueError(str(exc)) from exc
-        raise ValueError(f"Active relationship required for group chat participant: {participant_id}")
-
-
 @router.get("")
 def list_chats(
     user_id: Annotated[str, Depends(get_current_user_id)],
@@ -167,20 +139,11 @@ def create_chat(
     messaging_service: Annotated[Any, Depends(get_messaging_service)],
     user_repo: Annotated[Any, Depends(get_user_repo)],
     thread_repo: Annotated[Any, Depends(get_thread_repo)],
-    contact_repo: Annotated[Any, Depends(get_contact_repo)],
-    relationship_service: Annotated[Any, Depends(get_relationship_service)],
 ):
     try:
         participant_ids = _validate_chat_participant_ids(user_repo, thread_repo, body.user_ids, user_id)
         _validate_requester_is_participant(user_repo, participant_ids, user_id)
         if len(participant_ids) >= 3:
-            _validate_group_chat_relationships(
-                relationship_service,
-                contact_repo,
-                user_repo,
-                participant_ids,
-                user_id,
-            )
             chat = messaging_service.create_group_chat(participant_ids, body.title)
         else:
             chat = messaging_service.find_or_create_chat(participant_ids, body.title)

@@ -99,8 +99,6 @@ def _create_chat(app: SimpleNamespace, body: chats_router.CreateChatBody, *, use
         messaging_service=app.state.chat_runtime_state.messaging_service,
         user_repo=app.state.user_repo,
         thread_repo=app.state.thread_repo,
-        contact_repo=app.state.chat_runtime_state.contact_repo,
-        relationship_service=app.state.chat_runtime_state.relationship_service,
     )
 
 
@@ -838,6 +836,11 @@ def test_create_group_chat_rejects_external_participant_without_active_relations
         relationship_state="pending",
     )
     app = SimpleNamespace(state=state)
+
+    def _raise_group_policy_error(_user_ids, _title):
+        raise ValueError("Active relationship required for group chat participant: human-user-2")
+
+    app.state.chat_runtime_state.messaging_service = SimpleNamespace(create_group_chat=_raise_group_policy_error)
 
     with pytest.raises(HTTPException) as exc_info:
         _create_chat(
