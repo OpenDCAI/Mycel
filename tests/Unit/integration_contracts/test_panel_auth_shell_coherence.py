@@ -996,13 +996,15 @@ def test_panel_library_skill_routes_use_skill_repo_without_recipe_repo() -> None
             json={"name": "Loadable Skill", "desc": "Use this skill", "content": _editable_skill_md()},
         )
         assert created.status_code == 200
-        assert created.json()["id"] == "loadable-skill"
+        created_id = created.json()["id"]
+        assert created_id != "loadable-skill"
+        assert created_id.startswith("skill_")
 
         listed = client.get("/api/panel/library/skill")
         assert listed.status_code == 200
         assert listed.json()["items"][0]["name"] == "Loadable Skill"
 
-        content = client.get("/api/panel/library/skill/loadable-skill/content")
+        content = client.get(f"/api/panel/library/skill/{created_id}/content")
         assert content.status_code == 200
         assert content.json()["content"] == _editable_skill_md()
 
@@ -1097,7 +1099,7 @@ def test_library_skill_name_is_immutable_after_creation() -> None:
     assert skill_repo.get_by_id("owner-1", created["id"]).name == "Loadable Skill"
 
 
-def test_library_skill_create_rejects_slug_collision_with_different_name() -> None:
+def test_library_skill_create_rejects_duplicate_name_before_write() -> None:
     skill_repo = _MemorySkillRepo()
     created = library_service.create_resource(
         "skill",
@@ -1108,20 +1110,47 @@ def test_library_skill_create_rejects_slug_collision_with_different_name() -> No
         content=_editable_skill_md(),
     )
 
-    with pytest.raises(ValueError, match="Skill id already exists with a different Skill name"):
+    with pytest.raises(ValueError, match="Skill name already exists"):
         library_service.create_resource(
             "skill",
-            "Loadable-Skill",
-            "Different name, same slug",
+            "Loadable Skill",
+            "Duplicate name",
             owner_user_id="owner-1",
             skill_repo=skill_repo,
-            content=_editable_skill_md("Loadable-Skill", "Different name, same slug"),
+            content=_editable_skill_md("Loadable Skill", "Duplicate name"),
         )
 
     stored = skill_repo.get_by_id("owner-1", created["id"])
     assert stored is not None
     assert stored.name == "Loadable Skill"
     assert stored.description == "Use this skill"
+
+
+def test_library_skill_create_does_not_derive_id_from_name() -> None:
+    skill_repo = _MemorySkillRepo()
+
+    first = library_service.create_resource(
+        "skill",
+        "Loadable Skill",
+        "Use this skill",
+        owner_user_id="owner-1",
+        skill_repo=skill_repo,
+        content=_editable_skill_md(),
+    )
+    second = library_service.create_resource(
+        "skill",
+        "Loadable-Skill",
+        "Different name",
+        owner_user_id="owner-1",
+        skill_repo=skill_repo,
+        content=_editable_skill_md("Loadable-Skill", "Different name"),
+    )
+
+    assert first["id"] != "loadable-skill"
+    assert second["id"] != "loadable-skill"
+    assert first["id"] != second["id"]
+    assert skill_repo.get_by_id("owner-1", first["id"]).name == "Loadable Skill"
+    assert skill_repo.get_by_id("owner-1", second["id"]).name == "Loadable-Skill"
 
 
 def test_library_rejects_agent_resource_type() -> None:
