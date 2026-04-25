@@ -68,6 +68,14 @@ def _required_text(value: Any, *, label: str) -> str:
     return value.strip()
 
 
+def _optional_text(value: Any, *, label: str) -> str:
+    if value is None:
+        return ""
+    if not isinstance(value, str):
+        raise ValueError(f"{label} must be a string")
+    return value.strip()
+
+
 def _skill_metadata_from_content(content: str) -> dict[str, Any]:
     if not content.startswith("---\n"):
         raise ValueError("Skill snapshot must be a SKILL.md document with frontmatter")
@@ -86,6 +94,10 @@ def _skill_metadata_from_content(content: str) -> dict[str, Any]:
         raise ValueError("Skill snapshot frontmatter must include name")
     metadata["name"] = name.strip()
     return metadata
+
+
+def _skill_description_from_metadata(metadata: dict[str, Any]) -> str:
+    return _optional_text(metadata.get("description"), label="Skill snapshot frontmatter description")
 
 
 def _skill_files_from_snapshot(snapshot: dict[str, Any]) -> dict[str, str]:
@@ -251,10 +263,7 @@ def apply_item(
         for skill in skill_repo.list_for_owner(owner_user_id):
             if skill.name == skill_name and skill.id != slug:
                 raise ValueError("Skill name already exists under a different Library id")
-        meta = snapshot.get("meta", {})
-        if not isinstance(meta, dict):
-            raise ValueError("Skill snapshot meta must be an object")
-        skill_description = str(meta.get("desc") or item.get("description", ""))
+        skill_description = _skill_description_from_metadata(skill_metadata)
         publisher = _required_text(item.get("publisher_username"), label="Hub item publisher_username")
         timestamp = datetime.now(UTC)
         source = {
