@@ -5,7 +5,7 @@ from typing import Any
 
 import yaml
 
-from config.agent_config_types import AgentConfig, ResolvedAgentConfig, ResolvedSkill
+from config.agent_config_types import AgentConfig, AgentSkill, ResolvedAgentConfig, ResolvedSkill
 
 _FRONTMATTER_RE = re.compile(r"^---\s*\n(.*?)\n---\s*\n", re.DOTALL)
 
@@ -46,13 +46,9 @@ def resolve_agent_config(config: AgentConfig, *, skill_repo: Any = None) -> Reso
     )
 
 
-def _resolve_skill(owner_user_id: str, skill: Any, skill_repo: Any) -> ResolvedSkill:
+def _resolve_skill(owner_user_id: str, skill: AgentSkill, skill_repo: Any) -> ResolvedSkill:
     if skill_repo is None:
         raise RuntimeError("skill_repo is required to resolve AgentConfig Skills")
-    if not skill.skill_id:
-        raise ValueError(f"AgentConfig Skill {skill.name!r} is missing skill_id")
-    if not skill.package_id:
-        raise ValueError(f"AgentConfig Skill {skill.name!r} is missing package_id")
 
     package = skill_repo.get_package(owner_user_id, skill.package_id)
     if package is None:

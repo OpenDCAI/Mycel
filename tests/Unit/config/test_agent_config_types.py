@@ -70,6 +70,23 @@ def test_agent_skill_model_has_no_resolved_content() -> None:
     assert "files" not in agent_skill.model_dump()
 
 
+def test_agent_skill_model_requires_library_skill_and_package_identity() -> None:
+    with pytest.raises(ValueError) as missing_skill_excinfo:
+        AgentSkill.model_validate({"package_id": "package-1", "name": "query-helper", "version": "1.0.0"})
+    with pytest.raises(ValueError) as missing_package_excinfo:
+        AgentSkill.model_validate({"skill_id": "query-helper", "name": "query-helper", "version": "1.0.0"})
+
+    assert "skill_id" in str(missing_skill_excinfo.value)
+    assert "package_id" in str(missing_package_excinfo.value)
+
+
+def test_agent_skill_model_rejects_blank_library_skill_and_package_identity() -> None:
+    with pytest.raises(ValueError, match="agent_skill.skill_id must not be blank"):
+        AgentSkill(skill_id=" ", package_id="package-1", name="query-helper", version="1.0.0")
+    with pytest.raises(ValueError, match="agent_skill.package_id must not be blank"):
+        AgentSkill(skill_id="query-helper", package_id=" ", name="query-helper", version="1.0.0")
+
+
 def test_agent_skill_model_rejects_resolved_content_fields() -> None:
     with pytest.raises(ValueError, match="content"):
         AgentSkill.model_validate(
@@ -136,7 +153,7 @@ def test_agent_config_model_rejects_blank_version() -> None:
 @pytest.mark.parametrize(
     ("model_cls", "kwargs"),
     [
-        (AgentSkill, {"name": "query-helper", "version": "1.0.0"}),
+        (AgentSkill, {"skill_id": "query-helper", "package_id": "package-1", "name": "query-helper", "version": "1.0.0"}),
         (AgentRule, {"name": "cite", "content": "cite sources"}),
         (AgentSubAgent, {"name": "worker"}),
         (McpServerConfig, {"name": "filesystem", "command": "fs"}),
@@ -150,7 +167,7 @@ def test_agent_config_child_models_reject_string_enabled(model_cls, kwargs) -> N
 @pytest.mark.parametrize(
     ("model_cls", "kwargs"),
     [
-        (AgentSkill, {"name": "query-helper", "version": "1.0.0"}),
+        (AgentSkill, {"skill_id": "query-helper", "package_id": "package-1", "name": "query-helper", "version": "1.0.0"}),
         (AgentRule, {"name": "cite", "content": "cite sources"}),
         (AgentSubAgent, {"name": "worker"}),
         (McpServerConfig, {"name": "filesystem", "command": "fs"}),

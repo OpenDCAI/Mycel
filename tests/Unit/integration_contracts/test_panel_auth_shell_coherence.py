@@ -532,6 +532,9 @@ def test_agent_config_patch_does_not_fill_skill_identity_from_patch_or_current_b
 
     source = inspect.getsource(agent_user_service._skills_from_patch)
 
+    assert 'item.get("skill_id")' not in source
+    assert "agent_skill_id" not in source
+    assert "row_id" not in source
     assert 'item.get("version")' not in source
     assert "current_skill.version" not in source
     assert "library_skill.source" not in source
@@ -863,7 +866,7 @@ def test_agent_config_patch_rejects_missing_explicit_library_skill_id() -> None:
         def save_agent_config(self, config: AgentConfig) -> None:
             saved_configs.append(config)
 
-    with pytest.raises(RuntimeError, match="Library skill not found: missing-skill"):
+    with pytest.raises(RuntimeError, match="Skill patch item must include id"):
         agent_user_service.update_agent_user_config(
             "agent-1",
             {
@@ -915,7 +918,7 @@ def test_agent_config_patch_explicit_library_id_uses_library_package_choice() ->
         {
             "skills": [
                 {
-                    "skill_id": "loadable-skill",
+                    "id": "loadable-skill",
                     "name": "Loadable Skill",
                     "enabled": True,
                 }

@@ -595,6 +595,13 @@ def _current_skill_by_id(config: AgentConfig, skill_id: str) -> AgentSkill | Non
     return None
 
 
+def _patch_library_skill_id(item: dict[str, Any]) -> str:
+    value = item.get("id")
+    if not isinstance(value, str) or not value.strip():
+        raise RuntimeError("Skill patch item must include id")
+    return value
+
+
 def _skills_from_patch(current_config: AgentConfig, config_patch: dict[str, Any], owner_user_id: str, skill_repo: Any) -> list[AgentSkill]:
     if "skills" not in config_patch or config_patch["skills"] is None:
         return list(current_config.skills)
@@ -614,27 +621,23 @@ def _skills_from_patch(current_config: AgentConfig, config_patch: dict[str, Any]
         if "disabled" in item:
             raise RuntimeError("Skill patch item must use enabled, not disabled")
         _enabled_from_patch_item(item, label="Skill patch item")
-        if not (item.get("id") or item.get("skill_id")):
-            raise RuntimeError("Skill patch item must include id")
+        _patch_library_skill_id(item)
         name = str(item["name"])
         if name in seen_names:
             raise RuntimeError(f"Duplicate Skill name in patch: {name}")
         seen_names.add(name)
     for item in skill_items:
-        name = str(item["name"])
         enabled = _enabled_from_patch_item(item, label="Skill patch item")
-        explicit_skill_id = item.get("id") or item.get("skill_id")
-        explicit_skill_id_str = str(explicit_skill_id)
-        current_skill = _current_skill_by_id(current_config, explicit_skill_id_str)
-        library_skill = skill_repo.get_by_id(owner_user_id, explicit_skill_id_str)
+        library_skill_id = _patch_library_skill_id(item)
+        current_skill = _current_skill_by_id(current_config, library_skill_id)
+        library_skill = skill_repo.get_by_id(owner_user_id, library_skill_id)
         if library_skill is None:
-            raise RuntimeError(f"Library skill not found: {explicit_skill_id_str}")
+            raise RuntimeError(f"Library skill not found: {library_skill_id}")
         library_package = _selected_library_package(owner_user_id, library_skill, skill_repo)
         description = library_skill.description
-        agent_skill_id = item.get("agent_skill_id") or item.get("row_id") or (current_skill.id if current_skill is not None else None)
         skills.append(
             AgentSkill(
-                id=str(agent_skill_id) if agent_skill_id else None,
+                id=current_skill.id if current_skill is not None else None,
                 skill_id=library_skill.id,
                 package_id=library_package.id,
                 name=library_skill.name,

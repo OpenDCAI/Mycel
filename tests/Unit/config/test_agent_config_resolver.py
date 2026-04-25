@@ -156,15 +156,6 @@ def test_resolver_keeps_skill_id_separate_from_display_name() -> None:
     assert resolved.skills[0].name == "GitHub"
 
 
-def test_resolver_rejects_skill_without_package_id():
-    config = _config(skills=[AgentSkill(skill_id="broken", name="broken", version="1.0.0")])
-
-    with pytest.raises(ValueError) as excinfo:
-        resolve_agent_config(config, skill_repo=_SkillRepo())
-
-    assert "missing package_id" in str(excinfo.value)
-
-
 def test_agent_named_children_reject_blank_names():
     with pytest.raises(ValueError) as rule_excinfo:
         AgentRule(name=" ", content="body")
