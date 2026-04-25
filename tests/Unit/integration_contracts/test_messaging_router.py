@@ -773,7 +773,7 @@ def test_create_chat_accepts_agent_user_ids_for_group_participants() -> None:
     result = _create_chat(
         app,
         chats_router.CreateChatBody(
-            user_ids=["human-user-1", "agent-user-1", "agent-user-2"],
+            user_ids=["agent-user-1", "agent-user-2"],
             title="agent-group",
         ),
     )
@@ -793,7 +793,7 @@ def test_create_chat_accepts_agent_user_id_for_direct_participant() -> None:
     result = _create_chat(
         app,
         chats_router.CreateChatBody(
-            user_ids=["human-user-1", "agent-user-1"],
+            user_ids=["agent-user-1"],
             title=None,
         ),
     )
@@ -809,7 +809,7 @@ def test_create_chat_accepts_human_and_thread_social_user_ids_for_group_particip
     result = _create_chat(
         app,
         chats_router.CreateChatBody(
-            user_ids=["human-user-1", "thread-user-1", "thread-user-2"],
+            user_ids=["thread-user-1", "thread-user-2"],
             title="good-group",
         ),
     )
@@ -823,33 +823,29 @@ def test_create_chat_accepts_human_and_thread_social_user_ids_for_group_particip
     }
 
 
-def test_create_chat_rejects_participants_unrelated_to_requester() -> None:
-    state, called = _create_chat_route_state(
-        users={
-            "human-user-2": SimpleNamespace(id="human-user-2", owner_user_id=None),
-            "human-user-3": SimpleNamespace(id="human-user-3", owner_user_id=None),
-            "human-user-4": SimpleNamespace(id="human-user-4", owner_user_id=None),
-        },
-        active_contact_pairs={
-            ("human-user-1", "human-user-2"),
-            ("human-user-1", "human-user-3"),
-            ("human-user-1", "human-user-4"),
-        },
-    )
+def test_create_chat_rejects_explicit_authenticated_user_id() -> None:
+    state, called = _create_chat_route_state()
     app = SimpleNamespace(state=state)
 
     with pytest.raises(HTTPException) as exc_info:
         _create_chat(
             app,
             chats_router.CreateChatBody(
-                user_ids=["human-user-2", "human-user-3", "human-user-4"],
-                title="unrelated-group",
+                user_ids=["human-user-1", "human-user-2"],
+                title="legacy-group",
             ),
         )
 
     assert exc_info.value.status_code == 400
-    assert "requester" in str(exc_info.value.detail).lower()
+    assert "authenticated user" in str(exc_info.value.detail).lower()
     assert called == []
+
+
+def test_create_chat_rejects_empty_other_participants() -> None:
+    with pytest.raises(ValidationError) as exc_info:
+        chats_router.CreateChatBody(user_ids=[], title="empty-group")
+
+    assert "at least 1 item" in str(exc_info.value)
 
 
 def test_create_group_chat_rejects_external_participant_without_active_relationship() -> None:
@@ -872,7 +868,7 @@ def test_create_group_chat_rejects_external_participant_without_active_relations
         _create_chat(
             app,
             chats_router.CreateChatBody(
-                user_ids=["human-user-1", "owned-agent-1", "human-user-2"],
+                user_ids=["owned-agent-1", "human-user-2"],
                 title="bad-group",
             ),
         )
@@ -897,7 +893,7 @@ def test_create_group_chat_accepts_external_active_contact_without_relationship(
     result = _create_chat(
         app,
         chats_router.CreateChatBody(
-            user_ids=["human-user-1", "owned-agent-1", "human-user-2"],
+            user_ids=["owned-agent-1", "human-user-2"],
             title="contact-group",
         ),
     )
@@ -922,7 +918,7 @@ def test_create_group_chat_accepts_agent_owned_by_external_active_contact() -> N
     result = _create_chat(
         app,
         chats_router.CreateChatBody(
-            user_ids=["human-user-1", "owned-agent-1", "external-agent-1"],
+            user_ids=["owned-agent-1", "external-agent-1"],
             title="owner-contact-agent-group",
         ),
     )
@@ -945,7 +941,7 @@ def test_create_group_chat_accepts_owned_agent_without_relationship() -> None:
     result = _create_chat(
         app,
         chats_router.CreateChatBody(
-            user_ids=["human-user-1", "owned-agent-1", "human-user-2"],
+            user_ids=["owned-agent-1", "human-user-2"],
             title="good-group",
         ),
     )
@@ -962,7 +958,7 @@ def test_create_chat_rejects_unknown_participant_ids_instead_of_falling_to_stora
         _create_chat(
             app,
             chats_router.CreateChatBody(
-                user_ids=["human-user-1", "thread-id-not-a-user", "thread-user-2"],
+                user_ids=["thread-id-not-a-user", "thread-user-2"],
                 title="bad-group",
             ),
         )

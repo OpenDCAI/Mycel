@@ -144,7 +144,7 @@ describe("NewChatDialog", () => {
         "/api/chats",
         expect.objectContaining({
           method: "POST",
-          body: JSON.stringify({ user_ids: ["human-1", "human-2", "agent-2"], title: "Trial group" }),
+          body: JSON.stringify({ user_ids: ["human-2", "agent-2"], title: "Trial group" }),
         }),
       );
     });
@@ -211,7 +211,7 @@ describe("NewChatDialog", () => {
         "/api/chats",
         expect.objectContaining({
           method: "POST",
-          body: JSON.stringify({ user_ids: ["human-1", "actor-agent-1", "human-2"] }),
+          body: JSON.stringify({ user_ids: ["actor-agent-1", "human-2"] }),
         }),
       );
     });

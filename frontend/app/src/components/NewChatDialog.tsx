@@ -102,7 +102,7 @@ export default function NewChatDialog({ open, onOpenChange }: NewChatDialogProps
     setCreating(true);
     setError(null);
     try {
-      const chatId = await createChat([myUserId, ...selectedIds], groupTitle.trim() || null);
+      const chatId = await createChat(selectedIds, groupTitle.trim() || null);
       onOpenChange(false);
       navigate(`/chat/visit/${chatId}`);
     } catch (err) {

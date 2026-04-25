@@ -131,7 +131,7 @@ describe("ContactDetailPage", () => {
     await waitFor(() => {
       expect(authFetch).toHaveBeenCalledWith("/api/chats", {
         method: "POST",
-        body: JSON.stringify({ user_ids: ["human-1", "agent-2"] }),
+        body: JSON.stringify({ user_ids: ["agent-2"] }),
       });
     });
     expect(navigate).toHaveBeenCalledWith("/chat/visit/chat-agent-2");
@@ -168,7 +168,7 @@ describe("ContactDetailPage", () => {
     await waitFor(() => {
       expect(authFetch).toHaveBeenCalledWith("/api/chats", {
         method: "POST",
-        body: JSON.stringify({ user_ids: ["human-1", "human-2"] }),
+        body: JSON.stringify({ user_ids: ["human-2"] }),
       });
     });
     expect(navigate).toHaveBeenCalledWith("/chat/visit/chat-human-2");
