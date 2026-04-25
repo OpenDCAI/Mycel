@@ -221,7 +221,7 @@ def test_chat_tool_registry_exposes_final_contract_only() -> None:
         messaging_service=_messaging_display_service(),
     )
 
-    for tool_name in ("list_chats", "read_messages", "send_message", "search_messages"):
+    for tool_name in ("list_chats", "create_group_chat", "read_messages", "send_message", "search_messages"):
         assert registry.get(tool_name) is not None
 
 
@@ -1842,6 +1842,70 @@ def test_messaging_service_mark_read_resets_unread_count_via_last_read_seq_water
     assert after[0]["unread_count"] == 0
 
 
+def test_messaging_service_group_chat_creation_requires_social_access_collaborators() -> None:
+    created: list[Any] = []
+    service = MessagingService(
+        chat_repo=SimpleNamespace(create=lambda row: created.append(row)),
+        chat_member_repo=SimpleNamespace(add_member=lambda _chat_id, _user_id: None),
+        messages_repo=SimpleNamespace(),
+        user_repo=SimpleNamespace(
+            get_by_id=lambda uid: SimpleNamespace(id=uid, owner_user_id=None, display_name=uid, type="human", avatar=None)
+        ),
+    )
+
+    with pytest.raises(RuntimeError) as excinfo:
+        service.create_group_chat(["agent-user-1", "human-user-1", "stranger-user-1"], title="unguarded")
+
+    assert str(excinfo.value) == "contact_repo is required for social access checks"
+    assert created == []
+
+
+def test_messaging_service_group_chat_creation_rejects_participant_without_active_social_access() -> None:
+    created: list[Any] = []
+    service = MessagingService(
+        chat_repo=SimpleNamespace(create=lambda row: created.append(row)),
+        chat_member_repo=SimpleNamespace(add_member=lambda _chat_id, _user_id: None),
+        messages_repo=SimpleNamespace(),
+        user_repo=SimpleNamespace(
+            get_by_id=lambda uid: SimpleNamespace(id=uid, owner_user_id=None, display_name=uid, type="human", avatar=None)
+        ),
+        contact_repo=SimpleNamespace(get=lambda _owner_id, _target_id: None),
+        relationship_service=SimpleNamespace(get_state=lambda _viewer_id, _target_id: "none"),
+    )
+
+    with pytest.raises(ValueError) as excinfo:
+        service.create_group_chat(["agent-user-1", "human-user-1", "stranger-user-1"], title="blocked")
+
+    assert str(excinfo.value) == "Active relationship required for group chat participant: human-user-1"
+    assert created == []
+
+
+def test_messaging_service_group_chat_creation_accepts_active_relationships() -> None:
+    created: list[Any] = []
+    members: list[tuple[str, str]] = []
+    service = MessagingService(
+        chat_repo=SimpleNamespace(create=lambda row: created.append(row)),
+        chat_member_repo=SimpleNamespace(add_member=lambda chat_id, user_id: members.append((chat_id, user_id))),
+        messages_repo=SimpleNamespace(),
+        user_repo=SimpleNamespace(
+            get_by_id=lambda uid: SimpleNamespace(id=uid, owner_user_id=None, display_name=uid, type="human", avatar=None)
+        ),
+        contact_repo=SimpleNamespace(get=lambda _owner_id, _target_id: None),
+        relationship_service=SimpleNamespace(get_state=lambda _viewer_id, _target_id: "visit"),
+    )
+
+    chat = service.create_group_chat(["agent-user-1", "human-user-1", "stranger-user-1"], title="guarded")
+
+    assert chat["title"] == "guarded"
+    assert len(created) == 1
+    assert created[0].created_by_user_id == "agent-user-1"
+    assert members == [
+        (chat["id"], "agent-user-1"),
+        (chat["id"], "human-user-1"),
+        (chat["id"], "stranger-user-1"),
+    ]
+
+
 def test_chat_tool_formats_agent_user_id_sender_as_agent_name() -> None:
     registry = ToolRegistry()
     service = ChatToolService(
@@ -2021,6 +2085,62 @@ def test_chat_tool_send_accepts_agent_user_target_id() -> None:
 
     assert result == "Message sent to Toad."
     assert sent == [("chat-1", "human-user-1", "hello")]
+
+
+def test_chat_tool_create_group_chat_registers_without_identity_arguments() -> None:
+    registry = ToolRegistry()
+    ChatToolService(
+        registry=registry,
+        chat_identity_id="agent-user-1",
+        messaging_service=SimpleNamespace(create_group_chat=lambda _user_ids, title=None: {"id": "chat-1", "title": title}),
+    )
+
+    create_group_chat = registry.get("create_group_chat")
+    assert create_group_chat is not None
+    properties = create_group_chat.schema["parameters"]["properties"]
+
+    assert "participant_ids" in properties
+    assert "title" in properties
+    assert "sender_id" not in properties
+    assert "owner_id" not in properties
+    assert "created_by_user_id" not in properties
+
+
+def test_chat_tool_create_group_chat_uses_current_identity_as_group_owner() -> None:
+    registry = ToolRegistry()
+    created: list[tuple[list[str], str | None]] = []
+    ChatToolService(
+        registry=registry,
+        chat_identity_id="agent-user-1",
+        messaging_service=SimpleNamespace(
+            create_group_chat=lambda user_ids, title=None: created.append((user_ids, title)) or {"id": "chat-1", "title": title}
+        ),
+    )
+
+    create_group_chat = registry.get("create_group_chat")
+    assert create_group_chat is not None
+
+    result = create_group_chat.handler(participant_ids=["human-user-1", "human-user-2"], title="debate room")
+
+    assert result == "Group chat created: debate room [chat_id: chat-1]"
+    assert created == [(["agent-user-1", "human-user-1", "human-user-2"], "debate room")]
+
+
+def test_chat_tool_create_group_chat_fails_when_created_chat_has_invalid_id() -> None:
+    registry = ToolRegistry()
+    ChatToolService(
+        registry=registry,
+        chat_identity_id="agent-user-1",
+        messaging_service=SimpleNamespace(create_group_chat=lambda _user_ids, title=None: {"title": title}),
+    )
+
+    create_group_chat = registry.get("create_group_chat")
+    assert create_group_chat is not None
+
+    with pytest.raises(RuntimeError) as excinfo:
+        create_group_chat.handler(participant_ids=["human-user-1", "human-user-2"], title="debate room")
+
+    assert str(excinfo.value) == "Created group chat has invalid id"
 
 
 def test_chat_tool_send_fails_before_unread_check_when_created_chat_is_missing_id() -> None:
