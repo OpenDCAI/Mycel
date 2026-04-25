@@ -269,6 +269,7 @@ def test_create_leon_agent_supabase_defaults_wire_runtime_container(monkeypatch,
         assert agent.queue_manager._repo is _patch_runtime_storage_container.queue_repo()
         assert agent._memory_middleware.summary_store is not None
         assert agent._memory_middleware.summary_store._repo is _patch_runtime_storage_container.summary_repo()
+        assert agent._memory_middleware.summary_store.db_path is None
     finally:
         agent.close()
 
@@ -290,6 +291,7 @@ def test_create_leon_agent_defaults_wire_runtime_container_when_strategy_missing
         assert agent.queue_manager._repo is _patch_runtime_storage_container.queue_repo()
         assert agent._memory_middleware.summary_store is not None
         assert agent._memory_middleware.summary_store._repo is _patch_runtime_storage_container.summary_repo()
+        assert agent._memory_middleware.summary_store.db_path is None
     finally:
         agent.close()
 
