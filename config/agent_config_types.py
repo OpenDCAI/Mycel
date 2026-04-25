@@ -92,7 +92,7 @@ class ResolvedSkill(AgentConfigSchemaModel):
     files: dict[str, str] = Field(default_factory=dict)
     source: dict[str, Any] = Field(default_factory=dict)
 
-    @field_validator("name", "content")
+    @field_validator("name", "version", "content")
     @classmethod
     def _non_blank(cls, value: str, info: ValidationInfo) -> str:
         if not value.strip():

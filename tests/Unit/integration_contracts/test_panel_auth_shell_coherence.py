@@ -1796,6 +1796,16 @@ def test_apply_snapshot_requires_source_identity(field: str, value: object, mess
         apply_snapshot(**cast(Any, kwargs))
 
 
+def test_apply_snapshot_does_not_fill_package_version_from_source_version() -> None:
+    import inspect
+
+    from backend.hub.snapshot_apply import _materialize_snapshot_skills
+
+    source = inspect.getsource(_materialize_snapshot_skills)
+
+    assert "or source_version" not in source
+
+
 def test_apply_snapshot_rejects_duplicate_skill_names_before_library_write():
     from backend.hub.snapshot_apply import apply_snapshot
 

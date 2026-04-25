@@ -28,6 +28,15 @@ def test_resolved_skill_model_rejects_duplicate_file_paths_after_normalization()
         ResolvedSkill(name="query-helper", **common)
 
 
+def test_resolved_skill_model_rejects_blank_version() -> None:
+    with pytest.raises(ValueError, match="resolved_skill.version must not be blank"):
+        ResolvedSkill(
+            name="query-helper",
+            version=" ",
+            content="---\nname: query-helper\n---\nUse exact terms.",
+        )
+
+
 def test_agent_skill_model_has_no_resolved_content() -> None:
     agent_skill = AgentSkill(skill_id="query-helper", package_id="package-1", name="query-helper")
 
