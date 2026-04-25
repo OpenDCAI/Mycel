@@ -16,9 +16,10 @@ import backend.hub.snapshot_apply as _snapshot_apply
 import backend.library.paths as _lib_paths
 from backend.hub.versioning import BumpType, bump_semver
 from config.agent_config_resolver import resolve_agent_config
-from config.agent_config_types import AgentSkill, Skill
+from config.agent_config_types import AgentSkill, Skill, SkillPackage
 from config.agent_snapshot import snapshot_from_resolved_config
 from config.skill_files import normalize_skill_file_map
+from config.skill_package import build_skill_package_hash, build_skill_package_manifest
 
 HUB_URL = os.environ.get("MYCEL_HUB_URL", "https://hub.mycel.nextmind.space")
 # @@@hub-agent-user-item-type - Hub still names published Agent users "member";
@@ -250,25 +251,39 @@ def apply_item(
             raise ValueError("Skill snapshot meta must be an object")
         skill_description = str(meta.get("desc") or item.get("description", ""))
         timestamp = datetime.now(UTC)
-        skill_repo.upsert(
+        source = {
+            "marketplace_item_id": item_id,
+            "source_version": source_version,
+            "source_at": now,
+            "publisher": item.get("publisher_username", ""),
+        }
+        skill = skill_repo.upsert(
             Skill(
                 id=slug,
                 owner_user_id=owner_user_id,
                 name=skill_name,
                 description=skill_description,
-                version=source_version,
-                content=content,
-                files=skill_files,
-                source={
-                    "marketplace_item_id": item_id,
-                    "source_version": source_version,
-                    "source_at": now,
-                    "publisher": item.get("publisher_username", ""),
-                },
+                source=source,
                 created_at=timestamp,
                 updated_at=timestamp,
             )
         )
+        package_hash = build_skill_package_hash(content, skill_files)
+        package = skill_repo.create_package(
+            SkillPackage(
+                id=package_hash.removeprefix("sha256:"),
+                owner_user_id=owner_user_id,
+                skill_id=skill.id,
+                version=source_version,
+                hash=package_hash,
+                manifest=build_skill_package_manifest(content, skill_files),
+                skill_md=content,
+                files=skill_files,
+                source=source,
+                created_at=timestamp,
+            )
+        )
+        skill_repo.select_package(owner_user_id, skill.id, package.id)
 
         if agent_user_id is not None:
             if user_repo is None or agent_config_repo is None:
@@ -286,6 +301,7 @@ def apply_item(
             next_skills.append(
                 AgentSkill(
                     skill_id=slug,
+                    package_id=package.id,
                     name=skill_name,
                     description=skill_description,
                     version=source_version,
@@ -299,8 +315,14 @@ def apply_item(
                 )
             )
             agent_config_repo.save_agent_config(config.model_copy(update={"skills": next_skills}))
-            return {"resource_id": slug, "type": "skill", "version": source_version, "agent_user_id": agent_user_id}
-        return {"resource_id": slug, "type": "skill", "version": source_version}
+            return {
+                "resource_id": slug,
+                "package_id": package.id,
+                "type": "skill",
+                "version": source_version,
+                "agent_user_id": agent_user_id,
+            }
+        return {"resource_id": slug, "package_id": package.id, "type": "skill", "version": source_version}
 
     if item_type == "agent":
         slug = item.get("slug", item["name"].lower().replace(" ", "-"))

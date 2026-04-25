@@ -12,7 +12,7 @@ from fastapi import HTTPException
 
 import backend.library.paths as _lib_paths
 from backend.hub.versioning import bump_semver
-from config.agent_config_types import AgentConfig, AgentRule, AgentSkill, AgentSubAgent, McpServerConfig, Skill
+from config.agent_config_types import AgentConfig, AgentRule, AgentSkill, AgentSubAgent, McpServerConfig, Skill, SkillPackage
 
 # ── Version Bump (tested via publish internals) ──
 
@@ -119,12 +119,16 @@ def _agent_config(**overrides: object) -> AgentConfig:
 class TestApplySkill:
     def test_writes_skill_to_skill_repo(self):
         saved: list[Skill] = []
+        packages: list[SkillPackage] = []
+        selected: list[tuple[str, str, str]] = []
         hub_resp = _make_hub_response("skill", "my-skill", content="---\nname: My Skill\n---\n# My Skill\nDo stuff")
         hub_resp["snapshot"]["files"] = {"references/usage.md": "Use carefully"}
         skill_repo = SimpleNamespace(
             get_by_id=lambda _owner_user_id, _skill_id: None,
             list_for_owner=lambda _owner_user_id: [],
             upsert=lambda skill: saved.append(skill) or skill,
+            create_package=lambda package: packages.append(package) or package,
+            select_package=lambda owner_user_id, skill_id, package_id: selected.append((owner_user_id, skill_id, package_id)),
         )
 
         with patch("backend.hub.client._hub_api", return_value=hub_resp):
@@ -137,17 +141,24 @@ class TestApplySkill:
         assert saved[0].id == "my-skill"
         assert saved[0].owner_user_id == "owner-1"
         assert saved[0].name == "My Skill"
-        assert saved[0].content == "---\nname: My Skill\n---\n# My Skill\nDo stuff"
-        assert saved[0].files == {"references/usage.md": "Use carefully"}
+        assert not hasattr(saved[0], "content")
+        assert packages[0].skill_id == "my-skill"
+        assert packages[0].skill_md == "---\nname: My Skill\n---\n# My Skill\nDo stuff"
+        assert packages[0].manifest["files"][0]["path"] == "references/usage.md"
+        assert selected == [("owner-1", "my-skill", packages[0].id)]
+        assert result["package_id"] == packages[0].id
 
     def test_writes_hub_skill_files_as_posix_paths(self):
         saved: list[Skill] = []
+        packages: list[SkillPackage] = []
         hub_resp = _make_hub_response("skill", "my-skill", content="---\nname: My Skill\n---\n# My Skill\nDo stuff")
         hub_resp["snapshot"]["files"] = {"references\\usage.md": "Use carefully"}
         skill_repo = SimpleNamespace(
             get_by_id=lambda _owner_user_id, _skill_id: None,
             list_for_owner=lambda _owner_user_id: [],
             upsert=lambda skill: saved.append(skill) or skill,
+            create_package=lambda package: packages.append(package) or package,
+            select_package=lambda _owner_user_id, _skill_id, _package_id: None,
         )
 
         with patch("backend.hub.client._hub_api", return_value=hub_resp):
@@ -155,7 +166,8 @@ class TestApplySkill:
 
             apply_item("item-123", owner_user_id="owner-1", skill_repo=skill_repo)
 
-        assert saved[0].files == {"references/usage.md": "Use carefully"}
+        assert saved[0].id == "my-skill"
+        assert packages[0].manifest["files"][0]["path"] == "references/usage.md"
 
     def test_apply_rejects_hub_skill_file_path_collision(self):
         saved: list[Skill] = []
@@ -180,6 +192,7 @@ class TestApplySkill:
 
     def test_skill_repo_payload_has_source_tracking(self):
         saved: list[Skill] = []
+        packages: list[SkillPackage] = []
         hub_resp = _make_hub_response(
             "skill", "tracked-skill", content="---\nname: Tracked Skill\n---\n# Hello", version="2.1.0", publisher="alice"
         )
@@ -187,6 +200,8 @@ class TestApplySkill:
             get_by_id=lambda _owner_user_id, _skill_id: None,
             list_for_owner=lambda _owner_user_id: [],
             upsert=lambda skill: saved.append(skill) or skill,
+            create_package=lambda package: packages.append(package) or package,
+            select_package=lambda _owner_user_id, _skill_id, _package_id: None,
         )
 
         with patch("backend.hub.client._hub_api", return_value=hub_resp):
@@ -197,6 +212,7 @@ class TestApplySkill:
         assert saved[0].source["marketplace_item_id"] == "item-456"
         assert saved[0].source["source_version"] == "2.1.0"
         assert saved[0].source["publisher"] == "alice"
+        assert packages[0].source["source_version"] == "2.1.0"
 
     def test_apply_to_library_rejects_name_drift_for_existing_skill_id(self):
         existing = Skill(
@@ -313,11 +329,15 @@ class TestApplySkill:
 
         saved: list[AgentConfig] = []
         saved_skills: list[Skill] = []
+        packages: list[SkillPackage] = []
+        selected: list[tuple[str, str, str]] = []
         user_repo = SimpleNamespace(get_by_id=lambda user_id: SimpleNamespace(id=user_id, agent_config_id="cfg-1", owner_user_id="owner-1"))
         skill_repo = SimpleNamespace(
             get_by_id=lambda _owner_user_id, _skill_id: None,
             list_for_owner=lambda _owner_user_id: [],
             upsert=lambda skill: saved_skills.append(skill) or skill,
+            create_package=lambda package: packages.append(package) or package,
+            select_package=lambda owner_user_id, skill_id, package_id: selected.append((owner_user_id, skill_id, package_id)),
         )
 
         class _AgentConfigRepo:
@@ -348,15 +368,23 @@ class TestApplySkill:
                 agent_user_id="agent-user-1",
             )
 
-        assert result == {"resource_id": "fastapi", "type": "skill", "version": "1.2.3", "agent_user_id": "agent-user-1"}
+        assert result == {
+            "resource_id": "fastapi",
+            "package_id": packages[0].id,
+            "type": "skill",
+            "version": "1.2.3",
+            "agent_user_id": "agent-user-1",
+        }
         assert saved_skills[0].name == "FastAPI"
         assert saved_skills[0].description == "Meta FastAPI description"
+        assert packages[0].skill_md == "---\nname: FastAPI\ndescription: Build FastAPI APIs\n---\nAlways use APIRouter."
+        assert packages[0].manifest["files"][0]["path"] == "references/routing.md"
+        assert selected == [("owner-1", "fastapi", packages[0].id)]
         assert saved[0].id == "cfg-1"
         assert [skill.name for skill in saved[0].skills] == ["Existing", "FastAPI"]
         assert saved[0].skills[1].skill_id == "fastapi"
+        assert saved[0].skills[1].package_id == packages[0].id
         assert saved[0].skills[1].description == "Meta FastAPI description"
-        assert saved[0].skills[1].content == "---\nname: FastAPI\ndescription: Build FastAPI APIs\n---\nAlways use APIRouter."
-        assert saved[0].skills[1].files == {"references/routing.md": "Prefer APIRouter."}
         assert saved[0].skills[1].source == {
             "marketplace_item_id": "skillsmp:fastapi",
             "source_version": "1.2.3",
@@ -368,11 +396,14 @@ class TestApplySkill:
 
         saved_configs: list[AgentConfig] = []
         saved_skills: list[Skill] = []
+        packages: list[SkillPackage] = []
         user_repo = SimpleNamespace(get_by_id=lambda user_id: SimpleNamespace(id=user_id, agent_config_id="cfg-1", owner_user_id="owner-1"))
         skill_repo = SimpleNamespace(
             get_by_id=lambda _owner_user_id, _skill_id: None,
             list_for_owner=lambda _owner_user_id: [],
             upsert=lambda skill: saved_skills.append(skill) or skill,
+            create_package=lambda package: packages.append(package) or package,
+            select_package=lambda _owner_user_id, _skill_id, _package_id: None,
         )
 
         class _AgentConfigRepo:
@@ -402,20 +433,30 @@ class TestApplySkill:
 
         assert saved_skills[0].id == "fastapi"
         assert saved_skills[0].name == "FastAPI"
-        assert result == {"resource_id": "fastapi", "type": "skill", "version": "1.2.3", "agent_user_id": "agent-user-1"}
+        assert result == {
+            "resource_id": "fastapi",
+            "package_id": packages[0].id,
+            "type": "skill",
+            "version": "1.2.3",
+            "agent_user_id": "agent-user-1",
+        }
         assert saved_configs[0].skills[0].name == "FastAPI"
         assert saved_configs[0].skills[0].skill_id == "fastapi"
+        assert saved_configs[0].skills[0].package_id == packages[0].id
 
     def test_apply_with_agent_user_id_pins_trimmed_frontmatter_name(self):
         import backend.hub.client as marketplace_client
 
         saved: list[AgentConfig] = []
         saved_skills: list[Skill] = []
+        packages: list[SkillPackage] = []
         user_repo = SimpleNamespace(get_by_id=lambda user_id: SimpleNamespace(id=user_id, agent_config_id="cfg-1", owner_user_id="owner-1"))
         skill_repo = SimpleNamespace(
             get_by_id=lambda _owner_user_id, _skill_id: None,
             list_for_owner=lambda _owner_user_id: [],
             upsert=lambda skill: saved_skills.append(skill) or skill,
+            create_package=lambda package: packages.append(package) or package,
+            select_package=lambda _owner_user_id, _skill_id, _package_id: None,
         )
 
         class _AgentConfigRepo:
@@ -443,6 +484,7 @@ class TestApplySkill:
             )
 
         assert result["resource_id"] == "fastapi"
+        assert result["package_id"] == packages[0].id
         assert saved_skills[0].name == "FastAPI"
         assert saved[0].skills[0].name == "FastAPI"
 
@@ -545,12 +587,16 @@ class TestApplyUnsupportedType:
 class TestApplyIdempotency:
     def test_apply_twice_upserts_same_skill_id(self):
         saved: dict[str, Skill] = {}
+        packages: list[SkillPackage] = []
+        selected: list[tuple[str, str, str]] = []
         v1 = _make_hub_response("skill", "idem-skill", content="---\nname: Idem Skill\n---\nV1", version="1.0.0")
         v2 = _make_hub_response("skill", "idem-skill", content="---\nname: Idem Skill\n---\nV2", version="1.0.1")
         skill_repo = SimpleNamespace(
             get_by_id=lambda _owner_user_id, skill_id: saved.get(skill_id),
             list_for_owner=lambda _owner_user_id: list(saved.values()),
             upsert=lambda skill: saved.__setitem__(skill.id, skill) or skill,
+            create_package=lambda package: packages.append(package) or package,
+            select_package=lambda owner_user_id, skill_id, package_id: selected.append((owner_user_id, skill_id, package_id)),
         )
 
         from backend.hub.client import apply_item
@@ -562,9 +608,12 @@ class TestApplyIdempotency:
             result = apply_item("item-idem", owner_user_id="owner-1", skill_repo=skill_repo)
 
         assert result["version"] == "1.0.1"
+        assert result["package_id"] == packages[1].id
         assert list(saved) == ["idem-skill"]
-        assert saved["idem-skill"].content == "---\nname: Idem Skill\n---\nV2"
         assert saved["idem-skill"].source["source_version"] == "1.0.1"
+        assert packages[0].skill_md == "---\nname: Idem Skill\n---\nV1"
+        assert packages[1].skill_md == "---\nname: Idem Skill\n---\nV2"
+        assert selected[-1] == ("owner-1", "idem-skill", packages[1].id)
 
 
 def test_upgrade_returns_user_id_contract(monkeypatch):
