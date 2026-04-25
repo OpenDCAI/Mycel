@@ -65,11 +65,9 @@ class AgentSkill(AgentConfigSchemaModel):
     id: str | None = None
     skill_id: str
     package_id: str
-    name: str
-    description: str = ""
     enabled: bool = True
 
-    @field_validator("skill_id", "package_id", "name")
+    @field_validator("skill_id", "package_id")
     @classmethod
     def _non_blank(cls, value: str, info: ValidationInfo) -> str:
         if not value.strip():

@@ -111,8 +111,6 @@ def _materialize_snapshot_skills(
             AgentSkill(
                 skill_id=skill.id,
                 package_id=package.id,
-                name=snapshot_skill.name,
-                description=snapshot_skill.description,
             )
         )
     return result
