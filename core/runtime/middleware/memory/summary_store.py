@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Any
 
 from storage.contracts import SummaryRepo, SummaryRow
-from storage.providers.sqlite.kernel import SQLiteDBRole, connect_sqlite, resolve_role_db_path
+from storage.providers.sqlite.kernel import connect_sqlite
 from storage.providers.sqlite.summary_repo import SQLiteSummaryRepo
 from storage.runtime import build_summary_repo, uses_supabase_runtime_defaults
 
@@ -36,7 +36,7 @@ class SummaryData:
 
 class SummaryStore:
     def __init__(self, db_path: Path | None = None, summary_repo: SummaryRepo | None = None):
-        self.db_path = db_path or resolve_role_db_path(SQLiteDBRole.SANDBOX)
+        self.db_path = Path(db_path) if db_path is not None else None
         self._repo: SummaryRepo
         if summary_repo is not None:
             self._repo = summary_repo
@@ -44,10 +44,11 @@ class SummaryStore:
             # @@@explicit-db-path-wins - an explicit local path is an operator choice,
             # so only path-less construction is allowed to switch to runtime storage.
             self._repo = build_summary_repo()
+        elif db_path is None:
+            raise RuntimeError("SummaryStore requires summary_repo or db_path.")
         else:
-            resolved_db_path = self.db_path
             # @@@connect_injection - keep _connect as an indirection point so existing retry/rollback tests can patch it.
-            self._repo = SQLiteSummaryRepo(resolved_db_path, connect_fn=lambda p: _connect(Path(p)))
+            self._repo = SQLiteSummaryRepo(self.db_path, connect_fn=lambda p: _connect(Path(p)))
         self._ensure_tables()
 
     def _ensure_tables(self) -> None:
