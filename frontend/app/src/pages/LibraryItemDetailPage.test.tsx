@@ -32,17 +32,9 @@ describe("LibraryItemDetailPage", () => {
     vi.restoreAllMocks();
     navigateMock.mockReset();
     fetchLibrary = vi.fn<() => Promise<void>>().mockResolvedValue(undefined);
-    fetchResourceContent = vi.fn<(type: string, id: string) => Promise<string>>().mockResolvedValue("# Agent doc");
+    fetchResourceContent = vi.fn<(type: string, id: string) => Promise<string>>().mockResolvedValue("# Skill doc");
     updateResource = vi.fn<(type: string, id: string, fields: Record<string, unknown>) => Promise<void>>().mockResolvedValue(undefined);
     useAppStore.setState({
-      libraryAgents: [{
-        id: "agent-lib-1",
-        name: "Explorer",
-        desc: "inspect repos",
-        type: "agent",
-        created_at: 1,
-        updated_at: 1,
-      }],
       librarySkills: [{
         id: "skill-lib-1",
         name: "Skill One",
@@ -90,34 +82,6 @@ describe("LibraryItemDetailPage", () => {
     expect(navigateMock).toHaveBeenCalledWith("/marketplace?tab=library&sub=sandbox-template");
   });
 
-  it("uses the canonical library route for the back button on agent detail pages", async () => {
-    render(
-      <MemoryRouter initialEntries={["/library/agent/agent-lib-1"]}>
-        <Routes>
-          <Route path="/library/:type/:id" element={<LibraryItemDetailPage />} />
-        </Routes>
-      </MemoryRouter>,
-    );
-
-    expect(await screen.findByRole("heading", { name: "Explorer" })).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "返回" }));
-
-    expect(navigateMock).toHaveBeenCalledWith("/marketplace?tab=library&sub=agent");
-  });
-
-  it("labels library agent resources as Subagent", async () => {
-    render(
-      <MemoryRouter initialEntries={["/library/agent/agent-lib-1"]}>
-        <Routes>
-          <Route path="/library/:type/:id" element={<LibraryItemDetailPage />} />
-        </Routes>
-      </MemoryRouter>,
-    );
-
-    expect(await screen.findByRole("heading", { name: "Explorer" })).toBeTruthy();
-    expect(screen.getByText("Subagent")).toBeTruthy();
-  });
-
   it("uses the canonical library route for the back button on skill detail pages", async () => {
     fetchResourceContent.mockResolvedValue("# Skill doc");
 
@@ -135,18 +99,18 @@ describe("LibraryItemDetailPage", () => {
     expect(navigateMock).toHaveBeenCalledWith("/marketplace?tab=library&sub=skill");
   });
 
-  it("uses bootstrapped library state instead of refetching the whole list", async () => {
+  it("uses bootstrapped skill library state instead of refetching the whole list", async () => {
     render(
-      <MemoryRouter initialEntries={["/library/agent/agent-lib-1"]}>
+      <MemoryRouter initialEntries={["/library/skill/skill-lib-1"]}>
         <Routes>
           <Route path="/library/:type/:id" element={<LibraryItemDetailPage />} />
         </Routes>
       </MemoryRouter>,
     );
 
-    expect(await screen.findByRole("heading", { name: "Explorer" })).toBeTruthy();
+    expect(await screen.findByRole("heading", { name: "Skill One" })).toBeTruthy();
     await waitFor(() => {
-      expect(fetchResourceContent).toHaveBeenCalledWith("agent", "agent-lib-1");
+      expect(fetchResourceContent).toHaveBeenCalledWith("skill", "skill-lib-1");
     });
     expect(fetchLibrary).not.toHaveBeenCalled();
   });
