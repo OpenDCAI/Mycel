@@ -487,6 +487,7 @@ import asyncio  # noqa: E402
 import json  # noqa: E402
 import re  # noqa: E402
 from collections.abc import Callable  # noqa: E402
+from contextlib import suppress  # noqa: E402
 
 from sandbox.interfaces.executor import ExecuteResult  # noqa: E402
 from sandbox.runtime import (  # noqa: E402
@@ -809,9 +810,7 @@ class DaytonaSessionRuntime(_RemoteRuntimeBase):
                 current_loop = None
             task_loop = self._snapshot_task.get_loop()
             if current_loop is task_loop:
-                try:
+                with suppress(asyncio.CancelledError):
                     await self._snapshot_task
-                except asyncio.CancelledError:
-                    pass
         self._snapshot_task = None
         await asyncio.to_thread(self._close_shell_sync)

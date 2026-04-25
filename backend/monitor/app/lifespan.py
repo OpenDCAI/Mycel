@@ -1,5 +1,5 @@
 import asyncio
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, suppress
 
 from fastapi import FastAPI
 
@@ -28,7 +28,5 @@ async def lifespan(app: FastAPI):
     finally:
         if monitor_resources_task:
             monitor_resources_task.cancel()
-            try:
+            with suppress(asyncio.CancelledError):
                 await monitor_resources_task
-            except asyncio.CancelledError:
-                pass
