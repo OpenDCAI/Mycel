@@ -917,7 +917,6 @@ class LeonAgent:
         self._monitor_middleware = MonitorMiddleware(
             context_limit=context_limit,
             model_name=self.model_name,
-            verbose=self.verbose,
         )
         middleware.append(self._monitor_middleware)
 
