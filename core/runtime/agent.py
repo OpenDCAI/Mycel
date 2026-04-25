@@ -205,7 +205,7 @@ class LeonAgent:
             memory_config_override=memory_config_override,
         )
         # Load observation config (langfuse / langsmith)
-        self._observation_config = ObservationLoader(workspace_root=workspace_root).load()
+        self._observation_config = ObservationLoader().load()
         # Resolve virtual model name
         active_model = self.models_config.active.model if self.models_config.active else model_name
         if not active_model:
@@ -520,7 +520,7 @@ class LeonAgent:
         models_cli: dict = {}
         if model_name is not None:
             models_cli["active"] = {"model": model_name}
-        models_loader = ModelsLoader(workspace_root=workspace_root)
+        models_loader = ModelsLoader()
         if models_config_override is None:
             models_config = models_loader.load(cli_overrides=models_cli or None)
         else:
@@ -763,7 +763,7 @@ class LeonAgent:
 
         # Reload models config (picks up new API keys + model changes from disk)
         models_cli = {"active": {"model": model}} if model else None
-        models_loader = ModelsLoader(workspace_root=self.workspace_root)
+        models_loader = ModelsLoader()
         self.models_config = models_loader.load(cli_overrides=models_cli)
 
         if model is None:
@@ -825,7 +825,7 @@ class LeonAgent:
         Args:
             **overrides: Fields to override (e.g. active="langfuse" or active=None)
         """
-        self._observation_config = ObservationLoader(workspace_root=self.workspace_root).load(cli_overrides=overrides or None)
+        self._observation_config = ObservationLoader().load(cli_overrides=overrides or None)
 
     def close(self, *, cleanup_sandbox: bool = True):
         """Clean up resources via CleanupRegistry (priority-ordered).
