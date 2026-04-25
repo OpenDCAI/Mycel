@@ -3,105 +3,86 @@ title: 核心概念
 sidebarTitle: 概念
 description: 构成 Mycel 平台的六大原语
 icon: layers
-keywords: [thread, member, entity, task, resource, skill, 原语]
+keywords: [agent config, Agent User, thread, task, resource, skill, 原语]
 ---
 
-Mycel 建立在六大原语之上。理解它们之间的关系，是高效使用这个平台的关键。
+Mycel 建立在六个原语之上。最关键的拆分很简单：**Agent Config** 定义能力，**Agent User** 是社交身份，**Thread** 是运行中的大脑。
 
 ```mermaid
 flowchart TD
-    M["<b>Member</b>\n模板 — Agent 是谁"]
-    E["<b>Entity</b>\n社交身份 — 在社交层的样子"]
+    C["<b>Agent Config</b>\n能力配置 — prompt、工具、Skill"]
+    U["<b>Agent User</b>\n社交身份 — Agent 在聊天中的样子"]
     T["<b>Thread</b>\n运行中的大脑 — 对话状态 + 记忆"]
     TA["<b>Task</b>\n工作项"]
     R["<b>Resource</b>\n文件 / 连接"]
-    SK["<b>Skill</b>\n加载的专业能力"]
+    SK["<b>Skill</b>\n可加载的专业能力"]
 
-    M -->|实例化| E
-    E -->|绑定| T
+    C -->|支撑| U
+    U -->|拥有| T
+    C --- SK
     T --- TA
     T --- R
     T --- SK
 ```
 
+## Agent Config
+
+**Agent Config** 是 Agent 的能力定义。它包含 system prompt、启用的工具、规则、分配的 Skill、子 Agent，以及高级 MCP 集成。
+
+<AccordionGroup>
+  <Accordion title="Agent Config 包含什么" icon="sliders">
+    | 区域 | 用途 |
+    |------|------|
+    | Prompt | 核心系统指令 |
+    | Tools | 启用的工具组和工具设置 |
+    | Rules | 以命名 Markdown 文档保存的行为规则 |
+    | Skills | 分配给 Agent、运行时通过 `load_skill` 按需加载 |
+    | 子 Agent | Agent 内部的派发预设 |
+    | 高级 MCP | 外部服务集成，保留在高级入口 |
+  </Accordion>
+  <Accordion title="config 与 resolved config" icon="check-circle">
+    保存下来的 config 是可编辑的事实来源。运行时启动时会解析成完整 config，把 Skill 内容、规则内容、工具设置和集成引用整理好，再交给 Agent loop。
+  </Accordion>
+</AccordionGroup>
+
+## Agent User
+
+**Agent User** 是 Agent 的社交身份。它有显示名称、头像、所有者，并引用一个 Agent Config。
+
+人类用户和 Agent User 出现在同一个聊天界面里。Agent User 可以从 Marketplace 添加，也可以发布回 Marketplace，或在本地创建和配置。
+
 ## Thread
 
-**Thread** 是 Agent 运行中的大脑 — 它的对话历史、记忆和执行上下文。
+**Thread** 是 Agent 运行中的大脑：对话历史、记忆、执行上下文和 checkpoint 状态。
 
 <AccordionGroup>
   <Accordion title="Thread 的作用" icon="circle-play">
     - Thread 跨会话持久存在。恢复对话时，Agent 会从上次中断的地方继续。
-    - 每个 Thread 绑定到特定的 **Member**（定义 Agent 能力）和可选的**沙箱**（定义代码运行位置）。
-    - 历史记录使用 LangGraph checkpointer 存储在 SQLite（`~/.leon/leon.db`）。
+    - 每个 Agent User 有默认 Thread，也可以创建分支 Thread。
+    - 历史记录通过 LangGraph checkpointer 存储。
   </Accordion>
   <Accordion title="Thread 与沙箱" icon="box">
-    Thread 也是沙箱分配的单位。用 Docker 启动一个 Thread 后，该 Thread 生命周期内所有命令都在同一个容器中执行 — 即使跨重启也是如此。
+    Thread 也是沙箱分配单位。用 Docker 启动一个 Thread 后，该 Thread 生命周期内所有命令都在同一个容器中执行。
   </Accordion>
   <Accordion title="回退 Thread" icon="rotate-left">
     Thread 支持通过 API 基于 checkpoint 回退。回退会移动活跃 checkpoint 指针，不会删除中间历史。
   </Accordion>
 </AccordionGroup>
 
-## Member
+## Skill
 
-**Member** 是模板 — 定义 Agent "是什么"的"类"。
+**Skill** 是可加载的专业能力模块。一个 Skill 包含 `SKILL.md`，也可以包含 `references/*` 等相邻文件。
 
-<AccordionGroup>
-  <Accordion title="Member 文件结构" icon="folder-open">
-    <Tree>
-      <Tree.Folder name="~/.leon/members/m_AbCdEfGhIjKl" defaultOpen>
-        <Tree.File name="agent.md" />
-        <Tree.File name="meta.json" />
-        <Tree.File name="runtime.json" />
-        <Tree.Folder name="rules">
-          <Tree.File name="行为规则.md" />
-        </Tree.Folder>
-        <Tree.Folder name="agents">
-          <Tree.File name="bash.md" />
-        </Tree.Folder>
-        <Tree.Folder name="skills" />
-        <Tree.File name=".mcp.json" />
-      </Tree.Folder>
-    </Tree>
+<Tree>
+  <Tree.Folder name="code-review" defaultOpen>
+    <Tree.File name="SKILL.md" />
+    <Tree.Folder name="references">
+      <Tree.File name="rubric.md" />
+    </Tree.Folder>
+  </Tree.Folder>
+</Tree>
 
-    | 文件 | 用途 |
-    |------|------|
-    | `agent.md` | 身份：名称、描述、模型、系统提示词（YAML frontmatter + 正文） |
-    | `meta.json` | 状态（草稿/激活）、版本、时间戳 |
-    | `runtime.json` | 启用的工具和 Skills |
-    | `rules/` | 行为规则 — 每条规则一个 `.md` 文件 |
-    | `agents/` | 子 Agent 定义 |
-    | `.mcp.json` | MCP 服务器配置 |
-  </Accordion>
-  <Accordion title="Member 类型" icon="users">
-    - `human` — 人类用户
-    - `mycel_agent` — 用 Mycel 构建的 AI Agent
-
-    每个 Agent Member 都有一个**所有者**（创建它的人类）。内置的 `Mycel` member（`__leon__`）对所有人开放。
-  </Accordion>
-  <Accordion title="创建 Member" icon="plus">
-    通过 Web UI 的**设置 → Members** 创建和管理 Member，也可以直接编辑 `~/.leon/members/` 下的文件。
-  </Accordion>
-</AccordionGroup>
-
-## Entity
-
-**Entity** 是社交身份 — 参与聊天的"实例"。
-
-<Columns>
-  <div>
-    **Member = 你是谁。**
-
-    模板：系统提示词、工具、规则。一个 Member 可以驱动多个 Entity。
-  </div>
-  <div>
-    **Entity = 你在聊天中的样子。**
-
-    档案：名称、头像、类型（`human` 或 `agent`）、链接到大脑的 `thread_id`。
-  </div>
-</Columns>
-
-Entity ID 格式为 `{member_id}-{seq}`。人类 Entity 没有 Thread — 人类直接通过 Web UI 交互。
+Skill 存在于 Library，并可以分配到 Agent Config。运行时 Agent 显式调用 `load_skill("code-review")`，返回 `SKILL.md` 正文和相邻文件。
 
 ## Task
 
@@ -115,52 +96,31 @@ Entity ID 格式为 `{member_id}-{seq}`。人类 Entity 没有 Thread — 人类
 | `TaskUpdate` | 更新任务状态 |
 
 <Note>
-  Task 工具是 **deferred** 模式 — 不注入每次请求。Agent 在需要时通过 `tool_search` 发现，节省不需要规划的对话的 token。
+  Task 工具是 **deferred** 模式：不会注入每次请求。Agent 在需要时通过 `tool_search` 发现。
 </Note>
 
 ## Resource
 
-**Resource** 是 Agent 可以访问的任何文件或连接 — 工作区文件、上传的文档、沙箱文件系统或外部数据源。
+**Resource** 是 Agent 可以访问的任何文件或连接：工作区文件、上传的文档、沙箱文件系统或外部数据源。
 
-Resource 存在于 Agent 的**工作区根目录**（默认为当前目录）。沙箱激活时，所有文件操作都通过沙箱的文件系统后端路由。
-
-Web UI 的**资源**页面展示所有运行中的沙箱运行时，包含实时指标（CPU、RAM、磁盘）和文件浏览器。
-
-## Skill
-
-**Skill** 是可加载的专业能力模块 — 按需注入专业指令的 Markdown 文件。
-
-<Tree>
-  <Tree.Folder name="~/.leon/skills" defaultOpen>
-    <Tree.Folder name="code-review" defaultOpen>
-      <Tree.File name="SKILL.md" />
-    </Tree.Folder>
-    <Tree.Folder name="debugging">
-      <Tree.File name="SKILL.md" />
-    </Tree.Folder>
-  </Tree.Folder>
-</Tree>
-
-Agent 在运行时加载：`load_skill("code-review")`。加载后，Skill 的指令在当前会话中持续生效。
+Resource 存在于 Agent 的工作区根目录。沙箱激活时，文件操作通过沙箱文件系统后端路由。
 
 ## 整体运转方式
 
 <Steps>
   <Step title="社交层">
-    消息到达 **Entity**（社交身份）。
+    消息在聊天图谱中发给某个 Agent User。
   </Step>
   <Step title="运行层">
-    路由到 Entity 对应的 **Thread**（运行中的大脑）。
+    系统选择或创建这个 Agent User 的 Thread。
+  </Step>
+  <Step title="配置解析">
+    Agent Config 被解析成 prompt、工具、规则、Skill、子 Agent 和高级 MCP 集成。
   </Step>
   <Step title="执行">
-    Agent 根据其 **Member** 配置处理消息 — 工具、Skills、MCP 服务器。
-  </Step>
-  <Step title="工作管理">
-    Agent 可能创建 **Task**、访问 **Resource**，或派发子 Agent。
+    Agent 处理消息，必要时加载 Skill 或派发子 Agent。
   </Step>
   <Step title="回复">
-    回复通过 Entity 经 SSE 流回聊天界面。
+    回复通过 SSE 流回聊天界面。
   </Step>
 </Steps>
-
-这种分离意味着同一个 Member 可以在不同的聊天上下文中驱动多个 Entity，每个都有自己独立的 Thread 和记忆。

@@ -1,7 +1,7 @@
 ---
 title: Configuration
 sidebarTitle: Configuration
-description: runtime.json, models.json, MCP, Skills, and environment variables
+description: runtime.json, models.json, Skills, advanced integrations, and environment variables
 icon: sliders
 keywords: [runtime.json, models.json, MCP, skills, configuration, environment variables, memory]
 ---
@@ -16,7 +16,7 @@ Mycel uses a split configuration system with three-tier merge: system defaults �
 
     | File | Purpose |
     |------|---------|
-    | `runtime.json` | Tools, memory, MCP, skills, security |
+    | `runtime.json` | Tools, memory, skills, advanced integrations, security |
     | `models.json` | Providers, API keys, model mapping |
     | `observation.json` | Langfuse / LangSmith tracing |
   </div>
@@ -27,7 +27,7 @@ Mycel uses a split configuration system with three-tier merge: system defaults �
     |------|---------|
     | `config.env` | Quick API key setup |
     | `sandboxes/<name>.json` | Per-provider sandbox config |
-    | `.mcp.json` (member) | Per-member MCP servers |
+    | `.mcp.json` | Advanced MCP servers for local runtime config |
   </div>
 </Columns>
 
@@ -38,7 +38,7 @@ Mycel uses a split configuration system with three-tier merge: system defaults �
 | Domain | Strategy |
 |--------|----------|
 | `runtime`, `memory`, `tools` | Deep merge — higher-priority tiers override individual fields |
-| `mcp`, `skills` | Lookup — first tier that defines a key wins; no merging |
+| `skills`, `mcp` | Lookup — first tier that defines a key wins; no merging |
 | `system_prompt` | Lookup — project → user → system |
 | `providers`, `mapping` (models.json) | Deep merge per-key |
 | `pool` (models.json) | Last wins — no list merging |
@@ -228,7 +228,26 @@ MODEL_NAME=claude-sonnet-4-5-20250929
   </Accordion>
 </AccordionGroup>
 
-## MCP servers
+## Skills
+
+```json
+{
+  "skills": {
+    "enabled": true,
+    "paths": ["~/.leon/skills"],
+    "skills": {
+      "code-review": true,
+      "debugging": false
+    }
+  }
+}
+```
+
+<Warning>
+  Skill paths must exist on disk — Mycel does not create them automatically. Run `mkdir -p ~/.leon/skills` if needed.
+</Warning>
+
+## Advanced MCP servers
 
 Connect external services via the Model Context Protocol. MCP tools appear as `mcp__{server_name}__{tool_name}`.
 
@@ -266,8 +285,8 @@ Connect external services via the Model Context Protocol. MCP tools appear as `m
     }
     ```
   </Tab>
-  <Tab title="Member-level (.mcp.json)">
-    Each Member can have its own `~/.leon/members/<id>/.mcp.json`:
+  <Tab title="Local .mcp.json">
+    Local runtime config can also carry MCP server definitions:
 
     ```json
     {
@@ -282,25 +301,6 @@ Connect external services via the Model Context Protocol. MCP tools appear as `m
     ```
   </Tab>
 </Tabs>
-
-## Skills
-
-```json
-{
-  "skills": {
-    "enabled": true,
-    "paths": ["~/.leon/skills"],
-    "skills": {
-      "code-review": true,
-      "debugging": false
-    }
-  }
-}
-```
-
-<Warning>
-  Skill paths must exist on disk — Mycel does not create them automatically. Run `mkdir -p ~/.leon/skills` if needed.
-</Warning>
 
 ## Observation (tracing)
 
