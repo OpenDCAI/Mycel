@@ -107,6 +107,7 @@ def test_resolved_config_contains_only_enabled_children():
 
     assert resolved.id == "cfg-1"
     assert resolved.name == "Researcher"
+    assert resolved.skills[0].id == "github"
     assert [skill.name for skill in resolved.skills] == ["github"]
     assert resolved.skills[0].files == {"references/query.md": "Prefer precise queries."}
     assert [rule.name for rule in resolved.rules] == ["Cite"]
@@ -119,6 +120,40 @@ def test_resolver_names_skill_working_set_as_resolved_skills() -> None:
 
     assert "enabled_skills" not in source
     assert "resolved_skills" in source
+
+
+def test_resolver_keeps_skill_id_separate_from_display_name() -> None:
+    config = _config(
+        skills=[
+            AgentSkill(
+                skill_id="github-core",
+                package_id="github-core-package",
+                name="GitHub",
+                description="GitHub guidance",
+                version="1.0.0",
+            )
+        ]
+    )
+
+    resolved = resolve_agent_config(
+        config,
+        skill_repo=_SkillRepo(
+            {
+                "github-core-package": SkillPackage(
+                    id="github-core-package",
+                    owner_user_id="owner-1",
+                    skill_id="github-core",
+                    version="1.0.0",
+                    hash="sha256:github-core",
+                    skill_md=_skill_md("GitHub"),
+                    created_at=datetime(2026, 4, 25, tzinfo=UTC),
+                )
+            }
+        ),
+    )
+
+    assert resolved.skills[0].id == "github-core"
+    assert resolved.skills[0].name == "GitHub"
 
 
 def test_resolver_rejects_skill_without_package_id():

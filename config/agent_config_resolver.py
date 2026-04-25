@@ -60,6 +60,7 @@ def _resolve_skill(owner_user_id: str, skill: Any, skill_repo: Any) -> ResolvedS
     if package.skill_id != skill.skill_id:
         raise RuntimeError(f"Skill package {skill.package_id} does not belong to Skill {skill.skill_id}")
     resolved = ResolvedSkill(
+        id=skill.skill_id,
         name=skill.name,
         description=skill.description,
         version=package.version,

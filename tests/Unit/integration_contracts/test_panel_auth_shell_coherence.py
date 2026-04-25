@@ -1978,6 +1978,7 @@ def test_apply_snapshot_saves_one_agent_config_aggregate():
                 "system_prompt": "main prompt",
                 "skills": [
                     {
+                        "id": "search-core",
                         "name": "Search",
                         "version": "1.0.0",
                         "content": "---\nname: Search\n---\nbody",
@@ -2000,9 +2001,9 @@ def test_apply_snapshot_saves_one_agent_config_aggregate():
     assert user_id == created_users[0].id
     assert saved_configs[0].name == "Repo Agent"
     assert saved_configs[0].skills[0].description == "skill desc"
-    assert saved_configs[0].skills[0].skill_id == "search"
+    assert saved_configs[0].skills[0].skill_id == "search-core"
     assert saved_configs[0].skills[0].package_id
-    assert skill_repo.get_by_id("user-1", "search") is not None
+    assert skill_repo.get_by_id("user-1", "search-core") is not None
     package = skill_repo.get_package("user-1", saved_configs[0].skills[0].package_id or "")
     assert package is not None
     assert package.skill_md == "---\nname: Search\n---\nbody"
@@ -2012,7 +2013,7 @@ def test_apply_snapshot_saves_one_agent_config_aggregate():
         "source_at": saved_configs[0].skills[0].source["source_at"],
     }
     assert saved_configs[0].skills[0].source == package.source
-    library_skill = skill_repo.get_by_id("user-1", "search")
+    library_skill = skill_repo.get_by_id("user-1", "search-core")
     assert library_skill is not None
     assert library_skill.source == package.source
     assert saved_configs[0].rules[0].content == "rule body"
@@ -2030,7 +2031,7 @@ def test_apply_snapshot_with_skills_requires_skill_repo():
                 "agent": {
                     "id": "cfg-source",
                     "name": "Repo Agent",
-                    "skills": [{"name": "Search", "version": "1.0.0", "content": "---\nname: Search\n---\nbody"}],
+                    "skills": [{"id": "search", "name": "Search", "version": "1.0.0", "content": "---\nname: Search\n---\nbody"}],
                 },
             },
             marketplace_item_id="item-1",
@@ -2059,7 +2060,7 @@ def test_apply_snapshot_requires_source_identity(field: str, value: object, mess
             "agent": {
                 "id": "cfg-source",
                 "name": "Repo Agent",
-                "skills": [{"name": "Search", "version": "1.0.0", "content": "---\nname: Search\n---\nbody"}],
+                "skills": [{"id": "search", "name": "Search", "version": "1.0.0", "content": "---\nname: Search\n---\nbody"}],
             },
         },
         "marketplace_item_id": "item-1",
@@ -2085,6 +2086,77 @@ def test_apply_snapshot_does_not_fill_package_version_from_source_version() -> N
     assert "or source_version" not in source
 
 
+def test_apply_snapshot_does_not_derive_skill_id_from_name() -> None:
+    import inspect
+
+    import backend.hub.snapshot_apply as snapshot_apply
+
+    source = inspect.getsource(snapshot_apply)
+
+    assert "_skill_id_from_name" not in source
+    assert '.lower().replace(" ", "-")' not in source
+
+
+def test_apply_snapshot_rejects_duplicate_skill_ids_before_library_write():
+    from backend.hub.snapshot_apply import apply_snapshot
+
+    skill_repo = _MemorySkillRepo()
+
+    with pytest.raises(ValueError, match="Duplicate Skill id in snapshot: search"):
+        apply_snapshot(
+            snapshot={
+                "schema_version": "agent-snapshot/v1",
+                "agent": {
+                    "id": "cfg-source",
+                    "name": "Repo Agent",
+                    "skills": [
+                        {"id": "search", "name": "Search One", "version": "1.0.0", "content": "---\nname: Search One\n---\none"},
+                        {"id": "search", "name": "Search Two", "version": "1.0.0", "content": "---\nname: Search Two\n---\ntwo"},
+                    ],
+                },
+            },
+            marketplace_item_id="item-1",
+            source_version="1.0.0",
+            owner_user_id="user-1",
+            user_repo=SimpleNamespace(create=lambda _row: None),
+            agent_config_repo=SimpleNamespace(save_agent_config=lambda _config: None),
+            skill_repo=skill_repo,
+        )
+    assert skill_repo.list_for_owner("user-1") == []
+
+
+def test_apply_snapshot_rejects_non_library_skill_id_before_library_write():
+    from backend.hub.snapshot_apply import apply_snapshot
+
+    skill_repo = _MemorySkillRepo()
+
+    with pytest.raises(ValueError, match="Invalid Snapshot Skill id: nested/search"):
+        apply_snapshot(
+            snapshot={
+                "schema_version": "agent-snapshot/v1",
+                "agent": {
+                    "id": "cfg-source",
+                    "name": "Repo Agent",
+                    "skills": [
+                        {
+                            "id": "nested/search",
+                            "name": "Search",
+                            "version": "1.0.0",
+                            "content": "---\nname: Search\n---\nbody",
+                        }
+                    ],
+                },
+            },
+            marketplace_item_id="item-1",
+            source_version="1.0.0",
+            owner_user_id="user-1",
+            user_repo=SimpleNamespace(create=lambda _row: None),
+            agent_config_repo=SimpleNamespace(save_agent_config=lambda _config: None),
+            skill_repo=skill_repo,
+        )
+    assert skill_repo.list_for_owner("user-1") == []
+
+
 def test_apply_snapshot_rejects_duplicate_skill_names_before_library_write():
     from backend.hub.snapshot_apply import apply_snapshot
 
@@ -2098,8 +2170,8 @@ def test_apply_snapshot_rejects_duplicate_skill_names_before_library_write():
                     "id": "cfg-source",
                     "name": "Repo Agent",
                     "skills": [
-                        {"name": "Search", "version": "1.0.0", "content": "---\nname: Search\n---\none"},
-                        {"name": "Search", "version": "1.0.0", "content": "---\nname: Search\n---\ntwo"},
+                        {"id": "search-one", "name": "Search", "version": "1.0.0", "content": "---\nname: Search\n---\none"},
+                        {"id": "search-two", "name": "Search", "version": "1.0.0", "content": "---\nname: Search\n---\ntwo"},
                     ],
                 },
             },

@@ -13,7 +13,7 @@ def _skill(
     content: str = "---\nname: query-helper\n---\nUse exact terms.",
     files: dict[str, str] | None = None,
 ) -> ResolvedSkill:
-    return ResolvedSkill(name=name, version="1.0.0", content=content, files=files or {})
+    return ResolvedSkill(id=name, name=name, version="1.0.0", content=content, files=files or {})
 
 
 def test_skills_service_has_no_filesystem_skill_index() -> None:
