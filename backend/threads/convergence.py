@@ -12,9 +12,10 @@ from storage.runtime import uses_supabase_runtime_defaults
 def delete_thread_in_db(thread_id: str) -> None:
     _get_container().purge_thread(thread_id)
 
-    sandbox_db = resolve_sandbox_db_path()
-    if not uses_supabase_runtime_defaults() and not sandbox_db.exists():
-        return
+    if not uses_supabase_runtime_defaults():
+        sandbox_db = resolve_sandbox_db_path()
+        if not sandbox_db.exists():
+            return
 
     session_repo = make_chat_session_repo()
     terminal_repo = make_terminal_repo()
