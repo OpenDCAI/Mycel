@@ -201,5 +201,5 @@ _AGENT_TOOL_SECTION = """
 """
 
 
-def build_common_sections(skills_enabled: bool) -> str:
+def build_common_sections() -> str:
     return _AGENT_TOOL_SECTION
