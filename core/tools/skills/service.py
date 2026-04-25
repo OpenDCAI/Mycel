@@ -13,7 +13,7 @@ class SkillsService:
         registry: ToolRegistry,
         skills: Sequence[ResolvedSkill] | None = None,
     ):
-        self._skills: dict[str, str] = {}
+        self._skill_bodies: dict[str, str] = {}
         self._skill_files: dict[str, dict[str, str]] = {}
         self._load_skills(skills if skills is not None else ())
         self._register(registry)
@@ -25,11 +25,11 @@ class SkillsService:
             document = parse_skill_document(skill.content, label="Skill content")
             if document.name != skill.name:
                 raise ValueError("Skill frontmatter name must match ResolvedSkill.name")
-            self._skills[skill.name] = skill.content
+            self._skill_bodies[skill.name] = document.body
             self._skill_files[skill.name] = skill.files
 
     def _register(self, registry: ToolRegistry) -> None:
-        if not self._skills:
+        if not self._skill_bodies:
             return
 
         registry.register(
@@ -45,7 +45,7 @@ class SkillsService:
         )
 
     def _get_schema(self) -> dict:
-        available_skills = sorted(self._skills)
+        available_skills = sorted(self._skill_bodies)
         skills_list = "\n".join(f"- {name}" for name in available_skills)
 
         return make_tool_schema(
@@ -66,11 +66,11 @@ class SkillsService:
         )
 
     def _load_skill(self, skill_name: str) -> str:
-        if skill_name not in self._skills:
-            available = ", ".join(sorted(self._skills))
+        if skill_name not in self._skill_bodies:
+            available = ", ".join(sorted(self._skill_bodies))
             raise ValueError(f"Skill '{skill_name}' not found. Available skills: {available}")
 
-        content = parse_skill_document(self._skills[skill_name], label="Skill content").body
+        content = self._skill_bodies[skill_name]
         return f"Loaded skill: {skill_name}\n\n{self._append_adjacent_files(content, self._skill_files[skill_name])}"
 
     @staticmethod

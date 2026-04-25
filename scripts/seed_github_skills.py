@@ -67,15 +67,8 @@ def parse_skill_md(skill_md: Path) -> dict | None:
 
     document = parse_skill_document(content, label="SKILL.md")
     name = document.name
-    description = ""
+    description = document.description
     tags = []
-    raw_description = document.frontmatter.get("description", "")
-    if raw_description is None:
-        description = ""
-    elif isinstance(raw_description, str):
-        description = raw_description.strip()
-    else:
-        raise ValueError("SKILL.md frontmatter description must be a string")
     meta = document.frontmatter.get("metadata", {})
     if isinstance(meta, dict):
         for key in ("domain", "role", "category"):

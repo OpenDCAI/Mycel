@@ -53,14 +53,10 @@ def _resolve_skill(owner_user_id: str, skill: AgentSkill, skill_repo: Any) -> Re
     if package.skill_id != skill.skill_id:
         raise RuntimeError(f"Skill package {skill.package_id} does not belong to Skill {skill.skill_id}")
     document = parse_skill_document(package.skill_md, label=f"Skill {skill.skill_id!r} on Agent config")
-    name = document.name
-    description = document.frontmatter.get("description", "")
-    if not isinstance(description, str):
-        description = ""
     resolved = ResolvedSkill(
         id=skill.skill_id,
-        name=name,
-        description=description,
+        name=document.name,
+        description=document.description,
         version=package.version,
         content=package.skill_md,
         files=dict(package.files),

@@ -14,9 +14,17 @@ class SkillDocument:
     frontmatter: dict[str, Any]
     body: str
     name: str
+    description: str
+    version: str | None
 
 
-def parse_skill_document(content: str, *, label: str = "Skill document") -> SkillDocument:
+def parse_skill_document(
+    content: str,
+    *,
+    label: str = "Skill document",
+    require_description: bool = False,
+    require_version: bool = False,
+) -> SkillDocument:
     match = _FRONTMATTER_RE.match(content)
     if match is None:
         raise ValueError(f"{label} must be a SKILL.md document with frontmatter")
@@ -27,31 +35,35 @@ def parse_skill_document(content: str, *, label: str = "Skill document") -> Skil
     if not isinstance(frontmatter, dict):
         raise ValueError(f"{label} frontmatter must be a mapping")
     name = _frontmatter_text(frontmatter, "name", label=label)
-    return SkillDocument(frontmatter=frontmatter, body=content[match.end() :], name=name)
-
-
-def skill_description(document: SkillDocument, *, required: bool = False) -> str:
-    value = document.frontmatter.get("description")
-    if value is None and not required:
-        return ""
-    return _frontmatter_text(document.frontmatter, "description", label="SKILL.md")
-
-
-def skill_version(document: SkillDocument) -> str:
-    if "version" not in document.frontmatter:
-        raise ValueError("SKILL.md frontmatter must include version")
-    value = document.frontmatter["version"]
-    if not isinstance(value, str) or not value.strip():
-        raise ValueError("SKILL.md frontmatter version must be a string")
-    return value.strip()
-
-
-def strip_skill_frontmatter(content: str) -> str:
-    return parse_skill_document(content).body
+    description = _optional_frontmatter_text(
+        frontmatter,
+        "description",
+        label=label,
+        required=require_description,
+    )
+    version = _optional_frontmatter_text(frontmatter, "version", label=label, required=require_version)
+    return SkillDocument(
+        frontmatter=frontmatter,
+        body=content[match.end() :],
+        name=name,
+        description=description or "",
+        version=version,
+    )
 
 
 def _frontmatter_text(frontmatter: dict[str, Any], key: str, *, label: str) -> str:
     value = frontmatter.get(key)
     if not isinstance(value, str) or not value.strip():
         raise ValueError(f"{label} frontmatter must include {key}")
+    return value.strip()
+
+
+def _optional_frontmatter_text(frontmatter: dict[str, Any], key: str, *, label: str, required: bool) -> str | None:
+    value = frontmatter.get(key)
+    if value is None and not required:
+        return None
+    if value is None:
+        raise ValueError(f"{label} frontmatter must include {key}")
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError(f"{label} frontmatter {key} must be a string")
     return value.strip()

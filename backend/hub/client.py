@@ -69,14 +69,6 @@ def _required_text(value: Any, *, label: str) -> str:
     return value.strip()
 
 
-def _optional_text(value: Any, *, label: str) -> str:
-    if value is None:
-        return ""
-    if not isinstance(value, str):
-        raise ValueError(f"{label} must be a string")
-    return value.strip()
-
-
 def _skill_document_from_content(content: str) -> SkillDocument:
     return parse_skill_document(content, label="Skill snapshot")
 
@@ -254,7 +246,6 @@ def apply_item(
                     raise ValueError("Skill name already exists under a different Library id")
         else:
             skill_id = existing_skill.id
-        skill_description = _optional_text(skill_document.frontmatter.get("description"), label="Skill snapshot frontmatter description")
         publisher = _required_text(item.get("publisher_username"), label="Hub item publisher_username")
         timestamp = datetime.now(UTC)
         source = {
@@ -271,7 +262,7 @@ def apply_item(
                 id=skill_id,
                 owner_user_id=owner_user_id,
                 name=skill_name,
-                description=skill_description,
+                description=skill_document.description,
                 source=source,
                 created_at=timestamp,
                 updated_at=timestamp,
