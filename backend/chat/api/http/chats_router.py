@@ -18,6 +18,7 @@ from backend.chat.api.http.dependencies import (
     get_thread_repo,
     get_user_repo,
 )
+from messaging.errors import ChatNotCaughtUpError
 from messaging.social_access import can_group_chat_with_participant
 from messaging.user_ownership import is_owned_by_viewer
 
@@ -35,6 +36,8 @@ class SendMessageBody(BaseModel):
     mentioned_ids: list[str] | None = None
     message_type: str = "human"
     signal: str | None = None
+    reply_to: str | None = None
+    enforce_caught_up: bool = False
 
 
 class MuteChatBody(BaseModel):
@@ -197,15 +200,31 @@ def send_message(
         raise HTTPException(400, "Content cannot be empty")
     sender_id = body.sender_id or user_id
     _verify_user_ownership(messaging_service, sender_id, user_id)
-    msg = messaging_service.send(
-        chat_id,
-        sender_id,
-        body.content,
-        mentions=body.mentioned_ids,
-        signal=body.signal,
-        message_type=body.message_type,
-    )
+    try:
+        msg = messaging_service.send(
+            chat_id,
+            sender_id,
+            body.content,
+            mentions=body.mentioned_ids,
+            signal=body.signal,
+            message_type=body.message_type,
+            reply_to=body.reply_to,
+            enforce_caught_up=body.enforce_caught_up,
+        )
+    except ChatNotCaughtUpError as exc:
+        raise HTTPException(409, str(exc)) from exc
     return messaging_service.project_message_response(msg)
+
+
+@router.get("/{chat_id}/messages/unread")
+def list_unread_messages(
+    chat_id: str,
+    user_id: Annotated[str, Depends(get_current_user_id)],
+    messaging_service: Annotated[Any, Depends(get_messaging_service)],
+):
+    if not messaging_service.is_chat_member(chat_id, user_id):
+        raise HTTPException(403, "Not a participant of this chat")
+    return [messaging_service.project_message_response(msg) for msg in messaging_service.list_unread(chat_id, user_id)]
 
 
 @router.post("/{chat_id}/messages/{message_id}/retract")

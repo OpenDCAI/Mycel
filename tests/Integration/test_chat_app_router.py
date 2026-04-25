@@ -15,6 +15,7 @@ def test_chat_app_router_mounts_chat_relationship_and_conversation_routes() -> N
     paths = response.json()["paths"]
 
     assert "/api/chats" in paths
+    assert "/api/chats/{chat_id}/messages/unread" in paths
     assert "/api/relationships" in paths
     assert "/api/conversations" in paths
 
