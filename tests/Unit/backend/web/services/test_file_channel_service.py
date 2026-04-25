@@ -28,8 +28,8 @@ class _Container:
 
 def test_get_file_channel_binding_uses_workspace_owned_local_channel_root(monkeypatch):
     monkeypatch.setattr(file_channel_service, "_get_container", lambda: _Container())
-    monkeypatch.setattr(file_channel_service, "user_home_path", lambda *parts: Path("/tmp/leon-home").joinpath(*parts))
-    expected_root = Path("/tmp/leon-home/file_channels/workspace-1").resolve()
+    monkeypatch.setenv("LEON_FILE_CHANNEL_ROOT", "/tmp/mycel-file-channels")
+    expected_root = Path("/tmp/mycel-file-channels/workspace-1").resolve()
 
     binding = file_channel_service.get_file_channel_binding("thread-1")
 
@@ -41,12 +41,24 @@ def test_get_file_channel_binding_uses_workspace_owned_local_channel_root(monkey
 
 def test_get_file_channel_source_uses_workspace_owned_local_channel_root(monkeypatch):
     monkeypatch.setattr(file_channel_service, "_get_container", lambda: _Container())
-    monkeypatch.setattr(file_channel_service, "user_home_path", lambda *parts: Path("/tmp/leon-home").joinpath(*parts))
-    expected_root = Path("/tmp/leon-home/file_channels/workspace-1").resolve()
+    monkeypatch.setenv("LEON_FILE_CHANNEL_ROOT", "/tmp/mycel-file-channels")
+    expected_root = Path("/tmp/mycel-file-channels/workspace-1").resolve()
 
     source = file_channel_service.get_file_channel_source("thread-1")
 
     assert source.host_path == expected_root
+
+
+def test_get_file_channel_binding_requires_explicit_channel_root(monkeypatch):
+    monkeypatch.setattr(file_channel_service, "_get_container", lambda: _Container())
+    monkeypatch.delenv("LEON_FILE_CHANNEL_ROOT", raising=False)
+
+    try:
+        file_channel_service.get_file_channel_binding("thread-1")
+    except RuntimeError as error:
+        assert "LEON_FILE_CHANNEL_ROOT is required" in str(error)
+    else:
+        raise AssertionError("file channel binding accepted an implicit host path")
 
 
 def test_save_file_does_not_touch_chat_session_activity(monkeypatch):

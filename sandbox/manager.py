@@ -5,7 +5,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from config.user_paths import user_home_path
+from config.file_channel_paths import file_channel_root
 from sandbox.capability import SandboxCapability
 from sandbox.chat_session import ChatSessionManager, ChatSessionPolicy
 from sandbox.clock import parse_runtime_datetime, utc_now
@@ -428,7 +428,7 @@ class SandboxManager:
         )
         if not workspace_id:
             raise ValueError("thread.current_workspace_id is required")
-        return user_home_path("file_channels", str(workspace_id)).expanduser().resolve()
+        return file_channel_root(str(workspace_id))
 
     def _skip_volume_sync_for_local_sandbox_runtime(self, sandbox_runtime) -> bool:
         # @@@local-no-volume-sync - local sessions execute directly in host cwd, so upload/download

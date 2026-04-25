@@ -4,7 +4,7 @@ import logging
 from dataclasses import dataclass
 from pathlib import Path
 
-from config.user_paths import user_home_path
+from config.file_channel_paths import file_channel_root
 from storage.container_cache import get_storage_container as _get_container
 
 logger = logging.getLogger(__name__)
@@ -56,7 +56,7 @@ def get_file_channel_binding(thread_id: str) -> FileChannelBinding:
         thread_id=thread_id,
         workspace_id=workspace_id,
         workspace_path=_required_text(workspace_row, "workspace_path", "workspace"),
-        local_staging_root=user_home_path("file_channels", workspace_id).expanduser().resolve(),
+        local_staging_root=file_channel_root(workspace_id),
         remote_files_dir="/workspace/files",
     )
 
