@@ -36,7 +36,7 @@ class SummaryData:
 
 class SummaryStore:
     def __init__(self, db_path: Path | None = None, summary_repo: SummaryRepo | None = None):
-        self.db_path = db_path
+        self.db_path = Path(db_path) if db_path is not None else None
         self._repo: SummaryRepo
         if summary_repo is not None:
             self._repo = summary_repo
@@ -47,9 +47,8 @@ class SummaryStore:
         elif db_path is None:
             raise RuntimeError("SummaryStore requires summary_repo or db_path.")
         else:
-            resolved_db_path = Path(db_path)
             # @@@connect_injection - keep _connect as an indirection point so existing retry/rollback tests can patch it.
-            self._repo = SQLiteSummaryRepo(resolved_db_path, connect_fn=lambda p: _connect(Path(p)))
+            self._repo = SQLiteSummaryRepo(self.db_path, connect_fn=lambda p: _connect(Path(p)))
         self._ensure_tables()
 
     def _ensure_tables(self) -> None:
