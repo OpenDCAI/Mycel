@@ -58,6 +58,20 @@ def _agent_config(**overrides: object) -> AgentConfig:
     return AgentConfig(**data)
 
 
+def _write_configured_file_skill(tmp_path, *, name: str, body: str, description: str = "configured file skill") -> None:
+    skill_dir = tmp_path / "file-skills" / name
+    skill_dir.mkdir(parents=True)
+    (skill_dir / "SKILL.md").write_text(
+        f"---\nname: {name}\ndescription: {description}\n---\n{body}",
+        encoding="utf-8",
+    )
+    (tmp_path / ".leon").mkdir()
+    (tmp_path / ".leon" / "runtime.json").write_text(
+        json.dumps({"skills": {"enabled": True, "paths": [str(tmp_path / "file-skills")], "skills": {}}}),
+        encoding="utf-8",
+    )
+
+
 class _FakeToolTaskRepo:
     def __init__(self) -> None:
         self._rows: dict[str, dict[str, dict[str, Any]]] = {}
@@ -609,16 +623,11 @@ async def test_leon_agent_agent_config_id_registers_repo_backed_skills(tmp_path)
 async def test_leon_agent_agent_config_id_does_not_register_configured_file_skills(tmp_path):
     from core.runtime.agent import LeonAgent
 
-    disk_skill_dir = tmp_path / "disk-skills" / "DiskOnly"
-    disk_skill_dir.mkdir(parents=True)
-    (disk_skill_dir / "SKILL.md").write_text(
-        "---\nname: DiskOnly\ndescription: must not leak into repo-backed agents\n---\nUse host-local state.",
-        encoding="utf-8",
-    )
-    (tmp_path / ".leon").mkdir()
-    (tmp_path / ".leon" / "runtime.json").write_text(
-        json.dumps({"skills": {"enabled": True, "paths": [str(tmp_path / "disk-skills")], "skills": {}}}),
-        encoding="utf-8",
+    _write_configured_file_skill(
+        tmp_path,
+        name="DiskOnly",
+        body="Use host-local state.",
+        description="must not leak into repo-backed agents",
     )
 
     class _Repo:
@@ -666,16 +675,11 @@ async def test_leon_agent_agent_config_id_does_not_register_configured_file_skil
 async def test_leon_agent_empty_agent_config_skills_do_not_enable_configured_file_skills(tmp_path):
     from core.runtime.agent import LeonAgent
 
-    disk_skill_dir = tmp_path / "disk-skills" / "DiskOnly"
-    disk_skill_dir.mkdir(parents=True)
-    (disk_skill_dir / "SKILL.md").write_text(
-        "---\nname: DiskOnly\ndescription: must not leak into repo-backed agents\n---\nUse host-local state.",
-        encoding="utf-8",
-    )
-    (tmp_path / ".leon").mkdir()
-    (tmp_path / ".leon" / "runtime.json").write_text(
-        json.dumps({"skills": {"enabled": True, "paths": [str(tmp_path / "disk-skills")], "skills": {}}}),
-        encoding="utf-8",
+    _write_configured_file_skill(
+        tmp_path,
+        name="DiskOnly",
+        body="Use host-local state.",
+        description="must not leak into repo-backed agents",
     )
 
     class _Repo:
@@ -709,16 +713,11 @@ async def test_leon_agent_empty_agent_config_skills_do_not_enable_configured_fil
 async def test_leon_agent_default_runtime_still_registers_configured_file_skills(tmp_path):
     from core.runtime.agent import LeonAgent
 
-    skill_dir = tmp_path / "file-skills" / "FileSkill"
-    skill_dir.mkdir(parents=True)
-    (skill_dir / "SKILL.md").write_text(
-        "---\nname: FileSkill\ndescription: local runtime skill\n---\nUse configured local guidance.",
-        encoding="utf-8",
-    )
-    (tmp_path / ".leon").mkdir()
-    (tmp_path / ".leon" / "runtime.json").write_text(
-        json.dumps({"skills": {"enabled": True, "paths": [str(tmp_path / "file-skills")], "skills": {}}}),
-        encoding="utf-8",
+    _write_configured_file_skill(
+        tmp_path,
+        name="FileSkill",
+        body="Use configured local guidance.",
+        description="local runtime skill",
     )
 
     mock_model = _mock_model("File skill response")
