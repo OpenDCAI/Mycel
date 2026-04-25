@@ -138,6 +138,60 @@ async def test_registry_get_or_create_agent_uses_explicit_messaging_service(
 
 
 @pytest.mark.asyncio
+async def test_registry_get_or_create_agent_uses_explicit_relationship_service(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    captured: dict[str, object] = {}
+    messaging_service = object()
+    relationship_service = object()
+
+    def _fake_create_agent_sync(**kwargs) -> object:
+        captured["chat_repos"] = kwargs.get("chat_repos")
+        return SimpleNamespace()
+
+    class _ThreadRepo:
+        def get_by_id(self, thread_id: str):
+            return {
+                "id": thread_id,
+                "agent_user_id": "agent-user-explicit",
+                "cwd": None,
+                "model": "leon:large",
+            }
+
+    class _UserRepo:
+        def get_by_id(self, user_id: str):
+            return SimpleNamespace(id=user_id, owner_user_id="owner-explicit", agent_config_id="cfg-explicit")
+
+    monkeypatch.setattr(agent_pool._registry, "create_agent_sync", _fake_create_agent_sync)
+    monkeypatch.setattr(agent_pool._registry, "get_or_create_agent_id", lambda **_: "agent-explicit")
+    monkeypatch.setattr(
+        agent_pool._registry, "get_file_channel_binding", lambda _thread_id: (_ for _ in ()).throw(ValueError()), raising=False
+    )
+
+    app = SimpleNamespace(
+        state=SimpleNamespace(
+            agent_pool={},
+            thread_repo=_ThreadRepo(),
+            user_repo=_UserRepo(),
+            runtime_storage_state=_runtime_storage_state(_EmptyAgentConfigRepo()),
+            thread_cwd={},
+            thread_sandbox={},
+        )
+    )
+
+    await agent_pool._registry.get_or_create_agent(
+        cast(Any, app),
+        "local",
+        thread_id="thread-explicit",
+        messaging_service=messaging_service,
+        relationship_service=relationship_service,
+    )
+
+    chat_repos = cast(dict[str, object], captured["chat_repos"])
+    assert chat_repos["relationship_service"] is relationship_service
+
+
+@pytest.mark.asyncio
 async def test_registry_get_or_create_agent_requires_explicit_messaging_service_for_chat_repos(
     monkeypatch: pytest.MonkeyPatch,
 ):
