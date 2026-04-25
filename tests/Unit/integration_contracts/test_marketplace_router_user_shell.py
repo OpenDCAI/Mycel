@@ -104,6 +104,7 @@ async def test_upgrade_from_marketplace_uses_user_repo_not_member_repo(monkeypat
     assert seen["owner_user_id"] == "owner-1"
     assert seen["user_repo"] is request.app.state.user_repo
     assert seen["agent_config_repo"] is request.app.state.runtime_storage_state.storage_container.agent_config_repo()
+    assert seen["skill_repo"] is request.app.state.runtime_storage_state.storage_container.skill_repo()
 
 
 @pytest.mark.asyncio
@@ -132,6 +133,100 @@ async def test_apply_marketplace_item_uses_user_and_agent_config_repos(monkeypat
     assert seen["agent_config_repo"] is request.app.state.runtime_storage_state.storage_container.agent_config_repo()
     assert seen["skill_repo"] is request.app.state.runtime_storage_state.storage_container.skill_repo()
     assert seen["agent_user_id"] == "agent-1"
+
+
+@pytest.mark.asyncio
+async def test_apply_member_snapshot_materializes_skill_through_router(monkeypatch: pytest.MonkeyPatch) -> None:
+    class _SkillRepo:
+        def __init__(self) -> None:
+            self.skills: dict[tuple[str, str], Any] = {}
+            self.packages: dict[tuple[str, str], Any] = {}
+
+        def list_for_owner(self, owner_user_id: str) -> list[Any]:
+            return [skill for (owner, _), skill in self.skills.items() if owner == owner_user_id]
+
+        def get_by_id(self, owner_user_id: str, skill_id: str) -> Any | None:
+            return self.skills.get((owner_user_id, skill_id))
+
+        def upsert(self, skill: Any) -> Any:
+            self.skills[(getattr(skill, "owner_user_id"), getattr(skill, "id"))] = skill
+            return skill
+
+        def create_package(self, package: Any) -> Any:
+            self.packages[(getattr(package, "owner_user_id"), getattr(package, "id"))] = package
+            return package
+
+        def get_package(self, owner_user_id: str, package_id: str) -> Any | None:
+            return self.packages.get((owner_user_id, package_id))
+
+        def select_package(self, owner_user_id: str, skill_id: str, package_id: str) -> None:
+            skill = self.skills[(owner_user_id, skill_id)]
+            self.skills[(owner_user_id, skill_id)] = skill.model_copy(update={"package_id": package_id})
+
+    class _UserRepo:
+        def __init__(self) -> None:
+            self.users: dict[str, Any] = {}
+
+        def get_by_id(self, user_id: str) -> Any | None:
+            return self.users.get(user_id)
+
+        def create(self, row: Any) -> None:
+            self.users[getattr(row, "id")] = row
+
+    class _AgentConfigRepo:
+        def __init__(self) -> None:
+            self.saved: list[Any] = []
+
+        def save_agent_config(self, config: Any) -> None:
+            self.saved.append(config)
+
+    def hub_response(_method: str, _path: str, **_kwargs: object) -> dict[str, object]:
+        return {
+            "item": {"type": "member", "name": "Snapshot Agent"},
+            "version": "1.2.3",
+            "snapshot": {
+                "schema_version": "agent-snapshot/v1",
+                "agent": {
+                    "id": "source-cfg",
+                    "name": "Snapshot Agent",
+                    "skills": [
+                        {
+                            "name": "Snapshot Skill",
+                            "description": "skill desc",
+                            "content": "---\nname: Snapshot Skill\n---\nbody",
+                            "files": {"references/routing.md": "route narrowly"},
+                        }
+                    ],
+                },
+            },
+        }
+
+    monkeypatch.setattr(marketplace_router.marketplace_client, "_hub_api", hub_response)
+    skill_repo = _SkillRepo()
+    agent_config_repo = _AgentConfigRepo()
+    request = SimpleNamespace(
+        app=SimpleNamespace(
+            state=SimpleNamespace(
+                user_repo=_UserRepo(),
+                runtime_storage_state=_runtime_storage_state(agent_config_repo, skill_repo),
+            )
+        )
+    )
+
+    result = await marketplace_router.apply_marketplace_item(
+        req=ApplyFromMarketplaceRequest(item_id="item-1"),
+        user_id="owner-1",
+        request=cast(Any, request),
+    )
+
+    saved_config = agent_config_repo.saved[0]
+    saved_skill = saved_config.skills[0]
+    assert result == {"user_id": saved_config.agent_user_id, "type": "user", "version": "1.2.3"}
+    assert saved_skill.skill_id == "snapshot-skill"
+    assert saved_skill.package_id
+    package = skill_repo.get_package("owner-1", saved_skill.package_id)
+    assert package is not None
+    assert getattr(package, "files") == {"references/routing.md": "route narrowly"}
 
 
 @pytest.mark.asyncio

@@ -141,6 +141,7 @@ async def upgrade_from_marketplace(
 ) -> dict[str, Any]:
     user_repo = request.app.state.user_repo
     agent_config_repo = _agent_config_repo(request)
+    skill_repo = _skill_repo(request)
     await _verify_user_ownership(req.user_id, user_id, user_repo)
 
     return await asyncio.to_thread(
@@ -150,6 +151,7 @@ async def upgrade_from_marketplace(
         owner_user_id=user_id,
         user_repo=user_repo,
         agent_config_repo=agent_config_repo,
+        skill_repo=skill_repo,
     )
 
 

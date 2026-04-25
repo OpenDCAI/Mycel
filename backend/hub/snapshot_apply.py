@@ -3,9 +3,101 @@
 from __future__ import annotations
 
 import time
+from datetime import UTC, datetime
 from typing import Any
 
-from config.agent_config_types import AgentConfig, AgentSnapshot
+from config.agent_config_resolver import validate_agent_skill_content
+from config.agent_config_types import AgentConfig, AgentSkill, AgentSnapshot, Skill, SkillPackage
+from config.skill_package import build_skill_package_hash, build_skill_package_manifest
+
+
+def _skill_id_from_name(name: str) -> str:
+    skill_id = name.strip().lower().replace(" ", "-")
+    if "/" in skill_id or "\\" in skill_id or skill_id in {"", ".", ".."}:
+        raise ValueError(f"Invalid Skill name for Library id: {name}")
+    return skill_id
+
+
+def _materialize_snapshot_skills(
+    *,
+    skills: list[AgentSkill],
+    owner_user_id: str,
+    marketplace_item_id: str,
+    source_version: str,
+    source_at: int,
+    skill_repo: Any = None,
+) -> list[AgentSkill]:
+    if not skills:
+        return []
+    if skill_repo is None:
+        raise RuntimeError("skill_repo is required to apply snapshot Skills")
+
+    seen_names: set[str] = set()
+    for snapshot_skill in skills:
+        validate_agent_skill_content(snapshot_skill)
+        if snapshot_skill.name in seen_names:
+            raise ValueError(f"Duplicate Skill name in snapshot: {snapshot_skill.name}")
+        seen_names.add(snapshot_skill.name)
+
+    result: list[AgentSkill] = []
+    timestamp = datetime.now(UTC)
+    library_skills = skill_repo.list_for_owner(owner_user_id)
+    for snapshot_skill in skills:
+        skill_id = snapshot_skill.skill_id or _skill_id_from_name(snapshot_skill.name)
+        existing = skill_repo.get_by_id(owner_user_id, skill_id)
+        if existing is not None and existing.name != snapshot_skill.name:
+            raise ValueError("Snapshot Skill frontmatter name must match existing Skill name")
+        for library_skill in library_skills:
+            if library_skill.name == snapshot_skill.name and library_skill.id != skill_id:
+                raise ValueError("Snapshot Skill name already exists under a different Library id")
+
+        source = dict(snapshot_skill.source)
+        source.update(
+            {
+                "marketplace_item_id": marketplace_item_id,
+                "source_version": source_version,
+                "source_at": source_at,
+            }
+        )
+        # @@@snapshot-skill-materialization - AgentConfig stores package bindings; Hub snapshots carry resolved Skill content.
+        skill = skill_repo.upsert(
+            Skill(
+                id=skill_id,
+                owner_user_id=owner_user_id,
+                name=snapshot_skill.name,
+                description=snapshot_skill.description,
+                source=source,
+                created_at=getattr(existing, "created_at", timestamp),
+                updated_at=timestamp,
+            )
+        )
+        package_hash = build_skill_package_hash(snapshot_skill.content, snapshot_skill.files)
+        package = skill_repo.create_package(
+            SkillPackage(
+                id=package_hash.removeprefix("sha256:"),
+                owner_user_id=owner_user_id,
+                skill_id=skill.id,
+                version=snapshot_skill.version or source_version,
+                hash=package_hash,
+                manifest=build_skill_package_manifest(snapshot_skill.content, snapshot_skill.files),
+                skill_md=snapshot_skill.content,
+                files=snapshot_skill.files,
+                source=source,
+                created_at=timestamp,
+            )
+        )
+        skill_repo.select_package(owner_user_id, skill.id, package.id)
+        result.append(
+            snapshot_skill.model_copy(
+                update={
+                    "skill_id": skill.id,
+                    "package_id": package.id,
+                    "version": package.version,
+                    "source": source,
+                }
+            )
+        )
+    return result
 
 
 def apply_snapshot(
@@ -17,6 +109,7 @@ def apply_snapshot(
     existing_user_id: str | None = None,
     user_repo: Any = None,
     agent_config_repo: Any = None,
+    skill_repo: Any = None,
 ) -> str:
     from storage.contracts import UserRow, UserType
     from storage.utils import generate_agent_config_id, generate_agent_user_id
@@ -49,11 +142,21 @@ def apply_snapshot(
             )
         )
 
+    source_at = int(now * 1000)
+    skills = _materialize_snapshot_skills(
+        skills=resolved.skills,
+        owner_user_id=owner_user_id,
+        marketplace_item_id=marketplace_item_id,
+        source_version=source_version,
+        source_at=source_at,
+        skill_repo=skill_repo,
+    )
+
     meta = dict(resolved.meta)
     meta["source"] = {
         "marketplace_item_id": marketplace_item_id,
         "source_version": source_version,
-        "source_at": int(now * 1000),
+        "source_at": source_at,
         "modified": False,
     }
 
@@ -71,7 +174,7 @@ def apply_snapshot(
             version=source_version,
             runtime_settings=resolved.runtime_settings,
             compact=resolved.compact,
-            skills=resolved.skills,
+            skills=skills,
             rules=resolved.rules,
             sub_agents=resolved.sub_agents,
             mcp_servers=resolved.mcp_servers,

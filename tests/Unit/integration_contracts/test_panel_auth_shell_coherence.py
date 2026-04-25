@@ -1345,6 +1345,7 @@ def test_apply_snapshot_saves_one_agent_config_aggregate():
 
     created_users: list[UserRow] = []
     saved_configs: list[AgentConfig] = []
+    skill_repo = _MemorySkillRepo()
 
     class _UserRepo:
         def create(self, row: UserRow) -> None:
@@ -1374,14 +1375,70 @@ def test_apply_snapshot_saves_one_agent_config_aggregate():
         owner_user_id="user-1",
         user_repo=_UserRepo(),
         agent_config_repo=_AgentConfigRepo(),
+        skill_repo=skill_repo,
     )
 
     assert user_id == created_users[0].id
     assert saved_configs[0].name == "Repo Agent"
     assert saved_configs[0].skills[0].description == "skill desc"
+    assert saved_configs[0].skills[0].skill_id == "search"
+    assert saved_configs[0].skills[0].package_id
+    assert skill_repo.get_by_id("user-1", "search") is not None
+    package = skill_repo.get_package("user-1", saved_configs[0].skills[0].package_id or "")
+    assert package is not None
+    assert package.skill_md == "---\nname: Search\n---\nbody"
     assert saved_configs[0].rules[0].content == "rule body"
     assert saved_configs[0].sub_agents[0].name == "Scout"
     assert saved_configs[0].meta["source"]["source_version"] == "1.0.0"
+
+
+def test_apply_snapshot_with_skills_requires_skill_repo():
+    from backend.hub.snapshot_apply import apply_snapshot
+
+    with pytest.raises(RuntimeError, match="skill_repo is required to apply snapshot Skills"):
+        apply_snapshot(
+            snapshot={
+                "schema_version": "agent-snapshot/v1",
+                "agent": {
+                    "id": "cfg-source",
+                    "name": "Repo Agent",
+                    "skills": [{"name": "Search", "content": "---\nname: Search\n---\nbody"}],
+                },
+            },
+            marketplace_item_id="item-1",
+            source_version="1.0.0",
+            owner_user_id="user-1",
+            user_repo=SimpleNamespace(create=lambda _row: None),
+            agent_config_repo=SimpleNamespace(save_agent_config=lambda _config: None),
+        )
+
+
+def test_apply_snapshot_rejects_duplicate_skill_names_before_library_write():
+    from backend.hub.snapshot_apply import apply_snapshot
+
+    skill_repo = _MemorySkillRepo()
+
+    with pytest.raises(ValueError, match="Duplicate Skill name in snapshot: Search"):
+        apply_snapshot(
+            snapshot={
+                "schema_version": "agent-snapshot/v1",
+                "agent": {
+                    "id": "cfg-source",
+                    "name": "Repo Agent",
+                    "skills": [
+                        {"name": "Search", "content": "---\nname: Search\n---\none"},
+                        {"name": "Search", "content": "---\nname: Search\n---\ntwo"},
+                    ],
+                },
+            },
+            marketplace_item_id="item-1",
+            source_version="1.0.0",
+            owner_user_id="user-1",
+            user_repo=SimpleNamespace(create=lambda _row: None),
+            agent_config_repo=SimpleNamespace(save_agent_config=lambda _config: None),
+            skill_repo=skill_repo,
+        )
+    assert skill_repo.list_for_owner("user-1") == []
 
 
 def _agent_delete_runner(*, contact_error: str | None = None):
