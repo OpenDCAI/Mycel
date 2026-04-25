@@ -14,6 +14,7 @@ from config.agent_config_types import Skill, SkillPackage
 from config.skill_package import build_skill_package_hash, build_skill_package_manifest
 from sandbox.recipes import FEATURE_CATALOG, default_recipe_snapshot, normalize_recipe_snapshot, provider_type_from_name
 from storage.contracts import RecipeRepo, SkillRepo
+from storage.utils import generate_skill_id
 
 _SKILL_FRONTMATTER_RE = re.compile(r"^---\s*\n(.*?)\n---\s*\n", re.DOTALL)
 _RESOURCE_TYPES = {"skill", "sandbox-template"}
@@ -275,10 +276,13 @@ def create_resource(
         if frontmatter_name != name:
             raise ValueError("Skill content frontmatter name must match Skill name")
         version = _skill_frontmatter_version(content)
-        rid = name.lower().replace(" ", "-")
+        for skill in skill_repo.list_for_owner(owner_user_id):
+            if skill.name == name:
+                raise ValueError("Skill name already exists")
+        rid = generate_skill_id()
         existing = skill_repo.get_by_id(owner_user_id, rid)
-        if existing is not None and existing.name != name:
-            raise ValueError("Skill id already exists with a different Skill name")
+        if existing is not None:
+            raise RuntimeError("Generated Skill id already exists")
         timestamp = _now_dt()
         skill = skill_repo.upsert(
             Skill(
