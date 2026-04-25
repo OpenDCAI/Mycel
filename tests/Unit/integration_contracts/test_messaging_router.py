@@ -450,74 +450,6 @@ def test_list_messages_route_resolves_sender_name_via_messaging_service() -> Non
     ]
 
 
-def test_send_message_consumes_service_owned_message_projection() -> None:
-    seen: list[tuple[str, str, str]] = []
-    app = SimpleNamespace(
-        state=SimpleNamespace(
-            chat_runtime_state=SimpleNamespace(
-                messaging_service=SimpleNamespace(
-                    resolve_display_user=lambda uid: (
-                        SimpleNamespace(
-                            id="agent-user-1",
-                            display_name="Ownership Toad",
-                            type="agent",
-                            avatar=None,
-                            owner_user_id="owner-user-1",
-                        )
-                        if uid == "thread-user-1"
-                        else None
-                    ),
-                    is_chat_member=lambda _chat_id, _user_id: True,
-                    send=lambda chat_id, sender_id, content, **_kwargs: (
-                        seen.append((chat_id, sender_id, content))
-                        or {
-                            "id": "msg-1",
-                            "chat_id": chat_id,
-                            "sender_id": sender_id,
-                            "content": content,
-                            "message_type": "human",
-                            "created_at": "2026-04-07T00:00:00Z",
-                        }
-                    ),
-                    project_message_response=lambda msg: {
-                        "id": msg["id"],
-                        "chat_id": msg["chat_id"],
-                        "sender_id": msg["sender_id"],
-                        "sender_name": "Projected Toad",
-                        "content": msg["content"],
-                        "message_type": msg["message_type"],
-                        "mentioned_ids": [],
-                        "signal": None,
-                        "retracted_at": None,
-                        "created_at": msg["created_at"],
-                    },
-                ),
-            ),
-        )
-    )
-
-    result = chats_router.send_message(
-        "chat-1",
-        chats_router.SendMessageBody(content="hello", sender_id="thread-user-1"),
-        user_id="owner-user-1",
-        messaging_service=app.state.chat_runtime_state.messaging_service,
-    )
-
-    assert seen == [("chat-1", "thread-user-1", "hello")]
-    assert result == {
-        "id": "msg-1",
-        "chat_id": "chat-1",
-        "sender_id": "thread-user-1",
-        "sender_name": "Projected Toad",
-        "content": "hello",
-        "message_type": "human",
-        "mentioned_ids": [],
-        "signal": None,
-        "retracted_at": None,
-        "created_at": "2026-04-07T00:00:00Z",
-    }
-
-
 def test_send_message_defaults_sender_to_authenticated_user() -> None:
     seen: list[tuple[str, str, str]] = []
     messaging_service = SimpleNamespace(
@@ -569,32 +501,56 @@ def test_send_message_defaults_sender_to_authenticated_user() -> None:
     assert result["sender_id"] == "external-user-1"
 
 
-def test_send_message_still_rejects_unowned_explicit_sender_id() -> None:
-    messaging_service = SimpleNamespace(
-        resolve_display_user=lambda uid: (
-            SimpleNamespace(
-                id="other-user-1",
-                display_name="Other User",
-                type="external",
-                avatar=None,
-                owner_user_id=None,
-            )
-            if uid == "other-user-1"
-            else None
-        ),
-        send=lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("send should not be called")),
-    )
-
-    with pytest.raises(HTTPException) as exc_info:
-        chats_router.send_message(
-            "chat-1",
-            chats_router.SendMessageBody(content="hello", sender_id="other-user-1"),
-            user_id="external-user-1",
-            messaging_service=messaging_service,
+def test_public_send_body_rejects_sender_and_internal_message_controls() -> None:
+    with pytest.raises(ValidationError):
+        chats_router.SendMessageBody.model_validate(
+            {
+                "content": "hello",
+                "sender_id": "other-user-1",
+                "message_type": "system",
+                "signal": "yield",
+            }
         )
 
-    assert exc_info.value.status_code == 403
-    assert "does not belong" in str(exc_info.value.detail)
+
+def test_send_message_ignores_external_sender_authority_by_contract() -> None:
+    seen: list[dict[str, object]] = []
+    messaging_service = SimpleNamespace(
+        resolve_display_user=lambda uid: SimpleNamespace(id=uid, owner_user_id=None),
+        is_chat_member=lambda _chat_id, _user_id: True,
+        send=lambda chat_id, sender_id, content, **kwargs: (
+            seen.append({"chat_id": chat_id, "sender_id": sender_id, "content": content, **kwargs})
+            or {
+                "id": "msg-1",
+                "chat_id": chat_id,
+                "sender_id": sender_id,
+                "content": content,
+                "message_type": "human",
+                "created_at": "2026-04-07T00:00:00Z",
+            }
+        ),
+        project_message_response=lambda msg: msg,
+    )
+
+    chats_router.send_message(
+        "chat-1",
+        chats_router.SendMessageBody(content="hello", mentioned_ids=["user-2"], enforce_caught_up=True),
+        user_id="external-user-1",
+        messaging_service=messaging_service,
+    )
+
+    assert seen == [
+        {
+            "chat_id": "chat-1",
+            "sender_id": "external-user-1",
+            "content": "hello",
+            "mentions": ["user-2"],
+            "signal": None,
+            "message_type": "human",
+            "reply_to": None,
+            "enforce_caught_up": True,
+        }
+    ]
 
 
 def test_send_message_rejects_sender_that_is_not_chat_member() -> None:
@@ -710,86 +666,6 @@ def test_mark_read_rejects_non_member_user() -> None:
 
     assert exc_info.value.status_code == 403
     assert exc_info.value.detail == "Not a participant of this chat"
-
-
-def test_send_message_accepts_owned_thread_user_sender_id_via_thread_repo():
-    seen: list[tuple[str, str, str]] = []
-    app = SimpleNamespace(
-        state=SimpleNamespace(
-            user_repo=SimpleNamespace(
-                get_by_id=lambda uid: (
-                    None
-                    if uid == "thread-user-1"
-                    else SimpleNamespace(id=uid, display_name="Toad", type="agent", avatar=None, owner_user_id="owner-user-1")
-                    if uid == "agent-user-1"
-                    else None
-                )
-            ),
-            thread_repo=SimpleNamespace(
-                get_by_user_id=lambda uid: {"id": "thread-1", "agent_user_id": "agent-user-1"} if uid == "thread-user-1" else None
-            ),
-            chat_runtime_state=SimpleNamespace(
-                messaging_service=SimpleNamespace(
-                    resolve_display_user=lambda uid: (
-                        SimpleNamespace(
-                            id="agent-user-1",
-                            display_name="Toad",
-                            type="agent",
-                            avatar=None,
-                            owner_user_id="owner-user-1",
-                        )
-                        if uid == "thread-user-1"
-                        else None
-                    ),
-                    is_chat_member=lambda _chat_id, _user_id: True,
-                    send=lambda chat_id, sender_id, content, **_kwargs: (
-                        seen.append((chat_id, sender_id, content))
-                        or {
-                            "id": "msg-1",
-                            "chat_id": chat_id,
-                            "sender_id": sender_id,
-                            "content": content,
-                            "message_type": "human",
-                            "created_at": "2026-04-07T00:00:00Z",
-                        }
-                    ),
-                    project_message_response=lambda msg: {
-                        "id": msg["id"],
-                        "chat_id": msg["chat_id"],
-                        "sender_id": msg["sender_id"],
-                        "sender_name": "Toad",
-                        "content": msg["content"],
-                        "message_type": msg["message_type"],
-                        "mentioned_ids": [],
-                        "signal": None,
-                        "retracted_at": None,
-                        "created_at": msg["created_at"],
-                    },
-                ),
-            ),
-        )
-    )
-
-    result = chats_router.send_message(
-        "chat-1",
-        chats_router.SendMessageBody(content="hello", sender_id="thread-user-1"),
-        user_id="owner-user-1",
-        messaging_service=app.state.chat_runtime_state.messaging_service,
-    )
-
-    assert seen == [("chat-1", "thread-user-1", "hello")]
-    assert result == {
-        "id": "msg-1",
-        "chat_id": "chat-1",
-        "sender_id": "thread-user-1",
-        "sender_name": "Toad",
-        "content": "hello",
-        "message_type": "human",
-        "mentioned_ids": [],
-        "signal": None,
-        "retracted_at": None,
-        "created_at": "2026-04-07T00:00:00Z",
-    }
 
 
 def test_create_chat_rejects_template_member_ids_for_group_participants() -> None:
