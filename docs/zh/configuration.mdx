@@ -16,7 +16,7 @@ Mycel 使用分层配置系统，三级合并：系统默认值 → 用户配置
 | `models.json` | 模型身份、提供商、API Key、虚拟模型映射 |
 | `observation.json` | Langfuse / LangSmith 追踪 |
 | `config.env` | 快速 API Key 配置（加载为环境变量） |
-| `sandboxes/<name>.json` | 各提供商的沙箱配置 |
+| `$LEON_SANDBOXES_DIR/<name>.json` | 各提供商的沙箱配置 |
 
 每个 JSON 文件从三个层级加载（优先级从高到低）：
 1. 工作区根目录下的 `.leon/<file>`（项目配置）

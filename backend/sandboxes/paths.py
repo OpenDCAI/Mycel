@@ -1,3 +1,5 @@
-from config.user_paths import user_home_path
+from pathlib import Path
 
-SANDBOXES_DIR = user_home_path("sandboxes")
+from sandbox.config import sandbox_config_dir
+
+SANDBOXES_DIR: Path | None = sandbox_config_dir()

@@ -7,6 +7,22 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
+SANDBOX_CONFIG_DIR_ENV = "LEON_SANDBOXES_DIR"
+
+
+def sandbox_config_dir() -> Path | None:
+    raw_path = os.environ.get(SANDBOX_CONFIG_DIR_ENV)
+    if not raw_path:
+        return None
+    return Path(raw_path).expanduser().resolve()
+
+
+def _sandbox_config_path(name: str, sandboxes_dir: Path | None) -> Path:
+    config_dir = sandboxes_dir or sandbox_config_dir()
+    if config_dir is None:
+        raise RuntimeError(f"{SANDBOX_CONFIG_DIR_ENV} is required for sandbox config: {name}")
+    return config_dir / f"{name}.json"
+
 
 class MountSpec(BaseModel):
     source: str
@@ -61,11 +77,11 @@ class SandboxConfig(BaseModel):
     allowed_paths: list[str] = Field(default_factory=list)
 
     @classmethod
-    def load(cls, name: str) -> SandboxConfig:
+    def load(cls, name: str, *, sandboxes_dir: Path | None = None) -> SandboxConfig:
         if name == "local":
             return cls()
 
-        path = Path.home() / ".leon" / "sandboxes" / f"{name}.json"
+        path = _sandbox_config_path(name, sandboxes_dir)
         if not path.exists():
             raise FileNotFoundError(f"Sandbox config not found: {path}")
 
@@ -74,8 +90,8 @@ class SandboxConfig(BaseModel):
         config.name = name
         return config
 
-    def save(self, name: str) -> Path:
-        path = Path.home() / ".leon" / "sandboxes" / f"{name}.json"
+    def save(self, name: str, *, sandboxes_dir: Path | None = None) -> Path:
+        path = _sandbox_config_path(name, sandboxes_dir)
         path.parent.mkdir(parents=True, exist_ok=True)
 
         data: dict[str, object] = {"provider": self.provider, "on_exit": self.on_exit}

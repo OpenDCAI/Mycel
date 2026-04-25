@@ -59,19 +59,19 @@ def _build_providers_and_managers(
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     from sandbox.providers.local import LocalSessionProvider
 
-    config_dir = sandboxes_dir or SANDBOXES_DIR
+    config_dir = sandboxes_dir if sandboxes_dir is not None else SANDBOXES_DIR
     workspace_root = local_workspace_root_path or local_workspace_root()
     providers: dict[str, Any] = {
         "local": LocalSessionProvider(default_cwd=str(workspace_root)),
     }
-    if not config_dir.exists():
+    if config_dir is None or not config_dir.exists():
         managers = {name: sandbox_manager_cls(provider=provider) for name, provider in providers.items()}
         return providers, managers
 
     for config_file in config_dir.glob("*.json"):
         name = config_file.stem
         try:
-            config = sandbox_config_cls.load(name)
+            config = sandbox_config_cls.load(name, sandboxes_dir=config_dir)
             if config.provider == "agentbay":
                 from sandbox.providers.agentbay import AgentBayProvider
 
@@ -155,13 +155,13 @@ def available_sandbox_types(
             "capability": _capability_to_dict(local_capability),
         }
     ]
-    config_dir = sandboxes_dir or SANDBOXES_DIR
-    if not config_dir.exists():
+    config_dir = sandboxes_dir if sandboxes_dir is not None else SANDBOXES_DIR
+    if config_dir is None or not config_dir.exists():
         return types
     for config_file in sorted(config_dir.glob("*.json")):
         name = config_file.stem
         try:
-            config = sandbox_config_cls.load(name)
+            config = sandbox_config_cls.load(name, sandboxes_dir=config_dir)
             provider_obj = providers.get(name)
             if provider_obj is None:
                 types.append(
