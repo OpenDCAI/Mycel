@@ -1162,6 +1162,29 @@ def test_library_skill_create_source_does_not_slugify_name() -> None:
     assert "generate_skill_id()" in source
 
 
+def test_library_skill_create_fails_when_generated_id_exists(monkeypatch: pytest.MonkeyPatch) -> None:
+    skill_repo = _MemorySkillRepo()
+    _put_skill(
+        skill_repo,
+        owner_user_id="owner-1",
+        skill_id="skill_existing",
+        name="Existing Skill",
+        description="Existing",
+        content="---\nname: Existing Skill\nversion: 1.0.0\n---\nExisting.",
+    )
+    monkeypatch.setattr(library_service, "generate_skill_id", lambda: "skill_existing")
+
+    with pytest.raises(RuntimeError, match="Generated Skill id already exists"):
+        library_service.create_resource(
+            "skill",
+            "Loadable Skill",
+            "Use this skill",
+            owner_user_id="owner-1",
+            skill_repo=skill_repo,
+            content=_editable_skill_md(),
+        )
+
+
 def test_library_rejects_agent_resource_type() -> None:
     with pytest.raises(ValueError, match="Unknown resource type: agent"):
         library_service.list_library("agent")
