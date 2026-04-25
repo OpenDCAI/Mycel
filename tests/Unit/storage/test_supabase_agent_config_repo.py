@@ -520,6 +520,7 @@ def test_save_agent_config_calls_single_rpc_with_full_payload() -> None:
             owner_user_id="owner-1",
             agent_user_id="agent-1",
             name="Researcher",
+            version="1.0.0",
             tools=["read"],
             runtime_settings={"shell": {"enabled": False}},
             compact={"trigger_tokens": 1000},
@@ -560,6 +561,7 @@ def test_save_agent_config_rejects_duplicate_skill_names_before_rpc() -> None:
         owner_user_id="owner-1",
         agent_user_id="agent-1",
         name="Researcher",
+        version="1.0.0",
         skills=[
             AgentSkill(skill_id="github", package_id="package-1", name="github", version="1.0.0"),
             AgentSkill(skill_id="github-two", package_id="package-2", name="github", version="1.0.0"),
@@ -580,6 +582,7 @@ def test_save_agent_config_rejects_duplicate_mcp_server_names_before_rpc() -> No
         owner_user_id="owner-1",
         agent_user_id="agent-1",
         name="Researcher",
+        version="1.0.0",
         mcp_servers=[
             McpServerConfig(name="filesystem", transport="stdio", command="fs-one"),
             McpServerConfig(name="filesystem", transport="stdio", command="fs-two"),
@@ -600,6 +603,7 @@ def test_save_agent_config_rejects_duplicate_inactive_child_names_before_rpc() -
         owner_user_id="owner-1",
         agent_user_id="agent-1",
         name="Researcher",
+        version="1.0.0",
         skills=[
             AgentSkill(skill_id="github", package_id="package-1", name="github", version="1.0.0", enabled=False),
             AgentSkill(skill_id="github-two", package_id="package-2", name="github", version="1.0.0", enabled=False),
@@ -624,6 +628,7 @@ def test_save_agent_config_rejects_duplicate_rule_and_sub_agent_names_before_rpc
         owner_user_id="owner-1",
         agent_user_id="agent-1",
         name="Researcher",
+        version="1.0.0",
         rules=[
             AgentRule(name="coding", content="one"),
             AgentRule(name="coding", content="two"),
