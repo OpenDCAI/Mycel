@@ -38,7 +38,6 @@ class MemoryMiddleware(AgentMiddleware):
         summary_repo: SummaryRepo | None = None,
         checkpointer: Any = None,
         compaction_threshold: float = 0.7,
-        verbose: bool = False,
     ):
         self._context_limit = context_limit
         self._compaction_threshold = compaction_threshold
