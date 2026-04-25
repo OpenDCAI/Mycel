@@ -736,7 +736,7 @@ def test_mark_read_rejects_non_member_user() -> None:
     assert exc_info.value.detail == "Not a participant of this chat"
 
 
-def test_create_chat_rejects_template_member_ids_for_group_participants() -> None:
+def test_create_chat_accepts_agent_user_ids_for_group_participants() -> None:
     state, called = _create_chat_route_state(
         users={
             "agent-user-1": SimpleNamespace(id="agent-user-1", type="agent", owner_user_id="owner-user-1"),
@@ -746,21 +746,19 @@ def test_create_chat_rejects_template_member_ids_for_group_participants() -> Non
     )
     app = SimpleNamespace(state=state)
 
-    with pytest.raises(HTTPException) as exc_info:
-        _create_chat(
-            app,
-            chats_router.CreateChatBody(
-                user_ids=["human-user-1", "agent-user-1", "agent-user-2"],
-                title="bad-group",
-            ),
-        )
+    result = _create_chat(
+        app,
+        chats_router.CreateChatBody(
+            user_ids=["human-user-1", "agent-user-1", "agent-user-2"],
+            title="agent-group",
+        ),
+    )
 
-    assert exc_info.value.status_code == 400
-    assert "thread user_ids" in str(exc_info.value.detail).lower()
-    assert called == []
+    assert called == [(["human-user-1", "agent-user-1", "agent-user-2"], "agent-group")]
+    assert result["id"] == "chat-1"
 
 
-def test_create_chat_rejects_template_member_id_for_direct_participant() -> None:
+def test_create_chat_accepts_agent_user_id_for_direct_participant() -> None:
     state, called = _create_chat_route_state(
         users={"agent-user-1": SimpleNamespace(id="agent-user-1", type="agent", owner_user_id="owner-user-1")},
         thread_user_ids={"owned-agent-1"},
@@ -768,18 +766,16 @@ def test_create_chat_rejects_template_member_id_for_direct_participant() -> None
     )
     app = SimpleNamespace(state=state)
 
-    with pytest.raises(HTTPException) as exc_info:
-        _create_chat(
-            app,
-            chats_router.CreateChatBody(
-                user_ids=["human-user-1", "agent-user-1"],
-                title=None,
-            ),
-        )
+    result = _create_chat(
+        app,
+        chats_router.CreateChatBody(
+            user_ids=["human-user-1", "agent-user-1"],
+            title=None,
+        ),
+    )
 
-    assert exc_info.value.status_code == 400
-    assert "thread user_ids" in str(exc_info.value.detail).lower()
-    assert called == []
+    assert called == [(["human-user-1", "agent-user-1"], None)]
+    assert result["id"] == "chat-1"
 
 
 def test_create_chat_accepts_human_and_thread_social_user_ids_for_group_participants() -> None:

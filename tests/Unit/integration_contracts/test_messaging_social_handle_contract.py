@@ -21,6 +21,7 @@ from messaging.display_user import resolve_messaging_display_user
 from messaging.relationships.service import RelationshipService
 from messaging.service import MessagingService
 from messaging.tools.chat_tool_service import ChatToolService
+from storage.contracts import ContactEdgeRow
 
 _MessagingService = MessagingService
 _ChatDeliveryDispatcher = ChatDeliveryDispatcher
@@ -2428,6 +2429,33 @@ def test_delivery_resolver_drops_when_new_contact_edge_is_blocked() -> None:
     action = resolver.resolve("thread-user-1", "chat-1", "human-user-1")
 
     assert action is DeliveryAction.DROP
+
+
+def test_delivery_resolver_reads_contact_edge_row_objects() -> None:
+    resolver = HireVisitDeliveryResolver(
+        contact_repo=SimpleNamespace(
+            get=lambda _owner_id, _target_id: ContactEdgeRow(
+                source_user_id="agent-user-1",
+                target_user_id="human-user-1",
+                kind="normal",
+                state="active",
+                muted=False,
+                blocked=False,
+                created_at=1.0,
+            )
+        ),
+        chat_member_repo=SimpleNamespace(
+            list_members=lambda _chat_id: [
+                {"user_id": "agent-user-1", "muted": False},
+                {"user_id": "human-user-1", "muted": False},
+            ]
+        ),
+        relationship_repo=None,
+    )
+
+    action = resolver.resolve("agent-user-1", "chat-1", "human-user-1")
+
+    assert action is DeliveryAction.DELIVER
 
 
 def test_delivery_resolver_propagates_contact_repo_failures() -> None:

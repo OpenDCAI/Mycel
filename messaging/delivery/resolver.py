@@ -107,16 +107,21 @@ class HireVisitDeliveryResolver:
     def _is_blocked(self, contact: Any | None) -> bool:
         if not contact:
             return False
-        if bool(contact.get("blocked")):
+        if bool(self._contact_value(contact, "blocked")):
             return True
-        return contact.get("relation") == "blocked"
+        return self._contact_value(contact, "relation") == "blocked" or self._contact_value(contact, "kind") == "blocked"
 
     def _is_muted(self, contact: Any | None) -> bool:
         if not contact:
             return False
-        if bool(contact.get("muted")):
+        if bool(self._contact_value(contact, "muted")):
             return True
-        return contact.get("relation") == "muted"
+        return self._contact_value(contact, "relation") == "muted" or self._contact_value(contact, "kind") == "muted"
+
+    def _contact_value(self, contact: Any, key: str) -> Any:
+        if isinstance(contact, dict):
+            return contact.get(key)
+        return getattr(contact, key, None)
 
     def _is_chat_muted(self, user_id: str, chat_id: str) -> bool:
         """Check if user has muted this specific chat."""
