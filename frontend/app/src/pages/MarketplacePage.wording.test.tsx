@@ -88,7 +88,6 @@ describe("MarketplacePage wording contract", () => {
       agentList: [],
       agentsLoaded: true,
       librarySkills: [],
-      libraryAgents: [],
       librarySandboxTemplates: [
         {
           id: "daytona:selfhost:default",
@@ -105,7 +104,7 @@ describe("MarketplacePage wording contract", () => {
           }],
         },
       ],
-      librariesLoaded: { skill: true, mcp: true, agent: true, "sandbox-template": true },
+      librariesLoaded: { skill: true, "sandbox-template": true },
       fetchLibrary: appStoreFetchLibrary,
       deleteResource: appStoreDeleteResource,
       addResource: appStoreAddResource,
@@ -295,7 +294,7 @@ describe("MarketplacePage wording contract", () => {
     expect(screen.getByText("更新到 v1.1.0")).toBeTruthy();
   });
 
-  it("uses Subagent wording for marketplace agent resources", () => {
+  it("normalizes the removed library agent tab to Agent users", () => {
     render(
       <MemoryRouter initialEntries={["/marketplace?tab=library&sub=agent"]}>
         <Routes>
@@ -304,27 +303,13 @@ describe("MarketplacePage wording contract", () => {
       </MemoryRouter>,
     );
 
-    expect(screen.getByRole("button", { name: /Subagent/ })).toBeTruthy();
-    expect(screen.getByText("暂无 Subagent")).toBeTruthy();
-  });
-
-  it("keeps the library Subagent tab distinct from Agent", () => {
-    render(
-      <MemoryRouter initialEntries={["/marketplace?tab=library&sub=agent"]}>
-        <Routes>
-          <Route path="/marketplace" element={<MarketplacePage />} />
-        </Routes>
-      </MemoryRouter>,
-    );
-
-    expect(screen.getByRole("button", { name: /Subagent/ })).toBeTruthy();
-    expect(screen.getByText("暂无 Subagent")).toBeTruthy();
-    expect(screen.queryByText("暂无 Agent")).toBeNull();
+    expect(screen.queryByRole("button", { name: /Subagent/ })).toBeNull();
+    expect(screen.getByText("暂无 Agent")).toBeTruthy();
   });
 
   it("does not bootstrap marketplace libraries because RootLayout owns panel loading", () => {
     render(
-      <MemoryRouter initialEntries={["/marketplace?tab=library&sub=agent"]}>
+      <MemoryRouter initialEntries={["/marketplace?tab=library&sub=skill"]}>
         <Routes>
           <Route path="/marketplace" element={<MarketplacePage />} />
         </Routes>
@@ -353,7 +338,7 @@ describe("MarketplacePage wording contract", () => {
     appStoreState = {
       ...appStoreState,
       librarySandboxTemplates: [],
-      librariesLoaded: { skill: true, mcp: true, agent: true, "sandbox-template": false },
+      librariesLoaded: { skill: true, "sandbox-template": false },
     };
 
     render(
