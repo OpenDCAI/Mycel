@@ -736,7 +736,6 @@ def test_leon_agent_agent_config_id_missing_config_does_not_load_agent_config_di
     class _Repo:
         def get_agent_config(self, agent_config_id: str):
             assert agent_config_id == "cfg-missing"
-            return None
 
     with pytest.raises(RuntimeError, match="Agent config not found: cfg-missing"):
         LeonAgent(

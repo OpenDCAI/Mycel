@@ -27,8 +27,7 @@ def mock_agent():
     runtime = MagicMock()
     runtime.transition.return_value = True
     runtime._activity_sink = None
-    agent = SimpleNamespace(runtime=runtime)
-    return agent
+    return SimpleNamespace(runtime=runtime)
 
 
 @pytest.mark.asyncio

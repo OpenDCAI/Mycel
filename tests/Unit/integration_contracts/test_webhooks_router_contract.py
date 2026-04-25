@@ -13,7 +13,6 @@ async def test_ingest_provider_webhook_keeps_unmatched_payload_shape(monkeypatch
         def find_by_instance(self, *, provider_name: str, instance_id: str):
             assert provider_name == "local"
             assert instance_id == "inst-1"
-            return None
 
         def close(self) -> None:
             pass
