@@ -1,7 +1,6 @@
-"""Three-tier observation configuration loader.
+"""Observation configuration loader.
 
-Follows the same pattern as AgentLoader / ModelsLoader:
-system defaults → user (~/.leon/observation.json) → project (.leon/observation.json) → CLI overrides
+Loads system defaults plus explicit call-site overrides.
 """
 
 from __future__ import annotations
@@ -11,25 +10,21 @@ from pathlib import Path
 from typing import Any
 
 from config.observation_schema import ObservationConfig
-from config.user_paths import remap_default_user_home_string, user_home_read_candidates
+from config.user_paths import remap_default_user_home_string
 
 
 class ObservationLoader:
-    """Three-tier observation.json loader."""
+    """Load observation defaults and explicit overrides."""
 
-    def __init__(self, workspace_root: str | Path | None = None):
-        self.workspace_root = Path(workspace_root).resolve() if workspace_root else None
+    def __init__(self):
         self._system_dir = Path(__file__).parent / "defaults"
 
     def load(self, cli_overrides: dict[str, Any] | None = None) -> ObservationConfig:
-        """Load and merge observation config from all tiers."""
+        """Load observation config from system defaults and explicit overrides."""
         system = self._load_json(self._system_dir / "observation.json")
-        user = self._load_user()
-        project = self._load_project()
 
-        merged = self._deep_merge(system, user, project)
+        merged = system
 
-        # CLI overrides: explicit None for "active" means disable, so apply directly
         if cli_overrides:
             for key, value in cli_overrides.items():
                 if isinstance(value, dict) and isinstance(merged.get(key), dict):
@@ -40,17 +35,6 @@ class ObservationLoader:
         merged = self._expand_env_vars(merged)
 
         return ObservationConfig(**merged)
-
-    def _load_project(self) -> dict[str, Any]:
-        if not self.workspace_root:
-            return {}
-        return self._load_json(self.workspace_root / ".leon" / "observation.json")
-
-    def _load_user(self) -> dict[str, Any]:
-        merged: dict[str, Any] = {}
-        for path in user_home_read_candidates("observation.json"):
-            merged = self._deep_merge(merged, self._load_json(path))
-        return merged
 
     @staticmethod
     def _load_json(path: Path) -> dict[str, Any]:
