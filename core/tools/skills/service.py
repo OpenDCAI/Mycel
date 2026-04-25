@@ -2,11 +2,10 @@ from __future__ import annotations
 
 import re
 from collections.abc import Sequence
-from typing import Any
 
 import yaml
 
-from config.skill_files import normalize_skill_file_map
+from config.agent_config_types import ResolvedSkill
 from core.runtime.registry import ToolEntry, ToolMode, ToolRegistry, make_tool_schema
 
 
@@ -14,30 +13,24 @@ class SkillsService:
     def __init__(
         self,
         registry: ToolRegistry,
-        skills: Sequence[dict[str, Any]] | None = None,
-        enabled_skills: dict[str, bool] | None = None,
+        skills: Sequence[ResolvedSkill] | None = None,
     ):
-        self.enabled_skills = enabled_skills or {}
         self._skills: dict[str, str] = {}
         self._skill_files: dict[str, dict[str, str]] = {}
-        self._load_skills(skills or [])
+        self._load_skills(skills if skills is not None else ())
         self._register(registry)
 
-    def _load_skills(self, skills: Sequence[dict[str, Any]]) -> None:
+    def _load_skills(self, skills: Sequence[ResolvedSkill]) -> None:
         for skill in skills:
-            content = skill.get("content")
-            if not isinstance(content, str):
-                raise ValueError("Skill content must be a string")
-            metadata = self._parse_frontmatter(content)
+            if not isinstance(skill, ResolvedSkill):
+                raise TypeError("SkillsService requires ResolvedSkill items")
+            metadata = self._parse_frontmatter(skill.content)
             if "name" not in metadata:
                 raise ValueError("Skill content must include frontmatter name")
-            skill_name = metadata["name"]
-            self._skills[skill_name] = content
-            files = skill.get("files")
-            if isinstance(files, dict):
-                self._skill_files[skill_name] = normalize_skill_file_map(files, context="Skill files")
-            elif files is not None:
-                raise ValueError("Skill files must be an object")
+            if metadata["name"] != skill.name:
+                raise ValueError("Skill frontmatter name must match ResolvedSkill.name")
+            self._skills[skill.name] = skill.content
+            self._skill_files[skill.name] = skill.files
 
     @staticmethod
     def _parse_frontmatter(content: str) -> dict[str, str]:
@@ -95,11 +88,8 @@ class SkillsService:
             available = ", ".join(sorted(self._skills))
             raise ValueError(f"Skill '{skill_name}' not found. Available skills: {available}")
 
-        if self.enabled_skills and skill_name in self.enabled_skills and not self.enabled_skills[skill_name]:
-            raise ValueError(f"Skill '{skill_name}' is disabled in profile configuration.")
-
         content = re.sub(r"^---\s*\n.*?\n---\s*\n", "", self._skills[skill_name], flags=re.DOTALL)
-        return f"Loaded skill: {skill_name}\n\n{self._append_adjacent_files(content, self._skill_files.get(skill_name, {}))}"
+        return f"Loaded skill: {skill_name}\n\n{self._append_adjacent_files(content, self._skill_files[skill_name])}"
 
     @staticmethod
     def _append_adjacent_files(content: str, files: dict[str, str]) -> str:
