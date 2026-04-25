@@ -199,4 +199,165 @@ describe("ContactDetailPage", () => {
     expect(await screen.findByText("联系人")).toBeTruthy();
     expect(screen.queryByText("none")).toBeNull();
   });
+
+  it("requests a relationship for an unknown contact and refreshes the profile", async () => {
+    authFetch
+      .mockResolvedValueOnce(okJson([
+        {
+          user_id: "human-2",
+          name: "Ada",
+          type: "human",
+          avatar_url: null,
+          owner_name: null,
+          is_owned: false,
+          relationship_state: "none",
+          relationship_id: null,
+          relationship_is_requester: false,
+          can_chat: false,
+        },
+      ]))
+      .mockResolvedValueOnce(okJson({
+        id: "hire_visit:human-1:human-2",
+        other_user_id: "human-2",
+        state: "pending",
+        is_requester: true,
+      }))
+      .mockResolvedValueOnce(okJson([
+        {
+          user_id: "human-2",
+          name: "Ada",
+          type: "human",
+          avatar_url: null,
+          owner_name: null,
+          is_owned: false,
+          relationship_state: "pending",
+          relationship_id: "hire_visit:human-1:human-2",
+          relationship_is_requester: true,
+          can_chat: false,
+        },
+      ]));
+
+    render(
+      <MemoryRouter initialEntries={["/contacts/users/human-2"]}>
+        <Routes>
+          <Route path="/contacts/users/:userId" element={<ContactDetailPage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(await screen.findByRole("button", { name: "申请联系" }));
+
+    await waitFor(() => {
+      expect(authFetch).toHaveBeenCalledWith("/api/relationships/request", {
+        method: "POST",
+        body: JSON.stringify({ target_user_id: "human-2" }),
+      });
+    });
+    expect(await screen.findByText("pending")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "取消申请" })).toBeTruthy();
+  });
+
+  it("lets a relationship request recipient approve or reject from the profile", async () => {
+    authFetch
+      .mockResolvedValueOnce(okJson([
+        {
+          user_id: "human-2",
+          name: "Ada",
+          type: "human",
+          avatar_url: null,
+          owner_name: null,
+          is_owned: false,
+          relationship_state: "pending",
+          relationship_id: "hire_visit:human-1:human-2",
+          relationship_is_requester: false,
+          can_chat: false,
+        },
+      ]))
+      .mockResolvedValueOnce(okJson({ state: "visit" }))
+      .mockResolvedValueOnce(okJson([
+        {
+          user_id: "human-2",
+          name: "Ada",
+          type: "human",
+          avatar_url: null,
+          owner_name: null,
+          is_owned: false,
+          relationship_state: "visit",
+          relationship_id: "hire_visit:human-1:human-2",
+          relationship_is_requester: false,
+          can_chat: true,
+        },
+      ]));
+
+    render(
+      <MemoryRouter initialEntries={["/contacts/users/human-2"]}>
+        <Routes>
+          <Route path="/contacts/users/:userId" element={<ContactDetailPage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(await screen.findByRole("button", { name: "同意申请" }));
+
+    await waitFor(() => {
+      expect(authFetch).toHaveBeenCalledWith("/api/relationships/hire_visit%3Ahuman-1%3Ahuman-2/approve", {
+        method: "POST",
+        body: JSON.stringify({}),
+      });
+    });
+    expect(await screen.findByText("visit")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "发起对话" })).toBeTruthy();
+  });
+
+  it("lets an active relationship be upgraded and downgraded", async () => {
+    authFetch
+      .mockResolvedValueOnce(okJson([
+        {
+          user_id: "agent-2",
+          name: "Toad",
+          type: "agent",
+          avatar_url: null,
+          owner_name: "Other",
+          is_owned: false,
+          relationship_state: "visit",
+          relationship_id: "hire_visit:agent-2:human-1",
+          relationship_is_requester: false,
+          can_chat: true,
+        },
+      ]))
+      .mockResolvedValueOnce(okJson({ state: "hire" }))
+      .mockResolvedValueOnce(okJson([
+        {
+          user_id: "agent-2",
+          name: "Toad",
+          type: "agent",
+          avatar_url: null,
+          owner_name: "Other",
+          is_owned: false,
+          relationship_state: "hire",
+          relationship_id: "hire_visit:agent-2:human-1",
+          relationship_is_requester: false,
+          can_chat: true,
+        },
+      ]));
+
+    render(
+      <MemoryRouter initialEntries={["/contacts/users/agent-2"]}>
+        <Routes>
+          <Route path="/contacts/users/:userId" element={<ContactDetailPage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(await screen.findByRole("button", { name: "升级为 hire" }));
+
+    await waitFor(() => {
+      expect(authFetch).toHaveBeenCalledWith("/api/relationships/hire_visit%3Aagent-2%3Ahuman-1/upgrade", {
+        method: "POST",
+        body: JSON.stringify({}),
+      });
+    });
+    expect(await screen.findByText("hire")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "降级为 visit" })).toBeTruthy();
+  });
 });
