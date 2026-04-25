@@ -12,11 +12,11 @@ from fastapi import HTTPException
 import backend.hub.snapshot_apply as _snapshot_apply
 from backend.hub.versioning import BumpType, bump_semver
 from config.agent_config_resolver import resolve_agent_config
-from config.agent_config_types import Skill, SkillPackage
+from config.agent_config_types import Skill
 from config.agent_snapshot import snapshot_from_resolved_config
 from config.skill_document import SkillDocument, parse_skill_document
 from config.skill_files import normalize_skill_file_map
-from config.skill_package import build_skill_package_hash, build_skill_package_manifest
+from config.skill_package import build_skill_package
 from storage.utils import generate_skill_id
 
 HUB_URL = os.environ.get("MYCEL_HUB_URL", "https://hub.mycel.nextmind.space")
@@ -277,15 +277,11 @@ def apply_item(
                 updated_at=timestamp,
             )
         )
-        package_hash = build_skill_package_hash(content, skill_files)
         package = skill_repo.create_package(
-            SkillPackage(
-                id=package_hash.removeprefix("sha256:"),
+            build_skill_package(
                 owner_user_id=owner_user_id,
                 skill_id=skill.id,
                 version=source_version,
-                hash=package_hash,
-                manifest=build_skill_package_manifest(content, skill_files),
                 skill_md=content,
                 files=skill_files,
                 source=source,
