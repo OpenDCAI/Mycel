@@ -16,10 +16,10 @@ def test_validate_chat_participant_ids_accepts_external_user() -> None:
         "external-1": UserRow(id="external-1", display_name="Codex External", type=UserType.EXTERNAL, created_at=1.0),
     }
 
-    result = chats_router._validate_chat_participant_ids(
+    result = chats_router._chat_participant_ids_for_request(
         _user_directory(rows),
         SimpleNamespace(get_by_user_id=lambda _user_id: None),
-        participant_ids=["human-1", "external-1"],
+        participant_ids=["external-1"],
         requester_user_id="human-1",
     )
 

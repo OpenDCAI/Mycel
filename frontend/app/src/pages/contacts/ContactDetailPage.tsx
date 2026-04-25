@@ -17,10 +17,10 @@ function errorText(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
 }
 
-async function createDirectChat(currentUserId: string, targetUserId: string): Promise<string> {
+async function createDirectChat(targetUserId: string): Promise<string> {
   const response = await authFetch("/api/chats", {
     method: "POST",
-    body: JSON.stringify({ user_ids: [currentUserId, targetUserId] }),
+    body: JSON.stringify({ user_ids: [targetUserId] }),
   });
   if (!response.ok) throw new Error(`API ${response.status}: ${await response.text()}`);
   const payload = await response.json();
@@ -111,7 +111,7 @@ export default function ContactDetailPage() {
     setOpenError(null);
     try {
       if (!myUserId) throw new Error("当前用户未登录");
-      const chatId = await createDirectChat(myUserId, contact.user_id);
+      const chatId = await createDirectChat(contact.user_id);
       navigate(`/chat/visit/${chatId}`);
     } catch (err) {
       setOpenError(errorText(err));

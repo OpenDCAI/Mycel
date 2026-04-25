@@ -6,7 +6,7 @@ from datetime import UTC, datetime
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 from backend.chat.api.http.dependencies import (
     get_chat_event_bus,
@@ -24,7 +24,10 @@ router = APIRouter(prefix="/api/chats", tags=["chats"])
 
 
 class CreateChatBody(BaseModel):
-    user_ids: list[str]
+    user_ids: list[str] = Field(
+        min_length=1,
+        description="Other participant user ids. Do not include the authenticated user; the backend adds it from the bearer token.",
+    )
     title: str | None = None
 
 
@@ -97,8 +100,7 @@ def _validate_chat_participant_ids(
     validated: list[str] = []
     for participant_id in participant_ids:
         if participant_id == requester_user_id:
-            validated.append(participant_id)
-            continue
+            raise ValueError("Chat participant ids must not include the authenticated user")
         if thread_repo.get_by_user_id(participant_id) is not None:
             validated.append(participant_id)
             continue
@@ -110,18 +112,16 @@ def _validate_chat_participant_ids(
     return validated
 
 
-def _is_owned_participant(user_repo: Any, participant_id: str, requester_user_id: str) -> bool:
-    participant = user_repo.get_by_id(participant_id)
-    return is_owned_by_viewer(requester_user_id, participant)
-
-
-def _validate_requester_is_participant(user_repo: Any, participant_ids: list[str], requester_user_id: str) -> None:
-    for participant_id in participant_ids:
-        if participant_id == requester_user_id:
-            return
-        if _is_owned_participant(user_repo, participant_id, requester_user_id):
-            return
-    raise ValueError("Chat participants must include the requester or a requester-owned participant")
+def _chat_participant_ids_for_request(
+    user_repo: Any,
+    thread_repo: Any,
+    participant_ids: list[str],
+    requester_user_id: str,
+) -> list[str]:
+    other_participants = _validate_chat_participant_ids(user_repo, thread_repo, participant_ids, requester_user_id)
+    if not other_participants:
+        raise ValueError("Chat must include at least one other participant")
+    return list(dict.fromkeys([requester_user_id, *other_participants]))
 
 
 @router.get("")
@@ -141,8 +141,7 @@ def create_chat(
     thread_repo: Annotated[Any, Depends(get_thread_repo)],
 ):
     try:
-        participant_ids = _validate_chat_participant_ids(user_repo, thread_repo, body.user_ids, user_id)
-        _validate_requester_is_participant(user_repo, participant_ids, user_id)
+        participant_ids = _chat_participant_ids_for_request(user_repo, thread_repo, body.user_ids, user_id)
         if len(participant_ids) >= 3:
             chat = messaging_service.create_group_chat(participant_ids, body.title)
         else:
