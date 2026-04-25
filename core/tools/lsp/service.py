@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 import logging
 import os
@@ -276,10 +277,8 @@ class _PyrightSession:
                 self._proc.kill()
         if self._reader_task and not self._reader_task.done():
             self._reader_task.cancel()
-            try:
+            with contextlib.suppress(asyncio.CancelledError, Exception):
                 await self._reader_task
-            except (asyncio.CancelledError, Exception):
-                pass
 
 
 class _LSPSession:
@@ -325,10 +324,8 @@ class _LSPSession:
                 await asyncio.wait_for(self._task, timeout=5)
             except (TimeoutError, asyncio.CancelledError):
                 self._task.cancel()
-                try:
+                with contextlib.suppress(asyncio.CancelledError):
                     await self._task
-                except asyncio.CancelledError:
-                    pass
 
     async def request_definition(self, rel_path: str, line: int, col: int) -> list:
         try:
@@ -443,16 +440,12 @@ class _LSPSessionPool:
 
     async def close_all(self) -> None:
         for (lang, ws), session in list(self._sessions.items()):
-            try:
+            with contextlib.suppress(Exception):
                 await session.stop()
-            except Exception:
-                pass
         self._sessions.clear()
         for ws, session in list(self._pyright.items()):
-            try:
+            with contextlib.suppress(Exception):
                 await session.stop()
-            except Exception:
-                pass
         self._pyright.clear()
 
 
