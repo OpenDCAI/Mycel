@@ -217,6 +217,17 @@ def test_get_agent_config_returns_none_when_root_missing() -> None:
     assert repo.get_agent_config("missing") is None
 
 
+def test_get_agent_config_preserves_empty_tool_list() -> None:
+    tables = _tables()
+    tables["agent.agent_configs"][0]["tools_json"] = []
+    repo = SupabaseAgentConfigRepo(_FakeClient(tables))
+
+    config = repo.get_agent_config("cfg-1")
+
+    assert config is not None
+    assert config.tools == []
+
+
 def test_get_agent_config_fails_loudly_when_mcp_json_is_not_an_array() -> None:
     tables = _tables()
     tables["agent.agent_configs"][0]["mcp_json"] = {"filesystem": {"command": "fs"}}
@@ -241,6 +252,33 @@ def test_get_agent_config_fails_loudly_when_mcp_json_enabled_is_not_boolean() ->
     repo = SupabaseAgentConfigRepo(_FakeClient(tables))
 
     with pytest.raises(RuntimeError, match="mcp_json item enabled must be a boolean"):
+        repo.get_agent_config("cfg-1")
+
+
+def test_get_agent_config_fails_loudly_when_skill_binding_enabled_is_not_boolean() -> None:
+    tables = _tables()
+    tables["agent.skill_bindings"][0]["enabled"] = "false"
+    repo = SupabaseAgentConfigRepo(_FakeClient(tables))
+
+    with pytest.raises(RuntimeError, match="skill_bindings enabled must be a boolean"):
+        repo.get_agent_config("cfg-1")
+
+
+def test_get_agent_config_fails_loudly_when_rule_enabled_is_not_boolean() -> None:
+    tables = _tables()
+    tables["agent.agent_rules"][0]["enabled"] = "false"
+    repo = SupabaseAgentConfigRepo(_FakeClient(tables))
+
+    with pytest.raises(RuntimeError, match="agent_rules enabled must be a boolean"):
+        repo.get_agent_config("cfg-1")
+
+
+def test_get_agent_config_fails_loudly_when_sub_agent_enabled_is_not_boolean() -> None:
+    tables = _tables()
+    tables["agent.agent_sub_agents"][0]["enabled"] = "false"
+    repo = SupabaseAgentConfigRepo(_FakeClient(tables))
+
+    with pytest.raises(RuntimeError, match="agent_sub_agents enabled must be a boolean"):
         repo.get_agent_config("cfg-1")
 
 

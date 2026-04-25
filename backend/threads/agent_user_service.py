@@ -16,7 +16,7 @@ _MCP_CONFIG_KEYS = ("transport", "command", "args", "env", "url", "allowed_tools
 
 def _tools_from_repo(config: AgentConfig) -> list[dict[str, Any]]:
     runtime = config.runtime_settings
-    enabled_tools = config.tools or ["*"]
+    enabled_tools = ["*"] if config.tools is None else config.tools
     tools_list = []
     for tool_name, tool_info in TOOLS_BY_NAME.items():
         runtime_key = f"tools:{tool_name}"
@@ -52,7 +52,7 @@ def _rules_from_repo(config: AgentConfig) -> list[dict[str, Any]]:
 def _sub_agents_from_repo(config: AgentConfig) -> list[dict[str, Any]]:
     sub_agents = {item["name"]: item for item in _load_builtin_agents(TOOLS_BY_NAME)}
     for row in config.sub_agents:
-        raw_tools = row.tools or ["*"]
+        raw_tools = ["*"] if row.tools is None else row.tools
         is_all = raw_tools == ["*"]
         tools = [
             {
@@ -378,7 +378,7 @@ def _save_config_to_repo(
             name=name,
             description=description,
             model=model,
-            tools=tools or ["*"],
+            tools=["*"] if tools is None else tools,
             system_prompt=system_prompt,
             status=status,
             version=version,
@@ -391,7 +391,7 @@ def _save_config_to_repo(
 
 def _runtime_and_tools_from_patch(current_config: AgentConfig, config_patch: dict[str, Any]) -> tuple[dict[str, Any], list[str]]:
     runtime = dict(current_config.runtime_settings)
-    tools = list(current_config.tools or ["*"])
+    tools = list(["*"] if current_config.tools is None else current_config.tools)
 
     if "tools" in config_patch and config_patch["tools"] is not None:
         tool_items = [item for item in config_patch["tools"] if isinstance(item, dict) and item.get("name")]

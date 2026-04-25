@@ -89,13 +89,14 @@ def tool_enabled_for_agent(tool_name: str, *, configured_tools: list[str] | None
     runtime_key = f"tools:{tool_name}"
     override = runtime.get(runtime_key)
     if isinstance(override, dict) and "enabled" in override:
-        return bool(override["enabled"])
-    if hasattr(override, "enabled"):
-        return bool(override.enabled)
+        enabled = override["enabled"]
+        if not isinstance(enabled, bool):
+            raise RuntimeError("Tool runtime override enabled must be a boolean")
+        return enabled
 
-    tools = configured_tools or ["*"]
+    tools = ["*"] if configured_tools is None else configured_tools
     if tools == ["*"]:
         return True
     if tool_name in tools:
         return True
-    return TOOLS_BY_NAME[tool_name].default
+    return False
