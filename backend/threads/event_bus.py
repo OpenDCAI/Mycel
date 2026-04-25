@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Awaitable, Callable
+from contextlib import suppress
 from typing import Any
 
 logger = logging.getLogger(__name__)
@@ -20,10 +21,8 @@ class EventBus:
 
         def _unsubscribe() -> None:
             subs = self._subs.get(thread_id, [])
-            try:
+            with suppress(ValueError):
                 subs.remove(callback)
-            except ValueError:
-                pass
             if not subs:
                 self._subs.pop(thread_id, None)
 

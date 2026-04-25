@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import os
 import uuid
 from typing import ClassVar
@@ -52,10 +53,8 @@ class PosixShellExecutor(BaseExecutor):
             if marker in line_str:
                 parts = line_str.split()
                 if len(parts) >= 2:
-                    try:
+                    with contextlib.suppress(ValueError):
                         exit_code = int(parts[1])
-                    except ValueError:
-                        pass
                 break
             stdout_lines.append(line_str)
         return "".join(stdout_lines), "", exit_code
