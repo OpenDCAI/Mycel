@@ -1,10 +1,10 @@
-"""Type definitions for local runtime agent definitions."""
+"""Type definitions for built-in runtime agent definitions."""
 
 from pydantic import BaseModel, Field
 
 
 class RuntimeAgentDefinition(BaseModel):
-    """Agent configuration parsed from .md file."""
+    """Built-in Agent configuration parsed from a bundled .md file."""
 
     name: str
     description: str = ""

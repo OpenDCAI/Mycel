@@ -4,8 +4,6 @@ import time
 from pathlib import Path
 from typing import Any
 
-import yaml
-
 from backend.hub.versioning import BumpType, bump_semver
 from backend.identity.avatar.urls import avatar_url
 from config.agent_config_types import AgentConfig, AgentRule, AgentSkill, AgentSubAgent, McpServerConfig
@@ -14,27 +12,6 @@ from config.loader import AgentLoader
 
 _SYSTEM_AGENTS_DIR = (Path(__file__).resolve().parents[2] / "config" / "defaults" / "agents").resolve()
 _MCP_CONFIG_KEYS = ("transport", "command", "args", "env", "url", "allowed_tools", "instructions")
-
-
-def _parse_agent_md_content(content: str) -> dict[str, Any] | None:
-    if not content.startswith("---"):
-        return None
-    parts = content.split("---", 2)
-    if len(parts) < 3:
-        return None
-    try:
-        fm = yaml.safe_load(parts[1])
-    except yaml.YAMLError:
-        return None
-    if not fm or "name" not in fm:
-        return None
-    return {
-        "name": fm["name"],
-        "description": fm.get("description", ""),
-        "model": fm.get("model"),
-        "tools": fm.get("tools", ["*"]),
-        "system_prompt": parts[2].strip(),
-    }
 
 
 def _tools_from_repo(config: AgentConfig) -> list[dict[str, Any]]:

@@ -790,13 +790,7 @@ async def test_agent_tool_live_runner_path_applies_role_specific_tool_filters(mo
 
 
 @pytest.mark.asyncio
-async def test_agent_tool_model_priority_prefers_env_over_tool_frontmatter_and_parent(monkeypatch, tmp_path):
-    agent_dir = tmp_path / ".leon" / "agents"
-    agent_dir.mkdir(parents=True)
-    (agent_dir / "explore.md").write_text(
-        "---\nname: explore\nmodel: frontmatter-model\ntools:\n  - Read\n---\nfrontmatter prompt\n",
-        encoding="utf-8",
-    )
+async def test_agent_tool_model_priority_prefers_env_over_tool_and_parent(monkeypatch, tmp_path):
     captured: dict[str, Any] = {}
     _patch_create_leon_agent(monkeypatch, captured=captured)
     monkeypatch.setenv("CLAUDE_CODE_SUBAGENT_MODEL", "env-model")
@@ -821,18 +815,17 @@ async def test_agent_tool_model_priority_prefers_env_over_tool_frontmatter_and_p
     assert captured["kwargs"]["agent"] == "explore"
 
 
-def test_resolve_subagent_model_ignores_member_dir_frontmatter(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+def test_resolve_subagent_model_ignores_user_home_agent_files(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     home_root = tmp_path
     monkeypatch.setattr("config.loader.user_home_read_candidates", lambda *parts: (home_root.joinpath(*parts),))
-    member_dir = home_root / "members" / "explore"
-    member_dir.mkdir(parents=True)
-    (member_dir / "agent.md").write_text(
-        "---\nname: explore\nmodel: member-model\ntools:\n  - Read\n---\nmember prompt\n",
+    agent_dir = home_root / "agents"
+    agent_dir.mkdir(parents=True)
+    (agent_dir / "explore.md").write_text(
+        "---\nname: explore\nmodel: user-model\ntools:\n  - Read\n---\nuser prompt\n",
         encoding="utf-8",
     )
 
     resolved = _resolve_subagent_model(
-        workspace_root=tmp_path,
         subagent_type="explore",
         requested_model=None,
         inherited_model="parent-model",
@@ -842,13 +835,7 @@ def test_resolve_subagent_model_ignores_member_dir_frontmatter(monkeypatch: pyte
 
 
 @pytest.mark.asyncio
-async def test_agent_tool_model_priority_prefers_tool_over_frontmatter_and_parent(monkeypatch, tmp_path):
-    agent_dir = tmp_path / ".leon" / "agents"
-    agent_dir.mkdir(parents=True)
-    (agent_dir / "explore.md").write_text(
-        "---\nname: explore\nmodel: frontmatter-model\ntools:\n  - Read\n---\nfrontmatter prompt\n",
-        encoding="utf-8",
-    )
+async def test_agent_tool_model_priority_prefers_tool_over_parent(monkeypatch, tmp_path):
     captured: dict[str, Any] = {}
     _patch_create_leon_agent(monkeypatch, captured=captured)
 
@@ -943,7 +930,7 @@ async def test_agent_tool_inherited_default_bootstrap_model_uses_parent_service_
 
 
 @pytest.mark.asyncio
-async def test_agent_tool_model_priority_prefers_frontmatter_over_parent(monkeypatch, tmp_path):
+async def test_agent_tool_model_priority_ignores_project_agent_file(monkeypatch, tmp_path):
     agent_dir = tmp_path / ".leon" / "agents"
     agent_dir.mkdir(parents=True)
     (agent_dir / "explore.md").write_text(
@@ -964,7 +951,7 @@ async def test_agent_tool_model_priority_prefers_frontmatter_over_parent(monkeyp
 
     await runner.awrap_tool_call(request, AsyncMock())
 
-    assert captured["model_name"] == "frontmatter-model"
+    assert captured["model_name"] == "parent-model"
     assert captured["kwargs"]["agent"] == "explore"
 
 

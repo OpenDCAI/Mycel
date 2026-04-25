@@ -184,7 +184,7 @@ class TestLoadConfigFunction:
         assert isinstance(settings, LeonSettings)
 
 
-def test_project_agent_file_stays_runtime_definition_only(tmp_path: Path):
+def test_project_agent_file_does_not_override_builtin_runtime_agent(tmp_path: Path):
     agents_dir = tmp_path / ".leon" / "agents"
     agents_dir.mkdir(parents=True)
     (agents_dir / "explore.md").write_text(
@@ -194,7 +194,21 @@ def test_project_agent_file_stays_runtime_definition_only(tmp_path: Path):
 
     agent = AgentLoader(workspace_root=tmp_path).load_runtime_agents()["explore"]
 
-    assert agent.model == "project-model"
+    assert agent.model is None
+    assert agent.system_prompt != "project prompt"
+
+
+def test_user_agent_file_does_not_enter_runtime_agent_discovery(tmp_path: Path, monkeypatch):
+    home_root = tmp_path
+    monkeypatch.setattr("config.loader.user_home_read_candidates", lambda *parts: (home_root.joinpath(*parts),))
+    agents_dir = home_root / "agents"
+    agents_dir.mkdir(parents=True)
+    (agents_dir / "custom.md").write_text(
+        "---\nname: custom\nmodel: user-model\n---\nuser prompt\n",
+        encoding="utf-8",
+    )
+
+    assert "custom" not in AgentLoader(workspace_root=tmp_path).load_runtime_agents()
 
 
 def test_runtime_agent_discovery_excludes_member_dirs(tmp_path: Path, monkeypatch):
