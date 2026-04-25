@@ -38,6 +38,7 @@ def _skills_from_repo(config: AgentConfig) -> list[dict[str, Any]]:
     for skill in config.skills:
         skills_list.append(
             {
+                "id": skill.skill_id,
                 "name": skill.name,
                 "enabled": skill.enabled,
                 "desc": skill.description,
@@ -549,13 +550,6 @@ def _sub_agents_from_patch(current_config: AgentConfig, config_patch: dict[str, 
     return sub_agents
 
 
-def _library_skill_by_name(owner_user_id: str, name: str, skill_repo: Any) -> Any | None:
-    for skill in skill_repo.list_for_owner(owner_user_id):
-        if skill.name == name:
-            return skill
-    return None
-
-
 def _selected_library_package(owner_user_id: str, library_skill: Any, skill_repo: Any) -> Any:
     package_id = getattr(library_skill, "package_id", None)
     if not package_id:
@@ -566,11 +560,9 @@ def _selected_library_package(owner_user_id: str, library_skill: Any, skill_repo
     return package
 
 
-def _current_skill_by_name_or_id(config: AgentConfig, name: str, skill_id: str | None) -> AgentSkill | None:
+def _current_skill_by_id(config: AgentConfig, skill_id: str) -> AgentSkill | None:
     for skill in config.skills:
-        if skill.name == name:
-            return skill
-        if skill_id is not None and (skill.skill_id == skill_id or skill.id == skill_id):
+        if skill.skill_id == skill_id:
             return skill
     return None
 
@@ -594,6 +586,8 @@ def _skills_from_patch(current_config: AgentConfig, config_patch: dict[str, Any]
         if "disabled" in item:
             raise RuntimeError("Skill patch item must use enabled, not disabled")
         _enabled_from_patch_item(item, label="Skill patch item")
+        if not (item.get("id") or item.get("skill_id")):
+            raise RuntimeError("Skill patch item must include id")
         name = str(item["name"])
         if name in seen_names:
             raise RuntimeError(f"Duplicate Skill name in patch: {name}")
@@ -602,15 +596,11 @@ def _skills_from_patch(current_config: AgentConfig, config_patch: dict[str, Any]
         name = str(item["name"])
         enabled = _enabled_from_patch_item(item, label="Skill patch item")
         explicit_skill_id = item.get("id") or item.get("skill_id")
-        explicit_skill_id_str = str(explicit_skill_id) if explicit_skill_id else None
-        current_skill = _current_skill_by_name_or_id(current_config, name, explicit_skill_id_str)
-        library_skill = (
-            skill_repo.get_by_id(owner_user_id, explicit_skill_id_str) if explicit_skill_id_str else None
-        ) or _library_skill_by_name(owner_user_id, name, skill_repo)
-        if explicit_skill_id_str and library_skill is None:
-            raise RuntimeError(f"Library skill not found: {explicit_skill_id_str}")
+        explicit_skill_id_str = str(explicit_skill_id)
+        current_skill = _current_skill_by_id(current_config, explicit_skill_id_str)
+        library_skill = skill_repo.get_by_id(owner_user_id, explicit_skill_id_str)
         if library_skill is None:
-            raise RuntimeError(f"Library skill not found: {name}")
+            raise RuntimeError(f"Library skill not found: {explicit_skill_id_str}")
         library_package = _selected_library_package(owner_user_id, library_skill, skill_repo)
         description = library_skill.description
         agent_skill_id = item.get("agent_skill_id") or item.get("row_id") or (current_skill.id if current_skill is not None else None)
