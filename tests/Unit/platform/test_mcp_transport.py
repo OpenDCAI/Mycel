@@ -2,15 +2,14 @@ from __future__ import annotations
 
 import pytest
 
-from config.agent_config_types import McpServerConfig
-from config.agent_config_types import ResolvedAgentConfig
+from config.agent_config_types import McpServerConfig, ResolvedAgentConfig
 from config.schema import LeonSettings
 from core.runtime.agent import LeonAgent
 
 
 def _agent_with_mcp(*servers: McpServerConfig) -> LeonAgent:
     agent = LeonAgent.__new__(LeonAgent)
-    agent.config = LeonSettings()
+    agent.config = LeonSettings.model_validate({})
     agent._resolved_agent_config = ResolvedAgentConfig(
         id="cfg-1",
         name="Agent",
@@ -111,7 +110,7 @@ async def test_missing_resolved_agent_config_disables_mcp(monkeypatch):
         return None, []
 
     agent = LeonAgent.__new__(LeonAgent)
-    agent.config = LeonSettings()
+    agent.config = LeonSettings.model_validate({})
 
     monkeypatch.setattr("core.runtime.agent.mcp_gateway.init_client_tools", fake_init_client_tools)
 
