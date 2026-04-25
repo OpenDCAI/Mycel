@@ -6,11 +6,9 @@ from __future__ import annotations
 import argparse
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
-
-import yaml
 
 from config.agent_config_types import Skill, SkillPackage
+from config.skill_document import SkillDocument, parse_skill_document, skill_description, skill_version
 from config.skill_files import normalize_skill_file_entries
 from config.skill_package import build_skill_package_hash, build_skill_package_manifest
 from storage.runtime import build_storage_container
@@ -19,34 +17,11 @@ from storage.utils import generate_skill_id
 FILE_IMPORT_SOURCE = {"kind": "file_import"}
 
 
-def _frontmatter(content: str) -> dict[str, Any]:
-    if not content.startswith("---"):
-        raise ValueError("SKILL.md must start with YAML frontmatter")
-    parts = content.split("---", 2)
-    if len(parts) < 3:
-        raise ValueError("SKILL.md frontmatter is not closed")
-    metadata = yaml.safe_load(parts[1]) or {}
-    if not isinstance(metadata, dict):
-        raise ValueError("SKILL.md frontmatter must be a mapping")
-    _frontmatter_text(metadata, "name")
-    _frontmatter_text(metadata, "description")
-    return metadata
-
-
-def _frontmatter_text(metadata: dict[str, Any], key: str) -> str:
-    value = metadata.get(key)
-    if not isinstance(value, str) or not value.strip():
-        raise ValueError(f"SKILL.md frontmatter must include {key}")
-    return value.strip()
-
-
-def _frontmatter_version(metadata: dict[str, Any]) -> str:
-    if "version" not in metadata:
-        raise ValueError("SKILL.md frontmatter must include version")
-    value = metadata["version"]
-    if not isinstance(value, str) or not value.strip():
-        raise ValueError("SKILL.md frontmatter version must be a string")
-    return value.strip()
+def _skill_document(content: str) -> SkillDocument:
+    document = parse_skill_document(content, label="SKILL.md")
+    skill_description(document, required=True)
+    skill_version(document)
+    return document
 
 
 def _read_files(skill_dir: Path) -> dict[str, str]:
@@ -74,14 +49,14 @@ def import_skills(owner_user_id: str, library_dir: Path) -> int:
     count = 0
     for skill_dir in sorted(path for path in skills_root.iterdir() if path.is_dir()):
         content = (skill_dir / "SKILL.md").read_text(encoding="utf-8")
-        metadata = _frontmatter(content)
-        skill_name = str(metadata["name"]).strip()
+        document = _skill_document(content)
+        skill_name = document.name
         existing = _find_skill_by_name(repo.list_for_owner(owner_user_id), skill_name)
         now = datetime.now(UTC)
         skill_id = existing.id if existing is not None else generate_skill_id()
         if existing is None and repo.get_by_id(owner_user_id, skill_id) is not None:
             raise RuntimeError("Generated Skill id already exists")
-        version = _frontmatter_version(metadata)
+        version = skill_version(document)
         files = _read_files(skill_dir)
         package_hash = build_skill_package_hash(content, files)
         skill = repo.upsert(
@@ -89,7 +64,7 @@ def import_skills(owner_user_id: str, library_dir: Path) -> int:
                 id=skill_id,
                 owner_user_id=owner_user_id,
                 name=skill_name,
-                description=_frontmatter_text(metadata, "description"),
+                description=skill_description(document, required=True),
                 source=dict(FILE_IMPORT_SOURCE),
                 created_at=getattr(existing, "created_at", now),
                 updated_at=now,

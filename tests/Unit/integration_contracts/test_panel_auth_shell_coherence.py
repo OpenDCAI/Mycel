@@ -1115,7 +1115,7 @@ def test_library_skill_content_update_rejects_frontmatter_name_drift() -> None:
 def test_library_skill_create_requires_version_frontmatter() -> None:
     skill_repo = _MemorySkillRepo()
 
-    with pytest.raises(ValueError, match="frontmatter version is required"):
+    with pytest.raises(ValueError, match="frontmatter must include version"):
         library_service.create_resource(
             "skill",
             "Loadable Skill",
@@ -1140,7 +1140,7 @@ def test_library_skill_content_update_requires_version_frontmatter() -> None:
         content=_editable_skill_md(),
     )
 
-    with pytest.raises(ValueError, match="frontmatter version is required"):
+    with pytest.raises(ValueError, match="frontmatter must include version"):
         library_service.update_resource_content(
             "skill",
             created["id"],
