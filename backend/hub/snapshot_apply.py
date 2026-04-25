@@ -11,6 +11,8 @@ from config.agent_config_types import AgentConfig, AgentSkill, AgentSnapshot, Re
 from config.skill_package import build_skill_package_hash, build_skill_package_manifest
 from storage.utils import generate_skill_id
 
+SNAPSHOT_SKILL_SOURCE_ID_KEY = "snapshot_skill_id"
+
 
 def _required_text(value: Any, *, label: str) -> str:
     if not isinstance(value, str) or not value.strip():
@@ -20,7 +22,10 @@ def _required_text(value: Any, *, label: str) -> str:
 
 def _snapshot_source_skill(skills: list[Skill], marketplace_item_id: str, snapshot_skill_id: str) -> Skill | None:
     for skill in skills:
-        if skill.source.get("marketplace_item_id") == marketplace_item_id and skill.source.get("snapshot_skill_id") == snapshot_skill_id:
+        if (
+            skill.source.get("marketplace_item_id") == marketplace_item_id
+            and skill.source.get(SNAPSHOT_SKILL_SOURCE_ID_KEY) == snapshot_skill_id
+        ):
             return skill
     return None
 
@@ -70,7 +75,7 @@ def _materialize_snapshot_skills(
 
         source = {
             "marketplace_item_id": marketplace_item_id,
-            "snapshot_skill_id": snapshot_skill_id,
+            SNAPSHOT_SKILL_SOURCE_ID_KEY: snapshot_skill_id,
             "source_version": source_version,
             "source_at": source_at,
         }
