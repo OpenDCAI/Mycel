@@ -16,7 +16,6 @@ from config.skill_package import build_skill_package_hash, build_skill_package_m
 from storage.runtime import build_storage_container
 
 FILE_IMPORT_SOURCE = {"kind": "file_import"}
-INITIAL_SKILL_PACKAGE_VERSION = "0.1.0"
 
 
 def _frontmatter(content: str) -> dict[str, Any]:
@@ -42,7 +41,7 @@ def _frontmatter_text(metadata: dict[str, Any], key: str) -> str:
 
 def _frontmatter_version(metadata: dict[str, Any]) -> str:
     if "version" not in metadata:
-        return INITIAL_SKILL_PACKAGE_VERSION
+        raise ValueError("SKILL.md frontmatter must include version")
     value = metadata["version"]
     if not isinstance(value, str) or not value.strip():
         raise ValueError("SKILL.md frontmatter version must be a string")
@@ -79,6 +78,7 @@ def import_skills(owner_user_id: str, library_dir: Path) -> int:
             if skill.name == skill_name and skill.id != skill_dir.name:
                 raise ValueError("Skill name already exists under a different Library id")
         now = datetime.now(UTC)
+        version = _frontmatter_version(metadata)
         files = _read_files(skill_dir)
         package_hash = build_skill_package_hash(content, files)
         skill = repo.upsert(
@@ -97,7 +97,7 @@ def import_skills(owner_user_id: str, library_dir: Path) -> int:
                 id=package_hash.removeprefix("sha256:"),
                 owner_user_id=owner_user_id,
                 skill_id=skill.id,
-                version=_frontmatter_version(metadata),
+                version=version,
                 hash=package_hash,
                 manifest=build_skill_package_manifest(content, files),
                 skill_md=content,

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import inspect
 from datetime import UTC, datetime
 from os import PathLike
 from pathlib import Path, PurePosixPath, PureWindowsPath
@@ -44,7 +45,7 @@ def test_import_file_skill_rejects_name_drift_for_existing_skill_id(monkeypatch:
     library_dir = tmp_path / "library"
     skill_dir = library_dir / "skills" / "same-skill"
     skill_dir.mkdir(parents=True)
-    (skill_dir / "SKILL.md").write_text("---\nname: Renamed Skill\ndescription: Renamed\n---\nBody", encoding="utf-8")
+    (skill_dir / "SKILL.md").write_text("---\nname: Renamed Skill\ndescription: Renamed\nversion: 1.0.0\n---\nBody", encoding="utf-8")
     repo = _MemorySkillRepo(
         Skill(
             id="same-skill",
@@ -66,7 +67,7 @@ def test_import_file_skill_rejects_same_name_under_different_skill_id(monkeypatc
     library_dir = tmp_path / "library"
     skill_dir = library_dir / "skills" / "new-skill"
     skill_dir.mkdir(parents=True)
-    (skill_dir / "SKILL.md").write_text("---\nname: Shared Skill\ndescription: Shared\n---\nBody", encoding="utf-8")
+    (skill_dir / "SKILL.md").write_text("---\nname: Shared Skill\ndescription: Shared\nversion: 1.0.0\n---\nBody", encoding="utf-8")
     repo = _MemorySkillRepo(
         Skill(
             id="original-skill",
@@ -88,7 +89,7 @@ def test_import_file_skill_rejects_unreadable_adjacent_file(monkeypatch: pytest.
     library_dir = tmp_path / "library"
     skill_dir = library_dir / "skills" / "new-skill"
     skill_dir.mkdir(parents=True)
-    (skill_dir / "SKILL.md").write_text("---\nname: New Skill\ndescription: New\n---\nBody", encoding="utf-8")
+    (skill_dir / "SKILL.md").write_text("---\nname: New Skill\ndescription: New\nversion: 1.0.0\n---\nBody", encoding="utf-8")
     (skill_dir / "broken.bin").write_bytes(b"\xff\xfe\xfa")
     repo = _MemorySkillRepo()
     monkeypatch.setattr(import_file_skills_to_library, "build_storage_container", lambda: SimpleNamespace(skill_repo=lambda: repo))
@@ -104,7 +105,7 @@ def test_import_file_skill_stores_adjacent_files_as_posix_paths(monkeypatch: pyt
     skill_dir = library_dir / "skills" / "new-skill"
     refs_dir = skill_dir / "references"
     refs_dir.mkdir(parents=True)
-    (skill_dir / "SKILL.md").write_text("---\nname: New Skill\ndescription: New\n---\nBody", encoding="utf-8")
+    (skill_dir / "SKILL.md").write_text("---\nname: New Skill\ndescription: New\nversion: 1.0.0\n---\nBody", encoding="utf-8")
     (refs_dir / "query.md").write_text("Use exact queries.", encoding="utf-8")
     repo = _MemorySkillRepo()
     original_relative_to = Path.relative_to
@@ -120,7 +121,8 @@ def test_import_file_skill_stores_adjacent_files_as_posix_paths(monkeypatch: pyt
 
     assert repo.saved[0].id == "new-skill"
     assert repo.packages[0].skill_id == "new-skill"
-    assert repo.packages[0].skill_md == "---\nname: New Skill\ndescription: New\n---\nBody"
+    assert repo.packages[0].version == "1.0.0"
+    assert repo.packages[0].skill_md == "---\nname: New Skill\ndescription: New\nversion: 1.0.0\n---\nBody"
     assert repo.packages[0].manifest["files"][0]["path"] == "references/query.md"
     assert repo.selected == [("owner-1", "new-skill", repo.packages[0].id)]
 
@@ -129,7 +131,7 @@ def test_import_file_skill_does_not_store_local_skill_path(monkeypatch: pytest.M
     library_dir = tmp_path / "library"
     skill_dir = library_dir / "skills" / "new-skill"
     skill_dir.mkdir(parents=True)
-    (skill_dir / "SKILL.md").write_text("---\nname: New Skill\ndescription: Imported skill\n---\nBody", encoding="utf-8")
+    (skill_dir / "SKILL.md").write_text("---\nname: New Skill\ndescription: Imported skill\nversion: 1.0.0\n---\nBody", encoding="utf-8")
     repo = _MemorySkillRepo()
     monkeypatch.setattr(import_file_skills_to_library, "build_storage_container", lambda: SimpleNamespace(skill_repo=lambda: repo))
 
@@ -153,12 +155,54 @@ def test_import_file_skill_requires_description_frontmatter(monkeypatch: pytest.
     assert repo.saved == []
 
 
+def test_import_file_skill_requires_version_frontmatter(monkeypatch: pytest.MonkeyPatch, tmp_path):
+    library_dir = tmp_path / "library"
+    skill_dir = library_dir / "skills" / "new-skill"
+    skill_dir.mkdir(parents=True)
+    (skill_dir / "SKILL.md").write_text("---\nname: New Skill\ndescription: New\n---\nBody", encoding="utf-8")
+    repo = _MemorySkillRepo()
+    monkeypatch.setattr(import_file_skills_to_library, "build_storage_container", lambda: SimpleNamespace(skill_repo=lambda: repo))
+
+    with pytest.raises(ValueError, match="SKILL.md frontmatter must include version"):
+        import_file_skills_to_library.import_skills("owner-1", library_dir)
+
+    assert repo.saved == []
+
+
+def test_import_file_skill_has_no_default_package_version() -> None:
+    source = inspect.getsource(import_file_skills_to_library)
+
+    assert "INITIAL_SKILL_PACKAGE_VERSION" not in source
+    assert 'return "0.1.0"' not in source
+
+
+@pytest.mark.parametrize(
+    "version_line",
+    [
+        "version: ''",
+        "version: 1",
+    ],
+)
+def test_import_file_skill_rejects_invalid_version_frontmatter(monkeypatch: pytest.MonkeyPatch, tmp_path, version_line: str):
+    library_dir = tmp_path / "library"
+    skill_dir = library_dir / "skills" / "new-skill"
+    skill_dir.mkdir(parents=True)
+    (skill_dir / "SKILL.md").write_text(f"---\nname: New Skill\ndescription: New\n{version_line}\n---\nBody", encoding="utf-8")
+    repo = _MemorySkillRepo()
+    monkeypatch.setattr(import_file_skills_to_library, "build_storage_container", lambda: SimpleNamespace(skill_repo=lambda: repo))
+
+    with pytest.raises(ValueError, match="SKILL.md frontmatter version must be a string"):
+        import_file_skills_to_library.import_skills("owner-1", library_dir)
+
+    assert repo.saved == []
+
+
 def test_import_file_skill_rejects_adjacent_file_path_collision(monkeypatch: pytest.MonkeyPatch, tmp_path):
     library_dir = tmp_path / "library"
     skill_dir = library_dir / "skills" / "new-skill"
     refs_dir = skill_dir / "references"
     refs_dir.mkdir(parents=True)
-    (skill_dir / "SKILL.md").write_text("---\nname: New Skill\ndescription: New\n---\nBody", encoding="utf-8")
+    (skill_dir / "SKILL.md").write_text("---\nname: New Skill\ndescription: New\nversion: 1.0.0\n---\nBody", encoding="utf-8")
     (refs_dir / "a.md").write_text("Windows-shaped key.", encoding="utf-8")
     (refs_dir / "b.md").write_text("POSIX-shaped key.", encoding="utf-8")
     repo = _MemorySkillRepo()
