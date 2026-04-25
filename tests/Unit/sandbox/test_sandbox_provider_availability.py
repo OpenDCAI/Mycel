@@ -20,7 +20,7 @@ def test_available_sandbox_types_marks_configured_but_unavailable_provider(monke
     monkeypatch.setattr(
         sandbox_service.SandboxConfig,
         "load",
-        classmethod(lambda cls, name: SimpleNamespace(provider="daytona", name=name)),
+        classmethod(lambda cls, name, **_kwargs: SimpleNamespace(provider="daytona", name=name)),
     )
 
     types = sandbox_service.available_sandbox_types()
@@ -44,7 +44,7 @@ def test_available_sandbox_types_marks_e2b_unavailable_when_sdk_missing(monkeypa
     monkeypatch.setattr(
         sandbox_service.SandboxConfig,
         "load",
-        classmethod(lambda cls, name: SimpleNamespace(provider="e2b", name=name)),
+        classmethod(lambda cls, name, **_kwargs: SimpleNamespace(provider="e2b", name=name)),
     )
 
     types = sandbox_service.available_sandbox_types()
@@ -64,6 +64,18 @@ def test_build_providers_and_managers_uses_explicit_local_workspace_root(monkeyp
     providers, _managers = sandbox_service._build_providers_and_managers()
 
     assert providers["local"].default_cwd == str(workspace_root.resolve())
+
+
+def test_build_providers_and_managers_accepts_empty_sandbox_config_set(monkeypatch, tmp_path: Path) -> None:
+    workspace_root = tmp_path / "workspace"
+    monkeypatch.setenv("LEON_LOCAL_WORKSPACE_ROOT", str(workspace_root))
+    monkeypatch.setenv("LEON_SANDBOX_DB_PATH", str(tmp_path / "sandbox.db"))
+    monkeypatch.setattr(sandbox_service, "SANDBOXES_DIR", None)
+
+    providers, managers = sandbox_service._build_providers_and_managers()
+
+    assert list(providers) == ["local"]
+    assert list(managers) == ["local"]
 
 
 def test_build_providers_and_managers_passes_agentbay_pause_capability_overrides(monkeypatch, tmp_path: Path) -> None:
@@ -91,7 +103,7 @@ def test_build_providers_and_managers_passes_agentbay_pause_capability_overrides
         sandbox_service.SandboxConfig,
         "load",
         classmethod(
-            lambda cls, name: SimpleNamespace(
+            lambda cls, name, **_kwargs: SimpleNamespace(
                 provider="agentbay",
                 agentbay=SimpleNamespace(
                     api_key="test-key",
@@ -142,7 +154,7 @@ def test_build_providers_and_managers_uses_current_daytona_contract(monkeypatch,
         sandbox_service.SandboxConfig,
         "load",
         classmethod(
-            lambda cls, name: SimpleNamespace(
+            lambda cls, name, **_kwargs: SimpleNamespace(
                 provider="daytona",
                 daytona=SimpleNamespace(
                     api_key="test-key",
@@ -190,7 +202,7 @@ def test_available_sandbox_types_marks_daytona_unavailable_when_api_key_missing(
         sandbox_service.SandboxConfig,
         "load",
         classmethod(
-            lambda cls, name: SimpleNamespace(
+            lambda cls, name, **_kwargs: SimpleNamespace(
                 provider="daytona",
                 name=name,
             )
