@@ -1153,6 +1153,15 @@ def test_library_skill_create_does_not_derive_id_from_name() -> None:
     assert skill_repo.get_by_id("owner-1", second["id"]).name == "Loadable-Skill"
 
 
+def test_library_skill_create_source_does_not_slugify_name() -> None:
+    import inspect
+
+    source = inspect.getsource(library_service.create_resource)
+
+    assert '.lower().replace(" ", "-")' not in source
+    assert "generate_skill_id()" in source
+
+
 def test_library_rejects_agent_resource_type() -> None:
     with pytest.raises(ValueError, match="Unknown resource type: agent"):
         library_service.list_library("agent")
