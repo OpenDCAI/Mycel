@@ -1,7 +1,7 @@
 """Core runtime configuration schema for Mycel using Pydantic.
 
 This module defines the runtime configuration structure with:
-- Nested config groups (Memory, Tools, MCP, Skills)
+- Nested config groups (Memory, Tools, Skills, MCP)
 - Runtime behavior parameters (temperature, max_tokens, context_limit, etc.)
 - Field validators for paths, extensions
 

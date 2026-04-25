@@ -3,7 +3,7 @@
 Combines:
 - Three-tier runtime config merge (system > user > project) — for default agent
 - Agent .md parsing (YAML frontmatter + system prompt)
-- Bundle discovery (meta.json, rules/, agents/, skills/, .mcp.json, runtime.json)
+- Local agent config discovery (agent.md, meta.json, runtime.json, rules/, agents/, skills/, .mcp.json)
 
 Configuration priority (highest to lowest):
 1. CLI overrides
@@ -11,7 +11,7 @@ Configuration priority (highest to lowest):
 3. User config (~/.leon/runtime.json)
 4. System defaults (config/defaults/runtime.json)
 
-Bundle loading: explicit bundle path or repo-backed agent_config_id only.
+Local agent config loading is explicit path only. Repo-backed startup reads AgentConfig aggregates.
 """
 
 from __future__ import annotations
@@ -23,25 +23,22 @@ from typing import Any
 
 import yaml
 
+from config.agent_config_resolver import resolve_agent_config
+from config.agent_config_types import AgentConfig, AgentRule, AgentSkill, AgentSubAgent, McpServerConfig, ResolvedAgentConfig
 from config.schema import LeonSettings
-from config.types import (
-    AgentBundle,
-    AgentConfig,
-    McpServerConfig,
-    RuntimeResourceConfig,
-)
+from config.types import RuntimeAgentDefinition
 from config.user_paths import remap_default_user_home_string, user_home_path, user_home_read_candidates
 
 logger = logging.getLogger(__name__)
 
 
 class AgentLoader:
-    """Unified loader for runtime config, agent definitions, and agent bundles."""
+    """Unified loader for runtime config, agent definitions, and local agent configs."""
 
     def __init__(self, workspace_root: str | Path | None = None):
         self.workspace_root = Path(workspace_root).resolve() if workspace_root else None
         self._system_defaults_dir = Path(__file__).parent / "defaults"
-        self._agents: dict[str, AgentConfig] = {}
+        self._agents: dict[str, RuntimeAgentDefinition] = {}
 
     # ── Three-tier runtime config (unchanged) ──
 
@@ -95,7 +92,7 @@ class AgentLoader:
 
     # ── Agent .md parsing (merged from core/task/loader) ──
 
-    def load_runtime_agents(self) -> dict[str, AgentConfig]:
+    def load_runtime_agents(self) -> dict[str, RuntimeAgentDefinition]:
         """Load runtime-facing agent definitions."""
         self._load_agent_layers()
         return self._agents
@@ -124,37 +121,52 @@ class AgentLoader:
                 self._agents[config.name] = config
 
     @staticmethod
-    def parse_agent_file(path: Path) -> AgentConfig | None:
-        """Parse Markdown file with YAML frontmatter into AgentConfig."""
+    def parse_agent_file(path: Path, *, strict: bool = False) -> RuntimeAgentDefinition | None:
+        """Parse Markdown file with YAML frontmatter into RuntimeAgentDefinition."""
         try:
             content = path.read_text(encoding="utf-8")
-        except OSError:
+        except OSError as exc:
+            if strict:
+                raise RuntimeError(f"agent.md could not be read: {path}") from exc
             return None
 
         if not content.startswith("---"):
+            if strict:
+                raise ValueError(f"agent.md must start with YAML frontmatter: {path}")
             return None
         parts = content.split("---", 2)
         if len(parts) < 3:
+            if strict:
+                raise ValueError(f"agent.md frontmatter is not closed: {path}")
             return None
 
         try:
             fm = yaml.safe_load(parts[1])
-        except yaml.YAMLError:
+        except yaml.YAMLError as exc:
+            if strict:
+                raise ValueError(f"agent.md frontmatter must be valid YAML: {path}") from exc
             return None
 
-        if not fm or "name" not in fm:
+        if not isinstance(fm, dict):
+            if strict:
+                raise ValueError(f"agent.md frontmatter must be a mapping: {path}")
             return None
+        name = fm.get("name")
+        if not isinstance(name, str) or not name.strip():
+            if strict:
+                raise ValueError(f"agent.md frontmatter must include name: {path}")
+            return None
+        fm["name"] = name.strip()
 
-        return AgentConfig(
+        return RuntimeAgentDefinition(
             name=fm["name"],
             description=fm.get("description", ""),
             tools=fm.get("tools", ["*"]),
             system_prompt=parts[2].strip(),
             model=fm.get("model"),
-            source_dir=None,
         )
 
-    def get_agent(self, name: str) -> AgentConfig | None:
+    def get_agent(self, name: str) -> RuntimeAgentDefinition | None:
         """Get a specific agent by name."""
         return self._agents.get(name)
 
@@ -162,28 +174,35 @@ class AgentLoader:
         """List all available agent names."""
         return list(self._agents.keys())
 
-    # ── Bundle discovery ──
+    # ── Local agent config discovery ──
 
-    def load_bundle(self, agent_dir: Path) -> AgentBundle:
-        """Load a complete agent bundle from a directory.
+    def load_resolved_config_from_dir(self, agent_dir: Path) -> ResolvedAgentConfig:
+        """Load a local agent config directory into runtime-ready resolved config.
 
-        Used by explicit bundle_dir startup and repo-backed agent_config snapshots.
-        Sub-agents use two-layer merge: system defaults → bundle-specific (override by name).
+        Sub-agents use two-layer merge: system defaults → local config (override by name).
         """
         agent_dir = agent_dir.resolve()
-        agent = self.parse_agent_file(agent_dir / "agent.md")
+        agent = self.parse_agent_file(agent_dir / "agent.md", strict=True)
         if not agent:
             raise ValueError(f"No valid agent.md in {agent_dir}")
 
-        return AgentBundle(
-            agent=agent,
+        config = AgentConfig(
+            id=f"local:{agent_dir.name}",
+            owner_user_id="local",
+            agent_user_id="local",
+            name=agent.name,
+            description=agent.description,
+            tools=agent.tools,
+            system_prompt=agent.system_prompt,
+            model=agent.model,
+            runtime_settings=self._discover_runtime(agent_dir),
             meta=self._discover_meta(agent_dir),
-            runtime=self._discover_runtime(agent_dir),
             rules=self._discover_rules(agent_dir),
-            agents=self._merge_agents(agent_dir),
+            sub_agents=self._merge_sub_agents(agent_dir),
             skills=self._discover_skills(agent_dir),
-            mcp=self._discover_mcp(agent_dir),
+            mcp_servers=self._discover_mcp(agent_dir),
         )
+        return resolve_agent_config(config)
 
     @staticmethod
     def _discover_meta(agent_dir: Path) -> dict[str, Any]:
@@ -192,104 +211,159 @@ class AgentLoader:
         if not path.exists():
             return {}
         try:
-            return json.loads(path.read_text(encoding="utf-8"))
-        except (json.JSONDecodeError, OSError):
-            return {}
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError as exc:
+            raise ValueError(f"Local Agent metadata must be valid JSON: {path}") from exc
+        except OSError as exc:
+            raise RuntimeError(f"Local Agent metadata could not be read: {path}") from exc
+        if not isinstance(data, dict):
+            raise ValueError(f"Local Agent metadata must be a JSON object: {path}")
+        return data
 
     @staticmethod
-    def _discover_runtime(agent_dir: Path) -> dict[str, RuntimeResourceConfig]:
-        """Read runtime.json → {resource_name: RuntimeResourceConfig}."""
+    def _discover_runtime(agent_dir: Path) -> dict[str, Any]:
+        """Read runtime.json as runtime_settings."""
         path = agent_dir / "runtime.json"
         if not path.exists():
             return {}
         try:
             data = json.loads(path.read_text(encoding="utf-8"))
-        except (json.JSONDecodeError, OSError):
-            return {}
-        result: dict[str, RuntimeResourceConfig] = {}
-        for name, cfg in data.items():
-            if isinstance(cfg, dict):
-                result[name] = RuntimeResourceConfig(**cfg)
-        return result
+        except json.JSONDecodeError as exc:
+            raise ValueError(f"Local runtime config must be valid JSON: {path}") from exc
+        except OSError as exc:
+            raise RuntimeError(f"Local runtime config could not be read: {path}") from exc
+        if not isinstance(data, dict):
+            raise ValueError(f"Local runtime config must be a JSON object: {path}")
+        return data
 
     @staticmethod
-    def _discover_rules(agent_dir: Path) -> list[dict[str, str]]:
-        """Scan rules/*.md → [{name, content}]."""
+    def _discover_rules(agent_dir: Path) -> list[AgentRule]:
+        """Scan rules/*.md."""
         rules_dir = agent_dir / "rules"
         if not rules_dir.is_dir():
             return []
-        rules = []
+        rules: list[AgentRule] = []
         for md in sorted(rules_dir.glob("*.md")):
             try:
                 content = md.read_text(encoding="utf-8")
-            except OSError:
-                continue
-            rules.append({"name": md.stem, "content": content})
+            except (OSError, UnicodeDecodeError) as exc:
+                raise RuntimeError(f"Local rule file could not be read: {md}") from exc
+            rules.append(AgentRule(name=md.stem, content=content))
         return rules
 
-    def _merge_agents(self, agent_dir: Path) -> list[AgentConfig]:
-        """Two-layer merge: system defaults → repo/user agent configs (override by name)."""
-        merged: dict[str, AgentConfig] = {}
+    def _merge_sub_agents(self, agent_dir: Path) -> list[AgentSubAgent]:
+        """Two-layer merge: system defaults → local config agents (override by name)."""
+        merged: dict[str, RuntimeAgentDefinition] = {}
 
         # Layer 1: system built-in agents
         for agent in self._discover_agents(self._system_defaults_dir):
             merged[agent.name] = agent
 
         # Layer 2: repo/user agent configs (override by name)
-        for agent in self._discover_agents(agent_dir):
+        for agent in self._discover_agents(agent_dir, strict=True):
             merged[agent.name] = agent
 
-        return list(merged.values())
+        return [
+            AgentSubAgent(
+                name=agent.name,
+                description=agent.description,
+                model=agent.model,
+                tools=agent.tools,
+                system_prompt=agent.system_prompt,
+            )
+            for agent in merged.values()
+        ]
 
     @staticmethod
-    def _discover_agents(agent_dir: Path) -> list[AgentConfig]:
-        """Scan agents/*.md → [AgentConfig]."""
+    def _discover_agents(agent_dir: Path, *, strict: bool = False) -> list[RuntimeAgentDefinition]:
+        """Scan agents/*.md -> [RuntimeAgentDefinition]."""
         agents_dir = agent_dir / "agents"
         if not agents_dir.is_dir():
             return []
         agents = []
         for md in sorted(agents_dir.glob("*.md")):
-            config = AgentLoader.parse_agent_file(md)
+            config = AgentLoader.parse_agent_file(md, strict=strict)
             if config:
                 agents.append(config)
         return agents
 
     @staticmethod
-    def _discover_skills(agent_dir: Path) -> list[dict[str, Any]]:
-        """Scan skills/*/SKILL.md → [{name, path}]."""
+    def _discover_skills(agent_dir: Path) -> list[AgentSkill]:
+        """Scan skills/*/SKILL.md."""
         skills_dir = agent_dir / "skills"
         if not skills_dir.is_dir():
             return []
-        skills = []
+        skills: list[AgentSkill] = []
         for skill_dir in sorted(skills_dir.iterdir()):
             if not skill_dir.is_dir():
                 continue
             skill_md = skill_dir / "SKILL.md"
-            if skill_md.exists():
-                skills.append({"name": skill_dir.name, "path": str(skill_dir)})
-            elif any(skill_dir.glob("*.md")):
-                # Accept any markdown file in the skill dir.
-                skills.append({"name": skill_dir.name, "path": str(skill_dir)})
+            if not skill_md.exists():
+                raise ValueError(f"Local Skill directory must contain SKILL.md: {skill_dir}")
+            content = skill_md.read_text(encoding="utf-8")
+            metadata = AgentLoader._skill_frontmatter(content)
+            files: dict[str, str] = {}
+            for file_path in sorted(skill_dir.rglob("*")):
+                if not file_path.is_file() or file_path.name == "SKILL.md":
+                    continue
+                try:
+                    files[str(file_path.relative_to(skill_dir))] = file_path.read_text(encoding="utf-8")
+                except UnicodeDecodeError as exc:
+                    raise RuntimeError(f"Local Skill adjacent file could not be read: {file_path}") from exc
+            skills.append(
+                AgentSkill(
+                    name=str(metadata["name"]),
+                    description=str(metadata.get("description") or ""),
+                    content=content,
+                    files=files,
+                )
+            )
         return skills
 
     @staticmethod
-    def _discover_mcp(agent_dir: Path) -> dict[str, McpServerConfig]:
-        """Read .mcp.json → {server_name: McpServerConfig}."""
+    def _skill_frontmatter(content: str) -> dict[str, Any]:
+        if not content.startswith("---"):
+            raise ValueError("Local Skill content must include frontmatter name")
+        parts = content.split("---", 2)
+        if len(parts) < 3:
+            raise ValueError("Local Skill content must include frontmatter name")
+        try:
+            metadata = yaml.safe_load(parts[1]) or {}
+        except yaml.YAMLError as exc:
+            raise ValueError("Local Skill frontmatter must be valid YAML") from exc
+        if not isinstance(metadata, dict):
+            raise ValueError("Local Skill frontmatter must be a mapping")
+        name = metadata.get("name")
+        if not isinstance(name, str) or not name.strip():
+            raise ValueError("Local Skill content must include frontmatter name")
+        metadata["name"] = name.strip()
+        return metadata
+
+    @staticmethod
+    def _discover_mcp(agent_dir: Path) -> list[McpServerConfig]:
+        """Read .mcp.json."""
         path = agent_dir / ".mcp.json"
         if not path.exists():
-            return {}
+            return []
         try:
             data = json.loads(path.read_text(encoding="utf-8"))
-        except (json.JSONDecodeError, OSError):
-            return {}
+        except json.JSONDecodeError as exc:
+            raise ValueError(f"Local MCP config must be valid JSON: {path}") from exc
+        except OSError as exc:
+            raise RuntimeError(f"Local MCP config could not be read: {path}") from exc
         # .mcp.json has {"mcpServers": {...}} or flat {...}
         servers = data.get("mcpServers", data)
         if not isinstance(servers, dict):
-            return {}
-        result: dict[str, McpServerConfig] = {}
+            raise ValueError(f"Local MCP config mcpServers must be an object: {path}")
+        result: list[McpServerConfig] = []
         for name, cfg in servers.items():
-            if isinstance(cfg, dict):
-                result[name] = McpServerConfig(**{k: v for k, v in cfg.items() if k in McpServerConfig.model_fields})
+            if not isinstance(cfg, dict):
+                raise ValueError(f"Local MCP server config must be an object: {path}#{name}")
+            fields = {k: v for k, v in cfg.items() if k in McpServerConfig.model_fields}
+            fields["name"] = name
+            if cfg.get("disabled") is True:
+                fields["enabled"] = False
+            result.append(McpServerConfig(**fields))
         return result
 
     # ── Internal helpers ──
@@ -317,9 +391,14 @@ class AgentLoader:
             return {}
         try:
             with open(path, encoding="utf-8") as f:
-                return json.load(f)
-        except (json.JSONDecodeError, OSError):
-            return {}
+                data = json.load(f)
+        except json.JSONDecodeError as exc:
+            raise ValueError(f"Runtime config must be valid JSON: {path}") from exc
+        except OSError as exc:
+            raise RuntimeError(f"Runtime config could not be read: {path}") from exc
+        if not isinstance(data, dict):
+            raise ValueError(f"Runtime config must be a JSON object: {path}")
+        return data
 
     def _deep_merge(self, *dicts: dict[str, Any]) -> dict[str, Any]:
         """Deep merge multiple dictionaries. Later dicts override earlier ones."""
@@ -385,84 +464,3 @@ def load_config(
 ) -> LeonSettings:
     """Convenience function to load runtime configuration."""
     return AgentLoader(workspace_root=workspace_root).load(cli_overrides=cli_overrides)
-
-
-def load_bundle_from_repo(agent_config_repo: Any, agent_config_id: str) -> AgentBundle | None:
-    """Load agent bundle from Supabase agent_config tables keyed by agent_config_id."""
-    config = agent_config_repo.get_config(agent_config_id)
-    if not config:
-        return None
-
-    # Parse agent identity from config
-    agent = AgentConfig(
-        name=config.get("name", ""),
-        description=config.get("description", ""),
-        tools=config.get("tools", ["*"]),
-        system_prompt=config.get("system_prompt", ""),
-        model=config.get("model"),
-        source_dir=None,
-    )
-
-    meta = dict(config.get("meta") if isinstance(config.get("meta"), dict) else {})
-    meta.update(
-        {
-            "status": config.get("status", "draft"),
-            "version": config.get("version", "0.1.0"),
-            "created_at": config.get("created_at", 0),
-            "updated_at": config.get("updated_at", 0),
-        }
-    )
-
-    # Runtime from config
-    runtime_data = config.get("runtime") or {}
-    runtime = {}
-    for rname, rcfg in runtime_data.items():
-        if isinstance(rcfg, dict):
-            runtime[rname] = RuntimeResourceConfig(**rcfg)
-
-    # Rules from agent_rules table
-    rule_rows = agent_config_repo.list_rules(agent_config_id)
-    rules = [{"name": r.get("filename", "").replace(".md", ""), "content": r.get("content", "")} for r in rule_rows]
-
-    # Sub-agents use the same default layer as filesystem bundles, then repo rows override by name.
-    loader = AgentLoader()
-    agents_by_name = {agent.name: agent for agent in loader._discover_agents(loader._system_defaults_dir)}
-    sub_agent_rows = agent_config_repo.list_sub_agents(agent_config_id)
-    for sa in sub_agent_rows:
-        tools = sa.get("tools_json") if "tools_json" in sa and sa.get("tools_json") is not None else sa.get("tools", ["*"])
-        sub_agent = AgentConfig(
-            name=sa.get("name", ""),
-            description=sa.get("description", ""),
-            tools=tools,
-            system_prompt=sa.get("system_prompt", ""),
-            model=sa.get("model"),
-            source_dir=None,
-        )
-        if sub_agent.name:
-            agents_by_name[sub_agent.name] = sub_agent
-
-    # Skills from agent_skills table
-    skill_rows = agent_config_repo.list_skills(agent_config_id)
-    skills = []
-    for s in skill_rows:
-        item = {"name": s.get("name", ""), "content": s.get("content", "")}
-        if isinstance(s.get("meta_json"), dict):
-            item["meta"] = s.get("meta_json")
-        skills.append(item)
-
-    # MCP from config
-    mcp_data = config.get("mcp") or {}
-    mcp = {}
-    for mname, mcfg in mcp_data.items():
-        if isinstance(mcfg, dict):
-            mcp[mname] = McpServerConfig(**{k: v for k, v in mcfg.items() if k in McpServerConfig.model_fields})
-
-    return AgentBundle(
-        agent=agent,
-        meta=meta,
-        runtime=runtime,
-        rules=rules,
-        agents=list(agents_by_name.values()),
-        skills=skills,
-        mcp=mcp,
-    )
