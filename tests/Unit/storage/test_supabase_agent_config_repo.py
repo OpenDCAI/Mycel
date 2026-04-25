@@ -244,6 +244,33 @@ def test_get_agent_config_fails_loudly_when_mcp_json_enabled_is_not_boolean() ->
         repo.get_agent_config("cfg-1")
 
 
+def test_get_agent_config_fails_loudly_when_skill_binding_enabled_is_not_boolean() -> None:
+    tables = _tables()
+    tables["agent.skill_bindings"][0]["enabled"] = "false"
+    repo = SupabaseAgentConfigRepo(_FakeClient(tables))
+
+    with pytest.raises(RuntimeError, match="skill_bindings enabled must be a boolean"):
+        repo.get_agent_config("cfg-1")
+
+
+def test_get_agent_config_fails_loudly_when_rule_enabled_is_not_boolean() -> None:
+    tables = _tables()
+    tables["agent.agent_rules"][0]["enabled"] = "false"
+    repo = SupabaseAgentConfigRepo(_FakeClient(tables))
+
+    with pytest.raises(RuntimeError, match="agent_rules enabled must be a boolean"):
+        repo.get_agent_config("cfg-1")
+
+
+def test_get_agent_config_fails_loudly_when_sub_agent_enabled_is_not_boolean() -> None:
+    tables = _tables()
+    tables["agent.agent_sub_agents"][0]["enabled"] = "false"
+    repo = SupabaseAgentConfigRepo(_FakeClient(tables))
+
+    with pytest.raises(RuntimeError, match="agent_sub_agents enabled must be a boolean"):
+        repo.get_agent_config("cfg-1")
+
+
 def test_save_agent_config_calls_single_rpc_with_full_payload() -> None:
     client = _FakeClient()
     repo = SupabaseAgentConfigRepo(client)
