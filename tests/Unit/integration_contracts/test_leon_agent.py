@@ -740,6 +740,35 @@ async def test_leon_agent_default_runtime_still_registers_configured_file_skills
 
 @pytest.mark.asyncio
 @_patch_env_api_key()
+async def test_leon_agent_default_runtime_ignores_missing_configured_file_skill_path(tmp_path):
+    from core.runtime.agent import LeonAgent
+
+    missing_skills = tmp_path / "missing-file-skills"
+    (tmp_path / ".leon").mkdir()
+    (tmp_path / ".leon" / "runtime.json").write_text(
+        json.dumps({"skills": {"enabled": True, "paths": [str(missing_skills)], "skills": {}}}),
+        encoding="utf-8",
+    )
+
+    mock_model = _mock_model("No file skill response")
+
+    with (
+        patch("core.runtime.agent.LeonAgent._create_model", return_value=mock_model),
+        patch("core.runtime.agent.LeonAgent._init_async_components", return_value=(None, [])),
+        patch("core.runtime.agent.LeonAgent._init_checkpointer", new_callable=AsyncMock, return_value=None),
+        patch("core.runtime.agent.LeonAgent._init_mcp_tools", new_callable=AsyncMock, return_value=[]),
+    ):
+        agent = LeonAgent(workspace_root=str(tmp_path), api_key="sk-test-integration")
+        await agent.ainit()
+
+        assert not missing_skills.exists()
+        assert agent._tool_registry.get("load_skill") is None
+
+        agent.close()
+
+
+@pytest.mark.asyncio
+@_patch_env_api_key()
 async def test_leon_agent_agent_config_skills_ignore_file_skill_toggle(tmp_path):
     from core.runtime.agent import LeonAgent
 

@@ -208,18 +208,8 @@ class SkillsConfig(BaseModel):
     """Skills configuration."""
 
     enabled: bool = True
-    paths: list[str] = Field(default_factory=lambda: ["./skills"], description="Skill search paths")
+    paths: list[str] = Field(default_factory=lambda: ["./skills"], description="Declared Skill search paths")
     skills: dict[str, bool] = Field(default_factory=dict, description="Skill enable/disable map")
-
-    @field_validator("paths")
-    @classmethod
-    def validate_paths(cls, v: list[str]) -> list[str]:
-        """Validate skill paths exist."""
-        for path_str in v:
-            path = Path(path_str).expanduser()
-            if not path.exists():
-                raise ValueError(f"Skill path does not exist: {path}")
-        return v
 
 
 # ============================================================================
