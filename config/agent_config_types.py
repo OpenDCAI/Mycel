@@ -6,6 +6,12 @@ from typing import Any, Literal
 from pydantic import BaseModel, Field, ValidationInfo, field_validator
 
 
+def _normalize_skill_file_paths(value: Any) -> Any:
+    if not isinstance(value, dict):
+        return value
+    return {str(path).replace("\\", "/"): content for path, content in value.items()}
+
+
 class Skill(BaseModel):
     id: str
     owner_user_id: str
@@ -25,6 +31,11 @@ class Skill(BaseModel):
             raise ValueError(f"skill.{info.field_name} must not be blank")
         return value
 
+    @field_validator("files", mode="before")
+    @classmethod
+    def _normalize_files(cls, value: Any) -> Any:
+        return _normalize_skill_file_paths(value)
+
 
 class AgentSkill(BaseModel):
     id: str | None = None
@@ -43,6 +54,11 @@ class AgentSkill(BaseModel):
         if not value.strip():
             raise ValueError(f"agent_skill.{info.field_name} must not be blank")
         return value
+
+    @field_validator("files", mode="before")
+    @classmethod
+    def _normalize_files(cls, value: Any) -> Any:
+        return _normalize_skill_file_paths(value)
 
 
 class AgentRule(BaseModel):
