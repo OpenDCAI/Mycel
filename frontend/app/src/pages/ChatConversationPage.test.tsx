@@ -193,6 +193,8 @@ describe("ChatConversationPage SSE teardown", () => {
               id: "request-1",
               chat_id: "chat-1",
               requester_user_id: "visitor-1",
+              requester_name: "Visitor",
+              requester_type: "external",
               state: "pending",
               message: "Please add me.",
               created_at: 1,
@@ -227,10 +229,10 @@ describe("ChatConversationPage SSE teardown", () => {
     );
 
     expect(await screen.findByText("入群申请")).toBeTruthy();
-    expect(screen.getByText("visitor-1")).toBeTruthy();
+    expect(screen.getByText("Visitor")).toBeTruthy();
     expect(screen.getByText("Please add me.")).toBeTruthy();
 
-    fireEvent.click(screen.getByRole("button", { name: "同意 visitor-1 入群" }));
+    fireEvent.click(screen.getByRole("button", { name: "同意 Visitor 入群" }));
 
     await waitFor(() => {
       expect(authFetchMocks.authFetch).toHaveBeenCalledWith(
@@ -326,5 +328,74 @@ describe("ChatConversationPage SSE teardown", () => {
       expect(screen.getByText("direct room")).toBeTruthy();
     });
     expect(screen.queryByText("入群申请")).toBeNull();
+  });
+
+  it("shows a join request card when the current user is not a group member", async () => {
+    authFetchMocks.authFetch.mockImplementation(async (url: string, init?: RequestInit) => {
+      if (url === "/api/chats/chat-1") {
+        return {
+          ok: false,
+          status: 403,
+          text: async () => "Not a participant of this chat",
+        };
+      }
+      if (url === "/api/chats/chat-1/join-target") {
+        return {
+          ok: true,
+          json: async () => ({
+            id: "chat-1",
+            type: "group",
+            title: "public group",
+            status: "active",
+            created_by_user_id: "owner-1",
+            is_member: false,
+            current_request: null,
+          }),
+        };
+      }
+      if (url === "/api/chats/chat-1/join-requests" && init?.method === "POST") {
+        return {
+          ok: true,
+          json: async () => ({
+            id: "request-1",
+            chat_id: "chat-1",
+            requester_user_id: "user-1",
+            requester_name: "tester",
+            requester_type: "human",
+            state: "pending",
+            message: "Please let me in.",
+            created_at: 1,
+            updated_at: 1,
+          }),
+        };
+      }
+      if (url.includes("/messages") || url.endsWith("/read") || url.endsWith("/events")) {
+        throw new Error("non-members should not load member-only chat surfaces");
+      }
+      throw new Error(`Unexpected authFetch url: ${url}`);
+    });
+
+    render(
+      <MemoryRouter initialEntries={["/chat/visit/chat-1"]}>
+        <Routes>
+          <Route path="/chat/visit/:chatId" element={<ChatConversationPage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText("public group")).toBeTruthy();
+    expect(screen.getByText("申请加入群聊")).toBeTruthy();
+
+    fireEvent.change(screen.getByPlaceholderText("写一句申请理由..."), { target: { value: "Please let me in." } });
+    fireEvent.click(screen.getByRole("button", { name: "发送申请" }));
+
+    await waitFor(() => {
+      expect(authFetchMocks.authFetch).toHaveBeenCalledWith(
+        "/api/chats/chat-1/join-requests",
+        { method: "POST", body: JSON.stringify({ message: "Please let me in." }) },
+      );
+    });
+    expect(await screen.findByText("申请已发送")).toBeTruthy();
+    expect(authFetchMocks.streamChatEvents).not.toHaveBeenCalled();
   });
 });
