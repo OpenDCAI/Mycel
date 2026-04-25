@@ -319,7 +319,7 @@ def apply_item(
                     package_id=package.id,
                     name=skill_name,
                     description=skill_description,
-                    version=source_version,
+                    version=package.version,
                     source={
                         "marketplace_item_id": item_id,
                         "source_version": source_version,
