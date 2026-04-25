@@ -137,9 +137,8 @@ def test_get_settings_route_does_not_import_preferences_when_repo_row_missing(mo
 
 
 def test_get_settings_route_requires_repo_backed_storage_contract():
-    with pytest.raises(RuntimeError, match="user_settings_repo"):
-        with TestClient(_settings_test_app(None)) as client:
-            client.get("/api/settings")
+    with pytest.raises(RuntimeError, match="user_settings_repo"), TestClient(_settings_test_app(None)) as client:
+        client.get("/api/settings")
 
 
 def test_get_settings_route_merges_repo_backed_model_pool_over_filesystem_loader(monkeypatch):
