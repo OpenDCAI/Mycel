@@ -80,35 +80,6 @@ class TestAgentLoader:
         result = loader._deep_merge(dict1, dict2, dict3)
         assert result == {"a": 1, "b": {"x": 1, "y": 2, "z": 3}, "c": 3, "d": 4}
 
-    def test_lookup_merge(self):
-        loader = AgentLoader()
-
-        config1 = {"mcp": {"servers": {"server1": {}}}}
-        config2 = {"mcp": {"servers": {"server2": {}}}}
-        config3 = {"mcp": {"servers": {"server3": {}}}}
-
-        result = loader._lookup_merge("mcp", config1, config2, config3)
-        assert "server1" in result["servers"]
-        assert "server2" not in result["servers"]
-
-    def test_lookup_merge_skip_none(self):
-        loader = AgentLoader()
-
-        config1 = {"mcp": None}
-        config2 = {"mcp": {"servers": {"server1": {}}}}
-
-        result = loader._lookup_merge("mcp", config1, config2)
-        assert "server1" in result["servers"]
-
-    def test_lookup_merge_missing_key(self):
-        loader = AgentLoader()
-
-        config1 = {"api": {}}
-        config2 = {"tools": {}}
-
-        result = loader._lookup_merge("mcp", config1, config2)
-        assert result == {}
-
     def test_expand_env_vars_string(self):
         loader = AgentLoader()
 

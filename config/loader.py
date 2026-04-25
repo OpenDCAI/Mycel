@@ -159,13 +159,6 @@ class AgentLoader:
                     result[key] = value
         return result
 
-    def _lookup_merge(self, key: str, *configs: dict[str, Any]) -> Any:
-        """Lookup strategy: first found wins."""
-        for config in configs:
-            if key in config and config[key] is not None:
-                return config[key]
-        return {}
-
     @staticmethod
     def _reject_removed_runtime_key(key: str, *configs: dict[str, Any]) -> None:
         for config in configs:
