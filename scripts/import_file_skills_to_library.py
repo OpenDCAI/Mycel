@@ -14,6 +14,7 @@ from config.agent_config_types import Skill, SkillPackage
 from config.skill_files import normalize_skill_file_entries
 from config.skill_package import build_skill_package_hash, build_skill_package_manifest
 from storage.runtime import build_storage_container
+from storage.utils import generate_skill_id
 
 FILE_IMPORT_SOURCE = {"kind": "file_import"}
 
@@ -60,6 +61,10 @@ def _read_files(skill_dir: Path) -> dict[str, str]:
     return normalize_skill_file_entries(file_entries, context="File Skill files")
 
 
+def _find_skill_by_name(skills: list[Skill], skill_name: str) -> Skill | None:
+    return next((skill for skill in skills if skill.name == skill_name), None)
+
+
 def import_skills(owner_user_id: str, library_dir: Path) -> int:
     repo = build_storage_container().skill_repo()
     skills_root = library_dir / "skills"
@@ -71,24 +76,22 @@ def import_skills(owner_user_id: str, library_dir: Path) -> int:
         content = (skill_dir / "SKILL.md").read_text(encoding="utf-8")
         metadata = _frontmatter(content)
         skill_name = str(metadata["name"]).strip()
-        existing = repo.get_by_id(owner_user_id, skill_dir.name)
-        if existing is not None and existing.name != skill_name:
-            raise ValueError("SKILL.md frontmatter name must match existing Skill name")
-        for skill in repo.list_for_owner(owner_user_id):
-            if skill.name == skill_name and skill.id != skill_dir.name:
-                raise ValueError("Skill name already exists under a different Library id")
+        existing = _find_skill_by_name(repo.list_for_owner(owner_user_id), skill_name)
         now = datetime.now(UTC)
+        skill_id = existing.id if existing is not None else generate_skill_id()
+        if existing is None and repo.get_by_id(owner_user_id, skill_id) is not None:
+            raise RuntimeError("Generated Skill id already exists")
         version = _frontmatter_version(metadata)
         files = _read_files(skill_dir)
         package_hash = build_skill_package_hash(content, files)
         skill = repo.upsert(
             Skill(
-                id=skill_dir.name,
+                id=skill_id,
                 owner_user_id=owner_user_id,
                 name=skill_name,
                 description=_frontmatter_text(metadata, "description"),
                 source=dict(FILE_IMPORT_SOURCE),
-                created_at=now,
+                created_at=getattr(existing, "created_at", now),
                 updated_at=now,
             )
         )

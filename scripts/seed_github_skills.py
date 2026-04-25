@@ -5,6 +5,8 @@ from pathlib import Path
 import httpx
 import yaml
 
+from config.skill_files import normalize_skill_file_entries
+
 HUB_URL = "http://localhost:8090"
 
 # Publisher mapping: repo_key -> (user_id, username, display_name)
@@ -40,23 +42,20 @@ SKIP_DIRS = {
 
 
 def register_publisher(user_id: str, username: str, display_name: str) -> None:
-    try:
-        httpx.post(
-            f"{HUB_URL}/api/v1/publishers/register",
-            json={
-                "user_id": user_id,
-                "username": username,
-                "display_name": display_name,
-            },
-            timeout=10.0,
-        ).raise_for_status()
-    except Exception as e:
-        print(f"  Publisher {username}: {e}")
+    httpx.post(
+        f"{HUB_URL}/api/v1/publishers/register",
+        json={
+            "user_id": user_id,
+            "username": username,
+            "display_name": display_name,
+        },
+        timeout=10.0,
+    ).raise_for_status()
 
 
 def parse_skill_md(skill_md: Path) -> dict | None:
     """Parse a SKILL.md into name/description/tags."""
-    content = skill_md.read_text(encoding="utf-8", errors="replace")
+    content = skill_md.read_text(encoding="utf-8")
     if len(content.strip()) < 50:
         return None
 
@@ -67,21 +66,28 @@ def parse_skill_md(skill_md: Path) -> dict | None:
     if content.startswith("---"):
         parts = content.split("---", 2)
         if len(parts) >= 3:
-            try:
-                fm = yaml.safe_load(parts[1])
-                if fm and isinstance(fm, dict):
-                    name = fm.get("name", name)
-                    description = fm.get("description", "")
-                    meta = fm.get("metadata", {})
-                    if isinstance(meta, dict):
-                        for key in ("domain", "role", "category"):
-                            if meta.get(key):
-                                tags.append(str(meta[key]))
-                        triggers = meta.get("triggers", "")
-                        if isinstance(triggers, str):
-                            tags.extend([t.strip() for t in triggers.split(",")[:5] if t.strip()])
-            except Exception:
-                pass
+            fm = yaml.safe_load(parts[1]) or {}
+            if not isinstance(fm, dict):
+                raise ValueError("SKILL.md frontmatter must be a mapping")
+            raw_name = fm.get("name", name)
+            if not isinstance(raw_name, str) or not raw_name.strip():
+                raise ValueError("SKILL.md frontmatter name must be a string")
+            name = raw_name.strip()
+            raw_description = fm.get("description", "")
+            if raw_description is None:
+                description = ""
+            elif isinstance(raw_description, str):
+                description = raw_description.strip()
+            else:
+                raise ValueError("SKILL.md frontmatter description must be a string")
+            meta = fm.get("metadata", {})
+            if isinstance(meta, dict):
+                for key in ("domain", "role", "category"):
+                    if meta.get(key):
+                        tags.append(str(meta[key]))
+                triggers = meta.get("triggers", "")
+                if isinstance(triggers, str):
+                    tags.extend([t.strip() for t in triggers.split(",")[:5] if t.strip()])
 
     if not description:
         for line in content.split("\n"):
@@ -93,9 +99,29 @@ def parse_skill_md(skill_md: Path) -> dict | None:
     return {
         "name": name,
         "description": description,
-        "tags": list(set(t for t in tags if t))[:10],
+        "tags": sorted({t for t in tags if t})[:10],
         "content": content,
     }
+
+
+def _read_adjacent_files(skill_dir: Path) -> dict[str, str]:
+    file_entries: list[tuple[str, str]] = []
+    for path in sorted(skill_dir.rglob("*")):
+        if not path.is_file() or path.name == "SKILL.md":
+            continue
+        try:
+            file_entries.append((path.relative_to(skill_dir).as_posix(), path.read_text(encoding="utf-8")))
+        except UnicodeDecodeError as exc:
+            raise RuntimeError(f"Skill adjacent file could not be read: {path}") from exc
+    return normalize_skill_file_entries(file_entries, context="Seed Skill files")
+
+
+def read_skill_package(skill_dir: Path) -> dict | None:
+    parsed = parse_skill_md(skill_dir / "SKILL.md")
+    if parsed is None:
+        return None
+    parsed["files"] = _read_adjacent_files(skill_dir)
+    return parsed
 
 
 def find_skill_dirs(repo_root: Path, skill_roots: list[Path] | None) -> list[Path]:
@@ -118,6 +144,34 @@ def find_skill_dirs(repo_root: Path, skill_roots: list[Path] | None) -> list[Pat
     return sorted(set(results))
 
 
+def build_skill_payload(
+    *,
+    slug: str,
+    package: dict,
+    publisher_user_id: str,
+    publisher_username: str,
+) -> dict:
+    return {
+        "slug": slug,
+        "type": "skill",
+        "name": package["name"],
+        "description": package["description"],
+        "version": "1.0.0",
+        "release_notes": "Initial release",
+        "tags": package["tags"],
+        "visibility": "public",
+        "snapshot": {
+            "meta": {"name": package["name"], "desc": package["description"]},
+            "content": package["content"],
+            "files": package["files"],
+        },
+        "parent_item_id": None,
+        "parent_version": None,
+        "publisher_user_id": publisher_user_id,
+        "publisher_username": publisher_username,
+    }
+
+
 def upload(payload: dict) -> bool:
     import time
 
@@ -126,10 +180,13 @@ def upload(payload: dict) -> bool:
             resp = httpx.post(f"{HUB_URL}/api/v1/publish", json=payload, timeout=30.0)
             resp.raise_for_status()
             return True
-        except Exception as e:
-            if attempt < 2 and ("Connection reset" in str(e) or "timed out" in str(e)):
+        except (httpx.ConnectError, httpx.RemoteProtocolError, httpx.TimeoutException) as e:
+            if attempt < 2:
                 time.sleep(1 + attempt)
                 continue
+            print(f"  FAIL: {e}")
+            return False
+        except httpx.HTTPStatusError as e:
             print(f"  FAIL: {e}")
             return False
     return False
@@ -142,12 +199,11 @@ def main():
         print(f"Publisher registered: {uname}")
 
     # Check existing items to avoid duplicates
-    try:
-        existing = httpx.get(f"{HUB_URL}/api/v1/items?page_size=2000", timeout=30.0).json()
-        existing_slugs = {(item["publisher_username"], item["slug"]) for item in existing.get("items", [])}
-        print(f"\nExisting items in Hub: {len(existing_slugs)}")
-    except Exception:
-        existing_slugs = set()
+    existing_response = httpx.get(f"{HUB_URL}/api/v1/items?page_size=2000", timeout=30.0)
+    existing_response.raise_for_status()
+    existing = existing_response.json()
+    existing_slugs = {(item["publisher_username"], item["slug"]) for item in existing.get("items", [])}
+    print(f"\nExisting items in Hub: {len(existing_slugs)}")
 
     total_ok = 0
     total_fail = 0
@@ -178,30 +234,18 @@ def main():
                 total_skip += 1
                 continue
 
-            parsed = parse_skill_md(skill_md)
-            if not parsed:
+            package = read_skill_package(skill_dir)
+            if not package:
                 print(f"  SKIP: {slug} (too short)")
                 total_skip += 1
                 continue
 
-            payload = {
-                "slug": slug,
-                "type": "skill",
-                "name": parsed["name"],
-                "description": parsed["description"],
-                "version": "1.0.0",
-                "release_notes": "Initial release",
-                "tags": parsed["tags"],
-                "visibility": "public",
-                "snapshot": {
-                    "meta": {"name": parsed["name"], "desc": parsed["description"]},
-                    "content": parsed["content"],
-                },
-                "parent_item_id": None,
-                "parent_version": None,
-                "publisher_user_id": uid,
-                "publisher_username": uname,
-            }
+            payload = build_skill_payload(
+                slug=slug,
+                package=package,
+                publisher_user_id=uid,
+                publisher_username=uname,
+            )
 
             print(f"  Upload: {slug} ...", end=" ")
             if upload(payload):
