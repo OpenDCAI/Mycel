@@ -18,6 +18,12 @@ def _skill_id_from_name(name: str) -> str:
     return skill_id
 
 
+def _required_text(value: Any, *, label: str) -> str:
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError(f"{label} must be a string")
+    return value.strip()
+
+
 def _materialize_snapshot_skills(
     *,
     skills: list[ResolvedSkill],
@@ -114,6 +120,8 @@ def apply_snapshot(
     if user_repo is None or agent_config_repo is None:
         raise RuntimeError("user_repo and agent_config_repo are required to apply marketplace user snapshot")
 
+    marketplace_item_id = _required_text(marketplace_item_id, label="marketplace_item_id")
+    source_version = _required_text(source_version, label="source_version")
     parsed = AgentSnapshot.model_validate(snapshot)
     resolved = parsed.agent
     now = time.time()
