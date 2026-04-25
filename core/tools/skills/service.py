@@ -54,7 +54,7 @@ class SkillsService:
             self._inline_skills[skill_name] = content
             files = skill.get("files")
             if isinstance(files, dict):
-                self._inline_skill_files[skill_name] = {str(path): str(body) for path, body in files.items()}
+                self._inline_skill_files[skill_name] = {str(path).replace("\\", "/"): str(body) for path, body in files.items()}
             elif files is not None:
                 raise ValueError("Inline Skill files must be an object")
 

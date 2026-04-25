@@ -1,3 +1,5 @@
+from typing import cast
+
 import pytest
 
 from core.runtime.registry import ToolRegistry
@@ -17,7 +19,7 @@ def test_load_file_skill_returns_adjacent_files(tmp_path) -> None:
     entry = registry.get("load_skill")
     assert entry is not None
 
-    result = entry.handler("query-helper")
+    result = cast(str, entry.handler("query-helper"))
 
     assert "Loaded skill: query-helper" in result
     assert "Use exact terms." in result
@@ -142,9 +144,32 @@ def test_load_inline_skill_returns_adjacent_files() -> None:
     entry = registry.get("load_skill")
     assert entry is not None
 
-    result = entry.handler("query-helper")
+    result = cast(str, entry.handler("query-helper"))
 
     assert "Loaded skill: query-helper" in result
     assert "Use exact terms." in result
     assert "references/query.md" in result
     assert "Prefer precise queries." in result
+
+
+def test_load_inline_skill_normalizes_adjacent_file_paths() -> None:
+    registry = ToolRegistry()
+    SkillsService(
+        registry=registry,
+        skill_paths=[],
+        inline_skills=[
+            {
+                "name": "query-helper",
+                "content": "---\nname: query-helper\n---\nUse exact terms.",
+                "files": {"references\\query.md": "Prefer precise queries."},
+            }
+        ],
+    )
+
+    entry = registry.get("load_skill")
+    assert entry is not None
+
+    result = cast(str, entry.handler("query-helper"))
+
+    assert "--- references/query.md ---" in result
+    assert "references\\query.md" not in result
