@@ -562,6 +562,26 @@ class TestApplySkill:
         assert saved[0].skills[0].name == "FastAPI"
 
 
+def test_apply_skill_to_agent_does_not_handwrite_binding_source() -> None:
+    import inspect
+
+    import backend.hub.client as marketplace_client
+
+    source = inspect.getsource(marketplace_client.apply_item)
+
+    assert 'source={\n                        "marketplace_item_id": item_id' not in source
+
+
+def test_apply_skill_to_agent_does_not_use_source_version_for_binding_version() -> None:
+    import inspect
+
+    import backend.hub.client as marketplace_client
+
+    source = inspect.getsource(marketplace_client.apply_item)
+
+    assert "version=source_version,\n                    source=" not in source
+
+
 # ── Apply — agent ──
 
 
