@@ -588,6 +588,8 @@ def _skills_from_patch(current_config: AgentConfig, config_patch: dict[str, Any]
             raise RuntimeError("Skill patch item must include name")
         if "content" in item or "files" in item:
             raise RuntimeError("Skill patch item must not include content or files")
+        if "source" in item or "version" in item:
+            raise RuntimeError("Skill patch item must not include source or version")
         if "disabled" in item:
             raise RuntimeError("Skill patch item must use enabled, not disabled")
         _enabled_from_patch_item(item, label="Skill patch item")
@@ -618,18 +620,8 @@ def _skills_from_patch(current_config: AgentConfig, config_patch: dict[str, Any]
                 package_id=library_package.id,
                 name=library_skill.name,
                 description=description,
-                version=str(
-                    library_package.version
-                    or item.get("version")
-                    or (current_skill.version if current_skill is not None else "")
-                    or "0.1.0"
-                ),
-                source=dict(
-                    library_package.source
-                    or library_skill.source
-                    or item.get("source")
-                    or (current_skill.source if current_skill is not None else {})
-                ),
+                version=library_package.version,
+                source=dict(library_package.source),
                 enabled=enabled,
             )
         )
