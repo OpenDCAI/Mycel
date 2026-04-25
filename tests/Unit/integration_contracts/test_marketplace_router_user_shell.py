@@ -184,17 +184,19 @@ def test_skill_marketplace_to_agent_library_delete_backend_api_yatu(monkeypatch:
                 ]
             },
         )
-        blocked_alpha_delete = client.delete("/api/panel/library/skill/alpha-skill")
+        alpha_skill_id = library_by_name["Alpha Skill"]["id"]
+        beta_skill_id = library_by_name["Beta Skill"]["id"]
+        blocked_alpha_delete = client.delete(f"/api/panel/library/skill/{alpha_skill_id}")
 
         keep_beta = client.put(
             "/api/panel/agents/agent-1/config",
             json={"skills": [{"id": library_by_name["Beta Skill"]["id"], "name": "Beta Skill", "enabled": True}]},
         )
-        deleted_alpha = client.delete("/api/panel/library/skill/alpha-skill")
-        blocked_beta_delete = client.delete("/api/panel/library/skill/beta-skill")
+        deleted_alpha = client.delete(f"/api/panel/library/skill/{alpha_skill_id}")
+        blocked_beta_delete = client.delete(f"/api/panel/library/skill/{beta_skill_id}")
 
         clear_skills = client.put("/api/panel/agents/agent-1/config", json={"skills": []})
-        deleted_beta = client.delete("/api/panel/library/skill/beta-skill")
+        deleted_beta = client.delete(f"/api/panel/library/skill/{beta_skill_id}")
         library_after_delete = client.get("/api/panel/library/skill")
 
     assert alpha_apply.status_code == 200
