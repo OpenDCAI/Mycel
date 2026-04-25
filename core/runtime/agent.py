@@ -38,7 +38,7 @@ if _env_file.exists():
             os.environ[key] = value
 
 from config import LeonSettings  # noqa: E402
-from config.agent_config_resolver import resolve_agent_config  # noqa: E402
+from config.agent_config_types import ResolvedAgentConfig  # noqa: E402
 from config.loader import AgentLoader  # noqa: E402
 from config.models_loader import ModelsLoader  # noqa: E402
 from config.models_schema import ModelsConfig  # noqa: E402
@@ -113,9 +113,7 @@ class LeonAgent:
         workspace_root: str | Path | None = None,
         *,
         agent: str | None = None,
-        agent_config_id: str | None = None,
-        agent_config_repo: Any = None,
-        skill_repo: Any = None,
+        resolved_agent_config: ResolvedAgentConfig | None = None,
         allowed_file_extensions: list[str] | None = None,
         block_dangerous_commands: bool | None = None,
         block_network_commands: bool | None = None,
@@ -166,10 +164,6 @@ class LeonAgent:
 
             if uses_supabase_storage():
                 runtime_storage = build_storage_container()
-        if skill_repo is None and runtime_storage is not None:
-            skill_repo_factory = getattr(runtime_storage, "skill_repo", None)
-            skill_repo = skill_repo_factory() if callable(skill_repo_factory) else None
-
         self.agent_id: str | None = None
         self.extra_allowed_paths = extra_allowed_paths
         if queue_manager is not None:
@@ -194,9 +188,7 @@ class LeonAgent:
         # New config system mode
         self.config, self.models_config = self._load_config(
             agent_name=agent,
-            agent_config_id=agent_config_id,
-            agent_config_repo=agent_config_repo,
-            skill_repo=skill_repo,
+            resolved_agent_config=resolved_agent_config,
             workspace_root=workspace_root,
             sandbox_name=requested_sandbox_name,
             model_name=model_name,
@@ -475,9 +467,7 @@ class LeonAgent:
     def _load_config(
         self,
         agent_name: str | None,
-        agent_config_id: str | None,
-        agent_config_repo: Any,
-        skill_repo: Any,
+        resolved_agent_config: ResolvedAgentConfig | None,
         workspace_root: str | Path | None,
         sandbox_name: str | None,
         model_name: str | None,
@@ -542,20 +532,16 @@ class LeonAgent:
                 cli_overrides=models_cli or None,
             )
 
-        self._resolved_agent_config = None
-        if agent_config_id is not None:
-            if agent_config_repo is None:
-                raise RuntimeError("agent_config_repo is required when agent_config_id is provided")
-            agent_config = agent_config_repo.get_agent_config(agent_config_id)
-            if agent_config is None:
-                raise RuntimeError(f"Agent config not found: {agent_config_id}")
-            self._resolved_agent_config = resolve_agent_config(agent_config, skill_repo=skill_repo)
+        self._resolved_agent_config = resolved_agent_config
+        if resolved_agent_config is not None:
+            if agent_name:
+                raise ValueError("resolved_agent_config and built-in agent name are mutually exclusive")
             self._agent_override = RuntimeAgentDefinition(
-                name=self._resolved_agent_config.name,
-                description=self._resolved_agent_config.description,
-                tools=self._resolved_agent_config.tools,
-                system_prompt=self._resolved_agent_config.system_prompt,
-                model=self._resolved_agent_config.model,
+                name=resolved_agent_config.name,
+                description=resolved_agent_config.description,
+                tools=resolved_agent_config.tools,
+                system_prompt=resolved_agent_config.system_prompt,
+                model=resolved_agent_config.model,
             )
         # If agent specified, load agent definition to override system_prompt and tools
         elif agent_name:
