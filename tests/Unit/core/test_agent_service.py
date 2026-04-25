@@ -150,7 +150,6 @@ class _FakeChildAgent:
     def close(self, **kwargs):
         self.closed = True
         self.close_kwargs = kwargs
-        return None
 
     def apply_forked_child_context(
         self,

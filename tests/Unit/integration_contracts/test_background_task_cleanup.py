@@ -60,11 +60,10 @@ class _SlowChildAgent:
         await self._release_event.wait()
 
     async def _cleanup_background_runs(self):
-        return None
+        pass
 
     def close(self):
         self.closed = True
-        return None
 
 
 class _CompleteChildAgent:
@@ -79,17 +78,16 @@ class _CompleteChildAgent:
         self.closed = False
 
     async def ainit(self):
-        return None
+        pass
 
     async def _astream(self, *args, **kwargs):
         yield {"agent": {"messages": [AIMessage(content=self._text)]}}
 
     async def _cleanup_background_runs(self):
-        return None
+        pass
 
     def close(self):
         self.closed = True
-        return None
 
 
 class _FailingInitChildAgent:
