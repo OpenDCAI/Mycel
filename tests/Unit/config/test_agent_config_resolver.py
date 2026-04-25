@@ -113,6 +113,13 @@ def test_resolved_config_contains_only_enabled_children():
     assert [server.name for server in resolved.mcp_servers] == ["filesystem"]
 
 
+def test_resolver_names_skill_working_set_as_resolved_skills() -> None:
+    source = inspect.getsource(resolve_agent_config)
+
+    assert "enabled_skills" not in source
+    assert "resolved_skills" in source
+
+
 def test_resolver_rejects_skill_without_package_id():
     config = _config(skills=[AgentSkill(skill_id="broken", name="broken")])
 
