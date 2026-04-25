@@ -26,6 +26,12 @@ from storage.errors import StorageConflictError
 logger = logging.getLogger(__name__)
 
 
+def _should_dispatch_chat_delivery(message_type: MessageType, mentions: list[str] | None) -> bool:
+    # @@@notification-mention-delivery - request notifications are durable chat messages,
+    # but mentioned managed agents still need a runtime wakeup to inspect them.
+    return message_type in {"human", "ai"} or (message_type == "notification" and bool(mentions))
+
+
 class MessagingService:
     """Core messaging operations backed by Supabase repos."""
 
@@ -234,7 +240,7 @@ class MessagingService:
             )
 
         # Deliver to agent recipients
-        if message_type in ("human", "ai"):
+        if _should_dispatch_chat_delivery(message_type, mentions):
             self._delivery_dispatcher.dispatch(chat_id, sender_id, content, mentions or [], signal=signal)
 
         return created

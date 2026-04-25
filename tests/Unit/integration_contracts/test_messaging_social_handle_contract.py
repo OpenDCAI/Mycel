@@ -752,6 +752,56 @@ def test_messaging_service_event_bus_message_uses_service_owned_projection() -> 
     }
 
 
+def test_messaging_service_notification_mentions_dispatch_to_agent_recipients() -> None:
+    delivered: list[str] = []
+
+    service = MessagingService(
+        chat_repo=SimpleNamespace(),
+        chat_member_repo=SimpleNamespace(list_members=lambda _chat_id: [{"user_id": "managed-owner-1"}]),
+        messages_repo=SimpleNamespace(
+            create=lambda row: row,
+            count_unread=lambda _chat_id, _user_id: 1,
+        ),
+        user_repo=SimpleNamespace(
+            get_by_id=lambda uid: (
+                SimpleNamespace(
+                    id="visitor-1",
+                    display_name="Visitor",
+                    type="human",
+                    avatar=None,
+                    owner_user_id=None,
+                )
+                if uid == "visitor-1"
+                else SimpleNamespace(
+                    id="managed-owner-1",
+                    display_name="Managed Owner",
+                    type="agent",
+                    avatar=None,
+                    owner_user_id="human-owner-1",
+                )
+                if uid == "managed-owner-1"
+                else None
+            )
+        ),
+        delivery_resolver=SimpleNamespace(
+            resolve=lambda _recipient_id, _chat_id, _sender_id, *, is_mentioned: (
+                DeliveryAction.DELIVER if is_mentioned else DeliveryAction.DROP
+            )
+        ),
+        delivery_fn=lambda request: delivered.append(request.recipient_id),
+    )
+
+    service.send(
+        "chat-1",
+        "visitor-1",
+        "visitor-1 requested to join this chat.",
+        message_type="notification",
+        mentions=["managed-owner-1"],
+    )
+
+    assert delivered == ["managed-owner-1"]
+
+
 def test_messaging_service_send_fails_before_persisting_unknown_sender() -> None:
     created_rows: list[dict[str, Any]] = []
     published: list[dict[str, object]] = []
