@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 
 from backend.hub import client as marketplace_client
 from backend.identity.profile import get_profile
+from backend.threads import agent_user_service
 from backend.web.core.dependencies import get_current_user_id
 from backend.web.models.marketplace import (
     ApplyFromMarketplaceRequest,
@@ -122,15 +123,27 @@ async def apply_marketplace_item(
     if req.agent_user_id is not None:
         await _verify_user_ownership(req.agent_user_id, user_id, user_repo)
     try:
-        return await asyncio.to_thread(
+        result = await asyncio.to_thread(
             marketplace_client.apply_item,
             item_id=req.item_id,
             owner_user_id=user_id,
             user_repo=user_repo,
             agent_config_repo=agent_config_repo,
             skill_repo=skill_repo,
-            agent_user_id=req.agent_user_id,
         )
+        if req.agent_user_id is not None:
+            if result.get("type") != "skill" or not isinstance(result.get("resource_id"), str):
+                raise HTTPException(400, "agent_user_id can only select Skill items")
+            await asyncio.to_thread(
+                agent_user_service.select_agent_skill,
+                agent_user_id=req.agent_user_id,
+                skill_id=result["resource_id"],
+                user_repo=user_repo,
+                agent_config_repo=agent_config_repo,
+                skill_repo=skill_repo,
+            )
+            result = {**result, "agent_user_id": req.agent_user_id}
+        return result
     except ValueError as error:
         raise HTTPException(400, str(error)) from error
 
