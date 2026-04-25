@@ -170,7 +170,6 @@ describe("NewChatPage", () => {
         updated_at: 0,
       }],
       librarySkills: [],
-      libraryMcpServers: [],
       libraryAgents: [],
       librarySandboxTemplates: [],
       userProfile: { name: "User", initials: "U", email: "" },

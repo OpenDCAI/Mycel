@@ -55,7 +55,6 @@ vi.mock("@/store/app-store", () => ({
       ensureLibrary,
       loadAll: vi.fn(),
       librarySkills: [],
-      libraryMcpServers: [],
       libraryAgents,
     }),
 }));
@@ -212,7 +211,7 @@ describe("AgentDetailPage wording contract", () => {
     });
   });
 
-  it("loads MCP library only when the advanced MCP picker is opened", async () => {
+  it("keeps MCP advanced config outside the Library picker path", async () => {
     render(
       <MemoryRouter initialEntries={["/contacts/agents/agent-1"]}>
         <Routes>
@@ -224,11 +223,9 @@ describe("AgentDetailPage wording contract", () => {
     expect(ensureLibrary).not.toHaveBeenCalled();
 
     fireEvent.click(screen.getByRole("button", { name: /^MCP 高级/ }));
-    fireEvent.click(screen.getByText("点击 + 从 Library 添加 MCP 服务器"));
 
-    await waitFor(() => {
-      expect(ensureLibrary).toHaveBeenCalledWith("mcp");
-    });
+    expect(screen.getByText("暂无MCP 服务器")).toBeTruthy();
+    expect(ensureLibrary).not.toHaveBeenCalled();
   });
 
   it("uses subagent wording in the Library picker for Library agent resources", async () => {

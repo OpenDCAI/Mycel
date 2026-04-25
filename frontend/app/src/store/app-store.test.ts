@@ -231,7 +231,7 @@ describe("app store agent panel contract", () => {
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
-  it("loadAll does not load MCP library during global bootstrap", async () => {
+  it("loadAll loads the supported Library resource types during global bootstrap", async () => {
     const fetchMock = vi.fn().mockImplementation((url: string) => Promise.resolve({
       ok: true,
       json: async () => {
@@ -248,7 +248,7 @@ describe("app store agent panel contract", () => {
     expect(urls).toContain("/api/panel/library/skill");
     expect(urls).toContain("/api/panel/library/agent");
     expect(urls).toContain("/api/panel/library/sandbox-template");
-    expect(urls).not.toContain("/api/panel/library/mcp");
+    expect(urls.filter((url) => url.startsWith("/api/panel/library/"))).toHaveLength(3);
   });
 
   it("surfaces backend detail text from panel API errors", async () => {
