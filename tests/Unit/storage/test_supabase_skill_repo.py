@@ -220,6 +220,16 @@ def test_get_package_rejects_non_object_manifest_json() -> None:
         repo.get_package("owner-1", "package-1")
 
 
+def test_get_package_rejects_non_object_files_json() -> None:
+    row = _package_row()
+    row["files_json"] = [["references/query.md", "Prefer precise queries."]]
+    client = _FakeClient({"library.skill_packages": [row]})
+    repo = SupabaseSkillRepo(client)
+
+    with pytest.raises(RuntimeError, match="library.skill_packages.files_json must be a JSON object"):
+        repo.get_package("owner-1", "package-1")
+
+
 def test_select_package_updates_library_skill_pointer() -> None:
     client = _FakeClient({"library.skills": [_row()]})
     repo = SupabaseSkillRepo(client)
