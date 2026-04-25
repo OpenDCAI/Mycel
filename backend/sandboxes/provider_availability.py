@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from typing import Any
 
-from backend.sandboxes.inventory import init_providers_and_managers
 from backend.sandboxes.paths import SANDBOXES_DIR
 from sandbox.config import SandboxConfig
 
@@ -10,13 +9,13 @@ from sandbox.config import SandboxConfig
 def available_sandbox_types(
     *,
     sandboxes_dir=SANDBOXES_DIR,
-    init_providers_and_managers_fn=init_providers_and_managers,
+    build_providers_fn=None,
     sandbox_config_cls=SandboxConfig,
 ) -> list[dict[str, Any]]:
     from backend.sandboxes import inventory as sandbox_inventory
 
     return sandbox_inventory.available_sandbox_types(
         sandboxes_dir=sandboxes_dir,
-        init_providers_and_managers_fn=init_providers_and_managers_fn,
+        build_providers_fn=build_providers_fn,
         sandbox_config_cls=sandbox_config_cls,
     )
