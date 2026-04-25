@@ -1728,11 +1728,7 @@ class QueryLoop:
     async def _load_thread_checkpoint_state(self, thread_id: str) -> ThreadCheckpointState | None:
         if self._checkpoint_store is None:
             return None
-        try:
-            return await self._checkpoint_store.load(thread_id)
-        except Exception:
-            pass
-            return None
+        return await self._checkpoint_store.load(thread_id)
 
     async def _load_checkpoint_channel_values(self, thread_id: str) -> dict[str, Any]:
         state = await self._load_thread_checkpoint_state(thread_id)
@@ -1894,23 +1890,20 @@ class QueryLoop:
     async def _save_messages(self, thread_id: str, messages: list) -> None:
         if self._checkpoint_store is None:
             return
-        try:
-            permission_context, pending_requests, resolved_requests = self._thread_permission_state_snapshot(thread_id)
-            memory_state = self._thread_memory_state_snapshot(thread_id)
-            integration_instruction_state = self._thread_integration_instruction_state_snapshot(thread_id)
-            await self._checkpoint_store.save(
-                thread_id,
-                ThreadCheckpointState(
-                    messages=list(messages),
-                    tool_permission_context=permission_context,
-                    pending_permission_requests=pending_requests,
-                    resolved_permission_requests=resolved_requests,
-                    memory_compaction_state=memory_state,
-                    integration_instruction_state=integration_instruction_state,
-                ),
-            )
-        except Exception:
-            pass
+        permission_context, pending_requests, resolved_requests = self._thread_permission_state_snapshot(thread_id)
+        memory_state = self._thread_memory_state_snapshot(thread_id)
+        integration_instruction_state = self._thread_integration_instruction_state_snapshot(thread_id)
+        await self._checkpoint_store.save(
+            thread_id,
+            ThreadCheckpointState(
+                messages=list(messages),
+                tool_permission_context=permission_context,
+                pending_permission_requests=pending_requests,
+                resolved_permission_requests=resolved_requests,
+                memory_compaction_state=memory_state,
+                integration_instruction_state=integration_instruction_state,
+            ),
+        )
 
     def _collect_memory_system_notices(self, pending_notices: list[HumanMessage]) -> None:
         if self._memory_middleware is None:

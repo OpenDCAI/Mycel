@@ -667,7 +667,6 @@ class LeonAgent:
         if provider == "anthropic":
             return base_url
 
-        # Default: add /v1
         return f"{base_url}/v1"
 
     def _create_model(self):
@@ -1227,15 +1226,12 @@ class LeonAgent:
 
         # LSP tools — DEFERRED, always registered, multilspy checked at call time
         self._lsp_service = None
-        try:
-            from core.tools.lsp.service import LSPService
+        from core.tools.lsp.service import LSPService
 
-            self._lsp_service = LSPService(
-                registry=self._tool_registry,
-                workspace_root=self.workspace_root,
-            )
-        except Exception:
-            pass
+        self._lsp_service = LSPService(
+            registry=self._tool_registry,
+            workspace_root=self.workspace_root,
+        )
 
     async def _init_mcp_tools(self) -> list:
         client, tools = await mcp_gateway.init_client_tools(
