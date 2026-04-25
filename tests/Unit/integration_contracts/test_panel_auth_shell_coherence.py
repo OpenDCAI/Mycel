@@ -459,6 +459,40 @@ def test_agent_config_patch_rejects_inline_skill_content() -> None:
     assert saved_configs == []
 
 
+@pytest.mark.parametrize("field", ["source", "version"])
+def test_agent_config_patch_rejects_skill_content_identity_fields(field: str) -> None:
+    saved_configs: list[AgentConfig] = []
+
+    class _AgentConfigRepo:
+        def get_agent_config(self, _agent_config_id: str):
+            return _agent_config(skills=[])
+
+        def save_agent_config(self, config: AgentConfig) -> None:
+            saved_configs.append(config)
+
+    patch_item = {"name": "Loadable Skill", "enabled": True, field: {"source_version": "patch"} if field == "source" else "9.9.9"}
+
+    with pytest.raises(RuntimeError, match="Skill patch item must not include source or version"):
+        agent_user_service.update_agent_user_config(
+            "agent-1",
+            {"skills": [patch_item]},
+            user_repo=SimpleNamespace(
+                get_by_id=lambda _agent_id: UserRow(
+                    id="agent-1",
+                    type=UserType.AGENT,
+                    display_name="Toad",
+                    owner_user_id="user-1",
+                    agent_config_id="cfg-1",
+                    created_at=1,
+                )
+            ),
+            agent_config_repo=_AgentConfigRepo(),
+            skill_repo=_MemorySkillRepo(),
+        )
+
+    assert saved_configs == []
+
+
 def test_agent_config_patch_rejects_skill_disabled_flag() -> None:
     saved_configs: list[AgentConfig] = []
 
