@@ -58,22 +58,6 @@ def _frontmatter_text(frontmatter: dict[str, Any], key: str, *, label: str) -> s
     return value.strip()
 
 
-def skill_description(document: SkillDocument, *, required: bool = False) -> str:
-    if required and not document.description:
-        raise ValueError("SKILL.md frontmatter must include description")
-    return document.description
-
-
-def skill_version(document: SkillDocument) -> str:
-    if document.version is None:
-        raise ValueError("SKILL.md frontmatter must include version")
-    return document.version
-
-
-def strip_skill_frontmatter(content: str) -> str:
-    return parse_skill_document(content).body
-
-
 def _optional_frontmatter_text(frontmatter: dict[str, Any], key: str, *, label: str, required: bool) -> str | None:
     value = frontmatter.get(key)
     if value is None and not required:
