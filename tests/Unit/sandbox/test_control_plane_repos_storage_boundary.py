@@ -75,3 +75,13 @@ def test_sqlite_sandbox_repos_require_explicit_db_path(repo_cls, monkeypatch, tm
         repo_cls()
 
     assert not (tmp_path / ".leon").exists()
+
+
+def test_explicit_sandbox_db_path_is_not_strategy_command_registry(monkeypatch, tmp_path):
+    from sandbox.runtime import _uses_strategy_command_registry
+
+    db_path = tmp_path / "sandbox.db"
+    monkeypatch.setenv("LEON_STORAGE_STRATEGY", "supabase")
+    monkeypatch.setenv("LEON_SANDBOX_DB_PATH", str(db_path))
+
+    assert not _uses_strategy_command_registry(db_path)

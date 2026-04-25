@@ -7,8 +7,7 @@ from typing import TYPE_CHECKING
 
 from sandbox.interfaces.executor import BaseExecutor
 from sandbox.interfaces.filesystem import FileSystemBackend
-from storage.providers.sqlite.kernel import SQLiteDBRole, connect_sqlite, resolve_role_db_path
-from storage.runtime import uses_supabase_runtime_defaults
+from storage.providers.sqlite.kernel import connect_sqlite
 
 if TYPE_CHECKING:
     from sandbox.chat_session import ChatSession
@@ -94,8 +93,6 @@ class _CommandWrapper(BaseExecutor):
             if terminal_id is not None:
                 return terminal_id
             return None
-        if self._db_path is not None and uses_supabase_runtime_defaults() and self._db_path == resolve_role_db_path(SQLiteDBRole.SANDBOX):
-            raise RuntimeError("strategy-backed command lookup requires a bound command repo")
         if self._db_path is None:
             return None
         with connect_sqlite(self._db_path) as conn:

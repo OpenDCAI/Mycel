@@ -18,6 +18,11 @@ def resolve_sandbox_db_path(db_path: Path | None = None) -> Path:
     return Path(raw_path)
 
 
+def configured_sandbox_db_path() -> Path | None:
+    raw_path = os.getenv("LEON_SANDBOX_DB_PATH")
+    return Path(raw_path) if raw_path else None
+
+
 def _use_strategy_control_plane_repo(db_path: Path | None = None) -> bool:
     return db_path is None and not os.getenv("LEON_SANDBOX_DB_PATH") and uses_supabase_runtime_defaults()
 
