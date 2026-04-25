@@ -84,7 +84,7 @@ class VirtualModelEntry(BaseModel):
 class ModelsConfig(BaseModel):
     """Unified models configuration.
 
-    Merge priority: system defaults → user (~/.leon/models.json) → project (.leon/models.json) → CLI
+    Merge priority: system defaults → explicit repo-backed user config → CLI
     """
 
     active: ActiveModel | None = None
