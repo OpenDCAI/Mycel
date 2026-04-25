@@ -37,20 +37,29 @@ def test_agent_skill_model_has_no_resolved_content() -> None:
 
 def test_agent_skill_model_rejects_resolved_content_fields() -> None:
     with pytest.raises(ValueError, match="content"):
-        AgentSkill(name="query-helper", skill_id="skill-1", package_id="package-1", content="Use exact terms.")
+        AgentSkill.model_validate({"name": "query-helper", "skill_id": "skill-1", "package_id": "package-1", "content": "Use exact terms."})
 
     with pytest.raises(ValueError, match="files"):
-        AgentSkill(name="query-helper", skill_id="skill-1", package_id="package-1", files={"references/query.md": "Use exact terms."})
+        AgentSkill.model_validate(
+            {
+                "name": "query-helper",
+                "skill_id": "skill-1",
+                "package_id": "package-1",
+                "files": {"references/query.md": "Use exact terms."},
+            }
+        )
 
 
 def test_agent_config_model_rejects_unknown_fields() -> None:
     with pytest.raises(ValueError, match="skill_packages"):
-        AgentConfig(
-            id="cfg-1",
-            owner_user_id="owner-1",
-            agent_user_id="agent-1",
-            name="Researcher",
-            skill_packages=[],
+        AgentConfig.model_validate(
+            {
+                "id": "cfg-1",
+                "owner_user_id": "owner-1",
+                "agent_user_id": "agent-1",
+                "name": "Researcher",
+                "skill_packages": [],
+            }
         )
 
 
