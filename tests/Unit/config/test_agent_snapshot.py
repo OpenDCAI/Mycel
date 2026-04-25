@@ -43,6 +43,7 @@ def test_snapshot_contains_resolved_agent_config_only():
 
     assert payload["schema_version"] == "agent-snapshot/v1"
     assert payload["agent"]["id"] == "cfg-1"
+    assert payload["agent"]["skills"][0]["id"] == "github"
     assert payload["agent"]["skills"][0]["name"] == "github"
     assert payload["agent"]["skills"][0]["files"] == {"references/query.md": "Prefer precise queries."}
     assert "owner_user_id" not in payload["agent"]

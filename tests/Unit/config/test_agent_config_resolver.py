@@ -107,6 +107,7 @@ def test_resolved_config_contains_only_enabled_children():
 
     assert resolved.id == "cfg-1"
     assert resolved.name == "Researcher"
+    assert resolved.skills[0].id == "github"
     assert [skill.name for skill in resolved.skills] == ["github"]
     assert resolved.skills[0].files == {"references/query.md": "Prefer precise queries."}
     assert [rule.name for rule in resolved.rules] == ["Cite"]

@@ -7,6 +7,7 @@ from config.agent_config_types import AgentConfig, AgentRule, AgentSkill, AgentS
 
 def test_resolved_skill_model_normalizes_file_paths() -> None:
     resolved_skill = ResolvedSkill(
+        id="query-helper",
         name="query-helper",
         version="1.0.0",
         content="---\nname: query-helper\n---\nUse exact terms.",
@@ -26,14 +27,38 @@ def test_resolved_skill_model_rejects_duplicate_file_paths_after_normalization()
     }
 
     with pytest.raises(ValueError, match="Skill files contain duplicate path after normalization: references/query.md"):
-        ResolvedSkill(name="query-helper", **common)
+        ResolvedSkill(id="query-helper", name="query-helper", **common)
 
 
 def test_resolved_skill_model_rejects_blank_version() -> None:
     with pytest.raises(ValueError, match="resolved_skill.version must not be blank"):
         ResolvedSkill(
+            id="query-helper",
             name="query-helper",
             version=" ",
+            content="---\nname: query-helper\n---\nUse exact terms.",
+        )
+
+
+def test_resolved_skill_model_requires_id() -> None:
+    with pytest.raises(ValueError) as excinfo:
+        ResolvedSkill.model_validate(
+            {
+                "name": "query-helper",
+                "version": "1.0.0",
+                "content": "---\nname: query-helper\n---\nUse exact terms.",
+            }
+        )
+
+    assert "id" in str(excinfo.value)
+
+
+def test_resolved_skill_model_rejects_blank_id() -> None:
+    with pytest.raises(ValueError, match="resolved_skill.id must not be blank"):
+        ResolvedSkill(
+            id=" ",
+            name="query-helper",
+            version="1.0.0",
             content="---\nname: query-helper\n---\nUse exact terms.",
         )
 
@@ -183,7 +208,7 @@ def test_skill_package_rejects_blank_skill_md() -> None:
             },
         ),
         (AgentSkill, {"skill_id": "query-helper", "package_id": "package-1", "name": "query-helper"}),
-        (ResolvedSkill, {"name": "query-helper", "content": "---\nname: query-helper\n---\nUse exact terms."}),
+        (ResolvedSkill, {"id": "query-helper", "name": "query-helper", "content": "---\nname: query-helper\n---\nUse exact terms."}),
     ],
 )
 def test_skill_package_and_runtime_skill_models_require_version(model_cls, payload) -> None:
