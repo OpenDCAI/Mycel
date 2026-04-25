@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from pathlib import Path
 from types import SimpleNamespace
+from typing import Any, cast
 
 import pytest
 from fastapi import FastAPI, HTTPException
@@ -1763,10 +1764,12 @@ def test_apply_snapshot_with_skills_requires_skill_repo():
     ("field", "value", "message"),
     [
         ("marketplace_item_id", " ", "marketplace_item_id must be a string"),
+        ("marketplace_item_id", {"id": "item-1"}, "marketplace_item_id must be a string"),
         ("source_version", " ", "source_version must be a string"),
+        ("source_version", ["1.0.0"], "source_version must be a string"),
     ],
 )
-def test_apply_snapshot_requires_source_identity(field: str, value: str, message: str):
+def test_apply_snapshot_requires_source_identity(field: str, value: object, message: str):
     from backend.hub.snapshot_apply import apply_snapshot
 
     kwargs = {
@@ -1788,7 +1791,7 @@ def test_apply_snapshot_requires_source_identity(field: str, value: str, message
     kwargs[field] = value
 
     with pytest.raises(ValueError, match=message):
-        apply_snapshot(**kwargs)
+        apply_snapshot(**cast(Any, kwargs))
 
 
 def test_apply_snapshot_rejects_duplicate_skill_names_before_library_write():
