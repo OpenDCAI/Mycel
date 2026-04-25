@@ -159,6 +159,23 @@ def test_seed_publish_skill_package_uses_package_payload(monkeypatch: pytest.Mon
     assert seen["payload"]["publisher_username"] == "publisher"
 
 
+def test_seed_register_all_publishers_uses_declared_publishers(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls: list[tuple[str, str, str]] = []
+    monkeypatch.setattr(
+        seed_github_skills,
+        "PUBLISHERS",
+        {
+            "one": ("uid-1", "user-1", "User One"),
+            "two": ("uid-2", "user-2", "User Two"),
+        },
+    )
+    monkeypatch.setattr(seed_github_skills, "register_publisher", lambda uid, uname, dname: calls.append((uid, uname, dname)))
+
+    seed_github_skills.register_all_publishers()
+
+    assert calls == [("uid-1", "user-1", "User One"), ("uid-2", "user-2", "User Two")]
+
+
 def test_seed_skill_parser_does_not_swallow_parse_errors() -> None:
     source = inspect.getsource(seed_github_skills.parse_skill_md)
 

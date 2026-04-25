@@ -53,6 +53,12 @@ def register_publisher(user_id: str, username: str, display_name: str) -> None:
     ).raise_for_status()
 
 
+def register_all_publishers() -> None:
+    for _key, (uid, uname, dname) in PUBLISHERS.items():
+        register_publisher(uid, uname, dname)
+        print(f"Publisher registered: {uname}")
+
+
 def parse_skill_md(skill_md: Path) -> dict | None:
     """Parse a SKILL.md into name/description/tags."""
     content = skill_md.read_text(encoding="utf-8")
@@ -222,10 +228,7 @@ def publish_skill_package(
 
 
 def main():
-    # Register all publishers
-    for key, (uid, uname, dname) in PUBLISHERS.items():
-        register_publisher(uid, uname, dname)
-        print(f"Publisher registered: {uname}")
+    register_all_publishers()
 
     # Check existing items to avoid duplicates
     existing_slugs = read_existing_hub_slugs()
