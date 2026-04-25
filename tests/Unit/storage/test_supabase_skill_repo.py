@@ -1,6 +1,6 @@
 from datetime import UTC, datetime
 
-from config.agent_config_types import Skill
+from config.agent_config_types import Skill, SkillPackage
 from storage.container import StorageContainer
 from storage.providers.supabase.skill_repo import SupabaseSkillRepo
 
@@ -16,6 +16,7 @@ class _FakeQuery:
         self.tables = tables
         self.eq_calls: list[tuple[str, object]] = []
         self.upsert_payload: dict | None = None
+        self.update_payload: dict | None = None
         self._delete = False
 
     def select(self, _columns: str):
@@ -30,6 +31,10 @@ class _FakeQuery:
         self.tables.setdefault(self.table_name, []).append(dict(payload))
         return self
 
+    def update(self, payload: dict):
+        self.update_payload = dict(payload)
+        return self
+
     def delete(self):
         self._delete = True
         return self
@@ -39,6 +44,10 @@ class _FakeQuery:
         matching = [row for row in rows if all(row.get(column) == value for column, value in self.eq_calls)]
         if self._delete:
             self.tables[self.table_name] = [row for row in rows if row not in matching]
+        if self.update_payload is not None:
+            for row in matching:
+                row.update(self.update_payload)
+            return _FakeResponse([dict(row) for row in matching])
         if self.upsert_payload is not None:
             return _FakeResponse([self.upsert_payload])
         return _FakeResponse([dict(row) for row in matching])
@@ -78,30 +87,45 @@ def _row(skill_id: str = "skill-1") -> dict:
     }
 
 
+def _package_row(package_id: str = "package-1") -> dict:
+    return {
+        "id": package_id,
+        "owner_user_id": "owner-1",
+        "skill_id": "skill-1",
+        "version": "1.0.0",
+        "hash": "sha256:abc",
+        "manifest_json": {"files": [{"path": "references/query.md", "sha256": "def"}]},
+        "skill_md": "---\nname: github\n---\n",
+        "files_json": {"references/query.md": "Prefer precise queries."},
+        "source_json": {"source_version": "1.0.0"},
+        "created_at": "2026-04-24T00:00:00+00:00",
+    }
+
+
 def test_list_for_owner_reads_skills_from_library() -> None:
-    client = _FakeClient({"agent.skills": [_row()]})
+    client = _FakeClient({"library.skills": [_row()]})
     repo = SupabaseSkillRepo(client)
 
     skills = repo.list_for_owner("owner-1")
 
     assert [skill.name for skill in skills] == ["github"]
-    assert skills[0].files == {"references/query.md": "Prefer precise queries."}
-    assert ("owner_user_id", "owner-1") in client.table_queries["agent.skills"][0].eq_calls
+    assert skills[0].package_id is None
+    assert ("owner_user_id", "owner-1") in client.table_queries["library.skills"][0].eq_calls
 
 
 def test_get_by_id_filters_owner_and_skill_id() -> None:
-    client = _FakeClient({"agent.skills": [_row()]})
+    client = _FakeClient({"library.skills": [_row()]})
     repo = SupabaseSkillRepo(client)
 
     skill = repo.get_by_id("owner-1", "skill-1")
 
     assert skill is not None
     assert skill.id == "skill-1"
-    assert ("owner_user_id", "owner-1") in client.table_queries["agent.skills"][0].eq_calls
-    assert ("id", "skill-1") in client.table_queries["agent.skills"][0].eq_calls
+    assert ("owner_user_id", "owner-1") in client.table_queries["library.skills"][0].eq_calls
+    assert ("id", "skill-1") in client.table_queries["library.skills"][0].eq_calls
 
 
-def test_upsert_writes_full_skill_package() -> None:
+def test_upsert_writes_library_skill_metadata_only() -> None:
     client = _FakeClient()
     repo = SupabaseSkillRepo(client)
     timestamp = datetime(2026, 4, 24, tzinfo=UTC)
@@ -111,32 +135,89 @@ def test_upsert_writes_full_skill_package() -> None:
             id="skill-1",
             owner_user_id="owner-1",
             name="github",
-            content="---\nname: github\n---\n",
-            files={"references/query.md": "Prefer precise queries."},
+            package_id="package-1",
             source={"source_version": "1.0.0"},
             created_at=timestamp,
             updated_at=timestamp,
         )
     )
 
-    payload = client.table_queries["agent.skills"][0].upsert_payload
+    payload = client.table_queries["library.skills"][0].upsert_payload
     assert payload is not None
     assert payload["id"] == "skill-1"
     assert payload["owner_user_id"] == "owner-1"
-    assert payload["files_json"] == {"references/query.md": "Prefer precise queries."}
+    assert payload["package_id"] == "package-1"
     assert payload["source_json"] == {"source_version": "1.0.0"}
+    assert "content" not in payload
     assert "files" not in payload
     assert "source" not in payload
 
 
+def test_create_package_writes_immutable_skill_package() -> None:
+    client = _FakeClient()
+    repo = SupabaseSkillRepo(client)
+    timestamp = datetime(2026, 4, 24, tzinfo=UTC)
+
+    repo.create_package(
+        SkillPackage(
+            id="package-1",
+            owner_user_id="owner-1",
+            skill_id="skill-1",
+            version="1.0.0",
+            hash="sha256:abc",
+            manifest={"files": [{"path": "references/query.md", "sha256": "def"}]},
+            skill_md="---\nname: github\n---\n",
+            files={"references/query.md": "Prefer precise queries."},
+            source={"source_version": "1.0.0"},
+            created_at=timestamp,
+        )
+    )
+
+    payload = client.table_queries["library.skill_packages"][0].upsert_payload
+    assert payload is not None
+    assert payload["skill_md"] == "---\nname: github\n---\n"
+    assert payload["files_json"] == {"references/query.md": "Prefer precise queries."}
+    assert payload["manifest_json"] == {"files": [{"path": "references/query.md", "sha256": "def"}]}
+    assert payload["source_json"] == {"source_version": "1.0.0"}
+    assert "manifest" not in payload
+    assert "files" not in payload
+    assert "source" not in payload
+
+
+def test_get_package_filters_owner_and_package_id() -> None:
+    client = _FakeClient({"library.skill_packages": [_package_row()]})
+    repo = SupabaseSkillRepo(client)
+
+    package = repo.get_package("owner-1", "package-1")
+
+    assert package is not None
+    assert package.id == "package-1"
+    assert package.manifest == {"files": [{"path": "references/query.md", "sha256": "def"}]}
+    assert package.files == {"references/query.md": "Prefer precise queries."}
+    assert ("owner_user_id", "owner-1") in client.table_queries["library.skill_packages"][0].eq_calls
+    assert ("id", "package-1") in client.table_queries["library.skill_packages"][0].eq_calls
+
+
+def test_select_package_updates_library_skill_pointer() -> None:
+    client = _FakeClient({"library.skills": [_row()]})
+    repo = SupabaseSkillRepo(client)
+
+    repo.select_package("owner-1", "skill-1", "package-1")
+
+    query = client.table_queries["library.skills"][0]
+    assert query.update_payload == {"package_id": "package-1"}
+    assert ("owner_user_id", "owner-1") in query.eq_calls
+    assert ("id", "skill-1") in query.eq_calls
+
+
 def test_delete_filters_owner_and_skill_id() -> None:
-    tables = {"agent.skills": [_row()]}
+    tables = {"library.skills": [_row()]}
     client = _FakeClient(tables)
     repo = SupabaseSkillRepo(client)
 
     repo.delete("owner-1", "skill-1")
 
-    assert tables["agent.skills"] == []
+    assert tables["library.skills"] == []
 
 
 def test_storage_container_builds_skill_repo() -> None:
