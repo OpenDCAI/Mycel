@@ -659,7 +659,9 @@ class TestApplyUnsupportedType:
 
 
 class TestApplyIdempotency:
-    def test_apply_twice_upserts_same_skill_id(self):
+    def test_apply_twice_upserts_same_skill_id(self, monkeypatch):
+        generated_ids = iter(["skill_idem123", "skill_mustNotUse"])
+        monkeypatch.setattr("backend.hub.client.generate_skill_id", lambda: next(generated_ids))
         saved: dict[str, Skill] = {}
         packages: list[SkillPackage] = []
         selected: list[tuple[str, str, str]] = []
@@ -683,11 +685,11 @@ class TestApplyIdempotency:
 
         assert result["version"] == "1.0.1"
         assert result["package_id"] == packages[1].id
-        assert list(saved) == ["idem-skill"]
-        assert saved["idem-skill"].source["source_version"] == "1.0.1"
+        assert list(saved) == ["skill_idem123"]
+        assert saved["skill_idem123"].source["source_version"] == "1.0.1"
         assert packages[0].skill_md == "---\nname: Idem Skill\n---\nV1"
         assert packages[1].skill_md == "---\nname: Idem Skill\n---\nV2"
-        assert selected[-1] == ("owner-1", "idem-skill", packages[1].id)
+        assert selected[-1] == ("owner-1", "skill_idem123", packages[1].id)
 
 
 def test_upgrade_returns_user_id_contract(monkeypatch):
