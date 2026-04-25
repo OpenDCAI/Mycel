@@ -320,11 +320,7 @@ def apply_item(
                     name=skill_name,
                     description=skill_description,
                     version=package.version,
-                    source={
-                        "marketplace_item_id": item_id,
-                        "source_version": source_version,
-                        "publisher": publisher,
-                    },
+                    source=dict(package.source),
                 )
             )
             agent_config_repo.save_agent_config(config.model_copy(update={"skills": next_skills}))
