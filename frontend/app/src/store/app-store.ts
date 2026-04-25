@@ -11,7 +11,6 @@ interface AppState {
   // ── Data ──
   agentList: Agent[];
   librarySkills: ResourceItem[];
-  libraryAgents: ResourceItem[];
   librarySandboxTemplates: ResourceItem[];
   userProfile: UserProfile;
   loaded: boolean;
@@ -59,18 +58,16 @@ interface AppState {
   getResourceUsedBy: (type: string, name: string) => string[];
 }
 
-type LibraryType = "skill" | "agent" | "sandbox-template";
-type LibraryStateKey = "librarySkills" | "libraryAgents" | "librarySandboxTemplates";
+type LibraryType = "skill" | "sandbox-template";
+type LibraryStateKey = "librarySkills" | "librarySandboxTemplates";
 
 const DEFAULT_PROFILE: UserProfile = { name: "User", initials: "U", email: "" };
 const LIBRARY_STATE_KEYS: Record<LibraryType, LibraryStateKey> = {
   skill: "librarySkills",
-  agent: "libraryAgents",
   "sandbox-template": "librarySandboxTemplates",
 };
 const EMPTY_LIBRARY_LOADED: Record<LibraryType, boolean> = {
   skill: false,
-  agent: false,
   "sandbox-template": false,
 };
 const EMPTY_AGENT_CONFIG: Agent["config"] = {
@@ -95,7 +92,6 @@ function emptySessionState() {
   return {
     agentList: [],
     librarySkills: [],
-    libraryAgents: [],
     librarySandboxTemplates: [],
     userProfile: DEFAULT_PROFILE,
     loaded: false,
@@ -175,7 +171,6 @@ export const useAppStore = create<AppState>()((set, get) => ({
         await Promise.all([
           get().ensureAgents(),
           get().ensureLibrary("skill"),
-          get().ensureLibrary("agent"),
           get().ensureLibrary("sandbox-template"),
           get().fetchProfile(),
         ]);
@@ -388,7 +383,8 @@ export const useAppStore = create<AppState>()((set, get) => ({
 
   getResourceUsedBy: (type, name) => {
     if (type === "sandbox-template") return [];
-    const key = type === "skill" ? "skills" : type === "mcp" ? "mcpServers" : "subAgents";
+    if (type !== "skill") return [];
+    const key = "skills";
     return get().agentList.filter((s) =>
       (s.config?.[key as keyof typeof s.config] as { name: string }[] | undefined)?.some((i) => i.name === name)
     ).map((s) => s.name);
