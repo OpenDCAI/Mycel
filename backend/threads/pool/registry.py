@@ -147,11 +147,8 @@ async def get_or_create_agent(
         # Merge user-configured allowed_paths from sandbox config
         from sandbox.config import SandboxConfig
 
-        try:
-            sandbox_config = SandboxConfig.load(sandbox_type)
-            extra_allowed_paths.extend(sandbox_config.allowed_paths)
-        except FileNotFoundError:
-            pass
+        sandbox_config = SandboxConfig.load(sandbox_type)
+        extra_allowed_paths.extend(sandbox_config.allowed_paths)
 
         extra_allowed_paths_or_none: list[str] | None = extra_allowed_paths or None
 

@@ -559,6 +559,35 @@ async def test_get_or_create_agent_uses_binding_local_staging_root_for_extra_all
 
 
 @pytest.mark.asyncio
+async def test_registry_non_local_sandbox_requires_explicit_config_dir(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.delenv("LEON_SANDBOXES_DIR", raising=False)
+    monkeypatch.setattr(
+        agent_pool._registry,
+        "create_agent_sync",
+        lambda **_kwargs: (_ for _ in ()).throw(AssertionError("agent should not be created")),
+    )
+    monkeypatch.setattr(agent_pool._registry, "get_or_create_agent_id", lambda **_: "agent-no-config")
+    monkeypatch.setattr(
+        agent_pool._registry,
+        "get_file_channel_binding",
+        lambda _thread_id: (_ for _ in ()).throw(ValueError()),
+        raising=False,
+    )
+
+    app = SimpleNamespace(
+        state=SimpleNamespace(
+            agent_pool={},
+            thread_repo=_FakeThreadRepo(),
+            thread_cwd={},
+            thread_sandbox={},
+        )
+    )
+
+    with pytest.raises(RuntimeError, match="LEON_SANDBOXES_DIR"):
+        await agent_pool._registry.get_or_create_agent(cast(Any, app), "daytona", thread_id="thread-no-config")
+
+
+@pytest.mark.asyncio
 async def test_get_or_create_agent_requires_thread_agent_user_id_for_chat_identity(monkeypatch: pytest.MonkeyPatch):
     def _fake_create_agent_sync(**kwargs) -> object:
         return SimpleNamespace()
