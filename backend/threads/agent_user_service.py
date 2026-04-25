@@ -12,6 +12,7 @@ from config.loader import AgentLoader
 
 _SYSTEM_AGENTS_DIR = (Path(__file__).resolve().parents[2] / "config" / "defaults" / "agents").resolve()
 _MCP_CONFIG_KEYS = ("transport", "command", "args", "env", "url", "allowed_tools", "instructions")
+INITIAL_AGENT_CONFIG_VERSION = "1.0.0"
 
 
 def _tools_from_repo(config: AgentConfig) -> list[dict[str, Any]]:
@@ -290,7 +291,7 @@ def create_agent_user(
             name=name,
             description=description,
             status="draft",
-            version="0.1.0",
+            version=INITIAL_AGENT_CONFIG_VERSION,
         )
 
     created = get_agent_user(agent_user_id, user_repo=user_repo, agent_config_repo=agent_config_repo)
@@ -365,7 +366,7 @@ def _save_config_to_repo(
     tools: list[str] | None = None,
     system_prompt: str = "",
     status: str = "draft",
-    version: str = "0.1.0",
+    version: str,
     runtime_settings: dict | None = None,
     mcp_servers: list[McpServerConfig] | None = None,
     meta: dict | None = None,
