@@ -8,7 +8,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from config.agent_config_types import Skill
-from config.skill_document import SkillDocument, parse_skill_document, skill_description, skill_version
+from config.skill_document import SkillDocument, parse_skill_document
 from config.skill_files import normalize_skill_file_entries
 from config.skill_package import build_skill_package
 from storage.runtime import build_storage_container
@@ -18,10 +18,7 @@ FILE_IMPORT_SOURCE = {"kind": "file_import"}
 
 
 def _skill_document(content: str) -> SkillDocument:
-    document = parse_skill_document(content, label="SKILL.md")
-    skill_description(document, required=True)
-    skill_version(document)
-    return document
+    return parse_skill_document(content, label="SKILL.md", require_description=True, require_version=True)
 
 
 def _read_files(skill_dir: Path) -> dict[str, str]:
@@ -56,14 +53,15 @@ def import_skills(owner_user_id: str, library_dir: Path) -> int:
         skill_id = existing.id if existing is not None else generate_skill_id()
         if existing is None and repo.get_by_id(owner_user_id, skill_id) is not None:
             raise RuntimeError("Generated Skill id already exists")
-        version = skill_version(document)
+        if document.version is None:
+            raise RuntimeError("SKILL.md version was not parsed")
         files = _read_files(skill_dir)
         skill = repo.upsert(
             Skill(
                 id=skill_id,
                 owner_user_id=owner_user_id,
                 name=skill_name,
-                description=skill_description(document, required=True),
+                description=document.description,
                 source=dict(FILE_IMPORT_SOURCE),
                 created_at=getattr(existing, "created_at", now),
                 updated_at=now,
@@ -73,7 +71,7 @@ def import_skills(owner_user_id: str, library_dir: Path) -> int:
             build_skill_package(
                 owner_user_id=owner_user_id,
                 skill_id=skill.id,
-                version=version,
+                version=document.version,
                 skill_md=content,
                 files=files,
                 source=dict(FILE_IMPORT_SOURCE),
