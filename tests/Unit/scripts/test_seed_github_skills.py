@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import inspect
 from pathlib import Path, PureWindowsPath
+from types import SimpleNamespace
 
 import pytest
 import yaml
@@ -105,6 +106,30 @@ def test_seed_skill_slug_is_hub_item_path_not_library_identity(tmp_path: Path) -
     slug = seed_github_skills.build_skill_slug(repo_root, skill_dir)
 
     assert slug == "skills--backend--api-design"
+
+
+def test_seed_existing_hub_slugs_require_successful_response(monkeypatch: pytest.MonkeyPatch) -> None:
+    seen: dict[str, str] = {}
+
+    def fake_get(url: str, timeout: float):
+        seen["url"] = url
+        seen["timeout"] = str(timeout)
+        return SimpleNamespace(
+            raise_for_status=lambda: seen.setdefault("raised", "yes"),
+            json=lambda: {
+                "items": [
+                    {"publisher_username": "anthropics", "slug": "skills--planner"},
+                    {"publisher_username": "mycel", "slug": "skills--reviewer"},
+                ]
+            },
+        )
+
+    monkeypatch.setattr(seed_github_skills.httpx, "get", fake_get)
+
+    slugs = seed_github_skills.read_existing_hub_slugs()
+
+    assert seen == {"url": "http://localhost:8090/api/v1/items?page_size=2000", "timeout": "30.0", "raised": "yes"}
+    assert slugs == {("anthropics", "skills--planner"), ("mycel", "skills--reviewer")}
 
 
 def test_seed_skill_parser_does_not_swallow_parse_errors() -> None:

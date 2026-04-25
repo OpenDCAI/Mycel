@@ -178,6 +178,13 @@ def build_skill_payload(
     }
 
 
+def read_existing_hub_slugs() -> set[tuple[str, str]]:
+    response = httpx.get(f"{HUB_URL}/api/v1/items?page_size=2000", timeout=30.0)
+    response.raise_for_status()
+    existing = response.json()
+    return {(item["publisher_username"], item["slug"]) for item in existing.get("items", [])}
+
+
 def upload(payload: dict) -> bool:
     import time
 
@@ -205,10 +212,7 @@ def main():
         print(f"Publisher registered: {uname}")
 
     # Check existing items to avoid duplicates
-    existing_response = httpx.get(f"{HUB_URL}/api/v1/items?page_size=2000", timeout=30.0)
-    existing_response.raise_for_status()
-    existing = existing_response.json()
-    existing_slugs = {(item["publisher_username"], item["slug"]) for item in existing.get("items", [])}
+    existing_slugs = read_existing_hub_slugs()
     print(f"\nExisting items in Hub: {len(existing_slugs)}")
 
     total_ok = 0
