@@ -1,11 +1,8 @@
 from __future__ import annotations
 
 import asyncio
-import logging
 from collections.abc import Awaitable, Callable
 from typing import Any
-
-logger = logging.getLogger(__name__)
 
 
 def build_activity_bridge(
@@ -28,7 +25,6 @@ def build_activity_bridge(
                 act_event = activity_queue.get_nowait()
             except asyncio.QueueEmpty:
                 break
-            logger.info("[stream:drain] emitting activity event: %s", act_event.get("event", "?"))
             await emit(act_event)
 
     def attach() -> None:

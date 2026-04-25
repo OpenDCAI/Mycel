@@ -1,14 +1,11 @@
 from __future__ import annotations
 
 import json
-import logging
 from typing import Any
 
 from core.runtime.registry import ToolEntry, ToolMode, ToolRegistry, make_tool_schema
 from core.tools.task.types import Task, TaskStatus
 from storage.runtime import build_tool_task_repo
-
-logger = logging.getLogger(__name__)
 
 TASK_CREATE_SCHEMA = make_tool_schema(
     name="TaskCreate",
@@ -118,7 +115,6 @@ class TaskService:
         self._repo = repo or build_tool_task_repo()
         self._default_thread_id = thread_id  # override for tests / single-agent TUI
         self._register(registry)
-        logger.info("TaskService initialized")
 
     def _get_thread_id(self) -> str:
         if self._default_thread_id:
