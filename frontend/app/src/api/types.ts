@@ -365,12 +365,24 @@ export interface ChatJoinRequest {
   id: string;
   chat_id: string;
   requester_user_id: string;
+  requester_name?: string | null;
+  requester_type?: string | null;
   state: "pending" | "approved" | "rejected";
   message?: string | null;
   decided_by_user_id?: string | null;
   decided_at?: number | null;
   created_at: number;
   updated_at: number;
+}
+
+export interface ChatJoinTarget {
+  id: string;
+  type: "group";
+  title: string | null;
+  status: string;
+  created_by_user_id: string;
+  is_member: boolean;
+  current_request: ChatJoinRequest | null;
 }
 
 export interface ChatMessage {
