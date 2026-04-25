@@ -2272,6 +2272,39 @@ def test_apply_snapshot_reuses_existing_skill_by_snapshot_source(monkeypatch: py
     assert saved_configs[0].skills[0].source["snapshot_skill_id"] == "search-core"
 
 
+def test_apply_snapshot_fails_when_generated_skill_id_exists(monkeypatch: pytest.MonkeyPatch):
+    from backend.hub.snapshot_apply import apply_snapshot
+
+    skill_repo = _MemorySkillRepo()
+    _put_skill(
+        skill_repo,
+        owner_user_id="user-1",
+        skill_id="skill_existing123",
+        name="Existing",
+        description="existing",
+        content="---\nname: Existing\n---\nbody",
+    )
+    monkeypatch.setattr("backend.hub.snapshot_apply.generate_skill_id", lambda: "skill_existing123")
+
+    with pytest.raises(RuntimeError, match="Generated Skill id already exists"):
+        apply_snapshot(
+            snapshot={
+                "schema_version": "agent-snapshot/v1",
+                "agent": {
+                    "id": "cfg-source",
+                    "name": "Repo Agent",
+                    "skills": [{"id": "search-core", "name": "Search", "version": "1.0.0", "content": "---\nname: Search\n---\nbody"}],
+                },
+            },
+            marketplace_item_id="item-1",
+            source_version="1.0.0",
+            owner_user_id="user-1",
+            user_repo=SimpleNamespace(create=lambda _row: None),
+            agent_config_repo=SimpleNamespace(save_agent_config=lambda _config: None),
+            skill_repo=skill_repo,
+        )
+
+
 def test_apply_snapshot_rejects_duplicate_skill_names_before_library_write():
     from backend.hub.snapshot_apply import apply_snapshot
 
