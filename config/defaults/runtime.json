@@ -1,12 +1,14 @@
 {
-  "context_limit": 0,
-  "enable_audit_log": true,
-  "allowed_extensions": null,
-  "block_dangerous_commands": true,
-  "block_network_commands": false,
-  "temperature": null,
-  "max_tokens": null,
-  "model_kwargs": {},
+  "runtime": {
+    "context_limit": 0,
+    "enable_audit_log": true,
+    "allowed_extensions": null,
+    "block_dangerous_commands": true,
+    "block_network_commands": false,
+    "temperature": null,
+    "max_tokens": null,
+    "model_kwargs": {}
+  },
   "memory": {
     "pruning": {
       "enabled": true,
@@ -31,7 +33,6 @@
     },
     "search": {
       "enabled": true,
-      "max_results": 50,
       "tools": {
         "grep": {
           "enabled": true,
