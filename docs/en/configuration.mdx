@@ -234,7 +234,7 @@ MODEL_NAME=claude-sonnet-4-5-20250929
 {
   "skills": {
     "enabled": true,
-    "paths": ["~/.leon/skills"],
+    "paths": [],
     "skills": {
       "code-review": true,
       "debugging": false
@@ -244,7 +244,8 @@ MODEL_NAME=claude-sonnet-4-5-20250929
 ```
 
 <Warning>
-  Skill paths must exist on disk — Mycel does not create them automatically. Run `mkdir -p ~/.leon/skills` if needed.
+  Runtime config does not read a default host directory. Use Hub/Library managed Skills for product flows, or declare explicit
+  `paths` only for controlled file-based development and import workflows.
 </Warning>
 
 ## Advanced MCP servers
