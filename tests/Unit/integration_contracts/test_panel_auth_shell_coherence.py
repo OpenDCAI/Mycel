@@ -1033,6 +1033,66 @@ def test_agent_config_patch_rejects_mcp_enabled_string() -> None:
     assert saved_configs == []
 
 
+def test_agent_config_patch_rejects_mcp_args_object() -> None:
+    saved_configs: list[AgentConfig] = []
+
+    class _AgentConfigRepo:
+        def get_agent_config(self, _agent_config_id: str):
+            return _agent_config(mcp_servers=[])
+
+        def save_agent_config(self, config: AgentConfig) -> None:
+            saved_configs.append(config)
+
+    with pytest.raises(RuntimeError, match="MCP server patch item args must be a JSON array"):
+        agent_user_service.update_agent_user_config(
+            "agent-1",
+            {"mcpServers": [{"name": "demo-mcp", "transport": "stdio", "command": "uv", "args": {"root": "."}}]},
+            user_repo=SimpleNamespace(
+                get_by_id=lambda _agent_id: UserRow(
+                    id="agent-1",
+                    type=UserType.AGENT,
+                    display_name="Toad",
+                    owner_user_id="owner-1",
+                    agent_config_id="cfg-1",
+                    created_at=1,
+                )
+            ),
+            agent_config_repo=_AgentConfigRepo(),
+        )
+
+    assert saved_configs == []
+
+
+def test_agent_config_patch_rejects_mcp_env_array() -> None:
+    saved_configs: list[AgentConfig] = []
+
+    class _AgentConfigRepo:
+        def get_agent_config(self, _agent_config_id: str):
+            return _agent_config(mcp_servers=[])
+
+        def save_agent_config(self, config: AgentConfig) -> None:
+            saved_configs.append(config)
+
+    with pytest.raises(RuntimeError, match="MCP server patch item env must be a JSON object"):
+        agent_user_service.update_agent_user_config(
+            "agent-1",
+            {"mcpServers": [{"name": "demo-mcp", "transport": "stdio", "command": "uv", "env": ["A=B"]}]},
+            user_repo=SimpleNamespace(
+                get_by_id=lambda _agent_id: UserRow(
+                    id="agent-1",
+                    type=UserType.AGENT,
+                    display_name="Toad",
+                    owner_user_id="owner-1",
+                    agent_config_id="cfg-1",
+                    created_at=1,
+                )
+            ),
+            agent_config_repo=_AgentConfigRepo(),
+        )
+
+    assert saved_configs == []
+
+
 def test_agent_config_patch_rejects_duplicate_mcp_server_names() -> None:
     saved_configs: list[AgentConfig] = []
 
@@ -1207,6 +1267,37 @@ def test_agent_config_patch_rejects_sub_agent_tool_enabled_string() -> None:
         agent_user_service.update_agent_user_config(
             "agent-1",
             {"subAgents": [{"name": "Scout", "tools": [{"name": "Read", "enabled": "false"}]}]},
+            user_repo=SimpleNamespace(
+                get_by_id=lambda _agent_id: UserRow(
+                    id="agent-1",
+                    type=UserType.AGENT,
+                    display_name="Toad",
+                    owner_user_id="user-1",
+                    agent_config_id="cfg-1",
+                    created_at=1,
+                )
+            ),
+            agent_config_repo=_AgentConfigRepo(),
+            skill_repo=_MemorySkillRepo(),
+        )
+
+    assert saved_configs == []
+
+
+def test_agent_config_patch_rejects_sub_agent_tools_object() -> None:
+    saved_configs: list[AgentConfig] = []
+
+    class _AgentConfigRepo:
+        def get_agent_config(self, _agent_config_id: str):
+            return _agent_config()
+
+        def save_agent_config(self, config: AgentConfig) -> None:
+            saved_configs.append(config)
+
+    with pytest.raises(RuntimeError, match="SubAgent patch item tools must be a JSON array"):
+        agent_user_service.update_agent_user_config(
+            "agent-1",
+            {"subAgents": [{"name": "Scout", "tools": {"Read": True}}]},
             user_repo=SimpleNamespace(
                 get_by_id=lambda _agent_id: UserRow(
                     id="agent-1",
