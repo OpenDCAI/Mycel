@@ -4,7 +4,8 @@ from types import SimpleNamespace
 from typing import Any, cast
 
 import pytest
-from fastapi import HTTPException
+from fastapi import FastAPI, HTTPException
+from fastapi.testclient import TestClient
 
 from backend.web.models.marketplace import (
     ApplyFromMarketplaceRequest,
@@ -12,6 +13,9 @@ from backend.web.models.marketplace import (
     UpgradeFromMarketplaceRequest,
 )
 from backend.web.routers import marketplace as marketplace_router
+from backend.web.routers import panel as panel_router
+from config.agent_config_types import AgentConfig
+from storage.contracts import UserRow, UserType
 
 
 def _runtime_storage_state(agent_config_repo: object, skill_repo: object | None = None) -> SimpleNamespace:
@@ -21,6 +25,29 @@ def _runtime_storage_state(agent_config_repo: object, skill_repo: object | None 
             skill_repo=lambda: skill_repo,
         )
     )
+
+
+def _agent_config(**updates: object) -> AgentConfig:
+    data = {
+        "id": "cfg-1",
+        "owner_user_id": "owner-1",
+        "agent_user_id": "agent-1",
+        "name": "Demo Agent",
+        "description": "probe",
+        "tools": ["*"],
+        "system_prompt": "hello",
+        "status": "draft",
+        "version": "0.1.0",
+        "runtime_settings": {},
+        "compact": {},
+        "skills": [],
+        "rules": [],
+        "sub_agents": [],
+        "mcp_servers": [],
+        "meta": {},
+    }
+    data.update(updates)
+    return AgentConfig(**data)
 
 
 def test_marketplace_router_exposes_agent_user_marketplace_routes() -> None:
@@ -33,6 +60,150 @@ def test_marketplace_router_exposes_agent_user_marketplace_routes() -> None:
     assert "/api/marketplace/items/{item_id}/versions/{version}" in paths
     assert "/api/marketplace/apply" in paths
     assert "/api/marketplace/" + "download" not in paths
+
+
+def test_skill_marketplace_to_agent_library_delete_backend_api_yatu(monkeypatch: pytest.MonkeyPatch) -> None:
+    class _SkillRepo:
+        def __init__(self) -> None:
+            self.skills: dict[tuple[str, str], Any] = {}
+            self.packages: dict[tuple[str, str], Any] = {}
+
+        def list_for_owner(self, owner_user_id: str) -> list[Any]:
+            return [skill for (owner, _), skill in self.skills.items() if owner == owner_user_id]
+
+        def get_by_id(self, owner_user_id: str, skill_id: str) -> Any | None:
+            return self.skills.get((owner_user_id, skill_id))
+
+        def upsert(self, skill: Any) -> Any:
+            self.skills[(getattr(skill, "owner_user_id"), getattr(skill, "id"))] = skill
+            return skill
+
+        def create_package(self, package: Any) -> Any:
+            self.packages[(getattr(package, "owner_user_id"), getattr(package, "id"))] = package
+            return package
+
+        def get_package(self, owner_user_id: str, package_id: str) -> Any | None:
+            return self.packages.get((owner_user_id, package_id))
+
+        def select_package(self, owner_user_id: str, skill_id: str, package_id: str) -> None:
+            skill = self.skills[(owner_user_id, skill_id)]
+            self.skills[(owner_user_id, skill_id)] = skill.model_copy(update={"package_id": package_id})
+
+        def delete(self, owner_user_id: str, skill_id: str) -> None:
+            self.skills.pop((owner_user_id, skill_id), None)
+
+    class _UserRepo:
+        def __init__(self) -> None:
+            self.agent = UserRow(
+                id="agent-1",
+                type=UserType.AGENT,
+                display_name="Demo Agent",
+                owner_user_id="owner-1",
+                agent_config_id="cfg-1",
+                created_at=1.0,
+            )
+
+        def get_by_id(self, user_id: str) -> Any | None:
+            if user_id == "agent-1":
+                return self.agent
+            return None
+
+        def list_by_owner_user_id(self, owner_user_id: str) -> list[Any]:
+            return [self.agent] if owner_user_id == "owner-1" else []
+
+    class _AgentConfigRepo:
+        def __init__(self) -> None:
+            self.config = _agent_config()
+
+        def get_agent_config(self, agent_config_id: str) -> AgentConfig | None:
+            return self.config if agent_config_id == "cfg-1" else None
+
+        def save_agent_config(self, config: AgentConfig) -> None:
+            self.config = config
+
+    def hub_response(_method: str, path: str, **_kwargs: object) -> dict[str, object]:
+        item_id = path.removeprefix("/items/").removesuffix("/download")
+        rows = {
+            "skillsmp:alpha": {
+                "slug": "alpha-skill",
+                "name": "Alpha Skill",
+                "description": "Alpha desc",
+                "body": "Use alpha routing.",
+            },
+            "skillsmp:beta": {
+                "slug": "beta-skill",
+                "name": "Beta Skill",
+                "description": "Beta desc",
+                "body": "Use beta routing.",
+            },
+        }
+        row = rows[item_id]
+        return {
+            "item": {
+                "type": "skill",
+                "slug": row["slug"],
+                "name": row["name"],
+                "description": row["description"],
+                "publisher_username": "skillsmp",
+            },
+            "version": "1.0.0",
+            "snapshot": {
+                "content": f"---\nname: {row['name']}\n---\n{row['body']}",
+                "meta": {"desc": row["description"]},
+                "files": {"references/routing.md": row["body"]},
+            },
+        }
+
+    monkeypatch.setattr(marketplace_router.marketplace_client, "_hub_api", hub_response)
+
+    app = FastAPI()
+    app.include_router(marketplace_router.router)
+    app.include_router(panel_router.router)
+    app.dependency_overrides[marketplace_router.get_current_user_id] = lambda: "owner-1"
+    app.dependency_overrides[panel_router.get_current_user_id] = lambda: "owner-1"
+    user_repo = _UserRepo()
+    agent_config_repo = _AgentConfigRepo()
+    skill_repo = _SkillRepo()
+    app.state.user_repo = user_repo
+    app.state.runtime_storage_state = _runtime_storage_state(agent_config_repo, skill_repo)
+
+    with TestClient(app) as client:
+        alpha_apply = client.post("/api/marketplace/apply", json={"item_id": "skillsmp:alpha", "agent_user_id": "agent-1"})
+        beta_apply = client.post("/api/marketplace/apply", json={"item_id": "skillsmp:beta"})
+        library_after_apply = client.get("/api/panel/library/skill")
+        agent_after_apply = client.get("/api/panel/agents/agent-1")
+
+        assign_both = client.put(
+            "/api/panel/agents/agent-1/config",
+            json={"skills": [{"name": "Alpha Skill", "enabled": True}, {"name": "Beta Skill", "enabled": True}]},
+        )
+        blocked_alpha_delete = client.delete("/api/panel/library/skill/alpha-skill")
+
+        keep_beta = client.put("/api/panel/agents/agent-1/config", json={"skills": [{"name": "Beta Skill", "enabled": True}]})
+        deleted_alpha = client.delete("/api/panel/library/skill/alpha-skill")
+        blocked_beta_delete = client.delete("/api/panel/library/skill/beta-skill")
+
+        clear_skills = client.put("/api/panel/agents/agent-1/config", json={"skills": []})
+        deleted_beta = client.delete("/api/panel/library/skill/beta-skill")
+        library_after_delete = client.get("/api/panel/library/skill")
+
+    assert alpha_apply.status_code == 200
+    assert alpha_apply.json()["agent_user_id"] == "agent-1"
+    assert beta_apply.status_code == 200
+    assert sorted(item["name"] for item in library_after_apply.json()["items"]) == ["Alpha Skill", "Beta Skill"]
+    assert agent_after_apply.status_code == 200
+    assert [item["name"] for item in agent_after_apply.json()["config"]["skills"]] == ["Alpha Skill"]
+    assert assign_both.status_code == 200
+    assert [item["name"] for item in assign_both.json()["config"]["skills"]] == ["Alpha Skill", "Beta Skill"]
+    assert blocked_alpha_delete.status_code == 409
+    assert blocked_alpha_delete.json()["detail"] == "Skill is still assigned to Agent: Demo Agent"
+    assert keep_beta.status_code == 200
+    assert deleted_alpha.status_code == 200
+    assert blocked_beta_delete.status_code == 409
+    assert clear_skills.status_code == 200
+    assert deleted_beta.status_code == 200
+    assert library_after_delete.status_code == 200
+    assert library_after_delete.json()["items"] == []
 
 
 @pytest.mark.asyncio
