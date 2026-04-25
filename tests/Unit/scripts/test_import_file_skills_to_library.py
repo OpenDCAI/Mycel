@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 from os import PathLike
-from pathlib import Path, PureWindowsPath
+from pathlib import Path, PurePosixPath, PureWindowsPath
 from types import SimpleNamespace
 
 import pytest
@@ -112,3 +112,31 @@ def test_import_file_skill_stores_adjacent_files_as_posix_paths(monkeypatch: pyt
     import_file_skills_to_library.import_skills("owner-1", library_dir)
 
     assert repo.saved[0].files == {"references/query.md": "Use exact queries."}
+
+
+def test_import_file_skill_rejects_adjacent_file_path_collision(monkeypatch: pytest.MonkeyPatch, tmp_path):
+    library_dir = tmp_path / "library"
+    skill_dir = library_dir / "skills" / "new-skill"
+    refs_dir = skill_dir / "references"
+    refs_dir.mkdir(parents=True)
+    (skill_dir / "SKILL.md").write_text("---\nname: New Skill\n---\nBody", encoding="utf-8")
+    (refs_dir / "a.md").write_text("Windows-shaped key.", encoding="utf-8")
+    (refs_dir / "b.md").write_text("POSIX-shaped key.", encoding="utf-8")
+    repo = _MemorySkillRepo()
+    original_relative_to = Path.relative_to
+
+    def colliding_relative_to(self: Path, *other: str | PathLike[str]) -> PureWindowsPath | PurePosixPath:
+        if self.name == "a.md":
+            return PureWindowsPath("references", "query.md")
+        if self.name == "b.md":
+            return PurePosixPath("references/query.md")
+        relative_path = original_relative_to(self, *other)
+        return PurePosixPath(*relative_path.parts)
+
+    monkeypatch.setattr(Path, "relative_to", colliding_relative_to)
+    monkeypatch.setattr(import_file_skills_to_library, "build_storage_container", lambda: SimpleNamespace(skill_repo=lambda: repo))
+
+    with pytest.raises(ValueError, match="File Skill files contain duplicate path after normalization: references/query.md"):
+        import_file_skills_to_library.import_skills("owner-1", library_dir)
+
+    assert repo.saved == []
