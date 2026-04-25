@@ -1734,7 +1734,7 @@ class QueryLoop:
         try:
             return await self._checkpoint_store.load(thread_id)
         except Exception:
-            logger.debug("QueryLoop: could not load checkpoint for thread %s", thread_id)
+            pass
             return None
 
     async def _load_checkpoint_channel_values(self, thread_id: str) -> dict[str, Any]:
