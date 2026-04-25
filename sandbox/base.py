@@ -231,7 +231,7 @@ class LocalSandbox(Sandbox):
 
         self._workspace_root = workspace_root
         self._provider = LocalSessionProvider(default_cwd=workspace_root)
-        self._manager = SandboxManager(provider=self._provider, db_path=db_path or (Path.home() / ".leon" / "sandbox.db"))
+        self._manager = SandboxManager(provider=self._provider, db_path=db_path)
         self._capability_cache: dict[str, SandboxCapability] = {}
         self._owned_thread_ids: set[str] = set()
 
