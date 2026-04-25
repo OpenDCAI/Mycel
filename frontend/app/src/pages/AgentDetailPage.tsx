@@ -52,10 +52,9 @@ export default function AgentDetail() {
   const updateAgentConfig = useAppStore(s => s.updateAgentConfig);
   const ensureLibrary = useAppStore(s => s.ensureLibrary);
   const librarySkills = useAppStore(s => s.librarySkills);
-  const libraryMcpServers = useAppStore(s => s.libraryMcpServers);
   const libraryAgents = useAppStore(s => s.libraryAgents);
 
-  const [pickerType, setPickerType] = useState<"skill" | "mcp" | "agent" | null>(null);
+  const [pickerType, setPickerType] = useState<"skill" | "agent" | null>(null);
   const [editingName, setEditingName] = useState(false);
   const [nameDraft, setNameDraft] = useState("");
   const [loadFailure, setLoadFailure] = useState<{ id: string; message: string } | null>(null);
@@ -120,7 +119,7 @@ export default function AgentDetail() {
     } catch (err) { toast.error(`更新失败：${errorText(err)}`); }
   };
 
-  const handleAssign = async (type: "skill" | "mcp" | "agent", names: string[]) => {
+  const handleAssign = async (type: "skill" | "agent", names: string[]) => {
     if (!agent) return;
     try {
       if (type === "skill") {
@@ -130,13 +129,6 @@ export default function AgentDetail() {
           return { name: n, desc: lib?.desc || "", enabled: true };
         });
         if (newSkills.length) await updateAgentConfig(agent.id, { skills: [...agent.config.skills, ...newSkills] });
-      } else if (type === "mcp") {
-        const existing = new Set(agent.config.mcpServers.map(m => m.name));
-        const newMcpServers = names.filter(n => !existing.has(n)).map(n => {
-          const lib = libraryMcpServers.find(m => m.name === n);
-          return { name: n, command: lib?.desc || "", args: [], env: {}, disabled: false };
-        });
-        if (newMcpServers.length) await updateAgentConfig(agent.id, { mcpServers: [...agent.config.mcpServers, ...newMcpServers] });
       } else {
         const existing = new Set(agent.config.subAgents.map(a => a.name));
         const newAgents = names.filter(n => !existing.has(n)).map(n => {
@@ -206,7 +198,6 @@ export default function AgentDetail() {
             items={agent.config.mcpServers.map(m => ({ name: m.name, desc: m.command || "未配置", enabled: !m.disabled }))}
             onToggle={(name, en) => handleToggle("mcp", name, en)}
             onRemove={(name) => handleRemove("mcp", name)}
-            onAdd={() => setPickerType("mcp")}
           />
         );
       case "subagents":
@@ -297,10 +288,9 @@ export default function AgentDetail() {
 
       {showPublish && <PublishDialog open={showPublish} onOpenChange={setShowPublish} agentId={agent.id} />}
       {pickerType && (() => {
-        const libraryMap = { skill: librarySkills, mcp: libraryMcpServers, agent: libraryAgents };
+        const libraryMap = { skill: librarySkills, agent: libraryAgents };
         const assignedMap = {
           skill: agent.config.skills.map(s => s.name),
-          mcp: agent.config.mcpServers.map(m => m.name),
           agent: agent.config.subAgents.map(a => a.name),
         };
         return (
@@ -846,13 +836,13 @@ function ResourceCards({ type, items, onToggle, onRemove, onAdd }: {
 // ==================== ResourcePicker ====================
 
 function ResourcePicker({ type, library, assigned, onConfirm, onClose }: {
-  type: "skill" | "mcp" | "agent";
+  type: "skill" | "agent";
   library: ResourceItem[];
   assigned: string[];
   onConfirm: (names: string[]) => void;
   onClose: () => void;
 }) {
-  const labels = { skill: "Skill", mcp: "MCP", agent: "子 Agent" };
+  const labels = { skill: "Skill", agent: "子 Agent" };
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [filter, setFilter] = useState("");
   const assignedSet = useMemo(() => new Set(assigned), [assigned]);

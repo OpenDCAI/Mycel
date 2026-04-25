@@ -12,7 +12,7 @@ def _calculate_checksum(file_path: Path) -> str:
 
 class SyncState:
     def __init__(self, repo=None):
-        self._repo = repo or ProcessLocalSyncFileBacking()
+        self._repo = repo or InMemorySyncFileBacking()
 
     def close(self) -> None:
         self._repo.close()
@@ -44,7 +44,7 @@ class SyncState:
         return changed
 
 
-class ProcessLocalSyncFileBacking:
+class InMemorySyncFileBacking:
     def __init__(self) -> None:
         self._rows: dict[str, dict[str, tuple[str, int]]] = {}
 

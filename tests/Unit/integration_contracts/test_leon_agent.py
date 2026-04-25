@@ -340,7 +340,7 @@ def test_create_leon_agent_defaults_wire_runtime_container_when_strategy_missing
 
 
 @_patch_env_api_key()
-def test_create_leon_agent_defaults_to_process_local_agent_registry(monkeypatch, tmp_path, _patch_runtime_storage_container):
+def test_create_leon_agent_does_not_wire_agent_registry(monkeypatch, tmp_path, _patch_runtime_storage_container):
     from core.runtime.agent import LeonAgent
 
     monkeypatch.setenv("LEON_STORAGE_STRATEGY", "supabase")

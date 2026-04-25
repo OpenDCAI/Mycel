@@ -38,14 +38,11 @@ export default function MarketplaceActionDialog({ open, onOpenChange, item }: Pr
     void ensureAgents();
   }, [ensureAgents, isSkill, open]);
 
-  useEffect(() => {
-    if (!isSkill || selectedAgentId || targetAgents.length === 0) return;
-    setSelectedAgentId(targetAgents[0].id);
-  }, [targetAgents, isSkill, selectedAgentId]);
+  const activeSelectedAgentId = selectedAgentId || targetAgents[0]?.id || "";
 
   const handleAction = async () => {
     try {
-      const targetAgentId = isSkill && assignToAgent ? selectedAgentId : undefined;
+      const targetAgentId = isSkill && assignToAgent ? activeSelectedAgentId : undefined;
       if (isSkill && assignToAgent && !targetAgentId) {
         toast.error("请先选择要接收该 Skill 的 Agent");
         return;
@@ -113,7 +110,7 @@ export default function MarketplaceActionDialog({ open, onOpenChange, item }: Pr
                   选择 Agent
                   <select
                     className="mt-1 w-full rounded-md border border-border bg-background px-2 py-2 text-sm text-foreground"
-                    value={selectedAgentId}
+                    value={activeSelectedAgentId}
                     onChange={(event) => setSelectedAgentId(event.target.value)}
                   >
                     {targetAgents.map((agent) => (
@@ -137,7 +134,7 @@ export default function MarketplaceActionDialog({ open, onOpenChange, item }: Pr
 
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>取消</Button>
-          <Button onClick={handleAction} disabled={applying || (isSkill && assignToAgent && !selectedAgentId)}>
+          <Button onClick={handleAction} disabled={applying || (isSkill && assignToAgent && !activeSelectedAgentId)}>
             <ActionIcon className="w-3.5 h-3.5 mr-1.5" />
             {applying
               ? `${actionVerb}中...`

@@ -1,4 +1,4 @@
-"""Library CRUD for file-backed assets and DB-backed sandbox templates."""
+"""Library CRUD for Skills, Agent templates, and sandbox templates."""
 
 import json
 import re
@@ -10,7 +10,6 @@ from typing import Any
 
 import yaml
 
-from backend.library import mcp_library
 from backend.library.paths import LIBRARY_DIR
 from backend.sandboxes import provider_availability as sandbox_provider_availability
 from backend.sandboxes.recipe_bootstrap import seed_default_recipes as seed_builtin_recipes
@@ -20,6 +19,12 @@ from sandbox.recipes import FEATURE_CATALOG, default_recipe_snapshot, normalize_
 from storage.contracts import RecipeRepo, SkillRepo
 
 _SKILL_FRONTMATTER_RE = re.compile(r"^---\s*\n(.*?)\n---\s*\n", re.DOTALL)
+_RESOURCE_TYPES = {"skill", "agent", "sandbox-template"}
+
+
+def _require_resource_type(resource_type: str) -> None:
+    if resource_type not in _RESOURCE_TYPES:
+        raise ValueError(f"Unknown resource type: {resource_type}")
 
 
 def _read_json(path: Path, default: Any = None) -> Any:
@@ -179,6 +184,7 @@ def list_library(
     recipe_repo: RecipeRepo | None = None,
     skill_repo: SkillRepo | None = None,
 ) -> list[dict[str, Any]]:
+    _require_resource_type(resource_type)
     results: list[dict[str, Any]] = []
     if resource_type == "sandbox-template":
         owner_user_id = _require_recipe_owner(owner_user_id)
@@ -209,8 +215,6 @@ def list_library(
             for f in sorted(agents_dir.glob("*.md")):
                 meta = _read_json(f.with_suffix(".json"), {})
                 results.append(_library_resource_item("agent", f.stem, meta))
-    elif resource_type == "mcp":
-        results.extend(mcp_library.list_items())
     return results
 
 
@@ -326,8 +330,6 @@ def create_resource(
         _write_json(meta_path, meta)
         content_path.write_text(f"---\nname: {rid}\ndescription: {desc}\n---\n\n# {name}\n", encoding="utf-8")
         return _library_resource_item(resource_type, rid, meta)
-    if resource_type == "mcp":
-        return mcp_library.create(name, desc, cat)
     raise ValueError(f"Unknown resource type: {resource_type}")
 
 
@@ -342,6 +344,7 @@ def update_resource(
     desc: str | None = None,
     features: dict[str, bool] | None = None,
 ) -> dict[str, Any] | None:
+    _require_resource_type(resource_type)
     updates = {key: value for key, value in {"name": name, "desc": desc, "features": features}.items() if value is not None}
     now = int(time.time() * 1000)
     if resource_type == "sandbox-template":
@@ -399,8 +402,6 @@ def update_resource(
         meta["updated_at"] = now
         _write_json(meta_path, meta)
         return _library_resource_item(resource_type, resource_id, meta, updated_at=now)
-    if resource_type == "mcp":
-        return mcp_library.update(resource_id, updates)
     return None
 
 
@@ -411,6 +412,7 @@ def delete_resource(
     recipe_repo: RecipeRepo | None = None,
     skill_repo: SkillRepo | None = None,
 ) -> bool:
+    _require_resource_type(resource_type)
     if resource_type == "sandbox-template":
         owner_user_id = _require_recipe_owner(owner_user_id)
         recipe_repo = _require_recipe_repo(recipe_repo)
@@ -460,8 +462,6 @@ def delete_resource(
             json_path.unlink()
             found = True
         return found
-    if resource_type == "mcp":
-        return mcp_library.delete(resource_id)
     return False
 
 
@@ -487,9 +487,10 @@ def get_resource_used_by(
     agent_config_repo: Any = None,
 ) -> list[str]:
     """Return agent user names under the owner that use a given resource."""
+    _require_resource_type(resource_type)
     if user_repo is None or agent_config_repo is None:
         raise RuntimeError("user_repo and agent_config_repo are required for resource usage reads")
-    config_attr = {"skill": "skills", "mcp": "mcp_servers", "agent": "sub_agents"}.get(resource_type, "")
+    config_attr = {"skill": "skills", "agent": "sub_agents"}.get(resource_type, "")
     if not config_attr:
         return []
     names: list[str] = []
@@ -513,6 +514,7 @@ def get_resource_content(
     skill_repo: SkillRepo | None = None,
 ) -> str | None:
     """Read the .md content file for a skill or agent resource."""
+    _require_resource_type(resource_type)
     if resource_type == "sandbox-template":
         owner_user_id = _require_recipe_owner(owner_user_id)
         for item in list_library("sandbox-template", owner_user_id=owner_user_id, recipe_repo=recipe_repo):
@@ -534,8 +536,6 @@ def get_resource_content(
         if content_path.exists():
             return content_path.read_text(encoding="utf-8")
         return ""
-    if resource_type == "mcp":
-        return mcp_library.get_content(resource_id)
     return None
 
 
@@ -547,6 +547,7 @@ def update_resource_content(
     skill_repo: SkillRepo | None = None,
 ) -> bool:
     """Write the .md content file for a skill or agent resource."""
+    _require_resource_type(resource_type)
     now = int(time.time() * 1000)
     if resource_type == "sandbox-template":
         return False
@@ -576,6 +577,4 @@ def update_resource_content(
         meta["updated_at"] = now
         _write_json(meta_path, meta)
         return True
-    if resource_type == "mcp":
-        return mcp_library.update_content(resource_id, content)
     return False

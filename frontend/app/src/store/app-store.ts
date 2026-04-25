@@ -11,7 +11,6 @@ interface AppState {
   // ── Data ──
   agentList: Agent[];
   librarySkills: ResourceItem[];
-  libraryMcpServers: ResourceItem[];
   libraryAgents: ResourceItem[];
   librarySandboxTemplates: ResourceItem[];
   userProfile: UserProfile;
@@ -60,19 +59,17 @@ interface AppState {
   getResourceUsedBy: (type: string, name: string) => string[];
 }
 
-type LibraryType = "skill" | "mcp" | "agent" | "sandbox-template";
-type LibraryStateKey = "librarySkills" | "libraryMcpServers" | "libraryAgents" | "librarySandboxTemplates";
+type LibraryType = "skill" | "agent" | "sandbox-template";
+type LibraryStateKey = "librarySkills" | "libraryAgents" | "librarySandboxTemplates";
 
 const DEFAULT_PROFILE: UserProfile = { name: "User", initials: "U", email: "" };
 const LIBRARY_STATE_KEYS: Record<LibraryType, LibraryStateKey> = {
   skill: "librarySkills",
-  mcp: "libraryMcpServers",
   agent: "libraryAgents",
   "sandbox-template": "librarySandboxTemplates",
 };
 const EMPTY_LIBRARY_LOADED: Record<LibraryType, boolean> = {
   skill: false,
-  mcp: false,
   agent: false,
   "sandbox-template": false,
 };
@@ -98,7 +95,6 @@ function emptySessionState() {
   return {
     agentList: [],
     librarySkills: [],
-    libraryMcpServers: [],
     libraryAgents: [],
     librarySandboxTemplates: [],
     userProfile: DEFAULT_PROFILE,

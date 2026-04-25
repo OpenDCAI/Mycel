@@ -4,7 +4,7 @@ from typing import Any
 
 from backend.threads.binding import ThreadRuntimeBindingError, resolve_thread_runtime_binding
 from sandbox.control_plane_repos import make_chat_session_repo, make_terminal_repo, resolve_sandbox_db_path
-from sandbox.sync.state import ProcessLocalSyncFileBacking, SyncState
+from sandbox.sync.state import InMemorySyncFileBacking, SyncState
 from storage.container_cache import get_storage_container as _get_container
 from storage.runtime import uses_supabase_runtime_defaults
 
@@ -19,7 +19,7 @@ def delete_thread_in_db(thread_id: str) -> None:
 
     session_repo = make_chat_session_repo()
     terminal_repo = make_terminal_repo()
-    sync_state = SyncState(repo=ProcessLocalSyncFileBacking())
+    sync_state = SyncState(repo=InMemorySyncFileBacking())
     try:
         session_repo.delete_by_thread(thread_id)
         terminal_repo.delete_by_thread(thread_id)
