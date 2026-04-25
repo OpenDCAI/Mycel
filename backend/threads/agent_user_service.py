@@ -588,6 +588,8 @@ def _skills_from_patch(current_config: AgentConfig, config_patch: dict[str, Any]
             raise RuntimeError("Skill patch item must include name")
         if "content" in item or "files" in item:
             raise RuntimeError("Skill patch item must not include content or files")
+        if "source" in item or "version" in item:
+            raise RuntimeError("Skill patch item must not include source or version")
         if "disabled" in item:
             raise RuntimeError("Skill patch item must use enabled, not disabled")
         _enabled_from_patch_item(item, label="Skill patch item")
