@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { cleanup, render, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -60,6 +60,7 @@ describe("ChatConversationPage SSE teardown", () => {
     vi.restoreAllMocks();
     authFetchMocks.authFetch.mockReset();
     authFetchMocks.streamChatEvents.mockReset();
+    authFetchMocks.streamChatEvents.mockResolvedValue(undefined);
     authFetchMocks.useOutletContext.mockReset();
     authFetchMocks.useOutletContext.mockReturnValue({
       setSidebarCollapsed: vi.fn(),
@@ -89,6 +90,7 @@ describe("ChatConversationPage SSE teardown", () => {
           json: async () => ({
             id: "chat-1",
             title: "chat title",
+            created_by_user_id: "user-1",
             members: [{ id: "user-1", name: "tester", type: "human" }],
           }),
         };
@@ -103,6 +105,12 @@ describe("ChatConversationPage SSE teardown", () => {
         return {
           ok: true,
           json: async () => ({}),
+        };
+      }
+      if (url === "/api/chats/chat-1/join-requests") {
+        return {
+          ok: true,
+          json: async () => [],
         };
       }
       throw new Error(`Unexpected authFetch url: ${url}`);
@@ -145,5 +153,130 @@ describe("ChatConversationPage SSE teardown", () => {
     await waitFor(() => {
       expect(consoleError).not.toHaveBeenCalled();
     });
+  });
+
+  it("lets the chat owner review and approve join requests", async () => {
+    let chatDetailCalls = 0;
+    authFetchMocks.authFetch.mockImplementation(async (url: string, init?: RequestInit) => {
+      if (url === "/api/chats/chat-1") {
+        chatDetailCalls += 1;
+        return {
+          ok: true,
+          json: async () => ({
+            id: "chat-1",
+            title: "join room",
+            created_by_user_id: "user-1",
+            status: "active",
+            created_at: 1,
+            members: chatDetailCalls === 1
+              ? [{ id: "user-1", name: "tester", type: "human" }]
+              : [
+                  { id: "user-1", name: "tester", type: "human" },
+                  { id: "visitor-1", name: "Visitor", type: "external" },
+                ],
+          }),
+        };
+      }
+      if (url === "/api/chats/chat-1/messages?limit=100") {
+        return { ok: true, json: async () => [] };
+      }
+      if (url === "/api/chats/chat-1/read") {
+        return { ok: true, json: async () => ({}) };
+      }
+      if (url === "/api/chats/chat-1/join-requests" && !init?.method) {
+        return {
+          ok: true,
+          json: async () => [
+            {
+              id: "request-1",
+              chat_id: "chat-1",
+              requester_user_id: "visitor-1",
+              state: "pending",
+              message: "Please add me.",
+              created_at: 1,
+              updated_at: 1,
+            },
+          ],
+        };
+      }
+      if (url === "/api/chats/chat-1/join-requests/request-1/approve" && init?.method === "POST") {
+        return {
+          ok: true,
+          json: async () => ({
+            id: "request-1",
+            chat_id: "chat-1",
+            requester_user_id: "visitor-1",
+            state: "approved",
+            message: "Please add me.",
+            created_at: 1,
+            updated_at: 2,
+          }),
+        };
+      }
+      throw new Error(`Unexpected authFetch url: ${url}`);
+    });
+
+    render(
+      <MemoryRouter initialEntries={["/chat/visit/chat-1"]}>
+        <Routes>
+          <Route path="/chat/visit/:chatId" element={<ChatConversationPage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText("入群申请")).toBeTruthy();
+    expect(screen.getByText("visitor-1")).toBeTruthy();
+    expect(screen.getByText("Please add me.")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "同意 visitor-1 入群" }));
+
+    await waitFor(() => {
+      expect(authFetchMocks.authFetch).toHaveBeenCalledWith(
+        "/api/chats/chat-1/join-requests/request-1/approve",
+        { method: "POST", body: JSON.stringify({}) },
+      );
+    });
+    expect(await screen.findByText("2 位成员")).toBeTruthy();
+  });
+
+  it("does not fetch owner-only join requests for a non-owner member", async () => {
+    authFetchMocks.authFetch.mockImplementation(async (url: string) => {
+      if (url === "/api/chats/chat-1") {
+        return {
+          ok: true,
+          json: async () => ({
+            id: "chat-1",
+            title: "member room",
+            created_by_user_id: "owner-1",
+            status: "active",
+            created_at: 1,
+            members: [{ id: "user-1", name: "tester", type: "human" }],
+          }),
+        };
+      }
+      if (url === "/api/chats/chat-1/messages?limit=100") {
+        return { ok: true, json: async () => [] };
+      }
+      if (url === "/api/chats/chat-1/read") {
+        return { ok: true, json: async () => ({}) };
+      }
+      if (url === "/api/chats/chat-1/join-requests") {
+        throw new Error("non-owner should not request join approvals");
+      }
+      throw new Error(`Unexpected authFetch url: ${url}`);
+    });
+
+    render(
+      <MemoryRouter initialEntries={["/chat/visit/chat-1"]}>
+        <Routes>
+          <Route path="/chat/visit/:chatId" element={<ChatConversationPage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText("member room")).toBeTruthy();
+    });
+    expect(screen.queryByText("入群申请")).toBeNull();
   });
 });

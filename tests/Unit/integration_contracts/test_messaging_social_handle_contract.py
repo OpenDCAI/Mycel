@@ -983,7 +983,13 @@ def test_messaging_service_chat_detail_fails_on_unknown_member_identity() -> Non
         ),
     )
 
-    chat = SimpleNamespace(id="chat-1", title=None, status="active", created_at="2026-04-07T00:00:00Z")
+    chat = SimpleNamespace(
+        id="chat-1",
+        title=None,
+        status="active",
+        created_by_user_id="human-user-1",
+        created_at="2026-04-07T00:00:00Z",
+    )
 
     with pytest.raises(RuntimeError) as excinfo:
         service.get_chat_detail(chat)
@@ -1632,6 +1638,7 @@ def test_messaging_service_get_chat_detail_exposes_agent_user_participant_id() -
             id="chat-1",
             title="Chat title",
             status="active",
+            created_by_user_id="human-user-1",
             created_at="2026-04-07T00:00:00Z",
         )
     )
@@ -1640,6 +1647,7 @@ def test_messaging_service_get_chat_detail_exposes_agent_user_participant_id() -
         "id": "chat-1",
         "title": "Chat title",
         "status": "active",
+        "created_by_user_id": "human-user-1",
         "created_at": "2026-04-07T00:00:00Z",
         "members": [
             {

@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, Link, useOutletContext } from "react-router-dom";
-import { PanelLeft, Send } from "lucide-react";
+import { Check, PanelLeft, Send, X } from "lucide-react";
 import { authFetch, useAuthStore } from "../store/auth-store";
 import { parseChatMessageEventData, parseChatTypingUserId, streamChatEvents } from "../api/chat-events";
 import { UserBubble } from "../components/chat-area/UserBubble";
 import { ChatBubble } from "../components/chat-area/ChatBubble";
-import type { ChatMember, ChatMessage, ChatDetail } from "../api/types";
+import type { ChatMember, ChatMessage, ChatDetail, ChatJoinRequest } from "../api/types";
 
 // @@@time-gap — only show timestamp when gap >= 5 minutes
 function shouldShowTime(prev: ChatMessage | null, curr: ChatMessage): boolean {
@@ -50,6 +50,9 @@ function ChatConversationInner({ chatId }: { chatId: string }) {
   const [error, setError] = useState<string | null>(null);
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
+  const [joinRequests, setJoinRequests] = useState<ChatJoinRequest[]>([]);
+  const [joinRequestError, setJoinRequestError] = useState<string | null>(null);
+  const [joinRequestBusyId, setJoinRequestBusyId] = useState<string | null>(null);
   const [typingUsers, setTypingUsers] = useState<Set<string>>(new Set());
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -60,6 +63,31 @@ function ChatConversationInner({ chatId }: { chatId: string }) {
     chat?.members.forEach(member => m.set(member.id, member));
     return m;
   }, [chat?.members]);
+
+  const isOwner = Boolean(chat && chat.created_by_user_id === myUserId);
+  const pendingJoinRequests = useMemo(
+    () => joinRequests.filter(request => request.state === "pending"),
+    [joinRequests],
+  );
+
+  const loadJoinRequests = useCallback(async () => {
+    if (!isOwner) {
+      setJoinRequests([]);
+      setJoinRequestError(null);
+      return;
+    }
+    const res = await authFetch(`/api/chats/${chatId}/join-requests`);
+    if (!res.ok) {
+      const body = await res.text();
+      throw new Error(body || `Join requests load failed (${res.status})`);
+    }
+    setJoinRequests(await res.json());
+    setJoinRequestError(null);
+  }, [chatId, isOwner]);
+
+  useEffect(() => {
+    loadJoinRequests().catch(err => setJoinRequestError(err.message));
+  }, [loadJoinRequests]);
   // Track if user is at bottom for sticky scroll
   const onScroll = useCallback(() => {
     const el = scrollContainerRef.current;
@@ -234,6 +262,34 @@ function ChatConversationInner({ chatId }: { chatId: string }) {
     }
   };
 
+  const decideJoinRequest = useCallback(async (requestId: string, decision: "approve" | "reject") => {
+    setJoinRequestBusyId(requestId);
+    setJoinRequestError(null);
+    try {
+      const res = await authFetch(
+        `/api/chats/${chatId}/join-requests/${encodeURIComponent(requestId)}/${decision}`,
+        { method: "POST", body: JSON.stringify({}) },
+      );
+      if (!res.ok) {
+        const body = await res.text();
+        throw new Error(body || `Join request ${decision} failed (${res.status})`);
+      }
+      const updated: ChatJoinRequest = await res.json();
+      setJoinRequests(prev => prev.map(request => request.id === updated.id ? updated : request));
+      const chatRes = await authFetch(`/api/chats/${chatId}`);
+      if (!chatRes.ok) {
+        const body = await chatRes.text();
+        throw new Error(body || `Chat reload failed (${chatRes.status})`);
+      }
+      setChat(await chatRes.json());
+      refreshChatList();
+    } catch (err) {
+      setJoinRequestError(err instanceof Error ? err.message : "Join request action failed");
+    } finally {
+      setJoinRequestBusyId(null);
+    }
+  }, [chatId, refreshChatList]);
+
   // Typing indicator display — works for both 1:1 and group
   const typingNames = [...typingUsers]
     .map(id => memberMap.get(id)?.name)
@@ -294,6 +350,59 @@ function ChatConversationInner({ chatId }: { chatId: string }) {
           )}
         </div>
       </header>
+
+      {isOwner && (pendingJoinRequests.length > 0 || joinRequestError) && (
+        <section className="shrink-0 border-b border-border bg-muted/20 px-4 py-2.5">
+          <div className="max-w-3xl mx-auto space-y-2">
+            <div className="flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <h2 className="text-xs font-semibold text-foreground">入群申请</h2>
+                <p className="text-2xs text-muted-foreground">
+                  {pendingJoinRequests.length} 个待处理申请
+                </p>
+              </div>
+            </div>
+            {joinRequestError && (
+              <p className="text-2xs text-destructive">{joinRequestError}</p>
+            )}
+            {pendingJoinRequests.map(request => (
+              <div
+                key={request.id}
+                className="flex items-center justify-between gap-3 rounded-lg border border-border bg-background px-3 py-2"
+              >
+                <div className="min-w-0">
+                  <p className="truncate text-xs font-medium text-foreground">{request.requester_user_id}</p>
+                  {request.message && (
+                    <p className="mt-0.5 truncate text-2xs text-muted-foreground">{request.message}</p>
+                  )}
+                </div>
+                <div className="flex shrink-0 items-center gap-1.5">
+                  <button
+                    type="button"
+                    aria-label={`同意 ${request.requester_user_id} 入群`}
+                    disabled={joinRequestBusyId === request.id}
+                    onClick={() => void decideJoinRequest(request.id, "approve")}
+                    className="inline-flex h-7 items-center gap-1 rounded-md border border-border px-2 text-2xs font-medium text-foreground hover:bg-muted disabled:opacity-50"
+                  >
+                    <Check className="h-3.5 w-3.5" />
+                    同意
+                  </button>
+                  <button
+                    type="button"
+                    aria-label={`拒绝 ${request.requester_user_id} 入群`}
+                    disabled={joinRequestBusyId === request.id}
+                    onClick={() => void decideJoinRequest(request.id, "reject")}
+                    className="inline-flex h-7 items-center gap-1 rounded-md border border-border px-2 text-2xs font-medium text-muted-foreground hover:bg-muted disabled:opacity-50"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                    拒绝
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
 
       {/* Messages */}
       <div

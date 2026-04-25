@@ -355,8 +355,21 @@ export interface ChatDetail {
   id: string;
   title: string | null;
   status: string;
+  created_by_user_id: string;
   created_at: number;
   members: ChatMember[];
+}
+
+export interface ChatJoinRequest {
+  id: string;
+  chat_id: string;
+  requester_user_id: string;
+  state: "pending" | "approved" | "rejected";
+  message?: string | null;
+  decided_by_user_id?: string | null;
+  decided_at?: number | null;
+  created_at: number;
+  updated_at: number;
 }
 
 export interface ChatMessage {

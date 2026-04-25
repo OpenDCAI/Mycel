@@ -317,6 +317,7 @@ class MessagingService:
             "id": chat.id,
             "title": chat.title,
             "status": chat.status,
+            "created_by_user_id": chat.created_by_user_id,
             "created_at": chat.created_at,
             "members": self._build_chat_members(chat.id),
         }
