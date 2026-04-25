@@ -137,12 +137,7 @@ class ChatSessionManager:
         self.db_path = db_path
         self.default_policy = default_policy or ChatSessionPolicy()
         self._live_sessions: dict[str, ChatSession] = {}
-        if chat_session_repo:
-            self._repo = chat_session_repo
-            self._owns_repo = False
-        else:
-            self._repo = make_chat_session_repo(db_path=self.db_path)
-            self._owns_repo = True
+        self._repo = chat_session_repo or make_chat_session_repo(db_path=self.db_path)
         if terminal_repo:
             self._terminal_repo = terminal_repo
             self._owns_terminal_repo = False
@@ -379,8 +374,7 @@ class ChatSessionManager:
             self._live_sessions.pop(live_terminal_id, None)
 
         self._repo.close_all_active(reason)
-        if self._owns_repo:
-            self._repo.close()
+        self._repo.close()
         if self._owns_terminal_repo:
             self._terminal_repo.close()
         if self._owns_sandbox_runtime_repo:
