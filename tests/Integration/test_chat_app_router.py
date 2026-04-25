@@ -19,7 +19,7 @@ def test_chat_app_router_mounts_chat_relationship_and_conversation_routes() -> N
     assert "/api/conversations" in paths
 
 
-def test_chat_openapi_keeps_public_and_internal_send_message_schemas_distinct() -> None:
+def test_chat_app_router_does_not_mount_internal_http_surface() -> None:
     app = FastAPI()
     app.include_router(owner_chat_app_router.router)
 
@@ -27,7 +27,10 @@ def test_chat_openapi_keeps_public_and_internal_send_message_schemas_distinct() 
         response = client.get("/openapi.json")
 
     assert response.status_code == 200
-    schemas = response.json()["components"]["schemas"]
+    spec = response.json()
 
-    assert schemas["SendMessageBody"]["title"] == "SendMessageBody"
-    assert schemas["InternalSendMessageBody"]["title"] == "InternalSendMessageBody"
+    forbidden_prefix = "/api/" + "internal"
+    forbidden_schema = "Internal" + "SendMessageBody"
+
+    assert not [path for path in spec["paths"] if path.startswith(forbidden_prefix)]
+    assert forbidden_schema not in spec.get("components", {}).get("schemas", {})
