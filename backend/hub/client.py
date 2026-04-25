@@ -330,13 +330,21 @@ def apply_item(
             owner_user_id=owner_user_id,
             user_repo=user_repo,
             agent_config_repo=agent_config_repo,
+            skill_repo=skill_repo,
         )
         return {"user_id": user_id, "type": "user", "version": source_version}
 
     raise ValueError(f"Unsupported item type: {item_type}")
 
 
-def upgrade(user_id: str, item_id: str, owner_user_id: str, user_repo: Any = None, agent_config_repo: Any = None) -> dict:
+def upgrade(
+    user_id: str,
+    item_id: str,
+    owner_user_id: str,
+    user_repo: Any = None,
+    agent_config_repo: Any = None,
+    skill_repo: Any = None,
+) -> dict:
     """Upgrade a local marketplace-sourced agent user."""
     if user_repo is None or agent_config_repo is None:
         raise RuntimeError("user_repo and agent_config_repo are required to upgrade marketplace user snapshot")
@@ -353,6 +361,7 @@ def upgrade(user_id: str, item_id: str, owner_user_id: str, user_repo: Any = Non
         existing_user_id=user_id,
         user_repo=user_repo,
         agent_config_repo=agent_config_repo,
+        skill_repo=skill_repo,
     )
 
     return {"user_id": user_id, "version": source_version}

@@ -518,11 +518,13 @@ class TestApplyUser:
                 owner_user_id="owner-1",
                 user_repo=SimpleNamespace(),
                 agent_config_repo=SimpleNamespace(),
+                skill_repo=SimpleNamespace(),
             )
 
         assert result == {"user_id": "agent-user-1", "type": "user", "version": "1.0.0"}
         assert seen["user_repo"] is not None
         assert seen["agent_config_repo"] is not None
+        assert seen["skill_repo"] is not None
 
     def test_member_type_apply_requires_repos(self):
         hub_resp = _make_hub_response("member", "agent-user")
@@ -597,11 +599,13 @@ def test_upgrade_returns_user_id_contract(monkeypatch):
             owner_user_id="owner-1",
             user_repo=SimpleNamespace(),
             agent_config_repo=SimpleNamespace(),
+            skill_repo=SimpleNamespace(),
         )
 
     assert result == {"user_id": "agent-user-1", "version": "2.0.0"}
     assert seen["user_repo"] is not None
     assert seen["agent_config_repo"] is not None
+    assert seen["skill_repo"] is not None
 
 
 def test_upgrade_passes_existing_user_id_to_snapshot_apply(monkeypatch):
@@ -625,6 +629,7 @@ def test_upgrade_passes_existing_user_id_to_snapshot_apply(monkeypatch):
             owner_user_id="owner-1",
             user_repo=SimpleNamespace(),
             agent_config_repo=SimpleNamespace(),
+            skill_repo=SimpleNamespace(),
         )
 
     assert seen["existing_user_id"] == "agent-user-1"
