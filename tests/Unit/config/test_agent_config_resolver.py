@@ -283,6 +283,23 @@ def test_resolver_rejects_duplicate_enabled_skill_names():
     assert "Duplicate Skill name in AgentConfig: github" in str(excinfo.value)
 
 
+def test_resolver_uses_selected_package_source_not_agent_skill_source():
+    config = _config(
+        skills=[
+            AgentSkill(
+                skill_id="github",
+                package_id="github-package",
+                name="github",
+                source={"source_version": "agent-stale"},
+            )
+        ]
+    )
+
+    resolved = resolve_agent_config(config, skill_repo=_SkillRepo())
+
+    assert resolved.skills[0].source == {}
+
+
 def test_resolver_rejects_duplicate_enabled_mcp_server_names():
     config = _config(
         mcp_servers=[
