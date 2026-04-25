@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from pathlib import Path
 from types import SimpleNamespace
+from typing import Any, cast
 
 import pytest
 from fastapi import FastAPI, HTTPException
@@ -1697,7 +1698,14 @@ def test_apply_snapshot_saves_one_agent_config_aggregate():
                 "model": "leon:large",
                 "tools": ["Read"],
                 "system_prompt": "main prompt",
-                "skills": [{"name": "Search", "content": "---\nname: Search\n---\nbody", "description": "skill desc"}],
+                "skills": [
+                    {
+                        "name": "Search",
+                        "content": "---\nname: Search\n---\nbody",
+                        "description": "skill desc",
+                        "source": {"source_version": "snapshot-stale", "extra": "drop"},
+                    }
+                ],
                 "rules": [{"name": "Rule_Unsafe", "content": "rule body"}],
                 "sub_agents": [{"name": "Scout", "description": "scout desc", "tools": ["Read"], "system_prompt": "scout prompt"}],
             },
@@ -1719,6 +1727,15 @@ def test_apply_snapshot_saves_one_agent_config_aggregate():
     package = skill_repo.get_package("user-1", saved_configs[0].skills[0].package_id or "")
     assert package is not None
     assert package.skill_md == "---\nname: Search\n---\nbody"
+    assert package.source == {
+        "marketplace_item_id": "item-1",
+        "source_version": "1.0.0",
+        "source_at": saved_configs[0].skills[0].source["source_at"],
+    }
+    assert saved_configs[0].skills[0].source == package.source
+    library_skill = skill_repo.get_by_id("user-1", "search")
+    assert library_skill is not None
+    assert library_skill.source == package.source
     assert saved_configs[0].rules[0].content == "rule body"
     assert saved_configs[0].sub_agents[0].name == "Scout"
     assert saved_configs[0].meta["source"]["source_version"] == "1.0.0"
@@ -1743,6 +1760,40 @@ def test_apply_snapshot_with_skills_requires_skill_repo():
             user_repo=SimpleNamespace(create=lambda _row: None),
             agent_config_repo=SimpleNamespace(save_agent_config=lambda _config: None),
         )
+
+
+@pytest.mark.parametrize(
+    ("field", "value", "message"),
+    [
+        ("marketplace_item_id", " ", "marketplace_item_id must be a string"),
+        ("marketplace_item_id", {"id": "item-1"}, "marketplace_item_id must be a string"),
+        ("source_version", " ", "source_version must be a string"),
+        ("source_version", ["1.0.0"], "source_version must be a string"),
+    ],
+)
+def test_apply_snapshot_requires_source_identity(field: str, value: object, message: str):
+    from backend.hub.snapshot_apply import apply_snapshot
+
+    kwargs = {
+        "snapshot": {
+            "schema_version": "agent-snapshot/v1",
+            "agent": {
+                "id": "cfg-source",
+                "name": "Repo Agent",
+                "skills": [{"name": "Search", "content": "---\nname: Search\n---\nbody"}],
+            },
+        },
+        "marketplace_item_id": "item-1",
+        "source_version": "1.0.0",
+        "owner_user_id": "user-1",
+        "user_repo": SimpleNamespace(create=lambda _row: None),
+        "agent_config_repo": SimpleNamespace(save_agent_config=lambda _config: None),
+        "skill_repo": _MemorySkillRepo(),
+    }
+    kwargs[field] = value
+
+    with pytest.raises(ValueError, match=message):
+        apply_snapshot(**cast(Any, kwargs))
 
 
 def test_apply_snapshot_rejects_duplicate_skill_names_before_library_write():

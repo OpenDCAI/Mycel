@@ -18,6 +18,12 @@ def _skill_id_from_name(name: str) -> str:
     return skill_id
 
 
+def _required_text(value: Any, *, label: str) -> str:
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError(f"{label} must be a string")
+    return value.strip()
+
+
 def _materialize_snapshot_skills(
     *,
     skills: list[ResolvedSkill],
@@ -51,14 +57,11 @@ def _materialize_snapshot_skills(
             if library_skill.name == snapshot_skill.name and library_skill.id != skill_id:
                 raise ValueError("Snapshot Skill name already exists under a different Library id")
 
-        source = dict(snapshot_skill.source)
-        source.update(
-            {
-                "marketplace_item_id": marketplace_item_id,
-                "source_version": source_version,
-                "source_at": source_at,
-            }
-        )
+        source = {
+            "marketplace_item_id": marketplace_item_id,
+            "source_version": source_version,
+            "source_at": source_at,
+        }
         # @@@snapshot-skill-materialization - AgentConfig stores package bindings; Hub snapshots carry resolved Skill content.
         skill = skill_repo.upsert(
             Skill(
@@ -117,6 +120,8 @@ def apply_snapshot(
     if user_repo is None or agent_config_repo is None:
         raise RuntimeError("user_repo and agent_config_repo are required to apply marketplace user snapshot")
 
+    marketplace_item_id = _required_text(marketplace_item_id, label="marketplace_item_id")
+    source_version = _required_text(source_version, label="source_version")
     parsed = AgentSnapshot.model_validate(snapshot)
     resolved = parsed.agent
     now = time.time()
