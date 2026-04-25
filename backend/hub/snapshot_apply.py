@@ -51,14 +51,11 @@ def _materialize_snapshot_skills(
             if library_skill.name == snapshot_skill.name and library_skill.id != skill_id:
                 raise ValueError("Snapshot Skill name already exists under a different Library id")
 
-        source = dict(snapshot_skill.source)
-        source.update(
-            {
-                "marketplace_item_id": marketplace_item_id,
-                "source_version": source_version,
-                "source_at": source_at,
-            }
-        )
+        source = {
+            "marketplace_item_id": marketplace_item_id,
+            "source_version": source_version,
+            "source_at": source_at,
+        }
         # @@@snapshot-skill-materialization - AgentConfig stores package bindings; Hub snapshots carry resolved Skill content.
         skill = skill_repo.upsert(
             Skill(
