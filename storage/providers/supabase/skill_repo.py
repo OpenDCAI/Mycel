@@ -112,7 +112,7 @@ def _package_from_row(row: dict[str, Any]) -> SkillPackage:
         id=row["id"],
         owner_user_id=row["owner_user_id"],
         skill_id=row["skill_id"],
-        version=row.get("version") or "0.1.0",
+        version=row["version"],
         hash=row["hash"],
         manifest=_json_object(row, "manifest_json", table="library.skill_packages"),
         skill_md=row["skill_md"],

@@ -240,6 +240,16 @@ def test_get_package_rejects_non_object_source_json() -> None:
         repo.get_package("owner-1", "package-1")
 
 
+def test_get_package_rejects_null_version() -> None:
+    row = _package_row()
+    row["version"] = None
+    client = _FakeClient({"library.skill_packages": [row]})
+    repo = SupabaseSkillRepo(client)
+
+    with pytest.raises(ValueError, match="version"):
+        repo.get_package("owner-1", "package-1")
+
+
 def test_select_package_updates_library_skill_pointer() -> None:
     client = _FakeClient({"library.skills": [_row()]})
     repo = SupabaseSkillRepo(client)
