@@ -136,12 +136,9 @@ def ensure_thread_handlers(agent: Any, thread_id: str, app: Any) -> None:
     runtime._bound_thread_app = app
     qm.register_wake(thread_id, wake_handler)
 
-    try:
-        from backend.threads.event_bus import get_event_bus
+    from backend.threads.event_bus import get_event_bus
 
-        unsubscribe = getattr(runtime, "_thread_event_unsubscribe", None)
-        if callable(unsubscribe):
-            unsubscribe()
-        runtime._thread_event_unsubscribe = get_event_bus().subscribe(thread_id, activity_sink)
-    except ImportError:
-        pass
+    unsubscribe = getattr(runtime, "_thread_event_unsubscribe", None)
+    if callable(unsubscribe):
+        unsubscribe()
+    runtime._thread_event_unsubscribe = get_event_bus().subscribe(thread_id, activity_sink)
