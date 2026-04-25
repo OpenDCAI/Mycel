@@ -1,6 +1,7 @@
+import inspect
+import json
 import os
 import sys
-import inspect
 from pathlib import Path
 
 import pytest
@@ -41,6 +42,36 @@ class TestAgentLoader:
         loader = AgentLoader()
 
         assert isinstance(loader.load(), LeonSettings)
+
+    def test_load_applies_nested_runtime_defaults(self, tmp_path):
+        (tmp_path / "runtime.json").write_text(
+            json.dumps(
+                {
+                    "runtime": {
+                        "context_limit": 12345,
+                        "block_network_commands": True,
+                    },
+                    "tools": {"web": {"enabled": False}},
+                }
+            ),
+            encoding="utf-8",
+        )
+        loader = AgentLoader()
+        loader._system_defaults_dir = tmp_path
+
+        settings = loader.load()
+
+        assert settings.runtime.context_limit == 12345
+        assert settings.runtime.block_network_commands is True
+        assert settings.tools.web.enabled is False
+
+    def test_load_rejects_flat_runtime_defaults(self, tmp_path):
+        (tmp_path / "runtime.json").write_text(json.dumps({"context_limit": 12345}), encoding="utf-8")
+        loader = AgentLoader()
+        loader._system_defaults_dir = tmp_path
+
+        with pytest.raises(ValueError, match="context_limit"):
+            loader.load()
 
     def test_deep_merge_simple(self):
         loader = AgentLoader()
