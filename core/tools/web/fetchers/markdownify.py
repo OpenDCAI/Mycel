@@ -140,11 +140,7 @@ class MarkdownifyFetcher(BaseFetcher):
             tag.decompose()
 
         main_content = soup.find("main") or soup.find("article") or soup.find("div", class_="content") or soup.find("body")
-
-        if main_content:
-            text = main_content.get_text(separator="\n\n", strip=True)
-        else:
-            text = soup.get_text(separator="\n\n", strip=True)
+        text = main_content.get_text(separator="\n\n", strip=True) if main_content else soup.get_text(separator="\n\n", strip=True)
 
         return re.sub(r"\n{3,}", "\n\n", text)
 
