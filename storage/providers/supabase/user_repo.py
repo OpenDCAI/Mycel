@@ -105,10 +105,7 @@ class SupabaseUserRepo:
             {"p_user_id": user_id},
             _USER_REPO,
         ).execute()
-        if isinstance(response, dict):
-            data = response.get("data")
-        else:
-            data = getattr(response, "data", None)
+        data = response.get("data") if isinstance(response, dict) else getattr(response, "data", None)
         if data is None:
             raise RuntimeError(
                 f"Supabase {_USER_REPO} expected data from increment_user_thread_seq RPC. Check the function exists and user_id is valid."
