@@ -209,7 +209,6 @@ class DaytonaProvider(SandboxProvider):
             logger.warning("[DaytonaProvider] destroy_session error for %s, verifying actual state", session_id)
             actual = self.get_session_status(session_id)
             if actual == "unknown":
-                logger.info("[DaytonaProvider] sandbox %s no longer exists — destroy succeeded", session_id)
                 self._sandboxes.pop(session_id, None)
                 return True
             logger.error("[DaytonaProvider] destroy_session truly failed for %s (state=%s)", session_id, actual)
@@ -226,7 +225,6 @@ class DaytonaProvider(SandboxProvider):
             logger.warning("[DaytonaProvider] pause_session error for %s, verifying actual state", session_id)
             actual = self.get_session_status(session_id)
             if actual == "paused":
-                logger.info("[DaytonaProvider] sandbox %s is actually stopped despite error — pause succeeded", session_id)
                 return True
             logger.error("[DaytonaProvider] pause_session truly failed for %s (state=%s)", session_id, actual)
             return False
@@ -241,7 +239,6 @@ class DaytonaProvider(SandboxProvider):
             logger.warning("[DaytonaProvider] resume_session error for %s, verifying actual state", session_id)
             actual = self.get_session_status(session_id)
             if actual == "running":
-                logger.info("[DaytonaProvider] sandbox %s is actually running despite error — resume succeeded", session_id)
                 return True
             logger.error("[DaytonaProvider] resume_session truly failed for %s (state=%s)", session_id, actual)
             return False
