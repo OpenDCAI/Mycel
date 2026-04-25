@@ -321,6 +321,15 @@ def test_get_agent_config_reads_agent_skill_source_from_selected_package_only() 
     assert config.skills[0].source == {}
 
 
+def test_get_agent_config_fails_loudly_when_skill_package_version_is_null() -> None:
+    tables = _tables()
+    tables["library.skill_packages"][0]["version"] = None
+    repo = SupabaseAgentConfigRepo(_FakeClient(tables))
+
+    with pytest.raises(ValueError, match="version"):
+        repo.get_agent_config("cfg-1")
+
+
 def test_get_agent_config_fails_loudly_when_sub_agent_tools_json_is_not_an_array() -> None:
     tables = _tables()
     tables["agent.agent_sub_agents"][0]["tools_json"] = {"Read": True}
