@@ -75,7 +75,6 @@ def _get_subagent_agent_name(subagent_type: str) -> str:
 
 
 def _resolve_subagent_model(
-    workspace_root: Path,
     subagent_type: str,
     requested_model: str | None,
     inherited_model: str,
@@ -90,7 +89,7 @@ def _resolve_subagent_model(
     if requested_model and not _is_inherit_marker(requested_model):
         return requested_model
 
-    agent_def = AgentLoader(workspace_root=workspace_root).load_runtime_agents().get(_get_subagent_agent_name(subagent_type))
+    agent_def = AgentLoader().load_runtime_agents().get(_get_subagent_agent_name(subagent_type))
     if agent_def and agent_def.model:
         return agent_def.model
 
@@ -788,7 +787,6 @@ class AgentService:
                 elif parent_bootstrap is not None:
                     child_bootstrap = fork_bootstrap(parent_bootstrap)
                     selected_model = _resolve_subagent_model(
-                        self._workspace_root,
                         subagent_type,
                         model,
                         child_bootstrap.model_name,
@@ -815,7 +813,6 @@ class AgentService:
                     # be resolved explicitly here instead of leaking through
                     # prompt text or whichever defaults happen to win later.
                     selected_model = _resolve_subagent_model(
-                        self._workspace_root,
                         subagent_type,
                         model,
                         child_bootstrap.model_name,
@@ -844,7 +841,6 @@ class AgentService:
             except (AttributeError, ImportError):
                 inherited_model = getattr(parent_tool_context.bootstrap, "model_name", None) if parent_tool_context else None
                 selected_model = _resolve_subagent_model(
-                    self._workspace_root,
                     subagent_type,
                     model,
                     inherited_model or self._model_name,
