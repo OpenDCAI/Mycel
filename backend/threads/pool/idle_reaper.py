@@ -22,7 +22,7 @@ def run_idle_reaper_once(app_obj: Any) -> int:
         total += manager.enforce_idle_timeouts()
 
     if init_providers_and_managers is None:
-        raise RuntimeError("thread_runtime.pool.idle_reaper requires init_providers_and_managers binding")
+        return total
     _, managers = init_providers_and_managers()
     for provider_name, manager in managers.items():
         if provider_name in managed_providers:
