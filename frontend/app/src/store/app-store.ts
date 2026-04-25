@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { Agent, AgentConfig, ResourceItem, UserProfile } from "./types";
+import type { Agent, AgentConfigPatch, ResourceItem, UserProfile } from "./types";
 import { useAuthStore } from "./auth-store";
 
 const API = "/api/panel";
@@ -29,7 +29,7 @@ interface AppState {
   fetchAgent: (id: string) => Promise<Agent>;
   addAgent: (name: string, description?: string) => Promise<Agent>;
   updateAgent: (id: string, fields: Partial<Agent>) => Promise<void>;
-  updateAgentConfig: (id: string, patch: Partial<AgentConfig>) => Promise<void>;
+  updateAgentConfig: (id: string, patch: AgentConfigPatch) => Promise<void>;
   publishAgent: (id: string, bumpType: string) => Promise<Agent>;
   deleteAgent: (id: string) => Promise<void>;
   getAgentById: (id: string) => Agent | undefined;

@@ -255,8 +255,6 @@ describe("AgentDetailPage wording contract", () => {
         skills: [
           {
             id: "loadable-skill",
-            name: "Loadable Skill",
-            desc: "loadable",
             enabled: true,
           },
         ],

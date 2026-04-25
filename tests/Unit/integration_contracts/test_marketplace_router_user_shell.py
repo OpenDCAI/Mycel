@@ -179,8 +179,8 @@ def test_skill_marketplace_to_agent_library_delete_backend_api_yatu(monkeypatch:
             "/api/panel/agents/agent-1/config",
             json={
                 "skills": [
-                    {"id": assigned_by_name["Alpha Skill"]["id"], "name": "Alpha Skill", "enabled": True},
-                    {"id": library_by_name["Beta Skill"]["id"], "name": "Beta Skill", "enabled": True},
+                    {"id": assigned_by_name["Alpha Skill"]["id"], "enabled": True},
+                    {"id": library_by_name["Beta Skill"]["id"], "enabled": True},
                 ]
             },
         )
@@ -190,7 +190,7 @@ def test_skill_marketplace_to_agent_library_delete_backend_api_yatu(monkeypatch:
 
         keep_beta = client.put(
             "/api/panel/agents/agent-1/config",
-            json={"skills": [{"id": library_by_name["Beta Skill"]["id"], "name": "Beta Skill", "enabled": True}]},
+            json={"skills": [{"id": library_by_name["Beta Skill"]["id"], "enabled": True}]},
         )
         deleted_alpha = client.delete(f"/api/panel/library/skill/{alpha_skill_id}")
         blocked_beta_delete = client.delete(f"/api/panel/library/skill/{beta_skill_id}")

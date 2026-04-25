@@ -64,10 +64,27 @@ def test_resolved_skill_model_rejects_blank_id() -> None:
 
 
 def test_agent_skill_model_has_no_resolved_content() -> None:
-    agent_skill = AgentSkill(skill_id="query-helper", package_id="package-1", name="query-helper", version="1.0.0")
+    agent_skill = AgentSkill(skill_id="query-helper", package_id="package-1", name="query-helper")
 
     assert "content" not in agent_skill.model_dump()
     assert "files" not in agent_skill.model_dump()
+
+
+def test_agent_skill_model_requires_library_skill_and_package_identity() -> None:
+    with pytest.raises(ValueError) as missing_skill_excinfo:
+        AgentSkill.model_validate({"package_id": "package-1", "name": "query-helper"})
+    with pytest.raises(ValueError) as missing_package_excinfo:
+        AgentSkill.model_validate({"skill_id": "query-helper", "name": "query-helper"})
+
+    assert "skill_id" in str(missing_skill_excinfo.value)
+    assert "package_id" in str(missing_package_excinfo.value)
+
+
+def test_agent_skill_model_rejects_blank_library_skill_and_package_identity() -> None:
+    with pytest.raises(ValueError, match="agent_skill.skill_id must not be blank"):
+        AgentSkill(skill_id=" ", package_id="package-1", name="query-helper")
+    with pytest.raises(ValueError, match="agent_skill.package_id must not be blank"):
+        AgentSkill(skill_id="query-helper", package_id=" ", name="query-helper")
 
 
 def test_agent_skill_model_rejects_resolved_content_fields() -> None:
@@ -77,7 +94,6 @@ def test_agent_skill_model_rejects_resolved_content_fields() -> None:
                 "name": "query-helper",
                 "skill_id": "skill-1",
                 "package_id": "package-1",
-                "version": "1.0.0",
                 "content": "Use exact terms.",
             }
         )
@@ -88,8 +104,31 @@ def test_agent_skill_model_rejects_resolved_content_fields() -> None:
                 "name": "query-helper",
                 "skill_id": "skill-1",
                 "package_id": "package-1",
-                "version": "1.0.0",
                 "files": {"references/query.md": "Use exact terms."},
+            }
+        )
+
+
+def test_agent_skill_model_rejects_package_version() -> None:
+    with pytest.raises(ValueError, match="version"):
+        AgentSkill.model_validate(
+            {
+                "skill_id": "skill-1",
+                "package_id": "package-1",
+                "name": "query-helper",
+                "version": "1.0.0",
+            }
+        )
+
+
+def test_agent_skill_model_rejects_package_source() -> None:
+    with pytest.raises(ValueError, match="source"):
+        AgentSkill.model_validate(
+            {
+                "skill_id": "skill-1",
+                "package_id": "package-1",
+                "name": "query-helper",
+                "source": {"source_version": "1.0.0"},
             }
         )
 
@@ -136,7 +175,7 @@ def test_agent_config_model_rejects_blank_version() -> None:
 @pytest.mark.parametrize(
     ("model_cls", "kwargs"),
     [
-        (AgentSkill, {"name": "query-helper", "version": "1.0.0"}),
+        (AgentSkill, {"skill_id": "query-helper", "package_id": "package-1", "name": "query-helper"}),
         (AgentRule, {"name": "cite", "content": "cite sources"}),
         (AgentSubAgent, {"name": "worker"}),
         (McpServerConfig, {"name": "filesystem", "command": "fs"}),
@@ -150,7 +189,7 @@ def test_agent_config_child_models_reject_string_enabled(model_cls, kwargs) -> N
 @pytest.mark.parametrize(
     ("model_cls", "kwargs"),
     [
-        (AgentSkill, {"name": "query-helper", "version": "1.0.0"}),
+        (AgentSkill, {"skill_id": "query-helper", "package_id": "package-1", "name": "query-helper"}),
         (AgentRule, {"name": "cite", "content": "cite sources"}),
         (AgentSubAgent, {"name": "worker"}),
         (McpServerConfig, {"name": "filesystem", "command": "fs"}),
@@ -207,7 +246,6 @@ def test_skill_package_rejects_blank_skill_md() -> None:
                 "created_at": datetime(2026, 4, 25, tzinfo=UTC),
             },
         ),
-        (AgentSkill, {"skill_id": "query-helper", "package_id": "package-1", "name": "query-helper"}),
         (ResolvedSkill, {"id": "query-helper", "name": "query-helper", "content": "---\nname: query-helper\n---\nUse exact terms."}),
     ],
 )

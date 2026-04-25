@@ -21,9 +21,7 @@ def _skill(name: str = "github", *, enabled: bool = True) -> AgentSkill:
         package_id=f"{name}-package",
         name=name,
         description="GitHub guidance",
-        version="1.0.0",
         enabled=enabled,
-        source={"marketplace_item_id": "skill-github", "source_version": "1.0.0"},
     )
 
 
@@ -130,7 +128,6 @@ def test_resolver_keeps_skill_id_separate_from_display_name() -> None:
                 package_id="github-core-package",
                 name="GitHub",
                 description="GitHub guidance",
-                version="1.0.0",
             )
         ]
     )
@@ -154,15 +151,6 @@ def test_resolver_keeps_skill_id_separate_from_display_name() -> None:
 
     assert resolved.skills[0].id == "github-core"
     assert resolved.skills[0].name == "GitHub"
-
-
-def test_resolver_rejects_skill_without_package_id():
-    config = _config(skills=[AgentSkill(skill_id="broken", name="broken", version="1.0.0")])
-
-    with pytest.raises(ValueError) as excinfo:
-        resolve_agent_config(config, skill_repo=_SkillRepo())
-
-    assert "missing package_id" in str(excinfo.value)
 
 
 def test_agent_named_children_reject_blank_names():
@@ -195,7 +183,7 @@ def test_agent_config_rejects_blank_identity_fields():
 
 
 def test_resolver_rejects_skill_without_frontmatter():
-    config = _config(skills=[AgentSkill(skill_id="broken", package_id="broken-package", name="broken", version="1.0.0")])
+    config = _config(skills=[AgentSkill(skill_id="broken", package_id="broken-package", name="broken")])
 
     with pytest.raises(ValueError) as excinfo:
         resolve_agent_config(
@@ -225,7 +213,6 @@ def test_resolver_rejects_skill_frontmatter_without_name():
                 skill_id="broken",
                 package_id="broken-package",
                 name="broken",
-                version="1.0.0",
             )
         ]
     )
@@ -258,7 +245,6 @@ def test_resolver_rejects_display_name_without_name():
                 skill_id="broken",
                 package_id="broken-package",
                 name="broken",
-                version="1.0.0",
             )
         ]
     )
@@ -291,7 +277,6 @@ def test_resolver_rejects_skill_frontmatter_name_that_does_not_match_agent_skill
                 skill_id="visible-skill",
                 package_id="visible-package",
                 name="Visible Skill",
-                version="1.0.0",
             )
         ]
     )
@@ -331,15 +316,13 @@ def test_resolver_rejects_duplicate_enabled_skill_names():
     assert "Duplicate Skill name in AgentConfig: github" in str(excinfo.value)
 
 
-def test_resolver_uses_selected_package_source_not_agent_skill_source():
+def test_resolver_uses_selected_package_source():
     config = _config(
         skills=[
             AgentSkill(
                 skill_id="github",
                 package_id="github-package",
                 name="github",
-                version="1.0.0",
-                source={"source_version": "agent-stale"},
             )
         ]
     )

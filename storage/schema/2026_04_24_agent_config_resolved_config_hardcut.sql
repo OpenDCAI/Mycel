@@ -362,13 +362,6 @@ begin
     end if;
     if exists (
         select 1
-        from jsonb_array_elements(coalesce(payload->'skills', '[]'::jsonb)) as skill_item(value)
-        where btrim(coalesce(skill_item.value->>'name', '')) = ''
-    ) then
-        raise exception 'agent_config.skills child.name is required';
-    end if;
-    if exists (
-        select 1
         from jsonb_array_elements(coalesce(payload->'rules', '[]'::jsonb)) as rule_item(value)
         where btrim(coalesce(rule_item.value->>'name', '')) = ''
     ) then
@@ -411,14 +404,6 @@ begin
           and jsonb_typeof(mcp_item.value->'env') <> 'object'
     ) then
         raise exception 'agent_config.mcp_servers child.env must be a JSON object';
-    end if;
-    if exists (
-        select 1
-        from jsonb_array_elements(coalesce(payload->'skills', '[]'::jsonb)) as skill_item(value)
-        group by skill_item.value->>'name'
-        having count(*) > 1
-    ) then
-        raise exception 'agent_config.skills contains duplicate name';
     end if;
     if exists (
         select 1

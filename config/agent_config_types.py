@@ -63,15 +63,13 @@ class SkillPackage(AgentConfigSchemaModel):
 
 class AgentSkill(AgentConfigSchemaModel):
     id: str | None = None
-    skill_id: str | None = None
-    package_id: str | None = None
+    skill_id: str
+    package_id: str
     name: str
     description: str = ""
-    version: str
     enabled: bool = True
-    source: dict[str, Any] = Field(default_factory=dict)
 
-    @field_validator("name")
+    @field_validator("skill_id", "package_id", "name")
     @classmethod
     def _non_blank(cls, value: str, info: ValidationInfo) -> str:
         if not value.strip():

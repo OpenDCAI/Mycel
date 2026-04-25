@@ -12,19 +12,19 @@ _SCHEMA = "agent"
 _LIBRARY_SCHEMA = "library"
 
 
-def _reject_duplicate_names(label: str, names: list[str]) -> None:
+def _reject_duplicate_values(label: str, values: list[str]) -> None:
     seen: set[str] = set()
-    for name in names:
-        if name in seen:
-            raise ValueError(f"Duplicate {label} name in AgentConfig: {name}")
-        seen.add(name)
+    for value in values:
+        if value in seen:
+            raise ValueError(f"Duplicate {label} in AgentConfig: {value}")
+        seen.add(value)
 
 
 def _reject_duplicate_child_names(config: AgentConfig) -> None:
-    _reject_duplicate_names("Skill", [skill.name for skill in config.skills])
-    _reject_duplicate_names("Rule", [rule.name for rule in config.rules])
-    _reject_duplicate_names("SubAgent", [agent.name for agent in config.sub_agents])
-    _reject_duplicate_names("MCP server", [server.name for server in config.mcp_servers])
+    _reject_duplicate_values("Skill id", [skill.skill_id for skill in config.skills])
+    _reject_duplicate_values("Rule name", [rule.name for rule in config.rules])
+    _reject_duplicate_values("SubAgent name", [agent.name for agent in config.sub_agents])
+    _reject_duplicate_values("MCP server name", [server.name for server in config.mcp_servers])
 
 
 def _enabled_from_row(row: dict[str, Any], *, label: str) -> bool:
@@ -133,7 +133,7 @@ class SupabaseAgentConfigRepo:
             skill_id = row["skill_id"]
             package_id = row["package_id"]
             skill = self._get_library_skill(owner_user_id, skill_id)
-            package = self._get_skill_package(owner_user_id, package_id)
+            self._get_skill_package(owner_user_id, package_id)
             skills.append(
                 AgentSkill(
                     id=row.get("id"),
@@ -141,9 +141,7 @@ class SupabaseAgentConfigRepo:
                     package_id=package_id,
                     name=skill["name"],
                     description=_required_text(skill, "description", label="library.skills description"),
-                    version=package["version"],
                     enabled=_enabled_from_row(row, label="skill_bindings"),
-                    source=_required_json_object(package.get("source_json"), label="skill package source_json"),
                 )
             )
         return skills

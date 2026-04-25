@@ -180,8 +180,6 @@ def test_get_agent_config_reads_full_aggregate_from_final_tables() -> None:
                 package_id="package-1",
                 name="github",
                 description="GitHub guidance",
-                version="1.0.0",
-                source={"source_version": "1.0.0"},
             )
         ],
         rules=[AgentRule(id="rule-1", name="Cite", content="Always cite.")],
@@ -336,34 +334,38 @@ def test_get_agent_config_fails_loudly_when_meta_json_is_null() -> None:
         repo.get_agent_config("cfg-1")
 
 
-def test_get_agent_config_fails_loudly_when_skill_source_json_is_not_an_object() -> None:
+def test_get_agent_config_does_not_read_skill_package_source_json() -> None:
     tables = _tables()
     tables["library.skill_packages"][0]["source_json"] = ["bad"]
-    repo = SupabaseAgentConfigRepo(_FakeClient(tables))
-
-    with pytest.raises(RuntimeError, match="skill package source_json must be a JSON object"):
-        repo.get_agent_config("cfg-1")
-
-
-def test_get_agent_config_reads_agent_skill_source_from_selected_package_only() -> None:
-    tables = _tables()
-    tables["library.skills"][0]["source_json"] = {"source_version": "library"}
-    tables["library.skill_packages"][0]["source_json"] = {}
     repo = SupabaseAgentConfigRepo(_FakeClient(tables))
 
     config = repo.get_agent_config("cfg-1")
 
     assert config is not None
-    assert config.skills[0].source == {}
+    assert "source" not in config.skills[0].model_dump()
 
 
-def test_get_agent_config_fails_loudly_when_skill_package_version_is_null() -> None:
+def test_get_agent_config_keeps_package_source_out_of_agent_skill_binding() -> None:
+    tables = _tables()
+    tables["library.skills"][0]["source_json"] = {"source_version": "library"}
+    tables["library.skill_packages"][0]["source_json"] = {"source_version": "package"}
+    repo = SupabaseAgentConfigRepo(_FakeClient(tables))
+
+    config = repo.get_agent_config("cfg-1")
+
+    assert config is not None
+    assert "source" not in config.skills[0].model_dump()
+
+
+def test_get_agent_config_does_not_read_skill_package_version() -> None:
     tables = _tables()
     tables["library.skill_packages"][0]["version"] = None
     repo = SupabaseAgentConfigRepo(_FakeClient(tables))
 
-    with pytest.raises(ValueError, match="version"):
-        repo.get_agent_config("cfg-1")
+    config = repo.get_agent_config("cfg-1")
+
+    assert config is not None
+    assert "version" not in config.skills[0].model_dump()
 
 
 def test_get_agent_config_fails_loudly_when_skill_description_is_null() -> None:
@@ -530,7 +532,6 @@ def test_save_agent_config_calls_single_rpc_with_full_payload() -> None:
                     skill_id="skill-1",
                     package_id="package-1",
                     name="github",
-                    version="1.0.0",
                 )
             ],
             rules=[AgentRule(id="rule-1", name="Cite", content="Always cite.")],
@@ -553,7 +554,7 @@ def test_save_agent_config_calls_single_rpc_with_full_payload() -> None:
     assert "runtime_" + "settings_json" not in payload
 
 
-def test_save_agent_config_rejects_duplicate_skill_names_before_rpc() -> None:
+def test_save_agent_config_rejects_duplicate_skill_ids_before_rpc() -> None:
     client = _FakeClient()
     repo = SupabaseAgentConfigRepo(client)
     config = AgentConfig(
@@ -563,12 +564,12 @@ def test_save_agent_config_rejects_duplicate_skill_names_before_rpc() -> None:
         name="Researcher",
         version="1.0.0",
         skills=[
-            AgentSkill(skill_id="github", package_id="package-1", name="github", version="1.0.0"),
-            AgentSkill(skill_id="github-two", package_id="package-2", name="github", version="1.0.0"),
+            AgentSkill(skill_id="github", package_id="package-1", name="github"),
+            AgentSkill(skill_id="github", package_id="package-2", name="github"),
         ],
     )
 
-    with pytest.raises(ValueError, match="Duplicate Skill name in AgentConfig: github"):
+    with pytest.raises(ValueError, match="Duplicate Skill id in AgentConfig: github"):
         repo.save_agent_config(config)
 
     assert client.rpc_calls == []
@@ -605,8 +606,8 @@ def test_save_agent_config_rejects_duplicate_inactive_child_names_before_rpc() -
         name="Researcher",
         version="1.0.0",
         skills=[
-            AgentSkill(skill_id="github", package_id="package-1", name="github", version="1.0.0", enabled=False),
-            AgentSkill(skill_id="github-two", package_id="package-2", name="github", version="1.0.0", enabled=False),
+            AgentSkill(skill_id="github", package_id="package-1", name="github", enabled=False),
+            AgentSkill(skill_id="github", package_id="package-2", name="github", enabled=False),
         ],
         mcp_servers=[
             McpServerConfig(name="filesystem", transport="stdio", command="fs-one", enabled=False),
@@ -614,7 +615,7 @@ def test_save_agent_config_rejects_duplicate_inactive_child_names_before_rpc() -
         ],
     )
 
-    with pytest.raises(ValueError, match="Duplicate Skill name in AgentConfig: github"):
+    with pytest.raises(ValueError, match="Duplicate Skill id in AgentConfig: github"):
         repo.save_agent_config(config)
 
     assert client.rpc_calls == []

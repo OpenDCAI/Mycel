@@ -43,6 +43,10 @@ function skillId(item: CrudItem): string {
   return item.id;
 }
 
+function skillPatch(items: CrudItem[]): Array<{ id: string; enabled: boolean }> {
+  return items.map(item => ({ id: skillId(item), enabled: item.enabled }));
+}
+
 // ==================== Main Component ====================
 
 export default function AgentDetail() {
@@ -118,7 +122,7 @@ export default function AgentDetail() {
       } else if (mod === "mcp") {
         await updateAgentConfig(agent.id, { mcpServers: agent.config.mcpServers.map(i => i.name === itemName ? { ...i, enabled } : i) });
       } else if (mod === "skills") {
-        await updateAgentConfig(agent.id, { skills: agent.config.skills.map(i => i.name === itemName ? { ...i, enabled } : i) });
+        await updateAgentConfig(agent.id, { skills: skillPatch(agent.config.skills.map(i => i.name === itemName ? { ...i, enabled } : i)) });
       }
     } catch (err) { toast.error(`更新失败：${errorText(err)}`); }
   };
@@ -130,8 +134,8 @@ export default function AgentDetail() {
         const existing = new Set(agent.config.skills.map(skillId));
         const newSkills = items
           .filter(item => !existing.has(item.id))
-          .map(item => ({ id: item.id, name: item.name, desc: item.desc || "", enabled: true }));
-        if (newSkills.length) await updateAgentConfig(agent.id, { skills: [...agent.config.skills, ...newSkills] });
+          .map(item => ({ id: item.id, enabled: true }));
+        if (newSkills.length) await updateAgentConfig(agent.id, { skills: [...skillPatch(agent.config.skills), ...newSkills] });
       }
       toast.success("已添加");
     } catch (err) { toast.error(`添加失败：${errorText(err)}`); }
@@ -141,7 +145,7 @@ export default function AgentDetail() {
     if (!agent) return;
     try {
       if (mod === "mcp") await updateAgentConfig(agent.id, { mcpServers: agent.config.mcpServers.filter(i => i.name !== itemName) });
-      else if (mod === "skills") await updateAgentConfig(agent.id, { skills: agent.config.skills.filter(i => i.name !== itemName) });
+      else if (mod === "skills") await updateAgentConfig(agent.id, { skills: skillPatch(agent.config.skills.filter(i => i.name !== itemName)) });
       else if (mod === "subagents") await updateAgentConfig(agent.id, { subAgents: agent.config.subAgents.filter(i => i.name !== itemName) });
       else if (mod === "rules") await updateAgentConfig(agent.id, { rules: agent.config.rules.filter(i => i.name !== itemName) });
       toast.success("已移除");
