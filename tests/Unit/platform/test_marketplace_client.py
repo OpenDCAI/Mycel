@@ -321,7 +321,7 @@ class TestApplySkill:
             with pytest.raises(ValueError, match="Invalid slug"):
                 apply_item("item-evil", owner_user_id="owner-1", skill_repo=skill_repo)
 
-    def test_apply_with_agent_user_id_pins_skill_to_agent_config(self):
+    def test_apply_with_agent_user_id_selects_skill_package_for_agent_config(self):
         import backend.hub.client as marketplace_client
 
         saved: list[AgentConfig] = []
@@ -441,7 +441,7 @@ class TestApplySkill:
         assert saved_configs[0].skills[0].skill_id == "fastapi"
         assert saved_configs[0].skills[0].package_id == packages[0].id
 
-    def test_apply_with_agent_user_id_pins_trimmed_frontmatter_name(self):
+    def test_apply_with_agent_user_id_selects_trimmed_frontmatter_name(self):
         import backend.hub.client as marketplace_client
 
         saved: list[AgentConfig] = []

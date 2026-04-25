@@ -33,21 +33,13 @@ def _tools_from_repo(config: AgentConfig) -> list[dict[str, Any]]:
 
 
 def _skills_from_repo(config: AgentConfig) -> list[dict[str, Any]]:
-    runtime = config.runtime_settings
     skills_list = []
     for skill in config.skills:
-        runtime_key = f"skills:{skill.name}"
-        override = runtime.get(runtime_key, {}) if isinstance(runtime.get(runtime_key), dict) else {}
-        desc = ""
-        if "desc" in override and override.get("desc") is not None:
-            desc = str(override.get("desc") or "")
-        elif skill.description:
-            desc = skill.description
         skills_list.append(
             {
                 "name": skill.name,
-                "enabled": bool(override.get("enabled", skill.enabled)),
-                "desc": desc,
+                "enabled": skill.enabled,
+                "desc": skill.description,
             }
         )
     return skills_list
@@ -559,6 +551,8 @@ def _skills_from_patch(current_config: AgentConfig, config_patch: dict[str, Any]
     for item in skill_items:
         if not (isinstance(item, dict) and item.get("name")):
             raise RuntimeError("Skill patch item must include name")
+        if "content" in item or "files" in item:
+            raise RuntimeError("Skill patch item must not include content or files")
         name = str(item["name"])
         if name in seen_names:
             raise RuntimeError(f"Duplicate Skill name in patch: {name}")
@@ -577,29 +571,24 @@ def _skills_from_patch(current_config: AgentConfig, config_patch: dict[str, Any]
         if library_skill is None:
             raise RuntimeError(f"Library skill not found: {name}")
         library_package = _selected_library_package(owner_user_id, library_skill, skill_repo)
-        description = item.get("desc") or item.get("description")
-        if description is None and library_skill is not None:
-            description = library_skill.description
-        if description is None and current_skill is not None:
-            description = current_skill.description
-        if library_skill is not None:
-            description = library_skill.description
+        description = library_skill.description
+        agent_skill_id = item.get("agent_skill_id") or item.get("row_id") or (current_skill.id if current_skill is not None else None)
         skills.append(
             AgentSkill(
-                id=str(item.get("agent_skill_id") or item.get("row_id") or (current_skill.id if current_skill is not None else "")),
+                id=str(agent_skill_id) if agent_skill_id else None,
                 skill_id=library_skill.id,
                 package_id=library_package.id,
                 name=library_skill.name,
-                description=str(description or ""),
+                description=description,
                 version=str(
-                    (library_package.version if library_package is not None else "")
+                    library_package.version
                     or item.get("version")
                     or (current_skill.version if current_skill is not None else "")
                     or "0.1.0"
                 ),
                 source=dict(
-                    (library_package.source if library_package is not None else {})
-                    or (library_skill.source if library_skill is not None else {})
+                    library_package.source
+                    or library_skill.source
                     or item.get("source")
                     or (current_skill.source if current_skill is not None else {})
                 ),
