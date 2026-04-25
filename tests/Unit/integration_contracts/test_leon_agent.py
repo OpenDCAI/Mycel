@@ -606,6 +606,106 @@ async def test_leon_agent_agent_config_id_registers_repo_backed_skills(tmp_path)
 
 @pytest.mark.asyncio
 @_patch_env_api_key()
+async def test_leon_agent_agent_config_id_does_not_register_configured_file_skills(tmp_path):
+    from core.runtime.agent import LeonAgent
+
+    disk_skill_dir = tmp_path / "disk-skills" / "DiskOnly"
+    disk_skill_dir.mkdir(parents=True)
+    (disk_skill_dir / "SKILL.md").write_text(
+        "---\nname: DiskOnly\ndescription: must not leak into repo-backed agents\n---\nUse host-local state.",
+        encoding="utf-8",
+    )
+    (tmp_path / ".leon").mkdir()
+    (tmp_path / ".leon" / "runtime.json").write_text(
+        json.dumps({"skills": {"enabled": True, "paths": [str(tmp_path / "disk-skills")], "skills": {}}}),
+        encoding="utf-8",
+    )
+
+    class _Repo:
+        def get_agent_config(self, agent_config_id: str):
+            assert agent_config_id == "cfg-1"
+            return _agent_config(
+                name="Repo Toad",
+                system_prompt="You are Repo Toad.",
+                skills=[
+                    AgentSkill(
+                        name="FastAPI",
+                        content="---\nname: FastAPI\ndescription: Build FastAPI services\n---\nAlways use APIRouter.",
+                    )
+                ],
+            )
+
+    mock_model = _mock_model("Repo skill response")
+
+    with (
+        patch("core.runtime.agent.LeonAgent._create_model", return_value=mock_model),
+        patch("core.runtime.agent.LeonAgent._init_async_components", return_value=(None, [])),
+        patch("core.runtime.agent.LeonAgent._init_checkpointer", new_callable=AsyncMock, return_value=None),
+        patch("core.runtime.agent.LeonAgent._init_mcp_tools", new_callable=AsyncMock, return_value=[]),
+    ):
+        agent = LeonAgent(
+            workspace_root=str(tmp_path),
+            agent_config_id="cfg-1",
+            agent_config_repo=_Repo(),
+            api_key="sk-test-integration",
+        )
+        await agent.ainit()
+
+        skill_tool = agent._tool_registry.get("load_skill")
+        assert skill_tool is not None
+        assert "FastAPI" in skill_tool.get_schema()["description"]
+        assert "DiskOnly" not in skill_tool.get_schema()["description"]
+        with pytest.raises(ValueError, match="Skill 'DiskOnly' not found"):
+            skill_tool.handler("DiskOnly")
+
+        agent.close()
+
+
+@pytest.mark.asyncio
+@_patch_env_api_key()
+async def test_leon_agent_empty_agent_config_skills_do_not_enable_configured_file_skills(tmp_path):
+    from core.runtime.agent import LeonAgent
+
+    disk_skill_dir = tmp_path / "disk-skills" / "DiskOnly"
+    disk_skill_dir.mkdir(parents=True)
+    (disk_skill_dir / "SKILL.md").write_text(
+        "---\nname: DiskOnly\ndescription: must not leak into repo-backed agents\n---\nUse host-local state.",
+        encoding="utf-8",
+    )
+    (tmp_path / ".leon").mkdir()
+    (tmp_path / ".leon" / "runtime.json").write_text(
+        json.dumps({"skills": {"enabled": True, "paths": [str(tmp_path / "disk-skills")], "skills": {}}}),
+        encoding="utf-8",
+    )
+
+    class _Repo:
+        def get_agent_config(self, agent_config_id: str):
+            assert agent_config_id == "cfg-1"
+            return _agent_config(name="Repo Toad", system_prompt="You are Repo Toad.", skills=[])
+
+    mock_model = _mock_model("Repo skill response")
+
+    with (
+        patch("core.runtime.agent.LeonAgent._create_model", return_value=mock_model),
+        patch("core.runtime.agent.LeonAgent._init_async_components", return_value=(None, [])),
+        patch("core.runtime.agent.LeonAgent._init_checkpointer", new_callable=AsyncMock, return_value=None),
+        patch("core.runtime.agent.LeonAgent._init_mcp_tools", new_callable=AsyncMock, return_value=[]),
+    ):
+        agent = LeonAgent(
+            workspace_root=str(tmp_path),
+            agent_config_id="cfg-1",
+            agent_config_repo=_Repo(),
+            api_key="sk-test-integration",
+        )
+        await agent.ainit()
+
+        assert agent._tool_registry.get("load_skill") is None
+
+        agent.close()
+
+
+@pytest.mark.asyncio
+@_patch_env_api_key()
 async def test_leon_agent_agent_config_skills_ignore_file_skill_toggle(tmp_path):
     from core.runtime.agent import LeonAgent
 
