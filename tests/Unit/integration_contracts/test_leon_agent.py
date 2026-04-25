@@ -1042,7 +1042,6 @@ def test_leon_agent_chat_tool_wiring_does_not_pass_dead_repo_dependencies(monkey
     agent.enable_audit_log = False
     agent.block_dangerous_commands = False
     agent.block_network_commands = False
-    agent.verbose = False
     agent._get_mcp_server_configs = lambda: {}
     agent._chat_repos = {
         "chat_identity_id": "thread-user-9",
@@ -1113,7 +1112,6 @@ def test_leon_agent_init_services_passes_child_thread_live_runner(monkeypatch: p
     agent.enable_audit_log = False
     agent.block_dangerous_commands = False
     agent.block_network_commands = False
-    agent.verbose = False
     agent._get_mcp_server_configs = lambda: {}
     agent._chat_repos = None
     cast(Any, agent).config = SimpleNamespace(

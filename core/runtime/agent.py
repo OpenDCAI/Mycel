@@ -143,7 +143,6 @@ class LeonAgent:
         models_config_override: dict[str, Any] | None = None,
         memory_config_override: dict[str, Any] | None = None,
         permission_resolver_scope: str = "none",
-        verbose: bool = False,
     ):
         """
         Initialize Leon Agent
@@ -163,12 +162,10 @@ class LeonAgent:
             user_repo: Optional user repo for backend-integrated subagent registration
             queue_manager: Shared MessageQueueManager instance (created if not provided)
             permission_resolver_scope: Permission request surface for this agent ("none" or "thread")
-            verbose: Whether to output detailed logs (default False)
         """
         runtime_storage = storage_container
 
         self.agent_id: str | None = None
-        self.verbose = verbose
         self.extra_allowed_paths = extra_allowed_paths
         self.queue_manager = queue_manager or (
             MessageQueueManager(repo=runtime_storage.queue_repo()) if runtime_storage is not None else MessageQueueManager()
