@@ -1,3 +1,4 @@
+import re
 from pathlib import Path
 
 
@@ -23,6 +24,20 @@ def test_agent_config_schema_uses_library_package_storage() -> None:
     assert "insert into agent.agent_skills" not in sql
     assert "agent.agent_skills.content" not in sql
     assert "agent.agent_skills.files_json" not in sql
+
+
+def test_agent_skill_binding_package_fk_does_not_silently_delete_agent_selection() -> None:
+    sql = Path("storage/schema/2026_04_24_agent_config_resolved_config_hardcut.sql").read_text(encoding="utf-8")
+
+    binding_table = re.search(
+        r"create table if not exists agent\.skill_bindings \((?P<body>.*?)\);",
+        sql,
+        flags=re.DOTALL,
+    )
+    assert binding_table is not None
+    body = binding_table.group("body")
+    assert "references library.skill_packages(id)" in body
+    assert "on delete cascade" not in body.lower()
 
 
 def test_agent_config_schema_rejects_duplicate_child_names_inside_rpc() -> None:
