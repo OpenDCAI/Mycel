@@ -22,6 +22,7 @@ class _EmptyAgentConfigRepo:
             owner_user_id="owner-test",
             agent_user_id="agent-user-test",
             name="Test Agent",
+            version="1.0.0",
         )
 
 
@@ -971,6 +972,7 @@ async def test_get_or_create_agent_passes_repo_backed_compact_config_to_runtime(
                 owner_user_id="owner-12",
                 agent_user_id="agent-user-12",
                 name="Compact Agent",
+                version="1.0.0",
                 compact={"trigger_tokens": 80000},
             )
 

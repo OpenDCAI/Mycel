@@ -73,6 +73,7 @@ def _config(**overrides: object) -> AgentConfig:
         "owner_user_id": "owner-1",
         "agent_user_id": "agent-1",
         "name": "Researcher",
+        "version": "1.0.0",
         "description": "Research agent",
         "model": "gpt-test",
         "tools": ["read", "shell"],
