@@ -1,9 +1,18 @@
+import inspect
 from typing import cast
 
 import pytest
 
 from core.runtime.registry import ToolRegistry
 from core.tools.skills.service import SkillsService
+
+
+def test_skills_service_has_no_filesystem_skill_index() -> None:
+    source = inspect.getsource(SkillsService)
+
+    assert "skill_paths" not in source
+    assert "rglob" not in source
+    assert "SKILL.md" not in source
 
 
 def test_skills_service_does_not_register_without_skills() -> None:
