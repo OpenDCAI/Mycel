@@ -219,7 +219,6 @@ class TestApplySkill:
             id="same-slug",
             owner_user_id="owner-1",
             name="Original Skill",
-            content="---\nname: Original Skill\n---\nBody",
             created_at=datetime(2026, 4, 24, tzinfo=UTC),
             updated_at=datetime(2026, 4, 24, tzinfo=UTC),
         )
@@ -240,7 +239,6 @@ class TestApplySkill:
             id="original-slug",
             owner_user_id="owner-1",
             name="Shared Name",
-            content="---\nname: Shared Name\n---\nBody",
             created_at=datetime(2026, 4, 24, tzinfo=UTC),
             updated_at=datetime(2026, 4, 24, tzinfo=UTC),
         )

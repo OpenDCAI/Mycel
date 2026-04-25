@@ -707,7 +707,10 @@ def test_library_skill_content_update_rejects_frontmatter_name_drift() -> None:
 
     stored = skill_repo.get_by_id("owner-1", created["id"])
     assert stored is not None and stored.package_id is not None
-    assert skill_repo.get_package("owner-1", stored.package_id).skill_md == "---\nname: Loadable Skill\ndescription: Use this skill\n---\n\nUse this skill\n"
+    assert (
+        skill_repo.get_package("owner-1", stored.package_id).skill_md
+        == "---\nname: Loadable Skill\ndescription: Use this skill\n---\n\nUse this skill\n"
+    )
 
 
 def test_library_skill_name_is_immutable_after_creation() -> None:

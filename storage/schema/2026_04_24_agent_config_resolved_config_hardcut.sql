@@ -1,24 +1,61 @@
 create extension if not exists pgcrypto;
 
 create schema if not exists agent;
+create schema if not exists library;
 
-create table if not exists agent.skills (
+drop table if exists agent.agent_skills cascade;
+drop table if exists agent.skills cascade;
+
+create table if not exists library.skills (
     id text not null,
     owner_user_id text not null,
     name text not null,
     description text not null default '',
-    version text not null default '0.1.0',
-    content text not null,
-    files_json jsonb not null default '{}'::jsonb,
+    package_id text,
     source_json jsonb not null default '{}'::jsonb,
     created_at timestamptz not null default now(),
     updated_at timestamptz not null default now(),
-    primary key (owner_user_id, id)
+    primary key (owner_user_id, id),
+    unique (owner_user_id, name)
 );
 
-grant usage on schema agent to service_role, authenticated, anon;
-revoke all on agent.skills from anon, authenticated;
-grant select, insert, update, delete on agent.skills to service_role;
+create table if not exists library.skill_packages (
+    id text primary key,
+    owner_user_id text not null,
+    skill_id text not null,
+    version text not null default '0.1.0',
+    hash text not null,
+    manifest_json jsonb not null default '{}'::jsonb,
+    skill_md text not null,
+    files_json jsonb not null default '{}'::jsonb,
+    source_json jsonb not null default '{}'::jsonb,
+    created_at timestamptz not null default now(),
+    unique (owner_user_id, skill_id, hash),
+    foreign key (owner_user_id, skill_id)
+        references library.skills(owner_user_id, id)
+        on delete cascade
+);
+
+alter table library.skills
+    drop constraint if exists skills_package_fk,
+    add constraint skills_package_fk
+        foreign key (package_id)
+        references library.skill_packages(id);
+
+create table if not exists agent.skill_bindings (
+    id uuid primary key default gen_random_uuid(),
+    agent_config_id text not null,
+    skill_id text not null,
+    package_id text not null
+        references library.skill_packages(id),
+    enabled boolean not null default true,
+    created_at timestamptz not null default now(),
+    unique (agent_config_id, skill_id)
+);
+
+grant usage on schema agent, library to service_role, authenticated, anon;
+revoke all on library.skills, library.skill_packages from anon, authenticated;
+grant select, insert, update, delete on library.skills, library.skill_packages to service_role;
 
 alter table if exists agent.agent_configs
     add column if not exists owner_user_id text,
@@ -28,25 +65,12 @@ alter table if exists agent.agent_configs
     add column if not exists meta_json jsonb not null default '{}'::jsonb,
     add column if not exists mcp_json jsonb not null default '[]'::jsonb;
 
-alter table if exists agent.agent_skills
-    add column if not exists skill_id text,
-    add column if not exists description text not null default '',
-    add column if not exists version text not null default '0.1.0',
-    add column if not exists files_json jsonb not null default '{}'::jsonb,
-    add column if not exists source_json jsonb not null default '{}'::jsonb,
-    add column if not exists enabled boolean not null default true;
-
 alter table if exists agent.agent_rules
     add column if not exists name text,
     add column if not exists enabled boolean not null default true;
 
 alter table if exists agent.agent_sub_agents
     add column if not exists enabled boolean not null default true;
-
-alter table if exists agent.agent_skills
-    drop constraint if exists agent_skills_agent_config_id_fkey,
-    add constraint agent_skills_agent_config_id_fkey
-        foreign key (agent_config_id) references agent.agent_configs(id) on delete cascade;
 
 alter table if exists agent.agent_rules
     drop constraint if exists agent_rules_agent_config_id_fkey,
@@ -56,6 +80,11 @@ alter table if exists agent.agent_rules
 alter table if exists agent.agent_sub_agents
     drop constraint if exists agent_sub_agents_agent_config_id_fkey,
     add constraint agent_sub_agents_agent_config_id_fkey
+        foreign key (agent_config_id) references agent.agent_configs(id) on delete cascade;
+
+alter table if exists agent.skill_bindings
+    drop constraint if exists skill_bindings_agent_config_id_fkey,
+    add constraint skill_bindings_agent_config_id_fkey
         foreign key (agent_config_id) references agent.agent_configs(id) on delete cascade;
 
 do $$
@@ -83,44 +112,6 @@ begin
         drop constraint if exists agent_configs_name_required_ck,
         add constraint agent_configs_name_required_ck
             check (name is not null and btrim(name) <> '');
-
-    if exists (
-        select 1
-        from agent.skills
-        group by owner_user_id, name
-        having count(*) > 1
-    ) then
-        raise exception 'agent.skills contains duplicate (owner_user_id, name) rows before hard cut';
-    end if;
-
-    if not exists (
-        select 1
-        from pg_constraint
-        where conname = 'skills_owner_name_uq'
-          and conrelid = 'agent.skills'::regclass
-    ) then
-        alter table agent.skills
-            add constraint skills_owner_name_uq unique (owner_user_id, name);
-    end if;
-
-    if exists (
-        select 1
-        from agent.agent_skills
-        group by agent_config_id, name
-        having count(*) > 1
-    ) then
-        raise exception 'agent.agent_skills contains duplicate (agent_config_id, name) rows before hard cut';
-    end if;
-
-    if not exists (
-        select 1
-        from pg_constraint
-        where conname = 'agent_skills_config_name_uq'
-          and conrelid = 'agent.agent_skills'::regclass
-    ) then
-        alter table agent.agent_skills
-            add constraint agent_skills_config_name_uq unique (agent_config_id, name);
-    end if;
 
     if exists (
         select 1
@@ -208,6 +199,7 @@ declare
     owner_id text := payload->>'owner_user_id';
     child jsonb;
     child_skill_id text;
+    child_package_id text;
 begin
     if config_id is null or btrim(config_id) = '' then
         raise exception 'agent_config.id is required';
@@ -341,36 +333,39 @@ begin
         meta_json = excluded.meta_json,
         mcp_json = excluded.mcp_json;
 
-    delete from agent.agent_skills where agent_config_id = config_id;
+    delete from agent.skill_bindings where agent_config_id = config_id;
     delete from agent.agent_rules where agent_config_id = config_id;
     delete from agent.agent_sub_agents where agent_config_id = config_id;
 
     for child in select * from jsonb_array_elements(coalesce(payload->'skills', '[]'::jsonb)) loop
         child_skill_id := nullif(child->>'skill_id', '');
+        child_package_id := nullif(child->>'package_id', '');
+        if child_skill_id is null then
+            raise exception 'agent_config.skills child.skill_id is required';
+        end if;
+        if child_package_id is null then
+            raise exception 'agent_config.skills child.package_id is required';
+        end if;
         if child_skill_id is not null and not exists (
             select 1
-            from agent.skills
+            from library.skills
             where owner_user_id = owner_id
               and id = child_skill_id
         ) then
             raise exception 'agent_skill.skill_id does not belong to owner: %', child_skill_id;
         end if;
+        if child_package_id is not null and not exists (
+            select 1
+            from library.skill_packages
+            where owner_user_id = owner_id
+              and id = child_package_id
+              and (child_skill_id is null or skill_id = child_skill_id)
+        ) then
+            raise exception 'agent_skill.package_id does not belong to owner: %', child_package_id;
+        end if;
 
-        insert into agent.agent_skills (
-            id, agent_config_id, skill_id, name, description, version, content, files_json, source_json, enabled
-        )
-        values (
-            coalesce(nullif(child->>'id', ''), gen_random_uuid()::text),
-            config_id,
-            child_skill_id,
-            child->>'name',
-            coalesce(child->>'description', ''),
-            coalesce(child->>'version', '0.1.0'),
-            child->>'content',
-            coalesce(child->'files', '{}'::jsonb),
-            coalesce(child->'source', '{}'::jsonb),
-            coalesce((child->>'enabled')::boolean, true)
-        );
+        insert into agent.skill_bindings (id, agent_config_id, skill_id, package_id, enabled)
+        values (coalesce(nullif(child->>'id', '')::uuid, gen_random_uuid()), config_id, child_skill_id, child_package_id, coalesce((child->>'enabled')::boolean, true));
     end loop;
 
     for child in select * from jsonb_array_elements(coalesce(payload->'rules', '[]'::jsonb)) loop
@@ -408,14 +403,14 @@ grant execute on function agent.save_agent_config(jsonb) to service_role;
 
 revoke all on table
     agent.agent_configs,
-    agent.agent_skills,
+    agent.skill_bindings,
     agent.agent_rules,
     agent.agent_sub_agents
 from anon, authenticated;
 
 grant select, insert, update, delete on table
     agent.agent_configs,
-    agent.agent_skills,
+    agent.skill_bindings,
     agent.agent_rules,
     agent.agent_sub_agents
 to service_role;
