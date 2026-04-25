@@ -113,7 +113,7 @@ See [Sandbox](/en/sandbox) for full provider configuration. Quick reference:
 
 ### Docker
 
-Create `~/.leon/sandboxes/docker.json`:
+Set `LEON_SANDBOXES_DIR` to your sandbox provider config directory, then create `docker.json` in that directory:
 
 ```json
 {
@@ -264,7 +264,7 @@ env -u ALL_PROXY -u all_proxy uv run python -m backend.web.main
   </Accordion>
 
   <Accordion title="Docker provider hangs">
-    Proxy environment variables inherited by the Docker CLI. Mycel strips these automatically, but if issues persist, check the `docker_host` config field in `~/.leon/sandboxes/docker.json`.
+    Proxy environment variables inherited by the Docker CLI. Mycel strips these automatically, but if issues persist, check the `docker_host` config field in `$LEON_SANDBOXES_DIR/docker.json`.
   </Accordion>
 
   <Accordion title="Daytona PTY bootstrap fails">

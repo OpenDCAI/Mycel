@@ -113,7 +113,7 @@ LEON_BACKEND_PORT=9000 uv run python -m backend.web.main
 
 ### Docker
 
-创建 `~/.leon/sandboxes/docker.json`：
+设置 `LEON_SANDBOXES_DIR` 指向沙箱提供商配置目录，然后在该目录下创建 `docker.json`：
 
 ```json
 {
@@ -264,7 +264,7 @@ env -u ALL_PROXY -u all_proxy uv run python -m backend.web.main
   </Accordion>
 
   <Accordion title="Docker 提供商卡住">
-    Docker CLI 继承了代理环境变量。Mycel 会自动清理这些变量，若问题仍然存在，检查 `~/.leon/sandboxes/docker.json` 中的 `docker_host` 配置。
+    Docker CLI 继承了代理环境变量。Mycel 会自动清理这些变量，若问题仍然存在，检查 `$LEON_SANDBOXES_DIR/docker.json` 中的 `docker_host` 配置。
   </Accordion>
 
   <Accordion title="Daytona PTY bootstrap 失败">
