@@ -94,10 +94,17 @@ def _skill_from_row(row: dict[str, Any]) -> Skill:
         name=row["name"],
         description=row.get("description") or "",
         package_id=row.get("package_id"),
-        source=dict(row.get("source_json") or {}),
+        source=_json_object(row, "source_json", table="library.skills"),
         created_at=row["created_at"],
         updated_at=row["updated_at"],
     )
+
+
+def _json_object(row: dict[str, Any], column: str, *, table: str) -> dict[str, Any]:
+    value = row[column]
+    if not isinstance(value, dict):
+        raise RuntimeError(f"{table}.{column} must be a JSON object")
+    return value.copy()
 
 
 def _package_from_row(row: dict[str, Any]) -> SkillPackage:
