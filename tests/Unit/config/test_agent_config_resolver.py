@@ -19,8 +19,6 @@ def _skill(name: str = "github", *, enabled: bool = True) -> AgentSkill:
     return AgentSkill(
         skill_id=name,
         package_id=f"{name}-package",
-        name=name,
-        description="GitHub guidance",
         enabled=enabled,
     )
 
@@ -126,8 +124,6 @@ def test_resolver_keeps_skill_id_separate_from_display_name() -> None:
             AgentSkill(
                 skill_id="github-core",
                 package_id="github-core-package",
-                name="GitHub",
-                description="GitHub guidance",
             )
         ]
     )
@@ -183,7 +179,7 @@ def test_agent_config_rejects_blank_identity_fields():
 
 
 def test_resolver_rejects_skill_without_frontmatter():
-    config = _config(skills=[AgentSkill(skill_id="broken", package_id="broken-package", name="broken")])
+    config = _config(skills=[AgentSkill(skill_id="broken", package_id="broken-package")])
 
     with pytest.raises(ValueError) as excinfo:
         resolve_agent_config(
@@ -212,7 +208,6 @@ def test_resolver_rejects_skill_frontmatter_without_name():
             AgentSkill(
                 skill_id="broken",
                 package_id="broken-package",
-                name="broken",
             )
         ]
     )
@@ -244,7 +239,6 @@ def test_resolver_rejects_display_name_without_name():
             AgentSkill(
                 skill_id="broken",
                 package_id="broken-package",
-                name="broken",
             )
         ]
     )
@@ -270,18 +264,10 @@ def test_resolver_rejects_display_name_without_name():
     assert "frontmatter is missing name" in str(excinfo.value)
 
 
-def test_resolver_rejects_skill_frontmatter_name_that_does_not_match_agent_skill_name():
-    config = _config(
-        skills=[
-            AgentSkill(
-                skill_id="visible-skill",
-                package_id="visible-package",
-                name="Visible Skill",
-            )
-        ]
-    )
+def test_resolver_rejects_package_that_does_not_belong_to_selected_skill():
+    config = _config(skills=[AgentSkill(skill_id="visible-skill", package_id="visible-package")])
 
-    with pytest.raises(ValueError) as excinfo:
+    with pytest.raises(RuntimeError) as excinfo:
         resolve_agent_config(
             config,
             skill_repo=_SkillRepo(
@@ -289,7 +275,7 @@ def test_resolver_rejects_skill_frontmatter_name_that_does_not_match_agent_skill
                     "visible-package": SkillPackage(
                         id="visible-package",
                         owner_user_id="owner-1",
-                        skill_id="visible-skill",
+                        skill_id="other-skill",
                         version="1.0.0",
                         hash="sha256:visible",
                         skill_md="---\nname: Runtime Skill\n---\n\n# Runtime Skill\n",
@@ -299,7 +285,7 @@ def test_resolver_rejects_skill_frontmatter_name_that_does_not_match_agent_skill
             ),
         )
 
-    assert "frontmatter name must match AgentSkill.name" in str(excinfo.value)
+    assert "Skill package visible-package does not belong to Skill visible-skill" in str(excinfo.value)
 
 
 def test_resolver_rejects_duplicate_enabled_skill_names():
@@ -322,7 +308,6 @@ def test_resolver_uses_selected_package_source():
             AgentSkill(
                 skill_id="github",
                 package_id="github-package",
-                name="github",
             )
         ]
     )

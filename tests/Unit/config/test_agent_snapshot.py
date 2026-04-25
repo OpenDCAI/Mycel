@@ -15,7 +15,6 @@ def test_snapshot_contains_resolved_agent_config_only():
                 AgentSkill(
                     skill_id="github",
                     package_id="github-package",
-                    name="github",
                 )
             ],
         ),
@@ -61,7 +60,6 @@ def test_snapshot_preserves_skill_id_when_name_changes():
                 AgentSkill(
                     skill_id="github-core",
                     package_id="github-core-package",
-                    name="GitHub",
                 )
             ],
         ),
