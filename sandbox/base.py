@@ -201,9 +201,7 @@ class RemoteSandbox(Sandbox):
     def close(self) -> None:
         if self._on_exit == "pause":
             try:
-                count = self._manager.pause_all_sessions()
-                if count > 0:
-                    logger.info("[%s] Paused %d session(s)", self.name, count)
+                self._manager.pause_all_sessions()
             except Exception:
                 logger.exception("[%s] pause_all_sessions failed during close", self.name)
         elif self._on_exit == "destroy":
@@ -212,7 +210,6 @@ class RemoteSandbox(Sandbox):
                     self._manager.destroy_session(thread_id=session["thread_id"])
                 except Exception:
                     logger.exception("[%s] Failed to destroy session %s", self.name, session.get("thread_id"))
-            logger.info("[%s] Destroy pass complete", self.name)
 
 
 class _LazyLocalExecutor:
