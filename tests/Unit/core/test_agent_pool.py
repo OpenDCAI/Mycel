@@ -49,6 +49,25 @@ async def test_get_or_create_agent_borrows_messaging_service_for_registry(monkey
 
 
 @pytest.mark.asyncio
+async def test_get_or_create_agent_borrows_relationship_service_for_registry(monkeypatch: pytest.MonkeyPatch):
+    captured: dict[str, object] = {}
+    relationship_service = object()
+
+    async def _fake_registry_get_or_create_agent(*args, **kwargs):
+        captured["args"] = args
+        captured["kwargs"] = kwargs
+        return SimpleNamespace()
+
+    monkeypatch.setattr(agent_pool._registry, "get_or_create_agent", _fake_registry_get_or_create_agent)
+    app = SimpleNamespace(state=SimpleNamespace(threads_runtime_state=SimpleNamespace(relationship_service=relationship_service)))
+
+    await agent_pool.get_or_create_agent(cast(Any, app), "local", thread_id="thread-borrowed")
+
+    kwargs = cast(dict[str, object], captured["kwargs"])
+    assert kwargs["relationship_service"] is relationship_service
+
+
+@pytest.mark.asyncio
 async def test_get_or_create_agent_skips_borrow_when_chat_bootstrap_missing(monkeypatch: pytest.MonkeyPatch):
     captured: dict[str, object] = {}
 

@@ -20,4 +20,9 @@ async def get_or_create_agent(*args, **kwargs):
         messaging_service = getattr(runtime_state, "messaging_service", None)
         if messaging_service is not None:
             kwargs["messaging_service"] = messaging_service
+    if "relationship_service" not in kwargs and app is not None:
+        runtime_state = getattr(app.state, "threads_runtime_state", None)
+        relationship_service = getattr(runtime_state, "relationship_service", None)
+        if relationship_service is not None:
+            kwargs["relationship_service"] = relationship_service
     return await _registry.get_or_create_agent(*args, **kwargs)
