@@ -62,10 +62,10 @@ def _resolve_skill(owner_user_id: str, skill: Any, skill_repo: Any) -> ResolvedS
     resolved = ResolvedSkill(
         name=skill.name,
         description=skill.description,
-        version=package.version or skill.version,
+        version=package.version,
         content=package.skill_md,
         files=dict(package.files),
-        source=dict(package.source or skill.source),
+        source=dict(package.source),
     )
     return validate_resolved_skill_content(resolved)
 

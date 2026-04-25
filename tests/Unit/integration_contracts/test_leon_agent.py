@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from langchain_core.messages import AIMessage, AIMessageChunk, HumanMessage, SystemMessage, ToolMessage
 
-from config.agent_config_types import AgentConfig, AgentSkill, McpServerConfig, SkillPackage
+from config.agent_config_types import AgentConfig, AgentSkill, McpServerConfig, ResolvedSkill, SkillPackage
 
 
 def _mock_model(text="Integration test response"):
@@ -771,6 +771,56 @@ async def test_leon_agent_agent_config_id_registers_repo_backed_skills(tmp_path)
             "--- references/routing.md ---\n"
             "Prefer APIRouter over app-level route decorators."
         )
+
+        agent.close()
+
+
+@pytest.mark.asyncio
+@_patch_env_api_key()
+async def test_leon_agent_passes_resolved_skill_models_to_runtime_service(tmp_path):
+    from core.runtime.agent import LeonAgent
+
+    captured: list[ResolvedSkill] = []
+
+    class _Repo:
+        def get_agent_config(self, agent_config_id: str):
+            assert agent_config_id == "cfg-1"
+            return _agent_config(
+                name="Repo Toad",
+                system_prompt="You are Repo Toad.",
+                skills=[
+                    AgentSkill(
+                        skill_id="fastapi",
+                        package_id="fastapi-package",
+                        name="FastAPI",
+                    )
+                ],
+            )
+
+    class _CapturingSkillsService:
+        def __init__(self, *, registry, skills):
+            captured.extend(skills)
+
+    mock_model = _mock_model("Repo skill response")
+
+    with (
+        patch("core.runtime.agent.LeonAgent._create_model", return_value=mock_model),
+        patch("core.runtime.agent.LeonAgent._init_async_components", return_value=(None, [])),
+        patch("core.runtime.agent.LeonAgent._init_checkpointer", new_callable=AsyncMock, return_value=None),
+        patch("core.runtime.agent.LeonAgent._init_mcp_tools", new_callable=AsyncMock, return_value=[]),
+        patch("core.runtime.agent.SkillsService", _CapturingSkillsService),
+    ):
+        agent = LeonAgent(
+            workspace_root=str(tmp_path),
+            agent_config_id="cfg-1",
+            agent_config_repo=_Repo(),
+            skill_repo=_SkillRepo(),
+            api_key="sk-test-integration",
+        )
+        await agent.ainit()
+
+        assert [skill.name for skill in captured] == ["FastAPI"]
+        assert all(isinstance(skill, ResolvedSkill) for skill in captured)
 
         agent.close()
 

@@ -1,4 +1,6 @@
 import inspect
+from datetime import UTC, datetime
+from typing import Any
 
 import pytest
 
@@ -48,7 +50,7 @@ class _SkillRepo:
                 hash="sha256:github",
                 skill_md=_skill_md("github"),
                 files={"references/query.md": "Prefer precise queries."},
-                created_at="2026-04-25T00:00:00+00:00",
+                created_at=datetime(2026, 4, 25, tzinfo=UTC),
             ),
             "disabled-package": SkillPackage(
                 id="disabled-package",
@@ -57,7 +59,7 @@ class _SkillRepo:
                 version="1.0.0",
                 hash="sha256:disabled",
                 skill_md=_skill_md("disabled"),
-                created_at="2026-04-25T00:00:00+00:00",
+                created_at=datetime(2026, 4, 25, tzinfo=UTC),
             ),
         }
 
@@ -135,7 +137,7 @@ def test_agent_named_children_reject_blank_names():
 
 def test_agent_config_rejects_blank_identity_fields():
     for field_name in ("id", "owner_user_id", "agent_user_id", "name"):
-        data = {
+        data: dict[str, Any] = {
             "id": "cfg-1",
             "owner_user_id": "owner-1",
             "agent_user_id": "agent-1",
@@ -164,7 +166,7 @@ def test_resolver_rejects_skill_without_frontmatter():
                         version="1.0.0",
                         hash="sha256:broken",
                         skill_md="# Missing",
-                        created_at="2026-04-25T00:00:00+00:00",
+                        created_at=datetime(2026, 4, 25, tzinfo=UTC),
                     )
                 }
             ),
@@ -196,7 +198,7 @@ def test_resolver_rejects_skill_frontmatter_without_name():
                         version="1.0.0",
                         hash="sha256:broken",
                         skill_md="---\ndescription: Missing canonical name.\n---\n\n# Broken\n",
-                        created_at="2026-04-25T00:00:00+00:00",
+                        created_at=datetime(2026, 4, 25, tzinfo=UTC),
                     )
                 }
             ),
@@ -228,7 +230,7 @@ def test_resolver_rejects_display_name_without_name():
                         version="1.0.0",
                         hash="sha256:broken",
                         skill_md="---\ndisplay_name: Pretty label only.\n---\n\n# Broken\n",
-                        created_at="2026-04-25T00:00:00+00:00",
+                        created_at=datetime(2026, 4, 25, tzinfo=UTC),
                     )
                 }
             ),
@@ -260,7 +262,7 @@ def test_resolver_rejects_skill_frontmatter_name_that_does_not_match_agent_skill
                         version="1.0.0",
                         hash="sha256:visible",
                         skill_md="---\nname: Runtime Skill\n---\n\n# Runtime Skill\n",
-                        created_at="2026-04-25T00:00:00+00:00",
+                        created_at=datetime(2026, 4, 25, tzinfo=UTC),
                     )
                 }
             ),
@@ -281,6 +283,23 @@ def test_resolver_rejects_duplicate_enabled_skill_names():
         resolve_agent_config(config, skill_repo=_SkillRepo())
 
     assert "Duplicate Skill name in AgentConfig: github" in str(excinfo.value)
+
+
+def test_resolver_uses_selected_package_source_not_agent_skill_source():
+    config = _config(
+        skills=[
+            AgentSkill(
+                skill_id="github",
+                package_id="github-package",
+                name="github",
+                source={"source_version": "agent-stale"},
+            )
+        ]
+    )
+
+    resolved = resolve_agent_config(config, skill_repo=_SkillRepo())
+
+    assert resolved.skills[0].source == {}
 
 
 def test_resolver_rejects_duplicate_enabled_mcp_server_names():
