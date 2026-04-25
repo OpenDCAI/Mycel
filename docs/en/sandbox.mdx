@@ -191,7 +191,7 @@ flowchart TD
 
 Middleware owns **policy**. The sandbox backend owns **I/O**. Swapping the backend changes where operations run without touching any middleware logic.
 
-Sandbox runtime state is tracked in SQLite (`~/.leon/sandbox.db`):
+When SQLite sandbox storage is enabled, set `LEON_SANDBOX_DB_PATH` to the sandbox runtime database:
 
 | Table | Purpose |
 |-------|---------|

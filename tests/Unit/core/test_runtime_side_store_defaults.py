@@ -51,26 +51,24 @@ def test_message_queue_manager_defaults_to_runtime_repo_when_strategy_missing(mo
     assert manager._repo is fake_repo
 
 
-def test_message_queue_manager_keeps_sqlite_when_strategy_missing_and_runtime_config_missing(monkeypatch) -> None:
+def test_message_queue_manager_requires_runtime_repo_or_explicit_db_path(monkeypatch, tmp_path) -> None:
     monkeypatch.delenv("LEON_STORAGE_STRATEGY", raising=False)
     monkeypatch.delenv("LEON_SUPABASE_CLIENT_FACTORY", raising=False)
+    monkeypatch.delenv("LEON_QUEUE_DB_PATH", raising=False)
+    monkeypatch.setenv("HOME", str(tmp_path))
     monkeypatch.setattr(
         "core.runtime.middleware.queue.manager.build_queue_repo",
         lambda **_kwargs: (_ for _ in ()).throw(AssertionError("runtime repo should not be used")),
     )
 
-    class _SQLiteQueueRepoStub:
-        def __init__(self, db_path=None):
-            self.db_path = db_path
+    try:
+        MessageQueueManager()
+    except RuntimeError as exc:
+        assert "LEON_QUEUE_DB_PATH" in str(exc)
+    else:
+        raise AssertionError("MessageQueueManager should require an explicit storage source")
 
-        def close(self) -> None:
-            return None
-
-    monkeypatch.setattr("storage.providers.sqlite.queue_repo.SQLiteQueueRepo", _SQLiteQueueRepoStub)
-
-    manager = MessageQueueManager()
-
-    assert isinstance(manager._repo, _SQLiteQueueRepoStub)
+    assert not (tmp_path / ".leon").exists()
 
 
 def test_message_queue_manager_explicit_db_path_keeps_sqlite_under_supabase(monkeypatch, tmp_path) -> None:

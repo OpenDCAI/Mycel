@@ -12,7 +12,7 @@ keywords: [记忆, 裁剪, 压缩, 上下文, SQLite, checkpointer, 溢出缓冲
 
 Mycel 的记忆分为两层：
 
-1. **持久化** — 对话历史使用 LangGraph `AsyncSqliteSaver` checkpointer 存储在 SQLite（`~/.leon/leon.db`）。每条消息、工具调用和结果都被记录。恢复 Thread 时，完整历史会被重放。
+1. **持久化** — 对话历史使用 LangGraph `AsyncSqliteSaver` checkpointer 存储在 `LEON_DB_PATH` 指定的 SQLite 数据库中。每条消息、工具调用和结果都被记录。恢复 Thread 时，完整历史会被重放。
 
 2. **上下文管理** — 随着对话增长，`MemoryMiddleware` 会在每次模型调用前自动裁剪和压缩历史，确保上下文窗口始终可用。这一过程对用户完全透明。
 
@@ -102,9 +102,9 @@ Mycel 的记忆分为两层：
 
 | 存储 | 位置 | 内容 |
 |------|------|------|
-| Thread 历史 | `~/.leon/leon.db` | 所有消息、工具调用、结果（LangGraph checkpoints） |
-| 沙箱状态 | `~/.leon/sandbox.db` | 沙箱运行态、终端绑定、指标 |
-| 聊天消息 | `~/.leon/chat.db` | 社交层消息 |
+| Thread 历史 | `$LEON_DB_PATH` | 所有消息、工具调用、结果（LangGraph checkpoints） |
+| 沙箱状态 | `$LEON_SANDBOX_DB_PATH` | 沙箱运行态、终端绑定、指标 |
+| 队列状态 | `$LEON_QUEUE_DB_PATH` | follow-up 和通知队列 |
 
 <Note>
   Thread 历史是追加式的。回退 Thread 时移动的是活跃 checkpoint 指针，不会删除中间历史。

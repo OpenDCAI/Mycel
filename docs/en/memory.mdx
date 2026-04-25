@@ -16,7 +16,7 @@ flowchart LR
     MW --> P["Pruning\ntrim large tool results"]
     MW --> C["Compaction\nsummarize old history"]
     MW --> M["Model call"]
-    M --> DB["SQLite\n~/.leon/leon.db\n(LangGraph checkpointer)"]
+    M --> DB["SQLite\n$LEON_DB_PATH\n(LangGraph checkpointer)"]
     DB -->|resume thread| MW
 ```
 
@@ -115,9 +115,9 @@ For tools that produce very large outputs (e.g., `Grep` on a large codebase), th
 
 | Database | Location | Contents |
 |----------|----------|----------|
-| Thread history | `~/.leon/leon.db` | Messages, tool calls, results (LangGraph checkpoints) |
-| Sandbox state | `~/.leon/sandbox.db` | Sandbox runtime state, terminal bindings, metrics |
-| Chat messages | `~/.leon/chat.db` | Social layer messages |
+| Thread history | `$LEON_DB_PATH` | Messages, tool calls, results (LangGraph checkpoints) |
+| Sandbox state | `$LEON_SANDBOX_DB_PATH` | Sandbox runtime state, terminal bindings, metrics |
+| Queue state | `$LEON_QUEUE_DB_PATH` | Follow-up and notification queue |
 
 <Note>
   Thread history is append-only. Rolling back a Thread moves the active checkpoint pointer — it doesn't delete intermediate history.

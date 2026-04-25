@@ -247,6 +247,7 @@ def _make_router_app(
 @pytest.mark.asyncio
 async def test_run_child_thread_live_rebinds_from_parent_sink_and_surfaces_runtime_and_detail_before_completion(
     monkeypatch,
+    tmp_path,
 ):
     _patch_event_store(monkeypatch)
     child_thread_id = "subagent-live-1"
@@ -260,7 +261,7 @@ async def test_run_child_thread_live_rebinds_from_parent_sink_and_surfaces_runti
     app = SimpleNamespace(
         state=_app_state_with_display_builder(
             DisplayBuilder(),
-            queue_manager=MessageQueueManager(),
+            queue_manager=MessageQueueManager(db_path=str(tmp_path / "queue.db")),
             _event_loop=asyncio.get_running_loop(),
             thread_event_buffers={},
             thread_tasks={},
@@ -308,14 +309,14 @@ async def test_run_child_thread_live_rebinds_from_parent_sink_and_surfaces_runti
 
 
 @pytest.mark.asyncio
-async def test_run_child_thread_live_closes_and_detaches_completed_child_agent_without_losing_read_surface(monkeypatch):
+async def test_run_child_thread_live_closes_and_detaches_completed_child_agent_without_losing_read_surface(monkeypatch, tmp_path):
     _patch_event_store(monkeypatch)
     child_thread_id = "subagent-live-detach"
     agent = _BlockingChildAgent()
     app = SimpleNamespace(
         state=_app_state_with_display_builder(
             DisplayBuilder(),
-            queue_manager=MessageQueueManager(),
+            queue_manager=MessageQueueManager(db_path=str(tmp_path / "queue.db")),
             _event_loop=asyncio.get_running_loop(),
             thread_event_buffers={},
             thread_tasks={},
@@ -391,13 +392,13 @@ async def test_thread_runtime_omits_model_when_thread_has_no_model(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_run_child_thread_live_raises_when_child_run_emits_error_event(monkeypatch):
+async def test_run_child_thread_live_raises_when_child_run_emits_error_event(monkeypatch, tmp_path):
     child_thread_id = "subagent-live-error"
     agent = _BlockingChildAgent()
     app = SimpleNamespace(
         state=_app_state_with_display_builder(
             DisplayBuilder(),
-            queue_manager=MessageQueueManager(),
+            queue_manager=MessageQueueManager(db_path=str(tmp_path / "queue.db")),
             _event_loop=asyncio.get_running_loop(),
             thread_event_buffers={},
             thread_tasks={},
@@ -431,13 +432,13 @@ async def test_run_child_thread_live_raises_when_child_run_emits_error_event(mon
 
 
 @pytest.mark.asyncio
-async def test_run_child_thread_live_raises_when_child_never_makes_a_model_call(monkeypatch):
+async def test_run_child_thread_live_raises_when_child_never_makes_a_model_call(monkeypatch, tmp_path):
     child_thread_id = "subagent-live-no-call"
     agent = _BlockingChildAgent()
     app = SimpleNamespace(
         state=_app_state_with_display_builder(
             DisplayBuilder(),
-            queue_manager=MessageQueueManager(),
+            queue_manager=MessageQueueManager(db_path=str(tmp_path / "queue.db")),
             _event_loop=asyncio.get_running_loop(),
             thread_event_buffers={},
             thread_tasks={},

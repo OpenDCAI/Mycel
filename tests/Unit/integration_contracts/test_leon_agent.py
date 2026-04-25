@@ -106,6 +106,49 @@ class _FakeSummaryRepo:
     def ensure_tables(self) -> None:
         return None
 
+    def get_latest_summary_row(self, thread_id: str) -> None:
+        return None
+
+    def list_summaries(self, thread_id: str) -> list[dict[str, object]]:
+        return []
+
+    def delete_thread_summaries(self, thread_id: str) -> None:
+        return None
+
+    def close(self) -> None:
+        return None
+
+
+class _FakeQueueRepo:
+    def enqueue(
+        self,
+        thread_id: str,
+        content: str,
+        notification_type: str = "steer",
+        source: str | None = None,
+        sender_id: str | None = None,
+        sender_name: str | None = None,
+    ) -> None:
+        return None
+
+    def dequeue(self, thread_id: str) -> None:
+        return None
+
+    def drain_all(self, thread_id: str) -> list[object]:
+        return []
+
+    def peek(self, thread_id: str) -> bool:
+        return False
+
+    def list_queue(self, thread_id: str) -> list[dict[str, object]]:
+        return []
+
+    def clear_queue(self, thread_id: str) -> None:
+        return None
+
+    def count(self, thread_id: str) -> int:
+        return 0
+
     def close(self) -> None:
         return None
 
@@ -120,7 +163,7 @@ def _patch_runtime_storage_container(monkeypatch: pytest.MonkeyPatch):
     class _FakeRuntimeContainer:
         def __init__(self) -> None:
             self._tool_task_repo = _FakeToolTaskRepo()
-            self._queue_repo = object()
+            self._queue_repo = _FakeQueueRepo()
             self._summary_repo = _FakeSummaryRepo()
             self._terminal_repo = _FakeControlPlaneRepo()
             self._lease_repo = _FakeControlPlaneRepo()
@@ -328,6 +371,7 @@ def test_create_leon_agent_defaults_to_process_local_agent_registry(monkeypatch,
 async def test_leon_agent_simple_run(monkeypatch, tmp_path):
     """LeonAgent with mock model: astream completes and yields chunks."""
     from core.runtime.agent import LeonAgent
+    from core.runtime.middleware.queue.manager import MessageQueueManager
 
     monkeypatch.setenv("LEON_STORAGE_STRATEGY", "sqlite")
     mock_model = _mock_model("Hello from integration test")
@@ -338,7 +382,11 @@ async def test_leon_agent_simple_run(monkeypatch, tmp_path):
         patch("core.runtime.agent.LeonAgent._init_checkpointer", new_callable=AsyncMock, return_value=None),
         patch("core.runtime.agent.LeonAgent._init_mcp_tools", new_callable=AsyncMock, return_value=[]),
     ):
-        agent = LeonAgent(workspace_root=str(tmp_path), api_key="sk-test-integration")
+        agent = LeonAgent(
+            workspace_root=str(tmp_path),
+            api_key="sk-test-integration",
+            queue_manager=MessageQueueManager(db_path=str(tmp_path / "queue.db")),
+        )
         await agent.ainit()
 
         results = []

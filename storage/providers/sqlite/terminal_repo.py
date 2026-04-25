@@ -89,17 +89,19 @@ class SQLiteTerminalRepo:
         missing_abstract = REQUIRED_ABSTRACT_TERMINAL_COLUMNS - abstract_cols
         if missing_abstract:
             raise RuntimeError(
-                f"abstract_terminals schema mismatch: missing {sorted(missing_abstract)}. Purge ~/.leon/sandbox.db and retry."
+                f"abstract_terminals schema mismatch: missing {sorted(missing_abstract)}. Purge the configured sandbox sqlite db and retry."
             )
 
         missing_pointer = REQUIRED_TERMINAL_POINTER_COLUMNS - pointer_cols
         if missing_pointer:
             raise RuntimeError(
-                f"thread_terminal_pointers schema mismatch: missing {sorted(missing_pointer)}. Purge ~/.leon/sandbox.db and retry."
+                f"thread_terminal_pointers schema mismatch: missing {sorted(missing_pointer)}. Purge the configured sandbox sqlite db and retry."
             )
 
         if any(cols == {"thread_id"} for cols in unique_index_columns.values()):
-            raise RuntimeError("abstract_terminals still has UNIQUE index from single-terminal schema. Purge ~/.leon/sandbox.db and retry.")
+            raise RuntimeError(
+                "abstract_terminals still has UNIQUE index from single-terminal schema. Purge the configured sandbox sqlite db and retry."
+            )
 
     def _get_pointer_row(self, thread_id: str) -> dict[str, Any] | None:
         with self._lock:

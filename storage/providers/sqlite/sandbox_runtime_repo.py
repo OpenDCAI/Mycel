@@ -511,14 +511,17 @@ class SQLiteSandboxRuntimeRepo:
 
         missing_runtime = REQUIRED_SANDBOX_RUNTIME_COLUMNS - runtime_cols
         if missing_runtime:
-            raise RuntimeError(f"sandbox_runtimes schema mismatch: missing {sorted(missing_runtime)}. Purge ~/.leon/sandbox.db and retry.")
+            raise RuntimeError(
+                f"sandbox_runtimes schema mismatch: missing {sorted(missing_runtime)}. Purge the configured sandbox sqlite db and retry."
+            )
         missing_instances = REQUIRED_INSTANCE_COLUMNS - instance_cols
         if missing_instances:
             raise RuntimeError(
-                f"sandbox_instances schema mismatch: missing {sorted(missing_instances)}. Purge ~/.leon/sandbox.db and retry."
+                f"sandbox_instances schema mismatch: missing {sorted(missing_instances)}. Purge the configured sandbox sqlite db and retry."
             )
         missing_events = REQUIRED_EVENT_COLUMNS - event_cols
         if missing_events:
             raise RuntimeError(
-                f"sandbox_runtime_events schema mismatch: missing {sorted(missing_events)}. Purge ~/.leon/sandbox.db and retry."
+                f"sandbox_runtime_events schema mismatch: missing {sorted(missing_events)}. "
+                "Purge the configured sandbox sqlite db and retry."
             )

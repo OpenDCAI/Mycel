@@ -160,12 +160,20 @@ class LeonAgent:
             permission_resolver_scope: Permission request surface for this agent ("none" or "thread")
         """
         runtime_storage = storage_container
+        if runtime_storage is None:
+            from storage.runtime import build_storage_container, uses_supabase_storage
+
+            if uses_supabase_storage():
+                runtime_storage = build_storage_container()
 
         self.agent_id: str | None = None
         self.extra_allowed_paths = extra_allowed_paths
-        self.queue_manager = queue_manager or (
-            MessageQueueManager(repo=runtime_storage.queue_repo()) if runtime_storage is not None else MessageQueueManager()
-        )
+        if queue_manager is not None:
+            self.queue_manager = queue_manager
+        elif runtime_storage is not None:
+            self.queue_manager = MessageQueueManager(repo=runtime_storage.queue_repo())
+        else:
+            raise RuntimeError("LeonAgent requires queue_manager or storage_container.")
         self._chat_repos: dict | None = chat_repos
         self._thread_repo = thread_repo
         self._user_repo = user_repo
