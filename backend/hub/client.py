@@ -56,6 +56,26 @@ def _hub_error_detail(response: httpx.Response) -> str | None:
     return detail if isinstance(detail, str) and detail else None
 
 
+def _required_object(value: Any, *, label: str) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        raise ValueError(f"{label} must be an object")
+    return value
+
+
+def _required_text(value: Any, *, label: str) -> str:
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError(f"{label} must be a string")
+    return value.strip()
+
+
+def _optional_text(value: Any, *, label: str) -> str:
+    if value is None:
+        return ""
+    if not isinstance(value, str):
+        raise ValueError(f"{label} must be a string")
+    return value.strip()
+
+
 def _skill_metadata_from_content(content: str) -> dict[str, Any]:
     if not content.startswith("---\n"):
         raise ValueError("Skill snapshot must be a SKILL.md document with frontmatter")
@@ -74,6 +94,10 @@ def _skill_metadata_from_content(content: str) -> dict[str, Any]:
         raise ValueError("Skill snapshot frontmatter must include name")
     metadata["name"] = name.strip()
     return metadata
+
+
+def _skill_description_from_metadata(metadata: dict[str, Any]) -> str:
+    return _optional_text(metadata.get("description"), label="Skill snapshot frontmatter description")
 
 
 def _skill_files_from_snapshot(snapshot: dict[str, Any]) -> dict[str, str]:
@@ -216,22 +240,20 @@ def apply_item(
     or add Agent User.
     """
     result = _hub_api("POST", f"/items/{item_id}/download")
-    snapshot = result["snapshot"]
-    item = result["item"]
-    source_version = result["version"]
-    item_type = item.get("type", "skill")
+    snapshot = _required_object(result.get("snapshot"), label="Hub download snapshot")
+    item = _required_object(result.get("item"), label="Hub download item")
+    source_version = _required_text(result.get("version"), label="Hub download version")
+    item_type = _required_text(item.get("type"), label="Hub item type")
 
     now = int(time.time() * 1000)
 
     if item_type == "skill":
-        content = snapshot.get("content", "")
-        if not isinstance(content, str):
-            raise ValueError("Skill snapshot content must be a string")
+        content = _required_text(snapshot.get("content"), label="Skill snapshot content")
         skill_metadata = _skill_metadata_from_content(content)
         skill_files = _skill_files_from_snapshot(snapshot)
         if skill_repo is None:
             raise RuntimeError("skill_repo is required to save a skill to Library")
-        slug = item.get("slug", item["name"].lower().replace(" ", "-"))
+        slug = _required_text(item.get("slug"), label="Hub item slug")
         if "/" in slug or "\\" in slug or slug in {"", ".", ".."}:
             raise ValueError(f"Invalid slug: {slug}")
         skill_name = str(skill_metadata["name"]).strip()
@@ -241,16 +263,14 @@ def apply_item(
         for skill in skill_repo.list_for_owner(owner_user_id):
             if skill.name == skill_name and skill.id != slug:
                 raise ValueError("Skill name already exists under a different Library id")
-        meta = snapshot.get("meta", {})
-        if not isinstance(meta, dict):
-            raise ValueError("Skill snapshot meta must be an object")
-        skill_description = str(meta.get("desc") or item.get("description", ""))
+        skill_description = _skill_description_from_metadata(skill_metadata)
+        publisher = _required_text(item.get("publisher_username"), label="Hub item publisher_username")
         timestamp = datetime.now(UTC)
         source = {
             "marketplace_item_id": item_id,
             "source_version": source_version,
             "source_at": now,
-            "publisher": item.get("publisher_username", ""),
+            "publisher": publisher,
         }
         skill = skill_repo.upsert(
             Skill(
@@ -303,7 +323,7 @@ def apply_item(
                     source={
                         "marketplace_item_id": item_id,
                         "source_version": source_version,
-                        "publisher": item.get("publisher_username", ""),
+                        "publisher": publisher,
                     },
                 )
             )

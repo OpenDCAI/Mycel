@@ -15,6 +15,9 @@ from config.skill_files import normalize_skill_file_entries
 from config.skill_package import build_skill_package_hash, build_skill_package_manifest
 from storage.runtime import build_storage_container
 
+FILE_IMPORT_SOURCE = {"kind": "file_import"}
+INITIAL_SKILL_PACKAGE_VERSION = "0.1.0"
+
 
 def _frontmatter(content: str) -> dict[str, Any]:
     if not content.startswith("---"):
@@ -25,9 +28,25 @@ def _frontmatter(content: str) -> dict[str, Any]:
     metadata = yaml.safe_load(parts[1]) or {}
     if not isinstance(metadata, dict):
         raise ValueError("SKILL.md frontmatter must be a mapping")
-    if not str(metadata.get("name") or "").strip():
-        raise ValueError("SKILL.md frontmatter must include name")
+    _frontmatter_text(metadata, "name")
+    _frontmatter_text(metadata, "description")
     return metadata
+
+
+def _frontmatter_text(metadata: dict[str, Any], key: str) -> str:
+    value = metadata.get(key)
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError(f"SKILL.md frontmatter must include {key}")
+    return value.strip()
+
+
+def _frontmatter_version(metadata: dict[str, Any]) -> str:
+    if "version" not in metadata:
+        return INITIAL_SKILL_PACKAGE_VERSION
+    value = metadata["version"]
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError("SKILL.md frontmatter version must be a string")
+    return value.strip()
 
 
 def _read_files(skill_dir: Path) -> dict[str, str]:
@@ -67,8 +86,8 @@ def import_skills(owner_user_id: str, library_dir: Path) -> int:
                 id=skill_dir.name,
                 owner_user_id=owner_user_id,
                 name=skill_name,
-                description=str(metadata.get("description") or ""),
-                source={"file_skill_dir": str(skill_dir)},
+                description=_frontmatter_text(metadata, "description"),
+                source=dict(FILE_IMPORT_SOURCE),
                 created_at=now,
                 updated_at=now,
             )
@@ -78,12 +97,12 @@ def import_skills(owner_user_id: str, library_dir: Path) -> int:
                 id=package_hash.removeprefix("sha256:"),
                 owner_user_id=owner_user_id,
                 skill_id=skill.id,
-                version=str(metadata.get("version") or "0.1.0"),
+                version=_frontmatter_version(metadata),
                 hash=package_hash,
                 manifest=build_skill_package_manifest(content, files),
                 skill_md=content,
                 files=files,
-                source={"file_skill_dir": str(skill_dir)},
+                source=dict(FILE_IMPORT_SOURCE),
                 created_at=now,
             )
         )

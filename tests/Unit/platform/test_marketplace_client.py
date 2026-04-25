@@ -4,6 +4,7 @@ import importlib
 import json
 from datetime import UTC, datetime
 from types import SimpleNamespace
+from typing import Any
 from unittest.mock import patch
 
 import httpx
@@ -213,6 +214,76 @@ class TestApplySkill:
         assert saved[0].source["publisher"] == "alice"
         assert packages[0].source["source_version"] == "2.1.0"
 
+    def test_apply_skill_uses_frontmatter_description_as_library_description(self):
+        saved: list[Skill] = []
+        packages: list[SkillPackage] = []
+        hub_resp = _make_hub_response(
+            "skill",
+            "described-skill",
+            content="---\nname: Described Skill\ndescription: Frontmatter description\n---\n# Hello",
+        )
+        hub_resp["item"]["description"] = "Hub card description"
+        hub_resp["snapshot"]["meta"]["desc"] = "Snapshot meta description"
+        skill_repo = SimpleNamespace(
+            get_by_id=lambda _owner_user_id, _skill_id: None,
+            list_for_owner=lambda _owner_user_id: [],
+            upsert=lambda skill: saved.append(skill) or skill,
+            create_package=lambda package: packages.append(package) or package,
+            select_package=lambda _owner_user_id, _skill_id, _package_id: None,
+        )
+
+        with patch("backend.hub.client._hub_api", return_value=hub_resp):
+            from backend.hub.client import apply_item
+
+            apply_item("item-described", owner_user_id="owner-1", skill_repo=skill_repo)
+
+        assert saved[0].description == "Frontmatter description"
+
+    def test_apply_skill_requires_snapshot_version(self):
+        hub_resp = _make_hub_response("skill", "broken-skill", content="---\nname: Broken Skill\ndescription: Broken\n---\nBody")
+        del hub_resp["version"]
+        skill_repo = SimpleNamespace(
+            get_by_id=lambda _owner_user_id, _skill_id: None,
+            list_for_owner=lambda _owner_user_id: [],
+            upsert=lambda _skill: (_ for _ in ()).throw(AssertionError("must not save broken Skill")),
+        )
+
+        with patch("backend.hub.client._hub_api", return_value=hub_resp):
+            from backend.hub.client import apply_item
+
+            with pytest.raises(ValueError, match="Hub download version must be a string"):
+                apply_item("item-broken", owner_user_id="owner-1", skill_repo=skill_repo)
+
+    def test_apply_skill_requires_item_slug(self):
+        hub_resp = _make_hub_response("skill", "broken-skill", content="---\nname: Broken Skill\ndescription: Broken\n---\nBody")
+        del hub_resp["item"]["slug"]
+        skill_repo = SimpleNamespace(
+            get_by_id=lambda _owner_user_id, _skill_id: None,
+            list_for_owner=lambda _owner_user_id: [],
+            upsert=lambda _skill: (_ for _ in ()).throw(AssertionError("must not save broken Skill")),
+        )
+
+        with patch("backend.hub.client._hub_api", return_value=hub_resp):
+            from backend.hub.client import apply_item
+
+            with pytest.raises(ValueError, match="Hub item slug must be a string"):
+                apply_item("item-broken", owner_user_id="owner-1", skill_repo=skill_repo)
+
+    def test_apply_skill_requires_publisher(self):
+        hub_resp = _make_hub_response("skill", "broken-skill", content="---\nname: Broken Skill\ndescription: Broken\n---\nBody")
+        del hub_resp["item"]["publisher_username"]
+        skill_repo = SimpleNamespace(
+            get_by_id=lambda _owner_user_id, _skill_id: None,
+            list_for_owner=lambda _owner_user_id: [],
+            upsert=lambda _skill: (_ for _ in ()).throw(AssertionError("must not save broken Skill")),
+        )
+
+        with patch("backend.hub.client._hub_api", return_value=hub_resp):
+            from backend.hub.client import apply_item
+
+            with pytest.raises(ValueError, match="Hub item publisher_username must be a string"):
+                apply_item("item-broken", owner_user_id="owner-1", skill_repo=skill_repo)
+
     def test_apply_to_library_rejects_name_drift_for_existing_skill_id(self):
         existing = Skill(
             id="same-slug",
@@ -296,20 +367,28 @@ class TestApplySkill:
             with pytest.raises(ValueError, match="Skill snapshot frontmatter must include name"):
                 apply_item("item-broken", owner_user_id="owner-1", skill_repo=skill_repo)
 
-    def test_apply_to_library_rejects_non_object_skill_snapshot_meta(self):
-        hub_resp = _make_hub_response("skill", "broken-skill", content="---\nname: Broken Skill\n---\nBody")
+    def test_apply_to_library_does_not_read_skill_snapshot_meta(self):
+        saved: list[Skill] = []
+        packages: list[SkillPackage] = []
+        hub_resp = _make_hub_response(
+            "skill", "meta-free-skill", content="---\nname: Meta Free Skill\ndescription: Frontmatter wins\n---\nBody"
+        )
         hub_resp["snapshot"]["meta"] = []
         skill_repo = SimpleNamespace(
             get_by_id=lambda _owner_user_id, _skill_id: None,
             list_for_owner=lambda _owner_user_id: [],
-            upsert=lambda _skill: (_ for _ in ()).throw(AssertionError("must not save broken Skill")),
+            upsert=lambda skill: saved.append(skill) or skill,
+            create_package=lambda package: packages.append(package) or package,
+            select_package=lambda _owner_user_id, _skill_id, _package_id: None,
         )
 
         with patch("backend.hub.client._hub_api", return_value=hub_resp):
             from backend.hub.client import apply_item
 
-            with pytest.raises(ValueError, match="Skill snapshot meta must be an object"):
-                apply_item("item-broken", owner_user_id="owner-1", skill_repo=skill_repo)
+            apply_item("item-meta", owner_user_id="owner-1", skill_repo=skill_repo)
+
+        assert saved[0].description == "Frontmatter wins"
+        assert packages[0].skill_id == "meta-free-skill"
 
     def test_path_traversal_blocked(self):
         hub_resp = _make_hub_response("skill", "../../evil", content="---\nname: Evil\n---\n# Hello")
@@ -373,7 +452,7 @@ class TestApplySkill:
             "agent_user_id": "agent-user-1",
         }
         assert saved_skills[0].name == "FastAPI"
-        assert saved_skills[0].description == "Meta FastAPI description"
+        assert saved_skills[0].description == "Build FastAPI APIs"
         assert packages[0].skill_md == "---\nname: FastAPI\ndescription: Build FastAPI APIs\n---\nAlways use APIRouter."
         assert packages[0].manifest["files"][0]["path"] == "references/routing.md"
         assert selected == [("owner-1", "fastapi", packages[0].id)]
@@ -381,7 +460,7 @@ class TestApplySkill:
         assert [skill.name for skill in saved[0].skills] == ["Existing", "FastAPI"]
         assert saved[0].skills[1].skill_id == "fastapi"
         assert saved[0].skills[1].package_id == packages[0].id
-        assert saved[0].skills[1].description == "Meta FastAPI description"
+        assert saved[0].skills[1].description == "Build FastAPI APIs"
         assert saved[0].skills[1].source == {
             "marketplace_item_id": "skillsmp:fastapi",
             "source_version": "1.2.3",
@@ -648,7 +727,7 @@ def test_publish_uses_repo_material_when_member_dir_is_absent(tmp_path, monkeypa
     import backend.hub.client as marketplace_client
 
     saved: dict[str, AgentConfig] = {}
-    captured: dict[str, object] = {}
+    captured: dict[str, Any] = {}
 
     user_repo = SimpleNamespace(get_by_id=lambda user_id: SimpleNamespace(id=user_id, agent_config_id="cfg-1", owner_user_id="owner-1"))
 
@@ -698,7 +777,7 @@ def test_publish_uses_repo_material_when_member_dir_is_absent(tmp_path, monkeypa
                 hash="sha256:search",
                 skill_md="---\nname: Search\n---\nskill content",
                 source={"name": "Search", "desc": "Repo Search"},
-                created_at="2026-04-25T00:00:00+00:00",
+                created_at=datetime(2026, 4, 25, tzinfo=UTC),
             )
         ),
     )
@@ -728,7 +807,7 @@ def test_publish_prefers_repo_lineage_even_when_stale_member_dir_exists(tmp_path
     import backend.hub.client as marketplace_client
 
     saved: dict[str, AgentConfig] = {}
-    captured: dict[str, object] = {}
+    captured: dict[str, Any] = {}
     members_root = tmp_path / "members"
     member_dir = members_root / "agent-user-1"
     member_dir.mkdir(parents=True)
