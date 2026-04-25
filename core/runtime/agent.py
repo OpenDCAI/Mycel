@@ -1147,13 +1147,14 @@ class LeonAgent:
 
         # Skills tools
         resolved_skills = []
-        if getattr(self, "_resolved_agent_config", None) is not None:
+        has_repo_backed_agent_config = getattr(self, "_resolved_agent_config", None) is not None
+        if has_repo_backed_agent_config:
             resolved_skills = [
                 {"name": skill.name, "content": skill.content, "files": skill.files, "meta": skill.source}
                 for skill in self._resolved_agent_config.skills
             ]
         inline_skills = resolved_skills
-        skill_paths = self.config.skills.paths if self.config.skills.enabled else []
+        skill_paths = [] if has_repo_backed_agent_config else self.config.skills.paths if self.config.skills.enabled else []
         if skill_paths or inline_skills:
             enabled_skills = self.config.skills.skills
             if resolved_skills:
