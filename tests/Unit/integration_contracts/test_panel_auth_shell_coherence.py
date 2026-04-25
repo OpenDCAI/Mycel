@@ -2125,6 +2125,38 @@ def test_apply_snapshot_rejects_duplicate_skill_ids_before_library_write():
     assert skill_repo.list_for_owner("user-1") == []
 
 
+def test_apply_snapshot_rejects_non_library_skill_id_before_library_write():
+    from backend.hub.snapshot_apply import apply_snapshot
+
+    skill_repo = _MemorySkillRepo()
+
+    with pytest.raises(ValueError, match="Invalid Snapshot Skill id: nested/search"):
+        apply_snapshot(
+            snapshot={
+                "schema_version": "agent-snapshot/v1",
+                "agent": {
+                    "id": "cfg-source",
+                    "name": "Repo Agent",
+                    "skills": [
+                        {
+                            "id": "nested/search",
+                            "name": "Search",
+                            "version": "1.0.0",
+                            "content": "---\nname: Search\n---\nbody",
+                        }
+                    ],
+                },
+            },
+            marketplace_item_id="item-1",
+            source_version="1.0.0",
+            owner_user_id="user-1",
+            user_repo=SimpleNamespace(create=lambda _row: None),
+            agent_config_repo=SimpleNamespace(save_agent_config=lambda _config: None),
+            skill_repo=skill_repo,
+        )
+    assert skill_repo.list_for_owner("user-1") == []
+
+
 def test_apply_snapshot_rejects_duplicate_skill_names_before_library_write():
     from backend.hub.snapshot_apply import apply_snapshot
 
