@@ -366,6 +366,15 @@ def test_get_agent_config_fails_loudly_when_skill_package_version_is_null() -> N
         repo.get_agent_config("cfg-1")
 
 
+def test_get_agent_config_fails_loudly_when_skill_description_is_null() -> None:
+    tables = _tables()
+    tables["library.skills"][0]["description"] = None
+    repo = SupabaseAgentConfigRepo(_FakeClient(tables))
+
+    with pytest.raises(RuntimeError, match="library.skills description must be text"):
+        repo.get_agent_config("cfg-1")
+
+
 def test_get_agent_config_fails_loudly_when_sub_agent_tools_json_is_not_an_array() -> None:
     tables = _tables()
     tables["agent.agent_sub_agents"][0]["tools_json"] = {"Read": True}

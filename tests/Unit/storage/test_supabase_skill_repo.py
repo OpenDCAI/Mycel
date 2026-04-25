@@ -137,6 +137,16 @@ def test_get_by_id_rejects_non_object_skill_source_json() -> None:
         repo.get_by_id("owner-1", "skill-1")
 
 
+def test_get_by_id_rejects_null_skill_description() -> None:
+    row = _row()
+    row["description"] = None
+    client = _FakeClient({"library.skills": [row]})
+    repo = SupabaseSkillRepo(client)
+
+    with pytest.raises(RuntimeError, match="library.skills.description must be text"):
+        repo.get_by_id("owner-1", "skill-1")
+
+
 def test_upsert_writes_library_skill_metadata_only() -> None:
     client = _FakeClient()
     repo = SupabaseSkillRepo(client)
