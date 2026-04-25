@@ -74,10 +74,7 @@ def schema_rpc(client: Any, schema: str, function_name: str, params: dict[str, A
 
 
 def rows(response: Any, repo: str, operation: str) -> list[dict[str, Any]]:
-    if isinstance(response, dict):
-        payload = response.get("data")
-    else:
-        payload = getattr(response, "data", None)
+    payload = response.get("data") if isinstance(response, dict) else getattr(response, "data", None)
     if payload is None:
         raise RuntimeError(f"Supabase {repo} expected supabase-py `.data` payload for {operation}.")
     if not isinstance(payload, list):
