@@ -1,8 +1,7 @@
 from config.loader import AgentLoader
-from config.schema import SkillsConfig
 
 
-def test_load_has_no_default_home_skill_dir(monkeypatch, tmp_path):
+def test_load_has_no_runtime_skill_config(monkeypatch, tmp_path):
     monkeypatch.setenv("HOME", str(tmp_path))
     expected_path = tmp_path / ".leon" / "skills"
     assert not expected_path.exists()
@@ -10,13 +9,19 @@ def test_load_has_no_default_home_skill_dir(monkeypatch, tmp_path):
     settings = AgentLoader().load()
 
     assert not expected_path.exists()
-    assert settings.skills.paths == []
+    assert not hasattr(settings, "skills")
 
 
-def test_skills_config_allows_declared_paths_that_do_not_exist(tmp_path):
-    missing_path = tmp_path / "missing-skills"
+def test_runtime_skill_config_key_fails_loudly(monkeypatch, tmp_path):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    project_root = tmp_path / "project"
+    runtime_dir = project_root / ".leon"
+    runtime_dir.mkdir(parents=True)
+    (runtime_dir / "runtime.json").write_text('{"skills": {"paths": []}}', encoding="utf-8")
 
-    config = SkillsConfig(paths=[str(missing_path)])
-
-    assert config.paths == [str(missing_path)]
-    assert not missing_path.exists()
+    try:
+        AgentLoader(project_root).load()
+    except ValueError as exc:
+        assert "runtime.json must not define top-level 'skills'" in str(exc)
+    else:
+        raise AssertionError("AgentLoader accepted removed runtime skills config")
