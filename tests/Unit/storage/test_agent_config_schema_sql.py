@@ -105,6 +105,8 @@ def test_agent_config_schema_constrains_root_identity_fields() -> None:
     assert "library.skills.source_json must be a JSON object before hard cut" in sql
     assert "library.skill_packages.manifest_json must be a JSON object before hard cut" in sql
     assert "library.skill_packages.files_json must be a JSON object before hard cut" in sql
+    assert "library.skill_packages.files_json values must be strings before hard cut" in sql
+    assert "library.skill_packages.files_json keys must be package-relative paths before hard cut" in sql
     assert "library.skill_packages.source_json must be a JSON object before hard cut" in sql
     assert "agent.agent_configs.tools_json must be a JSON array before hard cut" in sql
     assert "agent.agent_configs.runtime_json must be a JSON object before hard cut" in sql

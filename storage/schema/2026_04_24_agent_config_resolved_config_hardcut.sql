@@ -177,6 +177,29 @@ begin
     end if;
     if exists (
         select 1
+        from library.skill_packages package
+        cross join lateral jsonb_each(package.files_json) as file(path, content)
+        where jsonb_typeof(file.content) <> 'string'
+    ) then
+        raise exception 'library.skill_packages.files_json values must be strings before hard cut';
+    end if;
+    if exists (
+        select 1
+        from library.skill_packages package
+        cross join lateral jsonb_each(package.files_json) as file(path, content)
+        where btrim(file.path) = ''
+           or file.path like '/%'
+           or file.path like '%//%'
+           or file.path like './%'
+           or file.path like '%/./%'
+           or file.path like '../%'
+           or file.path like '%/../%'
+           or position(chr(92) in file.path) > 0
+    ) then
+        raise exception 'library.skill_packages.files_json keys must be package-relative paths before hard cut';
+    end if;
+    if exists (
+        select 1
         from library.skill_packages
         where jsonb_typeof(source_json) <> 'object'
     ) then
