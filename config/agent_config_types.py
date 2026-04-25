@@ -8,6 +8,12 @@ from pydantic import BaseModel, Field, ValidationInfo, field_validator
 from config.skill_files import normalize_skill_file_map
 
 
+def _require_enabled_bool(value: Any) -> bool:
+    if not isinstance(value, bool):
+        raise ValueError("enabled must be a boolean")
+    return value
+
+
 class Skill(BaseModel):
     id: str
     owner_user_id: str
@@ -68,6 +74,11 @@ class AgentSkill(BaseModel):
             raise ValueError(f"agent_skill.{info.field_name} must not be blank")
         return value
 
+    @field_validator("enabled", mode="before")
+    @classmethod
+    def _enabled_bool(cls, value: Any) -> bool:
+        return _require_enabled_bool(value)
+
 
 class ResolvedSkill(BaseModel):
     name: str
@@ -103,6 +114,11 @@ class AgentRule(BaseModel):
             raise ValueError("agent_rule.name must not be blank")
         return value
 
+    @field_validator("enabled", mode="before")
+    @classmethod
+    def _enabled_bool(cls, value: Any) -> bool:
+        return _require_enabled_bool(value)
+
 
 class AgentSubAgent(BaseModel):
     id: str | None = None
@@ -119,6 +135,11 @@ class AgentSubAgent(BaseModel):
         if not value.strip():
             raise ValueError("agent_sub_agent.name must not be blank")
         return value
+
+    @field_validator("enabled", mode="before")
+    @classmethod
+    def _enabled_bool(cls, value: Any) -> bool:
+        return _require_enabled_bool(value)
 
 
 class McpServerConfig(BaseModel):
@@ -139,6 +160,11 @@ class McpServerConfig(BaseModel):
         if not value.strip():
             raise ValueError("mcp_server.name must not be blank")
         return value
+
+    @field_validator("enabled", mode="before")
+    @classmethod
+    def _enabled_bool(cls, value: Any) -> bool:
+        return _require_enabled_bool(value)
 
 
 class AgentConfig(BaseModel):
