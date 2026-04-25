@@ -64,8 +64,7 @@ class MemoryMiddleware(AgentMiddleware):
             self.compactor = ContextCompactor()
 
         # Persistent storage
-        summary_db_path = db_path or Path.home() / ".leon" / "leon.db"
-        self.summary_store = SummaryStore(summary_db_path, summary_repo=summary_repo) if (db_path or summary_repo) else None
+        self.summary_store = SummaryStore(db_path, summary_repo=summary_repo) if (db_path or summary_repo) else None
         self._checkpointer: Any = None
         self._checkpoint_store: CheckpointStore | None = None
         self.checkpointer = checkpointer

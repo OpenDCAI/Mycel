@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from core.runtime.middleware.memory.middleware import MemoryMiddleware
 from core.runtime.middleware.memory.summary_store import SummaryStore
 from core.runtime.middleware.queue.manager import MessageQueueManager
 from storage.providers.sqlite.queue_repo import SQLiteQueueRepo
@@ -146,3 +147,21 @@ def test_summary_store_explicit_db_path_keeps_sqlite_under_supabase(monkeypatch,
         assert isinstance(store._repo, SQLiteSummaryRepo)
     finally:
         store._repo.close()
+
+
+def test_memory_middleware_repo_injection_does_not_pass_default_home_db_path(monkeypatch) -> None:
+    captured: dict[str, object] = {}
+    fake_repo = _FakeSummaryRepo()
+
+    class _SummaryStoreProbe:
+        def __init__(self, db_path=None, summary_repo=None):
+            captured["db_path"] = db_path
+            captured["summary_repo"] = summary_repo
+
+    monkeypatch.setattr("core.runtime.middleware.memory.middleware.SummaryStore", _SummaryStoreProbe)
+
+    middleware = MemoryMiddleware(summary_repo=fake_repo)
+
+    assert middleware.summary_store is not None
+    assert captured["summary_repo"] is fake_repo
+    assert captured["db_path"] is None
