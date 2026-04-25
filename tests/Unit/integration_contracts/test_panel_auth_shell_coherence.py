@@ -759,14 +759,8 @@ def test_library_skill_create_rejects_slug_collision_with_different_name() -> No
     assert stored.description == "Use this skill"
 
 
-def test_file_backed_library_metadata_fails_loudly_when_json_is_corrupt(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-    monkeypatch.setattr(library_service, "LIBRARY_DIR", tmp_path / "library")
-    agents_dir = tmp_path / "library" / "agents"
-    agents_dir.mkdir(parents=True)
-    (agents_dir / "broken.md").write_text("agent body", encoding="utf-8")
-    (agents_dir / "broken.json").write_text("{bad json", encoding="utf-8")
-
-    with pytest.raises(ValueError, match="Library JSON file must be valid JSON"):
+def test_library_rejects_agent_resource_type() -> None:
+    with pytest.raises(ValueError, match="Unknown resource type: agent"):
         library_service.list_library("agent")
 
 
