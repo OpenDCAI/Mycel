@@ -75,9 +75,9 @@ async def get_or_create_agent(
         model_name = thread_data.get("model") if thread_data else None
         models_config_override = None
         runtime_storage = getattr(app_obj.state, "runtime_storage_state", None)
-        storage_container = getattr(runtime_storage, "storage_container", None)
+        storage_container: Any = getattr(runtime_storage, "storage_container", None)
         user_settings_repo_factory = getattr(storage_container, "user_settings_repo", None)
-        user_settings_repo = user_settings_repo_factory() if callable(user_settings_repo_factory) else None
+        user_settings_repo: Any = user_settings_repo_factory() if callable(user_settings_repo_factory) else None
         owner_user_id = getattr(agent_user, "owner_user_id", None) if agent_user is not None else None
         if user_settings_repo is not None and owner_user_id is not None:
             settings_row = user_settings_repo.get(owner_user_id) or {}
@@ -93,9 +93,11 @@ async def get_or_create_agent(
         agent_config_id = None
         memory_config_override = None
         runtime_storage = getattr(app_obj.state, "runtime_storage_state", None)
-        storage_container = getattr(runtime_storage, "storage_container", None)
+        storage_container: Any = getattr(runtime_storage, "storage_container", None)
         agent_config_repo_factory = getattr(storage_container, "agent_config_repo", None)
-        agent_config_repo = agent_config_repo_factory() if callable(agent_config_repo_factory) else None
+        agent_config_repo: Any = agent_config_repo_factory() if callable(agent_config_repo_factory) else None
+        skill_repo_factory = getattr(storage_container, "skill_repo", None)
+        skill_repo: Any = skill_repo_factory() if callable(skill_repo_factory) else None
         if thread_data and thread_data.get("agent_user_id"):
             if user_repo is None:
                 raise RuntimeError(f"user_repo is required to resolve agent_config_id for thread {thread_id}")
@@ -173,6 +175,7 @@ async def get_or_create_agent(
         if agent_config_id is not None:
             create_kwargs["agent_config_id"] = agent_config_id
             create_kwargs["agent_config_repo"] = agent_config_repo
+            create_kwargs["skill_repo"] = skill_repo
         agent_obj = await asyncio.to_thread(create_agent_sync, **create_kwargs)
         agent_identity_user_id = str(thread_data.get("agent_user_id") or "").strip() if thread_data else ""
         if not agent_identity_user_id:

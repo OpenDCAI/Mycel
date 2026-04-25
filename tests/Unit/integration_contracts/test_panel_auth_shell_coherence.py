@@ -661,7 +661,7 @@ def test_agent_config_patch_explicit_library_id_uses_library_content() -> None:
     assert result is not None
     assert saved_configs[-1].skills[0].skill_id == "loadable-skill"
     assert saved_configs[-1].skills[0].package_id == library_skill.package_id
-    assert saved_configs[-1].skills[0].content == "---\nname: Loadable Skill\n---\nLibrary content."
+    assert "content" not in saved_configs[-1].skills[0].model_dump()
 
 
 def test_panel_library_skill_routes_use_skill_repo_without_recipe_repo() -> None:
@@ -1153,7 +1153,7 @@ def test_get_agent_user_uses_repo_skill_desc():
                 description="probe",
                 model="leon:large",
                 system_prompt="",
-                skills=[AgentSkill(name="Search", description="repo desc", content="---\nname: Search\n---\n")],
+                skills=[AgentSkill(skill_id="search", package_id="search-package", name="Search", description="repo desc")],
             )
 
     result = agent_user_service.get_agent_user(
@@ -1183,7 +1183,7 @@ def test_get_agent_user_keeps_runtime_skill_desc_override_ahead_of_repo_meta():
                 model="leon:large",
                 system_prompt="",
                 runtime_settings={"skills:Search": {"desc": "runtime desc"}},
-                skills=[AgentSkill(name="Search", description="repo desc", content="---\nname: Search\n---\n")],
+                skills=[AgentSkill(skill_id="search", package_id="search-package", name="Search", description="repo desc")],
             )
 
     result = agent_user_service.get_agent_user(
@@ -1328,7 +1328,7 @@ def test_get_agent_user_preserves_explicit_empty_repo_skill_desc():
                 description="probe",
                 model="leon:large",
                 system_prompt="",
-                skills=[AgentSkill(name="Search", description="", content="---\nname: Search\n---\n")],
+                skills=[AgentSkill(skill_id="search", package_id="search-package", name="Search", description="")],
             )
 
     result = agent_user_service.get_agent_user(
@@ -1557,7 +1557,6 @@ def test_library_used_by_reads_agent_configs_without_display_projection(monkeypa
                     skill_id="skill-1",
                     package_id="skill-1-package",
                     name="api-design-reviewer",
-                    content="---\nname: api-design-reviewer\n---\nBody",
                     enabled=True,
                 )
             ],
@@ -1593,7 +1592,6 @@ async def test_delete_skill_route_rejects_skill_still_selected_by_agent(monkeypa
                     skill_id="skill-1",
                     package_id="skill-1-package",
                     name="api-design-reviewer",
-                    content="---\nname: api-design-reviewer\n---\nBody",
                     enabled=True,
                 )
             ],

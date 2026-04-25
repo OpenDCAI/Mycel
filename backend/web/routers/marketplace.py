@@ -87,6 +87,7 @@ async def publish_agent_user_to_marketplace(
 ) -> dict[str, Any]:
     user_repo = request.app.state.user_repo
     agent_config_repo = _agent_config_repo(request)
+    skill_repo = _skill_repo(request)
     await _verify_user_ownership(req.user_id, user_id, user_repo)
 
     publisher_user = user_repo.get_by_id(user_id)
@@ -105,6 +106,7 @@ async def publish_agent_user_to_marketplace(
         publisher_username=username,
         user_repo=user_repo,
         agent_config_repo=agent_config_repo,
+        skill_repo=skill_repo,
     )
 
 

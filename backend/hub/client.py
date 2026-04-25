@@ -117,8 +117,8 @@ def get_item_version_snapshot(item_id: str, version: str) -> dict:
     return _hub_api("GET", f"/items/{item_id}/versions/{version}")
 
 
-def _agent_snapshot_payload(config: Any) -> dict:
-    return snapshot_from_resolved_config(resolve_agent_config(config)).model_dump(mode="json")
+def _agent_snapshot_payload(config: Any, skill_repo: Any) -> dict:
+    return snapshot_from_resolved_config(resolve_agent_config(config, skill_repo=skill_repo)).model_dump(mode="json")
 
 
 def _load_repo_publish_material(user_id: str, user_repo: Any, agent_config_repo: Any) -> Any:
@@ -142,13 +142,16 @@ def publish(
     publisher_username: str,
     user_repo: Any = None,
     agent_config_repo: Any = None,
+    skill_repo: Any = None,
 ) -> dict:
     """Publish a local AgentSnapshot to the Hub."""
     if user_repo is None or agent_config_repo is None:
         raise RuntimeError("user_repo and agent_config_repo are required for publish()")
+    if skill_repo is None:
+        raise RuntimeError("skill_repo is required for publish()")
 
     config = _load_repo_publish_material(user_id, user_repo, agent_config_repo)
-    snapshot = _agent_snapshot_payload(config)
+    snapshot = _agent_snapshot_payload(config, skill_repo)
     meta = copy.deepcopy(config.meta)
 
     new_version = bump_semver(config.version, bump_type)
@@ -297,8 +300,6 @@ def apply_item(
                     name=skill_name,
                     description=skill_description,
                     version=source_version,
-                    content=content,
-                    files=skill_files,
                     source={
                         "marketplace_item_id": item_id,
                         "source_version": source_version,

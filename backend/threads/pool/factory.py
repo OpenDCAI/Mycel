@@ -14,6 +14,7 @@ def create_agent_sync(
     agent: str | None = None,
     agent_config_id: str | None = None,
     agent_config_repo: Any = None,
+    skill_repo: Any = None,
     thread_repo: Any = None,
     user_repo: Any = None,
     queue_manager: Any = None,
@@ -46,5 +47,6 @@ def create_agent_sync(
         agent=agent,
         agent_config_id=agent_config_id,
         agent_config_repo=agent_config_repo,
+        skill_repo=skill_repo,
         extra_allowed_paths=extra_allowed_paths,
     )

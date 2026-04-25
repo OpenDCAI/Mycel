@@ -2,20 +2,20 @@ from datetime import UTC, datetime
 
 import pytest
 
-from config.agent_config_types import AgentSkill, SkillPackage
+from config.agent_config_types import AgentSkill, ResolvedSkill, SkillPackage
 
 
-def test_agent_skill_model_normalizes_file_paths() -> None:
-    agent_skill = AgentSkill(
+def test_resolved_skill_model_normalizes_file_paths() -> None:
+    resolved_skill = ResolvedSkill(
         name="query-helper",
         content="---\nname: query-helper\n---\nUse exact terms.",
         files={"references\\query.md": "Prefer precise queries."},
     )
 
-    assert agent_skill.files == {"references/query.md": "Prefer precise queries."}
+    assert resolved_skill.files == {"references/query.md": "Prefer precise queries."}
 
 
-def test_agent_skill_model_rejects_duplicate_file_paths_after_normalization() -> None:
+def test_resolved_skill_model_rejects_duplicate_file_paths_after_normalization() -> None:
     common = {
         "content": "---\nname: query-helper\n---\nUse exact terms.",
         "files": {
@@ -25,7 +25,14 @@ def test_agent_skill_model_rejects_duplicate_file_paths_after_normalization() ->
     }
 
     with pytest.raises(ValueError, match="Skill files contain duplicate path after normalization: references/query.md"):
-        AgentSkill(name="query-helper", **common)
+        ResolvedSkill(name="query-helper", **common)
+
+
+def test_agent_skill_model_has_no_resolved_content() -> None:
+    agent_skill = AgentSkill(skill_id="query-helper", package_id="package-1", name="query-helper")
+
+    assert "content" not in agent_skill.model_dump()
+    assert "files" not in agent_skill.model_dump()
 
 
 def test_skill_package_requires_package_identity_and_skill_md() -> None:

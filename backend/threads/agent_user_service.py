@@ -577,9 +577,6 @@ def _skills_from_patch(current_config: AgentConfig, config_patch: dict[str, Any]
         if library_skill is None:
             raise RuntimeError(f"Library skill not found: {name}")
         library_package = _selected_library_package(owner_user_id, library_skill, skill_repo)
-        content = str(library_package.skill_md)
-        if enabled and not content.strip():
-            raise RuntimeError(f"Skill {name!r} has no content")
         description = item.get("desc") or item.get("description")
         if description is None and library_skill is not None:
             description = library_skill.description
@@ -599,12 +596,6 @@ def _skills_from_patch(current_config: AgentConfig, config_patch: dict[str, Any]
                     or item.get("version")
                     or (current_skill.version if current_skill is not None else "")
                     or "0.1.0"
-                ),
-                content=content,
-                files=dict(
-                    (library_package.files if library_package is not None else {})
-                    or item.get("files")
-                    or (current_skill.files if current_skill is not None else {})
                 ),
                 source=dict(
                     (library_package.source if library_package is not None else {})

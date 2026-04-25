@@ -115,6 +115,7 @@ class LeonAgent:
         agent: str | None = None,
         agent_config_id: str | None = None,
         agent_config_repo: Any = None,
+        skill_repo: Any = None,
         allowed_file_extensions: list[str] | None = None,
         block_dangerous_commands: bool | None = None,
         block_network_commands: bool | None = None,
@@ -165,6 +166,9 @@ class LeonAgent:
 
             if uses_supabase_storage():
                 runtime_storage = build_storage_container()
+        if skill_repo is None and runtime_storage is not None:
+            skill_repo_factory = getattr(runtime_storage, "skill_repo", None)
+            skill_repo = skill_repo_factory() if callable(skill_repo_factory) else None
 
         self.agent_id: str | None = None
         self.extra_allowed_paths = extra_allowed_paths
@@ -192,6 +196,7 @@ class LeonAgent:
             agent_name=agent,
             agent_config_id=agent_config_id,
             agent_config_repo=agent_config_repo,
+            skill_repo=skill_repo,
             workspace_root=workspace_root,
             sandbox_name=requested_sandbox_name,
             model_name=model_name,
@@ -441,11 +446,11 @@ class LeonAgent:
         """
         from config.defaults.tool_catalog import TOOLS_BY_NAME, tool_enabled_for_agent
 
-        if getattr(self, "_resolved_agent_config", None) is not None:
-            runtime = self._resolved_agent_config.runtime_settings
-            configured_tools = list(self._resolved_agent_config.tools or ["*"])
-        else:
+        resolved_config = getattr(self, "_resolved_agent_config", None)
+        if resolved_config is None:
             return set()
+        runtime = resolved_config.runtime_settings
+        configured_tools = list(resolved_config.tools or ["*"])
         return {
             tool_name
             for tool_name in TOOLS_BY_NAME
@@ -453,8 +458,9 @@ class LeonAgent:
         }
 
     def _get_mcp_server_configs(self) -> dict[str, Any]:
-        if getattr(self, "_resolved_agent_config", None) is not None:
-            return {server.name: server for server in self._resolved_agent_config.mcp_servers if server.enabled}
+        resolved_config = getattr(self, "_resolved_agent_config", None)
+        if resolved_config is not None:
+            return {server.name: server for server in resolved_config.mcp_servers if server.enabled}
         return self.config.mcp.servers
 
     def _get_integration_instruction_blocks(self) -> dict[str, str]:
@@ -465,6 +471,7 @@ class LeonAgent:
         agent_name: str | None,
         agent_config_id: str | None,
         agent_config_repo: Any,
+        skill_repo: Any,
         workspace_root: str | Path | None,
         sandbox_name: str | None,
         model_name: str | None,
@@ -536,7 +543,7 @@ class LeonAgent:
             agent_config = agent_config_repo.get_agent_config(agent_config_id)
             if agent_config is None:
                 raise RuntimeError(f"Agent config not found: {agent_config_id}")
-            self._resolved_agent_config = resolve_agent_config(agent_config)
+            self._resolved_agent_config = resolve_agent_config(agent_config, skill_repo=skill_repo)
             self._agent_override = RuntimeAgentDefinition(
                 name=self._resolved_agent_config.name,
                 description=self._resolved_agent_config.description,
@@ -1158,10 +1165,11 @@ class LeonAgent:
 
         # Skills tools
         resolved_skills = []
-        if getattr(self, "_resolved_agent_config", None) is not None:
+        resolved_config = getattr(self, "_resolved_agent_config", None)
+        if resolved_config is not None:
             resolved_skills = [
                 {"name": skill.name, "content": skill.content, "files": skill.files, "meta": skill.source}
-                for skill in self._resolved_agent_config.skills
+                for skill in resolved_config.skills
             ]
         if resolved_skills:
             self._skills_service = SkillsService(
@@ -1254,8 +1262,9 @@ class LeonAgent:
         # If agent override is set, use its system_prompt + rules.
         if hasattr(self, "_agent_override") and self._agent_override:
             prompt = self._agent_override.system_prompt
-            if getattr(self, "_resolved_agent_config", None) is not None and self._resolved_agent_config.rules:
-                rule_parts = [f"## {rule.name}\n{rule.content}" for rule in self._resolved_agent_config.rules if rule.content.strip()]
+            resolved_config = getattr(self, "_resolved_agent_config", None)
+            if resolved_config is not None and resolved_config.rules:
+                rule_parts = [f"## {rule.name}\n{rule.content}" for rule in resolved_config.rules if rule.content.strip()]
                 if rule_parts:
                     prompt += "\n\n---\n\n" + "\n\n".join(rule_parts)
                 return prompt

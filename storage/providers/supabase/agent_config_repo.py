@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from typing import Any
 
-from config.agent_config_resolver import resolve_agent_config, validate_agent_skill_content
 from config.agent_config_types import AgentConfig, AgentRule, AgentSkill, AgentSubAgent, McpServerConfig
 from storage.providers.supabase import _query as q
 
@@ -72,9 +71,6 @@ class SupabaseAgentConfigRepo:
 
     def save_agent_config(self, config: AgentConfig) -> None:
         _reject_duplicate_child_names(config)
-        resolve_agent_config(config)
-        for skill in config.skills:
-            validate_agent_skill_content(skill)
         payload = config.model_dump(mode="json")
         q.schema_rpc(self._client, _SCHEMA, "save_agent_config", {"payload": payload}, _REPO).execute()
 
@@ -104,8 +100,6 @@ class SupabaseAgentConfigRepo:
                     name=skill["name"],
                     description=skill.get("description") or "",
                     version=package.get("version") or "0.1.0",
-                    content=package["skill_md"],
-                    files=dict(package.get("files_json") or {}),
                     enabled=bool(row.get("enabled", True)),
                     source=dict(package.get("source_json") or skill.get("source_json") or {}),
                 )
