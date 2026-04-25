@@ -1733,7 +1733,9 @@ def test_apply_snapshot_saves_one_agent_config_aggregate():
         "source_at": saved_configs[0].skills[0].source["source_at"],
     }
     assert saved_configs[0].skills[0].source == package.source
-    assert skill_repo.get_by_id("user-1", "search").source == package.source
+    library_skill = skill_repo.get_by_id("user-1", "search")
+    assert library_skill is not None
+    assert library_skill.source == package.source
     assert saved_configs[0].rules[0].content == "rule body"
     assert saved_configs[0].sub_agents[0].name == "Scout"
     assert saved_configs[0].meta["source"]["source_version"] == "1.0.0"
