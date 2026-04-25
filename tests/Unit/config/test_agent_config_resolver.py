@@ -121,7 +121,7 @@ def test_resolver_names_skill_working_set_as_resolved_skills() -> None:
 
 
 def test_resolver_rejects_skill_without_package_id():
-    config = _config(skills=[AgentSkill(skill_id="broken", name="broken")])
+    config = _config(skills=[AgentSkill(skill_id="broken", name="broken", version="1.0.0")])
 
     with pytest.raises(ValueError) as excinfo:
         resolve_agent_config(config, skill_repo=_SkillRepo())
@@ -159,7 +159,7 @@ def test_agent_config_rejects_blank_identity_fields():
 
 
 def test_resolver_rejects_skill_without_frontmatter():
-    config = _config(skills=[AgentSkill(skill_id="broken", package_id="broken-package", name="broken")])
+    config = _config(skills=[AgentSkill(skill_id="broken", package_id="broken-package", name="broken", version="1.0.0")])
 
     with pytest.raises(ValueError) as excinfo:
         resolve_agent_config(
@@ -189,6 +189,7 @@ def test_resolver_rejects_skill_frontmatter_without_name():
                 skill_id="broken",
                 package_id="broken-package",
                 name="broken",
+                version="1.0.0",
             )
         ]
     )
@@ -221,6 +222,7 @@ def test_resolver_rejects_display_name_without_name():
                 skill_id="broken",
                 package_id="broken-package",
                 name="broken",
+                version="1.0.0",
             )
         ]
     )
@@ -253,6 +255,7 @@ def test_resolver_rejects_skill_frontmatter_name_that_does_not_match_agent_skill
                 skill_id="visible-skill",
                 package_id="visible-package",
                 name="Visible Skill",
+                version="1.0.0",
             )
         ]
     )
@@ -299,6 +302,7 @@ def test_resolver_uses_selected_package_source_not_agent_skill_source():
                 skill_id="github",
                 package_id="github-package",
                 name="github",
+                version="1.0.0",
                 source={"source_version": "agent-stale"},
             )
         ]

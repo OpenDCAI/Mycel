@@ -40,7 +40,7 @@ class SkillPackage(AgentConfigSchemaModel):
     id: str
     owner_user_id: str
     skill_id: str
-    version: str = "0.1.0"
+    version: str
     hash: str
     manifest: dict[str, Any] = Field(default_factory=dict)
     skill_md: str
@@ -67,7 +67,7 @@ class AgentSkill(AgentConfigSchemaModel):
     package_id: str | None = None
     name: str
     description: str = ""
-    version: str = "0.1.0"
+    version: str
     enabled: bool = True
     source: dict[str, Any] = Field(default_factory=dict)
 
@@ -87,7 +87,7 @@ class AgentSkill(AgentConfigSchemaModel):
 class ResolvedSkill(AgentConfigSchemaModel):
     name: str
     description: str = ""
-    version: str = "0.1.0"
+    version: str
     content: str
     files: dict[str, str] = Field(default_factory=dict)
     source: dict[str, Any] = Field(default_factory=dict)
