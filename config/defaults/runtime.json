@@ -67,7 +67,7 @@
   },
   "skills": {
     "enabled": true,
-    "paths": ["~/.leon/skills"],
+    "paths": [],
     "skills": {}
   }
 }
