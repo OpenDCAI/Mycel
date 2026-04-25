@@ -604,6 +604,8 @@ def _selected_library_package(owner_user_id: str, library_skill: Any, skill_repo
     package = skill_repo.get_package(owner_user_id, package_id)
     if package is None:
         raise RuntimeError(f"Library skill selected package not found: {package_id}")
+    if getattr(package, "skill_id", None) != library_skill.id:
+        raise RuntimeError(f"Library skill selected package does not belong to Skill: {package_id}")
     return package
 
 
