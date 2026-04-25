@@ -41,31 +41,25 @@ class _MemorySkillRepo:
         self.selected.append((owner_user_id, skill_id, package_id))
 
 
-def test_import_file_skill_rejects_name_drift_for_existing_skill_id(monkeypatch: pytest.MonkeyPatch, tmp_path):
+def test_import_file_skill_generates_library_skill_id(monkeypatch: pytest.MonkeyPatch, tmp_path):
     library_dir = tmp_path / "library"
-    skill_dir = library_dir / "skills" / "same-skill"
+    skill_dir = library_dir / "skills" / "folder-name"
     skill_dir.mkdir(parents=True)
-    (skill_dir / "SKILL.md").write_text("---\nname: Renamed Skill\ndescription: Renamed\nversion: 1.0.0\n---\nBody", encoding="utf-8")
-    repo = _MemorySkillRepo(
-        Skill(
-            id="same-skill",
-            owner_user_id="owner-1",
-            name="Original Skill",
-            created_at=datetime(2026, 4, 24, tzinfo=UTC),
-            updated_at=datetime(2026, 4, 24, tzinfo=UTC),
-        )
-    )
+    (skill_dir / "SKILL.md").write_text("---\nname: New Skill\ndescription: New\nversion: 1.0.0\n---\nBody", encoding="utf-8")
+    repo = _MemorySkillRepo()
     monkeypatch.setattr(import_file_skills_to_library, "build_storage_container", lambda: SimpleNamespace(skill_repo=lambda: repo))
+    monkeypatch.setattr(import_file_skills_to_library, "generate_skill_id", lambda: "skill_generated123")
 
-    with pytest.raises(ValueError, match="frontmatter name must match existing Skill name"):
-        import_file_skills_to_library.import_skills("owner-1", library_dir)
+    import_file_skills_to_library.import_skills("owner-1", library_dir)
 
-    assert repo.saved == []
+    assert repo.saved[0].id == "skill_generated123"
+    assert repo.packages[0].skill_id == "skill_generated123"
+    assert repo.selected == [("owner-1", "skill_generated123", repo.packages[0].id)]
 
 
-def test_import_file_skill_rejects_same_name_under_different_skill_id(monkeypatch: pytest.MonkeyPatch, tmp_path):
+def test_import_file_skill_reuses_existing_skill_by_name(monkeypatch: pytest.MonkeyPatch, tmp_path):
     library_dir = tmp_path / "library"
-    skill_dir = library_dir / "skills" / "new-skill"
+    skill_dir = library_dir / "skills" / "folder-name"
     skill_dir.mkdir(parents=True)
     (skill_dir / "SKILL.md").write_text("---\nname: Shared Skill\ndescription: Shared\nversion: 1.0.0\n---\nBody", encoding="utf-8")
     repo = _MemorySkillRepo(
@@ -78,11 +72,17 @@ def test_import_file_skill_rejects_same_name_under_different_skill_id(monkeypatc
         )
     )
     monkeypatch.setattr(import_file_skills_to_library, "build_storage_container", lambda: SimpleNamespace(skill_repo=lambda: repo))
+    monkeypatch.setattr(
+        import_file_skills_to_library,
+        "generate_skill_id",
+        lambda: (_ for _ in ()).throw(AssertionError("must reuse the existing Library Skill")),
+    )
 
-    with pytest.raises(ValueError, match="Skill name already exists under a different Library id"):
-        import_file_skills_to_library.import_skills("owner-1", library_dir)
+    import_file_skills_to_library.import_skills("owner-1", library_dir)
 
-    assert repo.saved == []
+    assert repo.saved[0].id == "original-skill"
+    assert repo.packages[0].skill_id == "original-skill"
+    assert repo.selected == [("owner-1", "original-skill", repo.packages[0].id)]
 
 
 def test_import_file_skill_rejects_unreadable_adjacent_file(monkeypatch: pytest.MonkeyPatch, tmp_path):
@@ -116,15 +116,16 @@ def test_import_file_skill_stores_adjacent_files_as_posix_paths(monkeypatch: pyt
 
     monkeypatch.setattr(Path, "relative_to", windows_relative_to)
     monkeypatch.setattr(import_file_skills_to_library, "build_storage_container", lambda: SimpleNamespace(skill_repo=lambda: repo))
+    monkeypatch.setattr(import_file_skills_to_library, "generate_skill_id", lambda: "skill_generated123")
 
     import_file_skills_to_library.import_skills("owner-1", library_dir)
 
-    assert repo.saved[0].id == "new-skill"
-    assert repo.packages[0].skill_id == "new-skill"
+    assert repo.saved[0].id == "skill_generated123"
+    assert repo.packages[0].skill_id == "skill_generated123"
     assert repo.packages[0].version == "1.0.0"
     assert repo.packages[0].skill_md == "---\nname: New Skill\ndescription: New\nversion: 1.0.0\n---\nBody"
     assert repo.packages[0].manifest["files"][0]["path"] == "references/query.md"
-    assert repo.selected == [("owner-1", "new-skill", repo.packages[0].id)]
+    assert repo.selected == [("owner-1", "skill_generated123", repo.packages[0].id)]
 
 
 def test_import_file_skill_does_not_store_local_skill_path(monkeypatch: pytest.MonkeyPatch, tmp_path):
@@ -134,6 +135,7 @@ def test_import_file_skill_does_not_store_local_skill_path(monkeypatch: pytest.M
     (skill_dir / "SKILL.md").write_text("---\nname: New Skill\ndescription: Imported skill\nversion: 1.0.0\n---\nBody", encoding="utf-8")
     repo = _MemorySkillRepo()
     monkeypatch.setattr(import_file_skills_to_library, "build_storage_container", lambda: SimpleNamespace(skill_repo=lambda: repo))
+    monkeypatch.setattr(import_file_skills_to_library, "generate_skill_id", lambda: "skill_generated123")
 
     import_file_skills_to_library.import_skills("owner-1", library_dir)
 
@@ -174,6 +176,15 @@ def test_import_file_skill_has_no_default_package_version() -> None:
 
     assert "INITIAL_SKILL_PACKAGE_VERSION" not in source
     assert 'return "0.1.0"' not in source
+
+
+def test_import_file_skill_source_does_not_use_directory_name_as_library_identity() -> None:
+    source = inspect.getsource(import_file_skills_to_library)
+
+    assert "generate_skill_id()" in source
+    assert "get_by_id(owner_user_id, skill_dir.name)" not in source
+    assert "skill.id != skill_dir.name" not in source
+    assert "id=skill_dir.name" not in source
 
 
 @pytest.mark.parametrize(
