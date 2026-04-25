@@ -14,7 +14,8 @@ from backend.library import mcp_library
 from backend.library.paths import LIBRARY_DIR
 from backend.sandboxes import provider_availability as sandbox_provider_availability
 from backend.sandboxes.recipe_bootstrap import seed_default_recipes as seed_builtin_recipes
-from config.agent_config_types import Skill
+from config.agent_config_types import Skill, SkillPackage
+from config.skill_package import build_skill_package_hash, build_skill_package_manifest
 from sandbox.recipes import FEATURE_CATALOG, default_recipe_snapshot, normalize_recipe_snapshot, provider_type_from_name
 from storage.contracts import RecipeRepo, SkillRepo
 
@@ -101,6 +102,45 @@ def _now_dt() -> datetime:
 
 def _dt_millis(value: datetime) -> int:
     return int(value.timestamp() * 1000)
+
+
+def _package_id(package_hash: str) -> str:
+    return package_hash.removeprefix("sha256:")
+
+
+def _selected_skill_package(owner_user_id: str, skill: Skill, skill_repo: SkillRepo) -> SkillPackage | None:
+    if not skill.package_id:
+        return None
+    return skill_repo.get_package(owner_user_id, skill.package_id)
+
+
+def _write_skill_package(
+    owner_user_id: str,
+    skill: Skill,
+    content: str,
+    files: dict[str, str],
+    skill_repo: SkillRepo,
+    *,
+    version: str = "0.1.0",
+    source: dict[str, Any] | None = None,
+) -> SkillPackage:
+    package_hash = build_skill_package_hash(content, files)
+    package = skill_repo.create_package(
+        SkillPackage(
+            id=_package_id(package_hash),
+            owner_user_id=owner_user_id,
+            skill_id=skill.id,
+            version=version,
+            hash=package_hash,
+            manifest=build_skill_package_manifest(content, files),
+            skill_md=content,
+            files=files,
+            source=source or {},
+            created_at=_now_dt(),
+        )
+    )
+    skill_repo.select_package(owner_user_id, skill.id, package.id)
+    return package
 
 
 def _file_resource_content_path(resource_type: str, resource_id: str) -> Path | None:
@@ -253,18 +293,18 @@ def create_resource(
         if existing is not None and existing.name != name:
             raise ValueError("Skill id already exists with a different Skill name")
         timestamp = _now_dt()
+        content = f"---\nname: {name}\ndescription: {desc}\n---\n\n{desc}\n"
         skill = skill_repo.upsert(
             Skill(
                 id=rid,
                 owner_user_id=owner_user_id,
                 name=name,
                 description=desc,
-                content=f"---\nname: {name}\ndescription: {desc}\n---\n\n{desc}\n",
-                files={},
                 created_at=timestamp,
                 updated_at=timestamp,
             )
         )
+        _write_skill_package(owner_user_id, skill, content, {}, skill_repo)
         return _library_resource_item(
             "skill",
             skill.id,
@@ -478,7 +518,12 @@ def get_resource_content(
         owner_user_id = _require_skill_owner(owner_user_id)
         skill_repo = _require_skill_repo(skill_repo)
         skill = skill_repo.get_by_id(owner_user_id, resource_id)
-        return skill.content if skill is not None else None
+        if skill is None:
+            return None
+        package = _selected_skill_package(owner_user_id, skill, skill_repo)
+        if package is None:
+            raise RuntimeError(f"Skill {resource_id} has no selected package")
+        return package.skill_md
     content_path = _file_resource_content_path(resource_type, resource_id)
     if content_path is not None:
         if content_path.exists():
@@ -509,7 +554,10 @@ def update_resource_content(
         frontmatter_name = _skill_frontmatter_name(content)
         if frontmatter_name != current.name:
             raise ValueError("Skill content frontmatter name must match Skill name")
-        skill_repo.upsert(current.model_copy(update={"content": content, "updated_at": _now_dt()}))
+        current_package = _selected_skill_package(owner_user_id, current, skill_repo)
+        files = current_package.files if current_package is not None else {}
+        updated = skill_repo.upsert(current.model_copy(update={"updated_at": _now_dt()}))
+        _write_skill_package(owner_user_id, updated, content, files, skill_repo)
         return True
     content_path = _file_resource_content_path(resource_type, resource_id)
     meta_path = _file_resource_meta_path(resource_type, resource_id)

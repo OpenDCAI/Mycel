@@ -1,12 +1,28 @@
 from pathlib import Path
 
 
-def test_agent_config_schema_rejects_skill_id_outside_owner() -> None:
+def test_agent_config_schema_uses_library_package_storage() -> None:
     sql = Path("storage/schema/2026_04_24_agent_config_resolved_config_hardcut.sql").read_text(encoding="utf-8")
 
-    assert "agent_skill.skill_id does not belong to owner" in sql
-    assert "from agent.skills" in sql
-    assert "owner_user_id = owner_id" in sql
+    assert "create schema if not exists library" in sql
+    assert "create table if not exists library.skills" in sql
+    assert "create table if not exists library.skill_packages" in sql
+    assert "create table if not exists agent.skill_bindings" in sql
+    assert "drop table if exists agent.agent_skills cascade" in sql
+    assert "drop table if exists agent.skills cascade" in sql
+    assert "skill_md text not null" in sql
+    assert "files_json jsonb not null default '{}'::jsonb" in sql
+    assert "manifest_json jsonb not null default '{}'::jsonb" in sql
+    assert "artifact_uri" not in sql
+    assert "references library.skill_packages(id)" in sql
+    assert "agent_config.skills child.skill_id is required" in sql
+    assert "agent_config.skills child.package_id is required" in sql
+    assert "agent_skill.package_id does not belong to owner" in sql
+    assert "from library.skill_packages" in sql
+    assert "insert into agent.skill_bindings" in sql
+    assert "insert into agent.agent_skills" not in sql
+    assert "agent.agent_skills.content" not in sql
+    assert "agent.agent_skills.files_json" not in sql
 
 
 def test_agent_config_schema_rejects_duplicate_child_names_inside_rpc() -> None:

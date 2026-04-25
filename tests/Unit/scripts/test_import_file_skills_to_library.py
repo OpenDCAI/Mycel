@@ -7,7 +7,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from config.agent_config_types import Skill
+from config.agent_config_types import Skill, SkillPackage
 from scripts import import_file_skills_to_library
 
 
@@ -15,6 +15,8 @@ class _MemorySkillRepo:
     def __init__(self, existing: Skill | None = None) -> None:
         self.existing = existing
         self.saved: list[Skill] = []
+        self.packages: list[SkillPackage] = []
+        self.selected: list[tuple[str, str, str]] = []
 
     def list_for_owner(self, owner_user_id: str) -> list[Skill]:
         if self.existing and self.existing.owner_user_id == owner_user_id:
@@ -30,6 +32,13 @@ class _MemorySkillRepo:
         self.saved.append(skill)
         return skill
 
+    def create_package(self, package: SkillPackage) -> SkillPackage:
+        self.packages.append(package)
+        return package
+
+    def select_package(self, owner_user_id: str, skill_id: str, package_id: str) -> None:
+        self.selected.append((owner_user_id, skill_id, package_id))
+
 
 def test_import_file_skill_rejects_name_drift_for_existing_skill_id(monkeypatch: pytest.MonkeyPatch, tmp_path):
     library_dir = tmp_path / "library"
@@ -41,7 +50,6 @@ def test_import_file_skill_rejects_name_drift_for_existing_skill_id(monkeypatch:
             id="same-skill",
             owner_user_id="owner-1",
             name="Original Skill",
-            content="---\nname: Original Skill\n---\nBody",
             created_at=datetime(2026, 4, 24, tzinfo=UTC),
             updated_at=datetime(2026, 4, 24, tzinfo=UTC),
         )
@@ -64,7 +72,6 @@ def test_import_file_skill_rejects_same_name_under_different_skill_id(monkeypatc
             id="original-skill",
             owner_user_id="owner-1",
             name="Shared Skill",
-            content="---\nname: Shared Skill\n---\nBody",
             created_at=datetime(2026, 4, 24, tzinfo=UTC),
             updated_at=datetime(2026, 4, 24, tzinfo=UTC),
         )
@@ -111,7 +118,11 @@ def test_import_file_skill_stores_adjacent_files_as_posix_paths(monkeypatch: pyt
 
     import_file_skills_to_library.import_skills("owner-1", library_dir)
 
-    assert repo.saved[0].files == {"references/query.md": "Use exact queries."}
+    assert repo.saved[0].id == "new-skill"
+    assert repo.packages[0].skill_id == "new-skill"
+    assert repo.packages[0].skill_md == "---\nname: New Skill\n---\nBody"
+    assert repo.packages[0].manifest["files"][0]["path"] == "references/query.md"
+    assert repo.selected == [("owner-1", "new-skill", repo.packages[0].id)]
 
 
 def test_import_file_skill_rejects_adjacent_file_path_collision(monkeypatch: pytest.MonkeyPatch, tmp_path):

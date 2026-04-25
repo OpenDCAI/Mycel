@@ -102,18 +102,39 @@ def _tables() -> dict[str, list[dict]]:
                 "meta_json": {"source": "unit"},
             }
         ],
-        "agent.agent_skills": [
+        "agent.skill_bindings": [
             {
                 "id": "agent-skill-1",
                 "agent_config_id": "cfg-1",
                 "skill_id": "skill-1",
+                "package_id": "package-1",
+                "enabled": True,
+            }
+        ],
+        "library.skills": [
+            {
+                "id": "skill-1",
+                "owner_user_id": "owner-1",
                 "name": "github",
                 "description": "GitHub guidance",
-                "version": "1.0.0",
-                "content": "---\nname: github\n---\n",
-                "files_json": {"references/query.md": "Prefer precise queries."},
-                "enabled": True,
+                "package_id": "package-1",
                 "source_json": {"source_version": "1.0.0"},
+                "created_at": "2026-04-24T00:00:00+00:00",
+                "updated_at": "2026-04-24T00:00:01+00:00",
+            }
+        ],
+        "library.skill_packages": [
+            {
+                "id": "package-1",
+                "owner_user_id": "owner-1",
+                "skill_id": "skill-1",
+                "version": "1.0.0",
+                "hash": "sha256:abc",
+                "manifest_json": {"files": [{"path": "references/query.md"}]},
+                "skill_md": "---\nname: github\n---\n",
+                "files_json": {"references/query.md": "Prefer precise queries."},
+                "source_json": {"source_version": "1.0.0"},
+                "created_at": "2026-04-24T00:00:00+00:00",
             }
         ],
         "agent.agent_rules": [{"id": "rule-1", "agent_config_id": "cfg-1", "name": "Cite", "content": "Always cite.", "enabled": True}],
@@ -156,6 +177,7 @@ def test_get_agent_config_reads_full_aggregate_from_final_tables() -> None:
             AgentSkill(
                 id="agent-skill-1",
                 skill_id="skill-1",
+                package_id="package-1",
                 name="github",
                 description="GitHub guidance",
                 version="1.0.0",
@@ -223,6 +245,7 @@ def test_save_agent_config_calls_single_rpc_with_full_payload() -> None:
                 AgentSkill(
                     id="agent-skill-1",
                     skill_id="skill-1",
+                    package_id="package-1",
                     name="github",
                     content="---\nname: github\n---\n",
                     files={"references/query.md": "Prefer precise queries."},
@@ -372,6 +395,6 @@ def test_delete_agent_config_deletes_root_aggregate() -> None:
     repo.delete_agent_config("cfg-1")
 
     assert tables["agent.agent_configs"] == []
-    assert tables["agent.agent_skills"] == []
+    assert tables["agent.skill_bindings"] == []
     assert tables["agent.agent_rules"] == []
     assert tables["agent.agent_sub_agents"] == []

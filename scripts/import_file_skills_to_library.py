@@ -11,8 +11,9 @@ from typing import Any
 import yaml
 
 from backend.library.paths import LIBRARY_DIR
-from config.agent_config_types import Skill
+from config.agent_config_types import Skill, SkillPackage
 from config.skill_files import normalize_skill_file_entries
+from config.skill_package import build_skill_package_hash, build_skill_package_manifest
 from storage.runtime import build_storage_container
 
 
@@ -60,20 +61,34 @@ def import_skills(owner_user_id: str, library_dir: Path) -> int:
             if skill.name == skill_name and skill.id != skill_dir.name:
                 raise ValueError("Skill name already exists under a different Library id")
         now = datetime.now(UTC)
-        repo.upsert(
+        files = _read_files(skill_dir)
+        package_hash = build_skill_package_hash(content, files)
+        skill = repo.upsert(
             Skill(
                 id=skill_dir.name,
                 owner_user_id=owner_user_id,
                 name=skill_name,
                 description=str(metadata.get("description") or ""),
-                version=str(metadata.get("version") or "0.1.0"),
-                content=content,
-                files=_read_files(skill_dir),
                 source={"file_skill_dir": str(skill_dir)},
                 created_at=now,
                 updated_at=now,
             )
         )
+        package = repo.create_package(
+            SkillPackage(
+                id=package_hash.removeprefix("sha256:"),
+                owner_user_id=owner_user_id,
+                skill_id=skill.id,
+                version=str(metadata.get("version") or "0.1.0"),
+                hash=package_hash,
+                manifest=build_skill_package_manifest(content, files),
+                skill_md=content,
+                files=files,
+                source={"file_skill_dir": str(skill_dir)},
+                created_at=now,
+            )
+        )
+        repo.select_package(owner_user_id, skill.id, package.id)
         count += 1
     return count
 

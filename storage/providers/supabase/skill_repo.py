@@ -4,12 +4,13 @@ from __future__ import annotations
 
 from typing import Any
 
-from config.agent_config_types import Skill
+from config.agent_config_types import Skill, SkillPackage
 from storage.providers.supabase import _query as q
 
 _REPO = "skill repo"
-_SCHEMA = "agent"
-_TABLE = "skills"
+_SCHEMA = "library"
+_SKILLS_TABLE = "skills"
+_PACKAGES_TABLE = "skill_packages"
 
 
 class SupabaseSkillRepo:
@@ -19,12 +20,15 @@ class SupabaseSkillRepo:
     def close(self) -> None:
         return None
 
-    def _table(self) -> Any:
-        return q.schema_table(self._client, _SCHEMA, _TABLE, _REPO)
+    def _skills_table(self) -> Any:
+        return q.schema_table(self._client, _SCHEMA, _SKILLS_TABLE, _REPO)
+
+    def _packages_table(self) -> Any:
+        return q.schema_table(self._client, _SCHEMA, _PACKAGES_TABLE, _REPO)
 
     def list_for_owner(self, owner_user_id: str) -> list[Skill]:
         rows = q.rows(
-            self._table().select("*").eq("owner_user_id", owner_user_id).execute(),
+            self._skills_table().select("*").eq("owner_user_id", owner_user_id).execute(),
             _REPO,
             "list_for_owner",
         )
@@ -32,7 +36,7 @@ class SupabaseSkillRepo:
 
     def get_by_id(self, owner_user_id: str, skill_id: str) -> Skill | None:
         rows = q.rows(
-            self._table().select("*").eq("owner_user_id", owner_user_id).eq("id", skill_id).execute(),
+            self._skills_table().select("*").eq("owner_user_id", owner_user_id).eq("id", skill_id).execute(),
             _REPO,
             "get_by_id",
         )
@@ -42,10 +46,9 @@ class SupabaseSkillRepo:
 
     def upsert(self, skill: Skill) -> Skill:
         payload = skill.model_dump(mode="json")
-        payload["files_json"] = payload.pop("files")
         payload["source_json"] = payload.pop("source")
         rows = q.rows(
-            self._table().upsert(payload).execute(),
+            self._skills_table().upsert(payload).execute(),
             _REPO,
             "upsert",
         )
@@ -53,8 +56,35 @@ class SupabaseSkillRepo:
             raise RuntimeError("Supabase skill repo expected upsert to return a row")
         return _skill_from_row(rows[0])
 
+    def create_package(self, package: SkillPackage) -> SkillPackage:
+        payload = package.model_dump(mode="json")
+        payload["manifest_json"] = payload.pop("manifest")
+        payload["files_json"] = payload.pop("files")
+        payload["source_json"] = payload.pop("source")
+        rows = q.rows(
+            self._packages_table().upsert(payload).execute(),
+            _REPO,
+            "create_package",
+        )
+        if not rows:
+            raise RuntimeError("Supabase skill repo expected package upsert to return a row")
+        return _package_from_row(rows[0])
+
+    def get_package(self, owner_user_id: str, package_id: str) -> SkillPackage | None:
+        rows = q.rows(
+            self._packages_table().select("*").eq("owner_user_id", owner_user_id).eq("id", package_id).execute(),
+            _REPO,
+            "get_package",
+        )
+        if not rows:
+            return None
+        return _package_from_row(rows[0])
+
+    def select_package(self, owner_user_id: str, skill_id: str, package_id: str) -> None:
+        self._skills_table().update({"package_id": package_id}).eq("owner_user_id", owner_user_id).eq("id", skill_id).execute()
+
     def delete(self, owner_user_id: str, skill_id: str) -> None:
-        self._table().delete().eq("owner_user_id", owner_user_id).eq("id", skill_id).execute()
+        self._skills_table().delete().eq("owner_user_id", owner_user_id).eq("id", skill_id).execute()
 
 
 def _skill_from_row(row: dict[str, Any]) -> Skill:
@@ -63,10 +93,23 @@ def _skill_from_row(row: dict[str, Any]) -> Skill:
         owner_user_id=row["owner_user_id"],
         name=row["name"],
         description=row.get("description") or "",
-        version=row.get("version") or "0.1.0",
-        content=row["content"],
-        files=dict(row.get("files_json") or {}),
+        package_id=row.get("package_id"),
         source=dict(row.get("source_json") or {}),
         created_at=row["created_at"],
         updated_at=row["updated_at"],
+    )
+
+
+def _package_from_row(row: dict[str, Any]) -> SkillPackage:
+    return SkillPackage(
+        id=row["id"],
+        owner_user_id=row["owner_user_id"],
+        skill_id=row["skill_id"],
+        version=row.get("version") or "0.1.0",
+        hash=row["hash"],
+        manifest=dict(row.get("manifest_json") or {}),
+        skill_md=row["skill_md"],
+        files=dict(row.get("files_json") or {}),
+        source=dict(row.get("source_json") or {}),
+        created_at=row["created_at"],
     )

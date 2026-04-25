@@ -552,6 +552,16 @@ def _library_skill_by_name(owner_user_id: str, name: str, skill_repo: Any) -> An
     return None
 
 
+def _selected_library_package(owner_user_id: str, library_skill: Any, skill_repo: Any) -> Any:
+    package_id = getattr(library_skill, "package_id", None)
+    if not package_id:
+        raise RuntimeError(f"Library skill has no selected package: {library_skill.id}")
+    package = skill_repo.get_package(owner_user_id, package_id)
+    if package is None:
+        raise RuntimeError(f"Library skill selected package not found: {package_id}")
+    return package
+
+
 def _current_skill_by_name_or_id(config: AgentConfig, name: str, skill_id: str | None) -> AgentSkill | None:
     for skill in config.skills:
         if skill.name == name:
@@ -569,13 +579,16 @@ def _skills_from_patch(current_config: AgentConfig, config_patch: dict[str, Any]
 
     skills: list[AgentSkill] = []
     seen_names: set[str] = set()
-    for item in config_patch["skills"]:
+    skill_items = config_patch["skills"]
+    for item in skill_items:
         if not (isinstance(item, dict) and item.get("name")):
             raise RuntimeError("Skill patch item must include name")
         name = str(item["name"])
         if name in seen_names:
             raise RuntimeError(f"Duplicate Skill name in patch: {name}")
         seen_names.add(name)
+    for item in skill_items:
+        name = str(item["name"])
         enabled = bool(item.get("enabled", not bool(item.get("disabled", False))))
         explicit_skill_id = item.get("id") or item.get("skill_id")
         explicit_skill_id_str = str(explicit_skill_id) if explicit_skill_id else None
@@ -585,11 +598,10 @@ def _skills_from_patch(current_config: AgentConfig, config_patch: dict[str, Any]
         ) or _library_skill_by_name(owner_user_id, name, skill_repo)
         if explicit_skill_id_str and library_skill is None:
             raise RuntimeError(f"Library skill not found: {explicit_skill_id_str}")
-        content = str(
-            (library_skill.content if library_skill is not None else "")
-            or item.get("content")
-            or (current_skill.content if current_skill is not None else "")
-        )
+        if library_skill is None:
+            raise RuntimeError(f"Library skill not found: {name}")
+        library_package = _selected_library_package(owner_user_id, library_skill, skill_repo)
+        content = str(library_package.skill_md)
         if enabled and not content.strip():
             raise RuntimeError(f"Skill {name!r} has no content")
         description = item.get("desc") or item.get("description")
@@ -602,23 +614,25 @@ def _skills_from_patch(current_config: AgentConfig, config_patch: dict[str, Any]
         skills.append(
             AgentSkill(
                 id=str(item.get("agent_skill_id") or item.get("row_id") or (current_skill.id if current_skill is not None else "")),
-                skill_id=(library_skill.id if library_skill is not None else None),
-                name=library_skill.name if library_skill is not None else current_skill.name if current_skill is not None else name,
+                skill_id=library_skill.id,
+                package_id=library_package.id,
+                name=library_skill.name,
                 description=str(description or ""),
                 version=str(
-                    (library_skill.version if library_skill is not None else "")
+                    (library_package.version if library_package is not None else "")
                     or item.get("version")
                     or (current_skill.version if current_skill is not None else "")
                     or "0.1.0"
                 ),
                 content=content,
                 files=dict(
-                    (library_skill.files if library_skill is not None else {})
+                    (library_package.files if library_package is not None else {})
                     or item.get("files")
                     or (current_skill.files if current_skill is not None else {})
                 ),
                 source=dict(
-                    (library_skill.source if library_skill is not None else {})
+                    (library_package.source if library_package is not None else {})
+                    or (library_skill.source if library_skill is not None else {})
                     or item.get("source")
                     or (current_skill.source if current_skill is not None else {})
                 ),

@@ -10,6 +10,7 @@ from storage.providers.supabase import _query as q
 
 _REPO = "agent_config repo"
 _SCHEMA = "agent"
+_LIBRARY_SCHEMA = "library"
 
 
 def _reject_duplicate_names(label: str, names: list[str]) -> None:
@@ -37,6 +38,9 @@ class SupabaseAgentConfigRepo:
     def _table(self, table: str) -> Any:
         return q.schema_table(self._client, _SCHEMA, table, _REPO)
 
+    def _library_table(self, table: str) -> Any:
+        return q.schema_table(self._client, _LIBRARY_SCHEMA, table, _REPO)
+
     def get_agent_config(self, agent_config_id: str) -> AgentConfig | None:
         rows = q.rows(
             self._table("agent_configs").select("*").eq("id", agent_config_id).execute(),
@@ -60,7 +64,7 @@ class SupabaseAgentConfigRepo:
             runtime_settings=dict(root.get("runtime_json") or {}),
             compact=dict(root.get("compact_json") or {}),
             meta=dict(root.get("meta_json") or {}),
-            skills=self._list_skill_rows(agent_config_id),
+            skills=self._list_skill_rows(agent_config_id, root["owner_user_id"]),
             rules=self._list_rule_rows(agent_config_id),
             sub_agents=self._list_sub_agent_rows(agent_config_id),
             mcp_servers=self._list_mcp_rows(agent_config_id),
@@ -75,31 +79,58 @@ class SupabaseAgentConfigRepo:
         q.schema_rpc(self._client, _SCHEMA, "save_agent_config", {"payload": payload}, _REPO).execute()
 
     def delete_agent_config(self, agent_config_id: str) -> None:
-        self._table("agent_skills").delete().eq("agent_config_id", agent_config_id).execute()
+        self._table("skill_bindings").delete().eq("agent_config_id", agent_config_id).execute()
         self._table("agent_rules").delete().eq("agent_config_id", agent_config_id).execute()
         self._table("agent_sub_agents").delete().eq("agent_config_id", agent_config_id).execute()
         self._table("agent_configs").delete().eq("id", agent_config_id).execute()
 
-    def _list_skill_rows(self, agent_config_id: str) -> list[AgentSkill]:
-        rows = q.rows(
-            self._table("agent_skills").select("*").eq("agent_config_id", agent_config_id).execute(),
+    def _list_skill_rows(self, agent_config_id: str, owner_user_id: str) -> list[AgentSkill]:
+        binding_rows = q.rows(
+            self._table("skill_bindings").select("*").eq("agent_config_id", agent_config_id).execute(),
             _REPO,
             "_list_skill_rows",
         )
-        return [
-            AgentSkill(
-                id=row.get("id"),
-                skill_id=row.get("skill_id"),
-                name=row["name"],
-                description=row.get("description") or "",
-                version=row.get("version") or "0.1.0",
-                content=row["content"],
-                files=dict(row.get("files_json") or {}),
-                enabled=bool(row.get("enabled", True)),
-                source=dict(row.get("source_json") or {}),
+        skills: list[AgentSkill] = []
+        for row in binding_rows:
+            skill_id = row["skill_id"]
+            package_id = row["package_id"]
+            skill = self._get_library_skill(owner_user_id, skill_id)
+            package = self._get_skill_package(owner_user_id, package_id)
+            skills.append(
+                AgentSkill(
+                    id=row.get("id"),
+                    skill_id=skill_id,
+                    package_id=package_id,
+                    name=skill["name"],
+                    description=skill.get("description") or "",
+                    version=package.get("version") or "0.1.0",
+                    content=package["skill_md"],
+                    files=dict(package.get("files_json") or {}),
+                    enabled=bool(row.get("enabled", True)),
+                    source=dict(package.get("source_json") or skill.get("source_json") or {}),
+                )
             )
-            for row in rows
-        ]
+        return skills
+
+    def _get_library_skill(self, owner_user_id: str, skill_id: str) -> dict[str, Any]:
+        rows = q.rows(
+            self._library_table("skills").select("*").eq("owner_user_id", owner_user_id).eq("id", skill_id).execute(),
+            _REPO,
+            "_get_library_skill",
+        )
+        if not rows:
+            raise RuntimeError(f"AgentConfig references missing Library skill: {skill_id}")
+        return dict(rows[0])
+
+    def _get_skill_package(self, owner_user_id: str, package_id: str) -> dict[str, Any]:
+        rows = q.rows(
+            self._library_table("skill_packages").select("*").eq("owner_user_id", owner_user_id).eq("id", package_id).execute(),
+            _REPO,
+            "_get_skill_package",
+        )
+        if not rows:
+            raise RuntimeError(f"AgentConfig references missing Skill package: {package_id}")
+        return dict(rows[0])
 
     def _list_rule_rows(self, agent_config_id: str) -> list[AgentRule]:
         rows = q.rows(

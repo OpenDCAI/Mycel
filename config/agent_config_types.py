@@ -13,29 +13,48 @@ class Skill(BaseModel):
     owner_user_id: str
     name: str
     description: str = ""
-    version: str = "0.1.0"
-    content: str
-    files: dict[str, str] = Field(default_factory=dict)
+    package_id: str | None = None
     source: dict[str, Any] = Field(default_factory=dict)
     created_at: datetime
     updated_at: datetime
 
-    @field_validator("id", "owner_user_id", "name", "content")
+    @field_validator("id", "owner_user_id", "name")
     @classmethod
     def _non_blank(cls, value: str, info: ValidationInfo) -> str:
         if not value.strip():
             raise ValueError(f"skill.{info.field_name} must not be blank")
         return value
 
+
+class SkillPackage(BaseModel):
+    id: str
+    owner_user_id: str
+    skill_id: str
+    version: str = "0.1.0"
+    hash: str
+    manifest: dict[str, Any] = Field(default_factory=dict)
+    skill_md: str
+    files: dict[str, str] = Field(default_factory=dict)
+    source: dict[str, Any] = Field(default_factory=dict)
+    created_at: datetime
+
+    @field_validator("id", "owner_user_id", "skill_id", "version", "hash", "skill_md")
+    @classmethod
+    def _non_blank(cls, value: str, info: ValidationInfo) -> str:
+        if not value.strip():
+            raise ValueError(f"skill_package.{info.field_name} must not be blank")
+        return value
+
     @field_validator("files", mode="before")
     @classmethod
     def _normalize_files(cls, value: Any) -> Any:
-        return normalize_skill_file_map(value, context="Skill files") if isinstance(value, dict) else value
+        return normalize_skill_file_map(value, context="Skill package files") if isinstance(value, dict) else value
 
 
 class AgentSkill(BaseModel):
     id: str | None = None
     skill_id: str | None = None
+    package_id: str | None = None
     name: str
     description: str = ""
     version: str = "0.1.0"
