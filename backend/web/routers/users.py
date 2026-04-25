@@ -1,7 +1,7 @@
 import logging
 import time
 from pathlib import Path
-from typing import Annotated, Any
+from typing import Annotated, Any, TypedDict
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile
 from fastapi.responses import FileResponse
@@ -21,6 +21,12 @@ ALLOWED_CONTENT_TYPES = {"image/png", "image/jpeg", "image/webp", "image/gif"}
 
 
 users_router = APIRouter(prefix="/api/users", tags=["users"])
+
+
+class RelationshipCandidateMetadata(TypedDict):
+    id: str
+    state: str
+    is_requester: bool
 
 
 @users_router.get("")
@@ -118,18 +124,23 @@ async def delete_avatar(
     return {"status": "ok"}
 
 
-def _relationship_states_for_user(relationship_service: Any, user_id: str) -> dict[str, str]:
+def _relationship_metadata_for_user(relationship_service: Any, user_id: str) -> dict[str, RelationshipCandidateMetadata]:
     if relationship_service is None:
         raise HTTPException(503, "chat bootstrap not attached: relationship_service")
-    states: dict[str, str] = {}
+    relationships: dict[str, RelationshipCandidateMetadata] = {}
     for row in relationship_service.list_for_user(user_id):
         other_id = getattr(row, "other_user_id", None)
         if other_id is None:
             user_low = getattr(row, "user_low")
             user_high = getattr(row, "user_high")
             other_id = user_high if user_id == user_low else user_low
-        states[str(other_id)] = str(getattr(row, "state"))
-    return states
+        initiator_user_id = getattr(row, "initiator_user_id", None)
+        relationships[str(other_id)] = {
+            "id": str(getattr(row, "id")),
+            "state": str(getattr(row, "state")),
+            "is_requester": initiator_user_id == user_id,
+        }
+    return relationships
 
 
 @users_router.get("/chat-candidates")
@@ -146,7 +157,7 @@ async def list_chat_candidates(
     """List chattable users for discovery (New Chat picker). Excludes the current user."""
     users = user_repo.list_all()
     user_map = {user.id: user for user in users}
-    relationship_states = _relationship_states_for_user(relationship_service, user_id)
+    relationship_metadata = _relationship_metadata_for_user(relationship_service, user_id)
     try:
         if contact_repo is None:
             raise RuntimeError("chat bootstrap not attached: contact_repo")
@@ -166,15 +177,25 @@ async def list_chat_candidates(
             # when thread_repo is absent instead of silently pretending the
             # owned agent has no thread truth.
             raise HTTPException(503, "Thread repo unavailable")
-        relationship_state = relationship_states.get(user.id, "none")
+        relationship = relationship_metadata.get(user.id)
+        relationship_state = relationship["state"] if relationship else "none"
         owner_user_id = str(user.owner_user_id) if user.type is UserType.AGENT and user.owner_user_id else None
+        owner_relationship_state = None
+        if owner_user_id:
+            owner_relationship = relationship_metadata.get(owner_user_id)
+            if owner_relationship:
+                owner_relationship_state = owner_relationship["state"]
         can_chat = can_chat_with_owner_scope(
             is_owned=is_owned,
             relationship_state=relationship_state,
             has_contact=user.id in contact_targets,
-            owner_relationship_state=relationship_states.get(owner_user_id, "none") if owner_user_id else None,
+            owner_relationship_state=owner_relationship_state,
             owner_has_contact=owner_user_id in contact_targets if owner_user_id else False,
         )
+        relationship_fields = {
+            "relationship_id": relationship["id"] if relationship else None,
+            "relationship_is_requester": relationship["is_requester"] if relationship else False,
+        }
         if user.type is UserType.HUMAN:
             items.append(
                 {
@@ -186,6 +207,7 @@ async def list_chat_candidates(
                     "agent_name": user.display_name,
                     "is_owned": False,
                     "relationship_state": relationship_state,
+                    **relationship_fields,
                     "can_chat": can_chat,
                 }
             )
@@ -201,6 +223,7 @@ async def list_chat_candidates(
                 "agent_name": user.display_name,
                 "is_owned": is_owned,
                 "relationship_state": relationship_state,
+                **relationship_fields,
                 "can_chat": can_chat,
             }
             if is_owned:

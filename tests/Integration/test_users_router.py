@@ -50,14 +50,22 @@ def _users_app(
     users: list[UserRow],
     *,
     relationships: dict[str, str] | None = None,
+    relationship_initiators: dict[str, str | None] | None = None,
     contact_repo: object | None = None,
     default_threads: dict[str, dict[str, object] | None] | None = None,
 ) -> SimpleNamespace:
     relationships = relationships or {}
+    relationship_initiators = relationship_initiators or {}
     default_threads = default_threads or {}
     relationship_service = SimpleNamespace(
         list_for_user=lambda _user_id: [
-            SimpleNamespace(other_user_id=other_user_id, state=state) for other_user_id, state in relationships.items()
+            SimpleNamespace(
+                id=f"hire_visit:{min(_user_id, other_user_id)}:{max(_user_id, other_user_id)}",
+                other_user_id=other_user_id,
+                state=state,
+                initiator_user_id=relationship_initiators.get(other_user_id),
+            )
+            for other_user_id, state in relationships.items()
         ]
     )
     chat_runtime_state = SimpleNamespace(
@@ -115,6 +123,8 @@ async def test_list_chat_candidates_excludes_current_user_and_returns_all_others
     assert "branch_index" not in human_item
     assert human_item["is_owned"] is False
     assert human_item["relationship_state"] == "visit"
+    assert human_item["relationship_id"] == "hire_visit:u1:u2"
+    assert human_item["relationship_is_requester"] is False
     assert human_item["can_chat"] is True
 
     # Agent entry is keyed by unified user identity, not private thread metadata.
@@ -128,6 +138,8 @@ async def test_list_chat_candidates_excludes_current_user_and_returns_all_others
     assert "branch_index" not in main_item
     assert main_item["is_owned"] is False
     assert main_item["relationship_state"] == "pending"
+    assert main_item["relationship_id"] == "hire_visit:a-main:u1"
+    assert main_item["relationship_is_requester"] is False
     assert main_item["can_chat"] is True
 
     # Child agent: also returned (frontend decides whether to hide it).
@@ -138,7 +150,24 @@ async def test_list_chat_candidates_excludes_current_user_and_returns_all_others
     assert "is_default_thread" not in child_item
     assert "branch_index" not in child_item
     assert child_item["relationship_state"] == "none"
+    assert child_item["relationship_id"] is None
+    assert child_item["relationship_is_requester"] is False
     assert child_item["can_chat"] is True
+
+
+@pytest.mark.asyncio
+async def test_list_chat_candidates_marks_pending_relationship_requester_side():
+    app = _users_app(
+        [_human("u1", "owner"), _human("u2", "other")],
+        relationships={"u2": "pending"},
+        relationship_initiators={"u2": "u1"},
+    )
+
+    result = await _list_chat_candidates(app)
+
+    assert result[0]["relationship_state"] == "pending"
+    assert result[0]["relationship_id"] == "hire_visit:u1:u2"
+    assert result[0]["relationship_is_requester"] is True
 
 
 @pytest.mark.asyncio
@@ -209,6 +238,8 @@ async def test_list_chat_candidates_marks_normal_active_contacts_as_chat_candida
             "agent_name": "other",
             "is_owned": False,
             "relationship_state": "none",
+            "relationship_id": None,
+            "relationship_is_requester": False,
             "can_chat": True,
         }
     ]
@@ -307,7 +338,16 @@ def test_chat_candidates_route_reads_dependencies_from_app_state() -> None:
     app.include_router(users_router.users_router)
     app.state.user_repo = SimpleNamespace(list_all=lambda: [owner, other])
     app.state.thread_repo = SimpleNamespace(get_default_thread=lambda _agent_user_id: None)
-    relationship_service = SimpleNamespace(list_for_user=lambda _user_id: [SimpleNamespace(other_user_id="u2", state="visit")])
+    relationship_service = SimpleNamespace(
+        list_for_user=lambda _user_id: [
+            SimpleNamespace(
+                id="hire_visit:u1:u2",
+                other_user_id="u2",
+                state="visit",
+                initiator_user_id=None,
+            )
+        ]
+    )
     contact_repo = _empty_contact_repo()
     app.state.chat_runtime_state = SimpleNamespace(
         relationship_service=relationship_service,
@@ -329,6 +369,8 @@ def test_chat_candidates_route_reads_dependencies_from_app_state() -> None:
             "agent_name": "other",
             "is_owned": False,
             "relationship_state": "visit",
+            "relationship_id": "hire_visit:u1:u2",
+            "relationship_is_requester": False,
             "can_chat": True,
         }
     ]
@@ -365,6 +407,8 @@ def test_chat_candidates_route_exposes_owned_agent_default_thread_id() -> None:
             "agent_name": "Ready Agent",
             "is_owned": True,
             "relationship_state": "none",
+            "relationship_id": None,
+            "relationship_is_requester": False,
             "can_chat": True,
             "default_thread_id": "thread-ready",
         }
@@ -410,6 +454,8 @@ async def test_list_chat_candidates_projects_external_user_like_unowned_particip
             "agent_name": "Codex External",
             "is_owned": False,
             "relationship_state": "visit",
+            "relationship_id": "hire_visit:ext-1:u1",
+            "relationship_is_requester": False,
             "can_chat": True,
         }
     ]
