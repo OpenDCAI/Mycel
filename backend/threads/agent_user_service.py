@@ -458,8 +458,8 @@ def _mcp_from_patch(config_patch: dict[str, Any], current_config: AgentConfig) -
                 name=name,
                 transport=direct_config.get("transport"),
                 command=direct_config.get("command"),
-                args=list(direct_config.get("args") or []),
-                env=dict(direct_config.get("env") or {}),
+                args=_json_array_from_patch_item(direct_config.get("args"), label="MCP server patch item args"),
+                env=_json_object_from_patch_item(direct_config.get("env"), label="MCP server patch item env"),
                 url=direct_config.get("url"),
                 instructions=direct_config.get("instructions"),
                 allowed_tools=direct_config.get("allowed_tools"),
@@ -476,6 +476,22 @@ def _enabled_from_patch_item(item: dict[str, Any], *, label: str) -> bool:
     if not isinstance(enabled, bool):
         raise RuntimeError(f"{label} enabled must be a boolean")
     return enabled
+
+
+def _json_array_from_patch_item(value: Any, *, label: str) -> list[Any]:
+    if value is None:
+        return []
+    if not isinstance(value, list):
+        raise RuntimeError(f"{label} must be a JSON array")
+    return list(value)
+
+
+def _json_object_from_patch_item(value: Any, *, label: str) -> dict[str, Any]:
+    if value is None:
+        return {}
+    if not isinstance(value, dict):
+        raise RuntimeError(f"{label} must be a JSON object")
+    return dict(value)
 
 
 def _rules_from_patch(current_config: AgentConfig, config_patch: dict[str, Any]) -> list[AgentRule]:
@@ -510,7 +526,7 @@ def _sub_agents_from_patch(current_config: AgentConfig, config_patch: dict[str, 
             if name in seen_names:
                 raise RuntimeError(f"Duplicate SubAgent name in patch: {name}")
             seen_names.add(name)
-            raw_tools = item.get("tools") or []
+            raw_tools = _json_array_from_patch_item(item.get("tools"), label="SubAgent patch item tools")
             if isinstance(raw_tools, list) and raw_tools and isinstance(raw_tools[0], dict):
                 enabled_tools = []
                 for tool in raw_tools:
