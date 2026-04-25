@@ -47,13 +47,11 @@ class FirecrawlSearcher(BaseSearcher):
             for item in data.get("data", []):
                 url = item.get("url", "")
 
-                if include_domains:
-                    if not any(domain in url for domain in include_domains):
-                        continue
+                if include_domains and not any(domain in url for domain in include_domains):
+                    continue
 
-                if exclude_domains:
-                    if any(domain in url for domain in exclude_domains):
-                        continue
+                if exclude_domains and any(domain in url for domain in exclude_domains):
+                    continue
 
                 result.results.append(
                     SearchItem(
