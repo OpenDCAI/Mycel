@@ -181,7 +181,7 @@ class AgentConfig(AgentConfigSchemaModel):
     tools: list[str] = Field(default_factory=lambda: ["*"])
     system_prompt: str = ""
     status: str = "draft"
-    version: str = "0.1.0"
+    version: str
     runtime_settings: dict[str, Any] = Field(default_factory=dict)
     compact: dict[str, Any] = Field(default_factory=dict)
     skills: list[AgentSkill] = Field(default_factory=list)
@@ -190,7 +190,7 @@ class AgentConfig(AgentConfigSchemaModel):
     mcp_servers: list[McpServerConfig] = Field(default_factory=list)
     meta: dict[str, Any] = Field(default_factory=dict)
 
-    @field_validator("id", "owner_user_id", "agent_user_id", "name")
+    @field_validator("id", "owner_user_id", "agent_user_id", "name", "version")
     @classmethod
     def _non_blank_identity(cls, value: str, info: ValidationInfo) -> str:
         if not value.strip():
