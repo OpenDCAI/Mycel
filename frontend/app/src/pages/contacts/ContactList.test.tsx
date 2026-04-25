@@ -132,6 +132,8 @@ describe("ContactList", () => {
         owner_name: null,
         is_owned: false,
         relationship_state: "pending",
+        relationship_id: "hire_visit:human-1:human-3",
+        relationship_is_requester: false,
         can_chat: false,
       },
     ]));
@@ -158,9 +160,43 @@ describe("ContactList", () => {
     expect(screen.queryByText("none")).toBeNull();
     expect(screen.queryByText("联系人功能即将上线")).toBeNull();
     expect(screen.queryByText("Morel")).toBeNull();
-    expect(screen.queryByText("Pending")).toBeNull();
+    expect(screen.getByText("Pending")).toBeTruthy();
+    expect(screen.getByText("待处理")).toBeTruthy();
 
     fireEvent.click(screen.getByRole("link", { name: /Ada/ }));
+
+    expect(await screen.findByText("contact detail route")).toBeTruthy();
+  });
+
+  it("keeps outgoing relationship requests reachable from contacts", async () => {
+    authFetch.mockResolvedValueOnce(okJson([
+      {
+        user_id: "human-5",
+        name: "Waiting",
+        type: "human",
+        avatar_url: null,
+        owner_name: null,
+        is_owned: false,
+        relationship_state: "pending",
+        relationship_id: "hire_visit:human-1:human-5",
+        relationship_is_requester: true,
+        can_chat: false,
+      },
+    ]));
+
+    render(
+      <MemoryRouter initialEntries={["/contacts/users"]}>
+        <Routes>
+          <Route path="/contacts/users" element={<ContactList />} />
+          <Route path="/contacts/users/:userId" element={<div>contact detail route</div>} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText("Waiting")).toBeTruthy();
+    expect(screen.getByText("已申请")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("link", { name: /Waiting/ }));
 
     expect(await screen.findByText("contact detail route")).toBeTruthy();
   });

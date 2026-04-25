@@ -285,6 +285,28 @@ describe("ChatConversationPage SSE teardown", () => {
     expect(screen.queryByText("入群申请")).toBeNull();
   });
 
+  it("lets group members copy the current group link for join discovery", async () => {
+    const writeText = vi.fn<() => Promise<void>>().mockResolvedValue(undefined);
+    Object.assign(navigator, { clipboard: { writeText } });
+
+    render(
+      <MemoryRouter initialEntries={["/chat/visit/chat-1"]}>
+        <Routes>
+          <Route path="/chat/visit/:chatId" element={<ChatConversationPage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText("chat title")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "复制群链接" }));
+
+    await waitFor(() => {
+      expect(writeText).toHaveBeenCalledWith("http://localhost:3000/chat/visit/chat-1");
+    });
+    expect(await screen.findByText("已复制")).toBeTruthy();
+  });
+
   it("does not fetch group join requests for a direct chat owner", async () => {
     authFetchMocks.authFetch.mockImplementation(async (url: string) => {
       if (url === "/api/chats/chat-1") {
