@@ -217,6 +217,17 @@ def test_get_agent_config_returns_none_when_root_missing() -> None:
     assert repo.get_agent_config("missing") is None
 
 
+def test_get_agent_config_preserves_empty_tool_list() -> None:
+    tables = _tables()
+    tables["agent.agent_configs"][0]["tools_json"] = []
+    repo = SupabaseAgentConfigRepo(_FakeClient(tables))
+
+    config = repo.get_agent_config("cfg-1")
+
+    assert config is not None
+    assert config.tools == []
+
+
 def test_get_agent_config_fails_loudly_when_mcp_json_is_not_an_array() -> None:
     tables = _tables()
     tables["agent.agent_configs"][0]["mcp_json"] = {"filesystem": {"command": "fs"}}

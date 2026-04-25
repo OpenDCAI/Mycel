@@ -56,6 +56,7 @@ class SupabaseAgentConfigRepo:
         if not rows:
             return None
         root = dict(rows[0])
+        tools_json = root.get("tools_json")
         return AgentConfig(
             id=root["id"],
             owner_user_id=root["owner_user_id"],
@@ -63,7 +64,7 @@ class SupabaseAgentConfigRepo:
             name=root["name"],
             description=root.get("description") or "",
             model=root.get("model"),
-            tools=list(root.get("tools_json") or ["*"]),
+            tools=["*"] if tools_json is None else list(tools_json),
             system_prompt=root.get("system_prompt") or "",
             status=root.get("status") or "draft",
             version=root.get("version") or "0.1.0",
