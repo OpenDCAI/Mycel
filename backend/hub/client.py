@@ -17,6 +17,7 @@ from config.agent_config_types import Skill, SkillPackage
 from config.agent_snapshot import snapshot_from_resolved_config
 from config.skill_files import normalize_skill_file_map
 from config.skill_package import build_skill_package_hash, build_skill_package_manifest
+from storage.utils import generate_skill_id
 
 HUB_URL = os.environ.get("MYCEL_HUB_URL", "https://hub.mycel.nextmind.space")
 # @@@hub-agent-user-item-type - Hub still names published Agent users "member";
@@ -107,6 +108,13 @@ def _skill_files_from_snapshot(snapshot: dict[str, Any]) -> dict[str, str]:
     if not isinstance(files, dict):
         raise ValueError("Skill snapshot files must be an object")
     return normalize_skill_file_map(files, context="Skill snapshot files")
+
+
+def _hub_source_skill(skills: list[Skill], item_id: str) -> Skill | None:
+    for skill in skills:
+        if skill.source.get("marketplace_item_id") == item_id:
+            return skill
+    return None
 
 
 def list_items(
@@ -252,16 +260,20 @@ def apply_item(
         skill_files = _skill_files_from_snapshot(snapshot)
         if skill_repo is None:
             raise RuntimeError("skill_repo is required to save a skill to Library")
-        slug = _required_text(item.get("slug"), label="Hub item slug")
-        if "/" in slug or "\\" in slug or slug in {"", ".", ".."}:
-            raise ValueError(f"Invalid slug: {slug}")
         skill_name = str(skill_metadata["name"]).strip()
-        existing_skill = skill_repo.get_by_id(owner_user_id, slug)
+        owner_skills = skill_repo.list_for_owner(owner_user_id)
+        existing_skill = _hub_source_skill(owner_skills, item_id)
         if existing_skill is not None and existing_skill.name != skill_name:
             raise ValueError("Skill snapshot frontmatter name must match existing Skill name")
-        for skill in skill_repo.list_for_owner(owner_user_id):
-            if skill.name == skill_name and skill.id != slug:
-                raise ValueError("Skill name already exists under a different Library id")
+        if existing_skill is None:
+            skill_id = generate_skill_id()
+            if skill_repo.get_by_id(owner_user_id, skill_id) is not None:
+                raise RuntimeError("Generated Skill id already exists")
+            for skill in owner_skills:
+                if skill.name == skill_name:
+                    raise ValueError("Skill name already exists under a different Library id")
+        else:
+            skill_id = existing_skill.id
         skill_description = _skill_description_from_metadata(skill_metadata)
         publisher = _required_text(item.get("publisher_username"), label="Hub item publisher_username")
         timestamp = datetime.now(UTC)
@@ -271,9 +283,12 @@ def apply_item(
             "source_at": now,
             "publisher": publisher,
         }
+        item_slug = item.get("slug")
+        if isinstance(item_slug, str) and item_slug.strip():
+            source["marketplace_slug"] = item_slug.strip()
         skill = skill_repo.upsert(
             Skill(
-                id=slug,
+                id=skill_id,
                 owner_user_id=owner_user_id,
                 name=skill_name,
                 description=skill_description,
@@ -299,7 +314,7 @@ def apply_item(
         )
         skill_repo.select_package(owner_user_id, skill.id, package.id)
 
-        return {"resource_id": slug, "package_id": package.id, "type": "skill", "version": source_version}
+        return {"resource_id": skill.id, "package_id": package.id, "type": "skill", "version": source_version}
 
     if item_type == "agent":
         raise ValueError("Marketplace agent items are not supported; apply Agent user items instead")
