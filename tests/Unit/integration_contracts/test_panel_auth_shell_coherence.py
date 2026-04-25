@@ -13,7 +13,7 @@ from backend.library import service as library_service
 from backend.threads import agent_user_service
 from backend.web.models.panel import PublishAgentRequest, UpdateAgentRequest
 from backend.web.routers import panel as panel_router
-from config.agent_config_types import AgentConfig, AgentSkill, McpServerConfig, Skill
+from config.agent_config_types import AgentConfig, AgentSkill, McpServerConfig, Skill, SkillPackage
 from storage.contracts import UserRow, UserType
 
 
@@ -55,6 +55,7 @@ def _agent_config(**updates: object) -> AgentConfig:
 class _MemorySkillRepo:
     def __init__(self) -> None:
         self.skills: dict[tuple[str, str], Skill] = {}
+        self.packages: dict[tuple[str, str], SkillPackage] = {}
 
     def list_for_owner(self, owner_user_id: str) -> list[Skill]:
         return [skill for (owner, _skill_id), skill in self.skills.items() if owner == owner_user_id]
@@ -66,8 +67,58 @@ class _MemorySkillRepo:
         self.skills[(skill.owner_user_id, skill.id)] = skill
         return skill
 
+    def create_package(self, package: SkillPackage) -> SkillPackage:
+        self.packages[(package.owner_user_id, package.id)] = package
+        return package
+
+    def get_package(self, owner_user_id: str, package_id: str) -> SkillPackage | None:
+        return self.packages.get((owner_user_id, package_id))
+
+    def select_package(self, owner_user_id: str, skill_id: str, package_id: str) -> None:
+        skill = self.skills[(owner_user_id, skill_id)]
+        self.skills[(owner_user_id, skill_id)] = skill.model_copy(update={"package_id": package_id})
+
     def delete(self, owner_user_id: str, skill_id: str) -> None:
         self.skills.pop((owner_user_id, skill_id), None)
+
+
+def _put_skill(
+    skill_repo: _MemorySkillRepo,
+    *,
+    owner_user_id: str,
+    skill_id: str,
+    name: str,
+    description: str,
+    content: str,
+    files: dict[str, str] | None = None,
+    version: str = "1.0.0",
+) -> Skill:
+    timestamp = datetime(2026, 4, 24, tzinfo=UTC)
+    skill = skill_repo.upsert(
+        Skill(
+            id=skill_id,
+            owner_user_id=owner_user_id,
+            name=name,
+            description=description,
+            created_at=timestamp,
+            updated_at=timestamp,
+        )
+    )
+    package = skill_repo.create_package(
+        SkillPackage(
+            id=f"{skill_id}-package",
+            owner_user_id=owner_user_id,
+            skill_id=skill_id,
+            version=version,
+            hash=f"sha256:{skill_id}",
+            manifest={"files": [{"path": path} for path in sorted(files or {})]},
+            skill_md=content,
+            files=files or {},
+            created_at=timestamp,
+        )
+    )
+    skill_repo.select_package(owner_user_id, skill_id, package.id)
+    return skill_repo.get_by_id(owner_user_id, skill_id) or skill
 
 
 @pytest.mark.asyncio
@@ -298,18 +349,14 @@ def test_repo_backed_tools_star_keeps_panel_and_runtime_tool_state_aligned() -> 
 
 def test_agent_config_patch_pins_library_skill_content() -> None:
     saved_configs: list[AgentConfig] = []
-    timestamp = datetime(2026, 4, 24, tzinfo=UTC)
     skill_repo = _MemorySkillRepo()
-    skill_repo.upsert(
-        Skill(
-            id="loadable-skill",
-            owner_user_id="user-1",
-            name="Loadable Skill",
-            description="loadable",
-            content="---\nname: Loadable Skill\n---\nUse it.",
-            created_at=timestamp,
-            updated_at=timestamp,
-        )
+    library_skill = _put_skill(
+        skill_repo,
+        owner_user_id="user-1",
+        skill_id="loadable-skill",
+        name="Loadable Skill",
+        description="loadable",
+        content="---\nname: Loadable Skill\n---\nUse it.",
     )
 
     class _AgentConfigRepo:
@@ -341,14 +388,16 @@ def test_agent_config_patch_pins_library_skill_content() -> None:
         AgentSkill(
             id="",
             skill_id="loadable-skill",
+            package_id=library_skill.package_id,
             name="Loadable Skill",
             description="loadable",
+            version="1.0.0",
             content="---\nname: Loadable Skill\n---\nUse it.",
         )
     ]
 
 
-def test_agent_config_patch_keeps_inline_skill_without_library_id() -> None:
+def test_agent_config_patch_rejects_inline_skill_without_library_id() -> None:
     saved_configs: list[AgentConfig] = []
 
     class _AgentConfigRepo:
@@ -358,48 +407,37 @@ def test_agent_config_patch_keeps_inline_skill_without_library_id() -> None:
         def save_agent_config(self, config: AgentConfig) -> None:
             saved_configs.append(config)
 
-    result = agent_user_service.update_agent_user_config(
-        "agent-1",
-        {"skills": [{"name": "Inline Skill", "content": "---\nname: Inline Skill\n---\nUse it.", "enabled": True}]},
-        user_repo=SimpleNamespace(
-            get_by_id=lambda _agent_id: UserRow(
-                id="agent-1",
-                type=UserType.AGENT,
-                display_name="Toad",
-                owner_user_id="user-1",
-                agent_config_id="cfg-1",
-                created_at=1,
-            )
-        ),
-        agent_config_repo=_AgentConfigRepo(),
-        skill_repo=_MemorySkillRepo(),
-    )
-
-    assert result is not None
-    assert saved_configs[-1].skills == [
-        AgentSkill(
-            id="",
-            skill_id=None,
-            name="Inline Skill",
-            content="---\nname: Inline Skill\n---\nUse it.",
+    with pytest.raises(RuntimeError, match="Library skill not found: Inline Skill"):
+        agent_user_service.update_agent_user_config(
+            "agent-1",
+            {"skills": [{"name": "Inline Skill", "content": "---\nname: Inline Skill\n---\nUse it.", "enabled": True}]},
+            user_repo=SimpleNamespace(
+                get_by_id=lambda _agent_id: UserRow(
+                    id="agent-1",
+                    type=UserType.AGENT,
+                    display_name="Toad",
+                    owner_user_id="user-1",
+                    agent_config_id="cfg-1",
+                    created_at=1,
+                )
+            ),
+            agent_config_repo=_AgentConfigRepo(),
+            skill_repo=_MemorySkillRepo(),
         )
-    ]
+
+    assert saved_configs == []
 
 
 def test_agent_config_patch_rejects_library_id_in_skill_name_field() -> None:
     saved_configs: list[AgentConfig] = []
-    timestamp = datetime(2026, 4, 24, tzinfo=UTC)
     skill_repo = _MemorySkillRepo()
-    skill_repo.upsert(
-        Skill(
-            id="loadable-skill",
-            owner_user_id="user-1",
-            name="Loadable Skill",
-            description="loadable",
-            content="---\nname: Loadable Skill\n---\nUse it.",
-            created_at=timestamp,
-            updated_at=timestamp,
-        )
+    _put_skill(
+        skill_repo,
+        owner_user_id="user-1",
+        skill_id="loadable-skill",
+        name="Loadable Skill",
+        description="loadable",
+        content="---\nname: Loadable Skill\n---\nUse it.",
     )
 
     class _AgentConfigRepo:
@@ -409,7 +447,7 @@ def test_agent_config_patch_rejects_library_id_in_skill_name_field() -> None:
         def save_agent_config(self, config: AgentConfig) -> None:
             saved_configs.append(config)
 
-    with pytest.raises(RuntimeError, match="Skill 'loadable-skill' has no content"):
+    with pytest.raises(RuntimeError, match="Library skill not found: loadable-skill"):
         agent_user_service.update_agent_user_config(
             "agent-1",
             {"skills": [{"name": "loadable-skill", "desc": "loadable", "enabled": True}]},
@@ -497,7 +535,7 @@ def test_agent_config_patch_rejects_duplicate_skill_names() -> None:
     assert saved_configs == []
 
 
-def test_agent_config_patch_preserves_pinned_skill_content_after_library_delete() -> None:
+def test_agent_config_patch_rejects_skill_after_library_delete() -> None:
     saved_configs: list[AgentConfig] = []
     pinned = AgentSkill(
         id="agent-skill-1",
@@ -516,25 +554,25 @@ def test_agent_config_patch_preserves_pinned_skill_content_after_library_delete(
         def save_agent_config(self, config: AgentConfig) -> None:
             saved_configs.append(config)
 
-    result = agent_user_service.update_agent_user_config(
-        "agent-1",
-        {"skills": [{"name": "Loadable Skill", "desc": "loadable", "enabled": False}]},
-        user_repo=SimpleNamespace(
-            get_by_id=lambda _agent_id: UserRow(
-                id="agent-1",
-                type=UserType.AGENT,
-                display_name="Toad",
-                owner_user_id="user-1",
-                agent_config_id="cfg-1",
-                created_at=1,
-            )
-        ),
-        agent_config_repo=_AgentConfigRepo(),
-        skill_repo=_MemorySkillRepo(),
-    )
+    with pytest.raises(RuntimeError, match="Library skill not found: Loadable Skill"):
+        agent_user_service.update_agent_user_config(
+            "agent-1",
+            {"skills": [{"name": "Loadable Skill", "desc": "loadable", "enabled": False}]},
+            user_repo=SimpleNamespace(
+                get_by_id=lambda _agent_id: UserRow(
+                    id="agent-1",
+                    type=UserType.AGENT,
+                    display_name="Toad",
+                    owner_user_id="user-1",
+                    agent_config_id="cfg-1",
+                    created_at=1,
+                )
+            ),
+            agent_config_repo=_AgentConfigRepo(),
+            skill_repo=_MemorySkillRepo(),
+        )
 
-    assert result is not None
-    assert saved_configs[-1].skills == [pinned.model_copy(update={"skill_id": None, "enabled": False})]
+    assert saved_configs == []
 
 
 def test_agent_config_patch_rejects_missing_explicit_library_skill_id() -> None:
@@ -578,18 +616,14 @@ def test_agent_config_patch_rejects_missing_explicit_library_skill_id() -> None:
 
 def test_agent_config_patch_explicit_library_id_uses_library_content() -> None:
     saved_configs: list[AgentConfig] = []
-    timestamp = datetime(2026, 4, 24, tzinfo=UTC)
     skill_repo = _MemorySkillRepo()
-    skill_repo.upsert(
-        Skill(
-            id="loadable-skill",
-            owner_user_id="user-1",
-            name="Loadable Skill",
-            description="loadable",
-            content="---\nname: Loadable Skill\n---\nLibrary content.",
-            created_at=timestamp,
-            updated_at=timestamp,
-        )
+    library_skill = _put_skill(
+        skill_repo,
+        owner_user_id="user-1",
+        skill_id="loadable-skill",
+        name="Loadable Skill",
+        description="loadable",
+        content="---\nname: Loadable Skill\n---\nLibrary content.",
     )
 
     class _AgentConfigRepo:
@@ -627,6 +661,7 @@ def test_agent_config_patch_explicit_library_id_uses_library_content() -> None:
 
     assert result is not None
     assert saved_configs[-1].skills[0].skill_id == "loadable-skill"
+    assert saved_configs[-1].skills[0].package_id == library_skill.package_id
     assert saved_configs[-1].skills[0].content == "---\nname: Loadable Skill\n---\nLibrary content."
 
 
@@ -670,9 +705,9 @@ def test_library_skill_content_update_rejects_frontmatter_name_drift() -> None:
             skill_repo=skill_repo,
         )
 
-    assert skill_repo.get_by_id("owner-1", created["id"]).content == (
-        "---\nname: Loadable Skill\ndescription: Use this skill\n---\n\nUse this skill\n"
-    )
+    stored = skill_repo.get_by_id("owner-1", created["id"])
+    assert stored is not None and stored.package_id is not None
+    assert skill_repo.get_package("owner-1", stored.package_id).skill_md == "---\nname: Loadable Skill\ndescription: Use this skill\n---\n\nUse this skill\n"
 
 
 def test_library_skill_name_is_immutable_after_creation() -> None:
