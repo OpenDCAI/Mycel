@@ -45,6 +45,8 @@ def test_agent_config_schema_rejects_duplicate_child_names_inside_rpc() -> None:
     sql = Path("storage/schema/2026_04_24_agent_config_resolved_config_hardcut.sql").read_text(encoding="utf-8")
 
     assert "agent_config.name is required" in sql
+    assert "agent_config.version is required" in sql
+    assert "coalesce(payload->>'version', '0.1.0')" not in sql
     assert "agent_config.tools must be a JSON array" in sql
     assert "agent_config.runtime_settings must be a JSON object" in sql
     assert "agent_config.compact must be a JSON object" in sql
@@ -117,7 +119,9 @@ def test_agent_config_schema_constrains_root_identity_fields() -> None:
     assert "agent_configs_owner_user_id_required_ck" in sql
     assert "agent_configs_agent_user_id_required_ck" in sql
     assert "agent_configs_name_required_ck" in sql
+    assert "agent_configs_version_required_ck" in sql
     assert "check (owner_user_id is not null and btrim(owner_user_id) <> '')" in sql
     assert "check (agent_user_id is not null and btrim(agent_user_id) <> '')" in sql
     assert "check (name is not null and btrim(name) <> '')" in sql
+    assert "check (version is not null and btrim(version) <> '')" in sql
     assert "agent.agent_configs contains blank root identity before hard cut" in sql

@@ -101,6 +101,8 @@ begin
            or btrim(agent_user_id) = ''
            or name is null
            or btrim(name) = ''
+           or version is null
+           or btrim(version) = ''
     ) then
         raise exception 'agent.agent_configs contains blank root identity before hard cut';
     end if;
@@ -114,7 +116,10 @@ begin
             check (agent_user_id is not null and btrim(agent_user_id) <> ''),
         drop constraint if exists agent_configs_name_required_ck,
         add constraint agent_configs_name_required_ck
-            check (name is not null and btrim(name) <> '');
+            check (name is not null and btrim(name) <> ''),
+        drop constraint if exists agent_configs_version_required_ck,
+        add constraint agent_configs_version_required_ck
+            check (version is not null and btrim(version) <> '');
 
     if exists (
         select 1
@@ -281,6 +286,9 @@ begin
     end if;
     if payload->>'name' is null or btrim(payload->>'name') = '' then
         raise exception 'agent_config.name is required';
+    end if;
+    if payload->>'version' is null or btrim(payload->>'version') = '' then
+        raise exception 'agent_config.version is required';
     end if;
     if jsonb_typeof(coalesce(payload->'tools', '["*"]'::jsonb)) <> 'array' then
         raise exception 'agent_config.tools must be a JSON array';
@@ -463,7 +471,7 @@ begin
         coalesce(payload->'tools', '["*"]'::jsonb),
         coalesce(payload->>'system_prompt', ''),
         coalesce(payload->>'status', 'draft'),
-        coalesce(payload->>'version', '0.1.0'),
+        payload->>'version',
         coalesce(payload->'runtime_settings', '{}'::jsonb),
         coalesce(payload->'compact', '{}'::jsonb),
         coalesce(payload->'meta', '{}'::jsonb),
