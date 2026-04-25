@@ -12,7 +12,7 @@ from backend.library import service as library_service
 from backend.threads import agent_user_service
 from backend.web.models.panel import PublishAgentRequest, UpdateAgentRequest
 from backend.web.routers import panel as panel_router
-from config.agent_config_types import AgentConfig, AgentSkill, McpServerConfig, Skill, SkillPackage
+from config.agent_config_types import AgentConfig, AgentSkill, AgentSubAgent, McpServerConfig, Skill, SkillPackage
 from storage.contracts import UserRow, UserType
 
 
@@ -344,6 +344,38 @@ def test_repo_backed_tools_star_keeps_panel_and_runtime_tool_state_aligned() -> 
 
     assert panel_lsp["enabled"] is True
     assert "LSP" not in agent._get_agent_blocked_tools()
+
+
+def test_repo_backed_empty_tool_list_means_no_tools_enabled() -> None:
+    config = _agent_config(tools=[])
+
+    assert all(item["enabled"] is False for item in agent_user_service._tools_from_repo(config))
+
+
+def test_repo_backed_named_tool_list_enables_only_named_tools() -> None:
+    config = _agent_config(tools=["Read"])
+    tools = {item["name"]: item["enabled"] for item in agent_user_service._tools_from_repo(config)}
+
+    assert tools["Read"] is True
+    assert tools["Bash"] is False
+
+
+def test_repo_backed_empty_sub_agent_tool_list_means_no_tools_enabled() -> None:
+    config = _agent_config(sub_agents=[AgentSubAgent(name="Worker", tools=[])])
+
+    worker = next(item for item in agent_user_service._sub_agents_from_repo(config) if item["name"] == "Worker")
+
+    assert all(item["enabled"] is False for item in worker["tools"])
+
+
+def test_repo_backed_named_sub_agent_tool_list_enables_only_named_tools() -> None:
+    config = _agent_config(sub_agents=[AgentSubAgent(name="Worker", tools=["Read"])])
+
+    worker = next(item for item in agent_user_service._sub_agents_from_repo(config) if item["name"] == "Worker")
+    tools = {item["name"]: item["enabled"] for item in worker["tools"]}
+
+    assert tools["Read"] is True
+    assert tools["Bash"] is False
 
 
 def test_agent_config_patch_saves_library_skill_package_choice() -> None:
