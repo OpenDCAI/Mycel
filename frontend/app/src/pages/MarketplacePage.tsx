@@ -10,6 +10,7 @@ import SandboxTemplateEditor from "@/components/SandboxTemplateEditor";
 import type { Agent, ResourceItem } from "@/store/types";
 import type { UpdateAvailable } from "@/store/marketplace-store";
 import { HUB_AGENT_USER_ITEM_TYPE } from "@/lib/marketplace-types";
+import { toast } from "sonner";
 
 type Tab = "explore" | "library";
 type LibrarySubTab = "agent-user" | "skill" | "agent" | "sandbox-template";
@@ -116,6 +117,13 @@ export default function MarketplacePage() {
   const filteredSandboxTemplates = librarySandboxTemplates.filter((sandboxTemplate) =>
     !librarySearch || sandboxTemplate.name.toLowerCase().includes(librarySearch.toLowerCase())
   );
+  const handleDeleteResource = async (type: "skill" | "agent" | "sandbox-template", id: string) => {
+    try {
+      await deleteResource(type, id);
+    } catch (err) {
+      toast.error(`删除失败：${err instanceof Error ? err.message : String(err)}`);
+    }
+  };
   const recipeProviderOptions = useMemo<ResourceItem[]>(() => {
     const seen = new Set<string>();
     return librarySandboxTemplates.filter((sandboxTemplate) => {
@@ -455,7 +463,7 @@ export default function MarketplacePage() {
                             </div>
                           </div>
                           <button
-                            onClick={(e) => { e.stopPropagation(); deleteResource("skill", skill.id); }}
+                            onClick={(e) => { e.stopPropagation(); void handleDeleteResource("skill", skill.id); }}
                             className="absolute top-3 right-3 p-1 rounded hover:bg-destructive/10 opacity-0 group-hover:opacity-100 transition-all duration-fast"
                             title="删除"
                           >
@@ -490,7 +498,7 @@ export default function MarketplacePage() {
                             </div>
                           </div>
                           <button
-                            onClick={(e) => { e.stopPropagation(); deleteResource("agent", agent.id); }}
+                            onClick={(e) => { e.stopPropagation(); void handleDeleteResource("agent", agent.id); }}
                             className="absolute top-3 right-3 p-1 rounded hover:bg-destructive/10 opacity-0 group-hover:opacity-100 transition-all duration-fast"
                             title="删除"
                           >
@@ -529,7 +537,7 @@ export default function MarketplacePage() {
                           </div>
                           {!sandboxTemplate.builtin && (
                             <button
-                              onClick={(e) => { e.stopPropagation(); deleteResource("sandbox-template", sandboxTemplate.id); }}
+                              onClick={(e) => { e.stopPropagation(); void handleDeleteResource("sandbox-template", sandboxTemplate.id); }}
                               className="absolute top-3 right-3 p-1 rounded hover:bg-destructive/10 opacity-0 group-hover:opacity-100 transition-all duration-fast"
                               title="删除"
                             >

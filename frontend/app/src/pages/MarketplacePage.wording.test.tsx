@@ -34,11 +34,20 @@ vi.mock("@/store/marketplace-store", () => ({
 const appStoreFetchLibrary = vi.fn();
 const appStoreDeleteResource = vi.fn();
 const appStoreAddResource = vi.fn();
+const { toastErrorMock } = vi.hoisted(() => ({
+  toastErrorMock: vi.fn(),
+}));
 let appStoreState: Record<string, unknown>;
 
 vi.mock("@/store/app-store", () => ({
   useAppStore: (selector: (state: Record<string, unknown>) => unknown) =>
     selector(appStoreState),
+}));
+
+vi.mock("sonner", () => ({
+  toast: {
+    error: toastErrorMock,
+  },
 }));
 
 afterEach(() => {
@@ -62,6 +71,7 @@ describe("MarketplacePage wording contract", () => {
     };
     appStoreFetchLibrary.mockReset();
     appStoreDeleteResource.mockReset();
+    toastErrorMock.mockReset();
     appStoreAddResource.mockReset();
     appStoreAddResource.mockResolvedValue({
       id: "daytona_selfhost:custom:probe",
@@ -178,6 +188,35 @@ describe("MarketplacePage wording contract", () => {
 
     expect(screen.queryByRole("button", { name: "检查更新" })).toBeNull();
     expect(screen.getByText("暂无 Skill")).toBeTruthy();
+  });
+
+  it("shows the backend reason when deleting a selected Skill is rejected", async () => {
+    appStoreDeleteResource.mockRejectedValue(new Error("Skill is still assigned to Agent: Toad"));
+    appStoreState = {
+      ...appStoreState,
+      librarySkills: [{
+        id: "skill-1",
+        name: "api-design-reviewer",
+        desc: "API Design Reviewer",
+        type: "skill",
+        created_at: 1,
+        updated_at: 1,
+      }],
+    };
+
+    render(
+      <MemoryRouter initialEntries={["/marketplace?tab=library&sub=skill"]}>
+        <Routes>
+          <Route path="/marketplace" element={<MarketplacePage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(screen.getByTitle("删除"));
+
+    await waitFor(() => {
+      expect(toastErrorMock).toHaveBeenCalledWith("删除失败：Skill is still assigned to Agent: Toad");
+    });
   });
 
   it("uses Sandbox wording for the library Sandbox tab", () => {
