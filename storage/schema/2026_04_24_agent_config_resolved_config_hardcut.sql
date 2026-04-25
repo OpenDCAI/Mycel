@@ -156,6 +156,62 @@ do $$
 begin
     if exists (
         select 1
+        from library.skills
+        where jsonb_typeof(source_json) <> 'object'
+    ) then
+        raise exception 'library.skills.source_json must be a JSON object before hard cut';
+    end if;
+    if exists (
+        select 1
+        from library.skill_packages
+        where jsonb_typeof(manifest_json) <> 'object'
+    ) then
+        raise exception 'library.skill_packages.manifest_json must be a JSON object before hard cut';
+    end if;
+    if exists (
+        select 1
+        from library.skill_packages
+        where jsonb_typeof(files_json) <> 'object'
+    ) then
+        raise exception 'library.skill_packages.files_json must be a JSON object before hard cut';
+    end if;
+    if exists (
+        select 1
+        from library.skill_packages
+        where jsonb_typeof(source_json) <> 'object'
+    ) then
+        raise exception 'library.skill_packages.source_json must be a JSON object before hard cut';
+    end if;
+    if exists (
+        select 1
+        from agent.agent_configs
+        where jsonb_typeof(tools_json) <> 'array'
+    ) then
+        raise exception 'agent.agent_configs.tools_json must be a JSON array before hard cut';
+    end if;
+    if exists (
+        select 1
+        from agent.agent_configs
+        where jsonb_typeof(runtime_json) <> 'object'
+    ) then
+        raise exception 'agent.agent_configs.runtime_json must be a JSON object before hard cut';
+    end if;
+    if exists (
+        select 1
+        from agent.agent_configs
+        where jsonb_typeof(compact_json) <> 'object'
+    ) then
+        raise exception 'agent.agent_configs.compact_json must be a JSON object before hard cut';
+    end if;
+    if exists (
+        select 1
+        from agent.agent_configs
+        where jsonb_typeof(meta_json) <> 'object'
+    ) then
+        raise exception 'agent.agent_configs.meta_json must be a JSON object before hard cut';
+    end if;
+    if exists (
+        select 1
         from agent.agent_configs
         where jsonb_typeof(mcp_json) <> 'array'
     ) then
@@ -185,6 +241,18 @@ begin
     end if;
     if payload->>'name' is null or btrim(payload->>'name') = '' then
         raise exception 'agent_config.name is required';
+    end if;
+    if jsonb_typeof(coalesce(payload->'tools', '["*"]'::jsonb)) <> 'array' then
+        raise exception 'agent_config.tools must be a JSON array';
+    end if;
+    if jsonb_typeof(coalesce(payload->'runtime_settings', '{}'::jsonb)) <> 'object' then
+        raise exception 'agent_config.runtime_settings must be a JSON object';
+    end if;
+    if jsonb_typeof(coalesce(payload->'compact', '{}'::jsonb)) <> 'object' then
+        raise exception 'agent_config.compact must be a JSON object';
+    end if;
+    if jsonb_typeof(coalesce(payload->'meta', '{}'::jsonb)) <> 'object' then
+        raise exception 'agent_config.meta must be a JSON object';
     end if;
     if jsonb_typeof(coalesce(payload->'skills', '[]'::jsonb)) <> 'array' then
         raise exception 'agent_config.skills must be a JSON array';
@@ -271,6 +339,30 @@ begin
         where btrim(coalesce(mcp_item.value->>'name', '')) = ''
     ) then
         raise exception 'agent_config.mcp_servers child.name is required';
+    end if;
+    if exists (
+        select 1
+        from jsonb_array_elements(coalesce(payload->'sub_agents', '[]'::jsonb)) as sub_agent_item(value)
+        where sub_agent_item.value ? 'tools'
+          and jsonb_typeof(sub_agent_item.value->'tools') <> 'array'
+    ) then
+        raise exception 'agent_config.sub_agents child.tools must be a JSON array';
+    end if;
+    if exists (
+        select 1
+        from jsonb_array_elements(coalesce(payload->'mcp_servers', '[]'::jsonb)) as mcp_item(value)
+        where mcp_item.value ? 'args'
+          and jsonb_typeof(mcp_item.value->'args') <> 'array'
+    ) then
+        raise exception 'agent_config.mcp_servers child.args must be a JSON array';
+    end if;
+    if exists (
+        select 1
+        from jsonb_array_elements(coalesce(payload->'mcp_servers', '[]'::jsonb)) as mcp_item(value)
+        where mcp_item.value ? 'env'
+          and jsonb_typeof(mcp_item.value->'env') <> 'object'
+    ) then
+        raise exception 'agent_config.mcp_servers child.env must be a JSON object';
     end if;
     if exists (
         select 1
