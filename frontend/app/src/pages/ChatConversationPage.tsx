@@ -64,14 +64,14 @@ function ChatConversationInner({ chatId }: { chatId: string }) {
     return m;
   }, [chat?.members]);
 
-  const isOwner = Boolean(chat && chat.created_by_user_id === myUserId);
+  const isGroupOwner = Boolean(chat && chat.type === "group" && chat.created_by_user_id === myUserId);
   const pendingJoinRequests = useMemo(
     () => joinRequests.filter(request => request.state === "pending"),
     [joinRequests],
   );
 
   const loadJoinRequests = useCallback(async () => {
-    if (!isOwner) {
+    if (!isGroupOwner) {
       setJoinRequests([]);
       setJoinRequestError(null);
       return;
@@ -83,7 +83,7 @@ function ChatConversationInner({ chatId }: { chatId: string }) {
     }
     setJoinRequests(await res.json());
     setJoinRequestError(null);
-  }, [chatId, isOwner]);
+  }, [chatId, isGroupOwner]);
 
   useEffect(() => {
     loadJoinRequests().catch(err => setJoinRequestError(err.message));
@@ -351,7 +351,7 @@ function ChatConversationInner({ chatId }: { chatId: string }) {
         </div>
       </header>
 
-      {isOwner && (pendingJoinRequests.length > 0 || joinRequestError) && (
+      {isGroupOwner && (pendingJoinRequests.length > 0 || joinRequestError) && (
         <section className="shrink-0 border-b border-border bg-muted/20 px-4 py-2.5">
           <div className="max-w-3xl mx-auto space-y-2">
             <div className="flex items-center justify-between gap-3">

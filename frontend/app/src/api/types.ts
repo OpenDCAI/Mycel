@@ -353,6 +353,7 @@ export interface ChatMember {
 
 export interface ChatDetail {
   id: string;
+  type: string;
   title: string | null;
   status: string;
   created_by_user_id: string;

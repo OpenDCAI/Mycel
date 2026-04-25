@@ -8,9 +8,13 @@ export type UserChatCandidate = {
   owner_name?: string | null;
   is_owned: boolean;
   relationship_state: string;
+  relationship_id: string | null;
+  relationship_is_requester: boolean;
   can_chat: boolean;
   default_thread_id?: string | null;
 };
+
+export type RelationshipAction = "approve" | "reject" | "upgrade" | "revoke" | "downgrade";
 
 let inflightUserChatCandidates: Promise<UserChatCandidate[]> | null = null;
 
@@ -37,10 +41,30 @@ export function parseUserChatCandidates(value: unknown): UserChatCandidate[] {
       owner_name: typeof row.owner_name === "string" ? row.owner_name : null,
       is_owned: row.is_owned,
       relationship_state: row.relationship_state,
+      relationship_id: typeof row.relationship_id === "string" ? row.relationship_id : null,
+      relationship_is_requester: typeof row.relationship_is_requester === "boolean" ? row.relationship_is_requester : false,
       can_chat: row.can_chat,
       default_thread_id: typeof row.default_thread_id === "string" ? row.default_thread_id : null,
     };
   });
+}
+
+async function checkedRelationshipResponse(response: Response): Promise<void> {
+  if (!response.ok) throw new Error(`Relationship API ${response.status}: ${await response.text()}`);
+}
+
+export async function requestRelationship(targetUserId: string): Promise<void> {
+  await checkedRelationshipResponse(await authFetch("/api/relationships/request", {
+    method: "POST",
+    body: JSON.stringify({ target_user_id: targetUserId }),
+  }));
+}
+
+export async function actOnRelationship(relationshipId: string, action: RelationshipAction): Promise<void> {
+  await checkedRelationshipResponse(await authFetch(`/api/relationships/${encodeURIComponent(relationshipId)}/${action}`, {
+    method: "POST",
+    body: JSON.stringify({}),
+  }));
 }
 
 export async function fetchUserChatCandidates(): Promise<UserChatCandidate[]> {

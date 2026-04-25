@@ -1,8 +1,14 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { ArrowLeft, Bot, MessageSquare, User } from "lucide-react";
 import { useNavigate, useParams } from "react-router-dom";
 
-import { fetchUserChatCandidates, type UserChatCandidate } from "@/api/users";
+import {
+  actOnRelationship,
+  fetchUserChatCandidates,
+  requestRelationship,
+  type RelationshipAction,
+  type UserChatCandidate,
+} from "@/api/users";
 import ActorAvatar from "@/components/ActorAvatar";
 import { Button } from "@/components/ui/button";
 import { authFetch, useAuthStore } from "@/store/auth-store";
@@ -30,6 +36,35 @@ function relationshipLabel(contact: UserChatCandidate): string {
   return contact.relationship_state;
 }
 
+type ContactRelationshipAction = RelationshipAction | "request";
+
+type RelationshipButton = {
+  action: ContactRelationshipAction;
+  label: string;
+  variant?: "default" | "outline" | "destructive";
+};
+
+const RELATIONSHIP_BUTTONS_BY_STATE: Record<string, RelationshipButton[]> = {
+  none: [{ action: "request", label: "申请联系" }],
+  visit: [
+    { action: "upgrade", label: "升级为 hire", variant: "outline" },
+    { action: "revoke", label: "解除关系", variant: "outline" },
+  ],
+  hire: [
+    { action: "downgrade", label: "降级为 visit", variant: "outline" },
+    { action: "revoke", label: "解除关系", variant: "outline" },
+  ],
+};
+
+function relationshipButtons(contact: UserChatCandidate): RelationshipButton[] {
+  if (contact.relationship_state !== "pending") return RELATIONSHIP_BUTTONS_BY_STATE[contact.relationship_state] ?? [];
+  if (contact.relationship_is_requester) return [{ action: "revoke", label: "取消申请", variant: "outline" }];
+  return [
+    { action: "approve", label: "同意申请" },
+    { action: "reject", label: "拒绝申请", variant: "outline" },
+  ];
+}
+
 export default function ContactDetailPage() {
   const { userId } = useParams<{ userId: string }>();
   const navigate = useNavigate();
@@ -39,12 +74,21 @@ export default function ContactDetailPage() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [opening, setOpening] = useState(false);
   const [openError, setOpenError] = useState<string | null>(null);
+  const [relationshipAction, setRelationshipAction] = useState<ContactRelationshipAction | null>(null);
+  const [relationshipError, setRelationshipError] = useState<string | null>(null);
+
+  const readCandidates = useCallback(async () => fetchUserChatCandidates(), []);
+
+  const loadCandidates = useCallback(async () => {
+    setLoadError(null);
+    setChatCandidates(await readCandidates());
+  }, [readCandidates]);
 
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
     setLoadError(null);
-    fetchUserChatCandidates()
+    readCandidates()
       .then((items) => {
         if (!cancelled) setChatCandidates(items);
       })
@@ -57,7 +101,7 @@ export default function ContactDetailPage() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [readCandidates]);
 
   const contact = useMemo(() => chatCandidates.find((item) => item.user_id === userId), [chatCandidates, userId]);
 
@@ -73,6 +117,25 @@ export default function ContactDetailPage() {
       setOpenError(errorText(err));
     } finally {
       setOpening(false);
+    }
+  };
+
+  const runRelationshipAction = async (action: ContactRelationshipAction) => {
+    if (!contact || relationshipAction) return;
+    setRelationshipAction(action);
+    setRelationshipError(null);
+    try {
+      if (action === "request") {
+        await requestRelationship(contact.user_id);
+      } else {
+        if (!contact.relationship_id) throw new Error("缺少 relationship id");
+        await actOnRelationship(contact.relationship_id, action);
+      }
+      await loadCandidates();
+    } catch (err) {
+      setRelationshipError(errorText(err));
+    } finally {
+      setRelationshipAction(null);
     }
   };
 
@@ -96,6 +159,7 @@ export default function ContactDetailPage() {
 
   const isAgent = contact.type === "agent";
   const relationshipStatus = relationshipLabel(contact);
+  const actions = relationshipButtons(contact);
 
   return (
     <div className="h-full flex flex-col bg-background">
@@ -146,7 +210,29 @@ export default function ContactDetailPage() {
                 <dd className="mt-1 text-foreground">{contact.can_chat ? "是" : "否"}</dd>
               </div>
             </dl>
+            {actions.length > 0 && (
+              <div className="mt-5 flex flex-wrap gap-2">
+                {actions.map((item) => (
+                  <Button
+                    key={item.action}
+                    type="button"
+                    size="sm"
+                    variant={item.variant ?? "default"}
+                    onClick={() => void runRelationshipAction(item.action)}
+                    disabled={relationshipAction !== null}
+                  >
+                    {relationshipAction === item.action ? "处理中..." : item.label}
+                  </Button>
+                ))}
+              </div>
+            )}
           </section>
+
+          {relationshipError && (
+            <p className="rounded-lg border border-destructive/20 bg-destructive/5 px-3 py-2 text-sm text-destructive">
+              {relationshipError}
+            </p>
+          )}
 
           {openError && (
             <p className="rounded-lg border border-destructive/20 bg-destructive/5 px-3 py-2 text-sm text-destructive">
