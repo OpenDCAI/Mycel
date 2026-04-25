@@ -13,7 +13,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Annotated, Any
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, StrictBool, field_validator
 
 # Default model used across the codebase — single source of truth
 DEFAULT_MODEL = "claude-sonnet-4-5-20250929"
@@ -195,7 +195,7 @@ class MCPServerConfig(BaseModel):
 class MCPConfig(BaseModel):
     """MCP (Model Context Protocol) configuration."""
 
-    enabled: bool = True
+    enabled: StrictBool = True
     servers: dict[str, MCPServerConfig] = Field(default_factory=dict, description="MCP server configurations")
 
 
