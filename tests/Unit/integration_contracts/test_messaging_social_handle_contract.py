@@ -2076,7 +2076,7 @@ def test_chat_tool_send_accepts_agent_user_target_id() -> None:
         chat_identity_id="human-user-1",
         messaging_service=_messaging_display_service(
             find_or_create_chat=lambda user_ids: {"id": "chat-1", "user_ids": user_ids},
-            count_unread=lambda _chat_id, _user_id: 0,
+            list_unread=lambda _chat_id, _user_id: [],
             send=lambda chat_id, sender_id, content, **_kwargs: sent.append((chat_id, sender_id, content)),
         ),
     )
@@ -2241,7 +2241,7 @@ def test_chat_tool_send_fails_before_unread_check_when_created_chat_id_is_empty(
     assert sent == []
 
 
-def test_chat_tool_send_fails_before_send_when_unread_count_is_invalid() -> None:
+def test_chat_tool_send_fails_before_send_when_unread_collection_is_invalid() -> None:
     registry = ToolRegistry()
     sent: list[tuple[str, str, str]] = []
     ChatToolService(
@@ -2249,7 +2249,7 @@ def test_chat_tool_send_fails_before_send_when_unread_count_is_invalid() -> None
         chat_identity_id="human-user-1",
         messaging_service=_messaging_display_service(
             find_or_create_chat=lambda _user_ids: {"id": "chat-1"},
-            count_unread=lambda _chat_id, _user_id: None,
+            list_unread=lambda _chat_id, _user_id: None,
             send=lambda chat_id, sender_id, content, **_kwargs: sent.append((chat_id, sender_id, content)),
         ),
     )
@@ -2260,7 +2260,7 @@ def test_chat_tool_send_fails_before_send_when_unread_count_is_invalid() -> None
     with pytest.raises(RuntimeError) as excinfo:
         send_message.handler(content="hello", participant_id="agent-user-1")
 
-    assert str(excinfo.value) == "Chat unread count is invalid for chat chat-1"
+    assert str(excinfo.value) == "Chat unread messages collection is invalid for chat chat-1"
     assert sent == []
 
 
@@ -2272,7 +2272,7 @@ def test_chat_tool_send_appends_yield_signal_to_content_and_payload() -> None:
         chat_identity_id="human-user-1",
         messaging_service=SimpleNamespace(
             is_chat_member=lambda _chat_id, _user_id: True,
-            count_unread=lambda _chat_id, _user_id: 0,
+            list_unread=lambda _chat_id, _user_id: [],
             send=lambda chat_id, sender_id, content, **kwargs: sent.append(
                 {
                     "chat_id": chat_id,
@@ -2295,7 +2295,6 @@ def test_chat_tool_send_appends_yield_signal_to_content_and_payload() -> None:
             "chat_id": "chat-1",
             "sender_id": "human-user-1",
             "content": "done\n[signal: yield]",
-            "enforce_caught_up": True,
             "mentions": None,
             "signal": "yield",
         }
@@ -2319,7 +2318,7 @@ def test_chat_tool_send_checks_group_membership_via_messaging_service_without_me
         send_message.handler(content="hello", chat_id="chat-1")
 
 
-def test_chat_tool_send_requires_group_reply_to_consume_peer_unread() -> None:
+def test_chat_tool_send_requires_group_reply_to_consume_human_unread() -> None:
     registry = ToolRegistry()
     sent: list[dict[str, object]] = []
     ChatToolService(
@@ -2327,7 +2326,9 @@ def test_chat_tool_send_requires_group_reply_to_consume_peer_unread() -> None:
         chat_identity_id="agent-user-1",
         messaging_service=SimpleNamespace(
             is_chat_member=lambda _chat_id, _user_id: True,
-            count_unread=lambda _chat_id, _user_id: 1,
+            list_chat_members=lambda _chat_id: [{"user_id": "agent-user-1"}, {"user_id": "human-user-1"}, {"user_id": "agent-user-2"}],
+            list_unread=lambda _chat_id, _user_id: [{"sender_id": "human-user-1", "mentioned_ids": []}],
+            resolve_display_user=lambda uid: SimpleNamespace(id=uid, display_name=uid, type="human" if uid == "human-user-1" else "agent"),
             send=lambda chat_id, sender_id, content, **kwargs: sent.append(
                 {
                     "chat_id": chat_id,
@@ -2351,6 +2352,149 @@ def test_chat_tool_send_requires_group_reply_to_consume_peer_unread() -> None:
     assert sent == []
 
 
+def test_chat_tool_send_requires_group_reply_to_consume_mentioned_agent_unread() -> None:
+    registry = ToolRegistry()
+    sent: list[dict[str, object]] = []
+    ChatToolService(
+        registry=registry,
+        chat_identity_id="agent-user-1",
+        messaging_service=SimpleNamespace(
+            is_chat_member=lambda _chat_id, _user_id: True,
+            list_chat_members=lambda _chat_id: [{"user_id": "agent-user-1"}, {"user_id": "agent-user-2"}, {"user_id": "agent-user-3"}],
+            list_unread=lambda _chat_id, _user_id: [{"sender_id": "agent-user-2", "mentioned_ids": ["agent-user-1"]}],
+            resolve_display_user=lambda uid: SimpleNamespace(id=uid, display_name=uid, type="agent"),
+            send=lambda chat_id, sender_id, content, **kwargs: sent.append(
+                {
+                    "chat_id": chat_id,
+                    "sender_id": sender_id,
+                    "content": content,
+                    **kwargs,
+                }
+            ),
+        ),
+    )
+
+    send_message = registry.get("send_message")
+    assert send_message is not None
+
+    result = send_message.handler(content="GROUP_READ_OK", chat_id="chat-1")
+
+    assert isinstance(result, ToolResultEnvelope)
+    assert result.kind == "error"
+    assert result.metadata["error_type"] == "chat_not_caught_up"
+    assert result.content == "You have 1 unread message(s). Call read_messages(chat_id='chat-1') first."
+    assert sent == []
+
+
+def test_chat_tool_send_ignores_unmentioned_agent_peer_unread_in_group() -> None:
+    registry = ToolRegistry()
+    sent: list[dict[str, object]] = []
+    ChatToolService(
+        registry=registry,
+        chat_identity_id="agent-user-1",
+        messaging_service=SimpleNamespace(
+            is_chat_member=lambda _chat_id, _user_id: True,
+            list_chat_members=lambda _chat_id: [{"user_id": "agent-user-1"}, {"user_id": "agent-user-2"}, {"user_id": "agent-user-3"}],
+            list_unread=lambda _chat_id, _user_id: [{"sender_id": "agent-user-2", "mentioned_ids": []}],
+            resolve_display_user=lambda uid: SimpleNamespace(id=uid, display_name=uid, type="agent"),
+            send=lambda chat_id, sender_id, content, **kwargs: sent.append(
+                {
+                    "chat_id": chat_id,
+                    "sender_id": sender_id,
+                    "content": content,
+                    **kwargs,
+                }
+            ),
+        ),
+    )
+
+    send_message = registry.get("send_message")
+    assert send_message is not None
+
+    result = send_message.handler(content="vote: agent 01", chat_id="chat-1")
+
+    assert result == "Message sent to chat."
+    assert sent == [
+        {
+            "chat_id": "chat-1",
+            "sender_id": "agent-user-1",
+            "content": "vote: agent 01",
+            "mentions": None,
+            "signal": None,
+        }
+    ]
+
+
+def test_chat_tool_send_requires_direct_reply_to_consume_agent_peer_unread() -> None:
+    registry = ToolRegistry()
+    sent: list[dict[str, object]] = []
+    ChatToolService(
+        registry=registry,
+        chat_identity_id="agent-user-1",
+        messaging_service=SimpleNamespace(
+            is_chat_member=lambda _chat_id, _user_id: True,
+            list_chat_members=lambda _chat_id: [{"user_id": "agent-user-1"}, {"user_id": "agent-user-2"}],
+            list_unread=lambda _chat_id, _user_id: [{"sender_id": "agent-user-2", "mentioned_ids": []}],
+            resolve_display_user=lambda uid: SimpleNamespace(id=uid, display_name=uid, type="agent"),
+            send=lambda chat_id, sender_id, content, **kwargs: sent.append(
+                {
+                    "chat_id": chat_id,
+                    "sender_id": sender_id,
+                    "content": content,
+                    **kwargs,
+                }
+            ),
+        ),
+    )
+
+    send_message = registry.get("send_message")
+    assert send_message is not None
+
+    result = send_message.handler(content="DIRECT_READ_OK", chat_id="chat-1")
+
+    assert isinstance(result, ToolResultEnvelope)
+    assert result.kind == "error"
+    assert result.metadata["error_type"] == "chat_not_caught_up"
+    assert sent == []
+
+
+def test_chat_tool_send_does_not_serialize_concurrent_group_replies_after_read() -> None:
+    registry = ToolRegistry()
+    sent: list[dict[str, object]] = []
+    ChatToolService(
+        registry=registry,
+        chat_identity_id="agent-user-1",
+        messaging_service=SimpleNamespace(
+            is_chat_member=lambda _chat_id, _user_id: True,
+            list_unread=lambda _chat_id, _user_id: [],
+            send=lambda chat_id, sender_id, content, **kwargs: sent.append(
+                {
+                    "chat_id": chat_id,
+                    "sender_id": sender_id,
+                    "content": content,
+                    **kwargs,
+                }
+            ),
+        ),
+    )
+
+    send_message = registry.get("send_message")
+    assert send_message is not None
+
+    result = send_message.handler(content="vote: agent 01", chat_id="chat-1")
+
+    assert result == "Message sent to chat."
+    assert sent == [
+        {
+            "chat_id": "chat-1",
+            "sender_id": "agent-user-1",
+            "content": "vote: agent 01",
+            "mentions": None,
+            "signal": None,
+        }
+    ]
+
+
 def test_chat_tool_send_returns_tool_error_when_chat_advances_after_read() -> None:
     registry = ToolRegistry()
 
@@ -2362,7 +2506,7 @@ def test_chat_tool_send_returns_tool_error_when_chat_advances_after_read() -> No
         chat_identity_id="agent-user-1",
         messaging_service=SimpleNamespace(
             is_chat_member=lambda _chat_id, _user_id: True,
-            count_unread=lambda _chat_id, _user_id: 0,
+            list_unread=lambda _chat_id, _user_id: [],
             send=_send,
         ),
     )
