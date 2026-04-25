@@ -58,16 +58,30 @@ class AgentSkill(BaseModel):
     name: str
     description: str = ""
     version: str = "0.1.0"
+    enabled: bool = True
+    source: dict[str, Any] = Field(default_factory=dict)
+
+    @field_validator("name")
+    @classmethod
+    def _non_blank(cls, value: str, info: ValidationInfo) -> str:
+        if not value.strip():
+            raise ValueError(f"agent_skill.{info.field_name} must not be blank")
+        return value
+
+
+class ResolvedSkill(BaseModel):
+    name: str
+    description: str = ""
+    version: str = "0.1.0"
     content: str
     files: dict[str, str] = Field(default_factory=dict)
-    enabled: bool = True
     source: dict[str, Any] = Field(default_factory=dict)
 
     @field_validator("name", "content")
     @classmethod
     def _non_blank(cls, value: str, info: ValidationInfo) -> str:
         if not value.strip():
-            raise ValueError(f"agent_skill.{info.field_name} must not be blank")
+            raise ValueError(f"resolved_skill.{info.field_name} must not be blank")
         return value
 
     @field_validator("files", mode="before")
@@ -163,7 +177,7 @@ class ResolvedAgentConfig(BaseModel):
     system_prompt: str = ""
     runtime_settings: dict[str, Any] = Field(default_factory=dict)
     compact: dict[str, Any] = Field(default_factory=dict)
-    skills: list[AgentSkill] = Field(default_factory=list)
+    skills: list[ResolvedSkill] = Field(default_factory=list)
     rules: list[AgentRule] = Field(default_factory=list)
     sub_agents: list[AgentSubAgent] = Field(default_factory=list)
     mcp_servers: list[McpServerConfig] = Field(default_factory=list)

@@ -1,5 +1,5 @@
 from config.agent_config_resolver import resolve_agent_config
-from config.agent_config_types import AgentConfig, AgentSkill
+from config.agent_config_types import AgentConfig, AgentSkill, SkillPackage
 from config.agent_snapshot import snapshot_from_resolved_config
 
 
@@ -12,17 +12,28 @@ def test_snapshot_contains_resolved_agent_config_only():
             name="Researcher",
             skills=[
                 AgentSkill(
+                    skill_id="github",
+                    package_id="github-package",
                     name="github",
-                    content="""---
-name: github
----
-
-# GitHub
-""",
-                    files={"references/query.md": "Prefer precise queries."},
                 )
             ],
-        )
+        ),
+        skill_repo=type(
+            "_SkillRepo",
+            (),
+            {
+                "get_package": lambda self, _owner_user_id, package_id: SkillPackage(
+                    id=package_id,
+                    owner_user_id="owner-1",
+                    skill_id="github",
+                    version="1.0.0",
+                    hash="sha256:github",
+                    skill_md="---\nname: github\n---\n\n# GitHub\n",
+                    files={"references/query.md": "Prefer precise queries."},
+                    created_at="2026-04-25T00:00:00+00:00",
+                )
+            },
+        )(),
     )
 
     snapshot = snapshot_from_resolved_config(resolved)
