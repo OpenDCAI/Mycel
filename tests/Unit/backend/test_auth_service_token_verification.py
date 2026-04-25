@@ -8,6 +8,7 @@ import jwt
 import pytest
 
 from backend.identity.auth.service import AuthService
+from storage.contracts import UserType
 
 
 class _FakeSupabaseAuth:
@@ -152,6 +153,51 @@ def test_verify_token_accepts_supabase_iat_clock_boundary(monkeypatch: pytest.Mo
     payload = _service().verify_token(token)
 
     assert payload == {"user_id": "user-local"}
+
+
+def test_create_external_user_token_creates_external_user_and_signed_token(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setenv("SUPABASE_JWT_SECRET", "secret-1")
+    created_rows: list[Any] = []
+    user_repo = SimpleNamespace(
+        get_by_id=lambda user_id: None if user_id == "external-codex-1" else SimpleNamespace(id=user_id),
+        create=lambda row: created_rows.append(row),
+    )
+
+    result = _service(user_repo=user_repo).create_external_user_token(
+        "external-codex-1",
+        "Codex Local",
+        created_by_user_id="owner-1",
+    )
+
+    assert len(created_rows) == 1
+    assert created_rows[0].id == "external-codex-1"
+    assert created_rows[0].type is UserType.EXTERNAL
+    assert created_rows[0].display_name == "Codex Local"
+    decoded = jwt.decode(result["token"], "secret-1", algorithms=["HS256"], options={"verify_aud": False})
+    assert decoded["sub"] == "external-codex-1"
+    assert decoded["mycel_user_type"] == "external"
+    assert decoded["created_by_user_id"] == "owner-1"
+    assert _service(user_repo=user_repo).verify_token(result["token"]) == {"user_id": "external-codex-1"}
+    assert result["user"] == {"id": "external-codex-1", "name": "Codex Local", "type": "external"}
+
+
+def test_create_external_user_token_rejects_existing_user(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setenv("SUPABASE_JWT_SECRET", "secret-1")
+    created_rows: list[Any] = []
+    user_repo = SimpleNamespace(
+        get_by_id=lambda user_id: SimpleNamespace(id=user_id),
+        create=lambda row: created_rows.append(row),
+    )
+
+    with pytest.raises(ValueError) as exc_info:
+        _service(user_repo=user_repo).create_external_user_token(
+            "external-codex-1",
+            "Codex Local",
+            created_by_user_id="owner-1",
+        )
+
+    assert "already exists" in str(exc_info.value)
+    assert created_rows == []
 
 
 def test_verify_token_fails_loudly_when_secret_missing_even_with_auth_client(monkeypatch: pytest.MonkeyPatch):
