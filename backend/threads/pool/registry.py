@@ -7,6 +7,7 @@ from fastapi import FastAPI
 
 from backend.threads.pool.factory import create_agent_sync
 from backend.threads.sandbox_resolution import resolve_thread_sandbox
+from config.agent_config_resolver import resolve_agent_config
 from core.identity.agent_registry import get_or_create_agent_id
 from sandbox.thread_context import set_current_thread_id
 
@@ -92,7 +93,7 @@ async def get_or_create_agent(
         # @@@agent-vs-agent-user - thread row agent_user_id resolves an agent user for display,
         # NOT an agent type name ("bash", "general", etc.). Never pass it to create_leon_agent.
         agent_name = agent  # explicit caller-provided type only; None -> default Leon agent
-        agent_config_id = None
+        resolved_agent_config = None
         memory_config_override = None
         runtime_storage = getattr(app_obj.state, "runtime_storage_state", None)
         storage_container: Any = getattr(runtime_storage, "storage_container", None)
@@ -106,12 +107,15 @@ async def get_or_create_agent(
             agent_user = agent_user or user_repo.get_by_id(thread_data["agent_user_id"])
             if agent_user is None or getattr(agent_user, "agent_config_id", None) is None:
                 raise RuntimeError(f"thread.agent_user_id is missing agent_config_id for runtime startup: {thread_id}")
-            agent_config_id = agent_user.agent_config_id
             if agent_config_repo is None:
                 raise RuntimeError(f"agent_config_repo is required to resolve runtime config for thread {thread_id}")
+            agent_config_id = agent_user.agent_config_id
             agent_config = agent_config_repo.get_agent_config(agent_config_id)
             if agent_config is None:
                 raise RuntimeError(f"Agent config {agent_config_id} is missing for runtime startup: {thread_id}")
+            if agent_name:
+                raise RuntimeError(f"thread {thread_id} cannot use a built-in agent name with repo-backed AgentConfig")
+            resolved_agent_config = resolve_agent_config(agent_config, skill_repo=skill_repo)
             raw_compact = agent_config.compact
             if raw_compact is not None and not isinstance(raw_compact, dict):
                 raise RuntimeError(f"agent config compact must be a JSON object for runtime startup: {agent_config_id}")
@@ -176,10 +180,8 @@ async def get_or_create_agent(
             create_kwargs["models_config_override"] = models_config_override
         if memory_config_override is not None:
             create_kwargs["memory_config_override"] = memory_config_override
-        if agent_config_id is not None:
-            create_kwargs["agent_config_id"] = agent_config_id
-            create_kwargs["agent_config_repo"] = agent_config_repo
-            create_kwargs["skill_repo"] = skill_repo
+        if resolved_agent_config is not None:
+            create_kwargs["resolved_agent_config"] = resolved_agent_config
         agent_obj = await asyncio.to_thread(create_agent_sync, **create_kwargs)
         agent_identity_user_id = str(thread_data.get("agent_user_id") or "").strip() if thread_data else ""
         if not agent_identity_user_id:

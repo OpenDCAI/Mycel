@@ -1,5 +1,6 @@
 import json
 import os
+from datetime import datetime
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, cast
@@ -8,7 +9,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from langchain_core.messages import AIMessage, AIMessageChunk, HumanMessage, SystemMessage, ToolMessage
 
-from config.agent_config_types import AgentConfig, AgentSkill, McpServerConfig, ResolvedSkill, SkillPackage
+from config.agent_config_resolver import resolve_agent_config
+from config.agent_config_types import AgentConfig, AgentSkill, McpServerConfig, ResolvedAgentConfig, ResolvedSkill, SkillPackage
 
 
 def _mock_model(text="Integration test response"):
@@ -59,6 +61,10 @@ def _agent_config(**overrides: object) -> AgentConfig:
     return AgentConfig(**data)
 
 
+def _resolved_agent_config(*, skill_repo: object | None = None, **overrides: object) -> ResolvedAgentConfig:
+    return resolve_agent_config(_agent_config(**overrides), skill_repo=skill_repo)
+
+
 class _SkillRepo:
     def __init__(self, *, files: dict[str, str] | None = None) -> None:
         self.files = files or {}
@@ -74,7 +80,7 @@ class _SkillRepo:
             hash="sha256:fastapi",
             skill_md="---\nname: FastAPI\ndescription: Build FastAPI services\n---\nAlways use APIRouter.",
             files=self.files,
-            created_at="2026-04-25T00:00:00+00:00",
+            created_at=datetime.fromisoformat("2026-04-25T00:00:00+00:00"),
         )
 
 
@@ -680,28 +686,24 @@ def test_leon_agent_does_not_prepare_local_workspace_directory(monkeypatch, tmp_
 
 @pytest.mark.asyncio
 @_patch_env_api_key()
-async def test_leon_agent_agent_config_id_registers_mcp_resource_tools(tmp_path):
-    """Repo-rooted agent config should surface MCP resource tools in the live registry."""
+async def test_leon_agent_resolved_config_registers_mcp_resource_tools(tmp_path):
+    """Resolved AgentConfig should surface MCP resource tools in the live registry."""
     from core.runtime.agent import LeonAgent
 
-    class _Repo:
-        def get_agent_config(self, agent_config_id: str):
-            assert agent_config_id == "cfg-1"
-            return _agent_config(
-                name="Toad",
-                description="Demo agent",
-                system_prompt="You are Toad.",
-                mcp_servers=[
-                    McpServerConfig(
-                        name="nu50demo",
-                        transport="stdio",
-                        command="uv",
-                        args=["run", "python", "/tmp/nu50_mcp_server.py"],
-                    )
-                ],
-            )
-
     mock_model = _mock_model("Repo MCP response")
+    resolved_config = _resolved_agent_config(
+        name="Toad",
+        description="Demo agent",
+        system_prompt="You are Toad.",
+        mcp_servers=[
+            McpServerConfig(
+                name="nu50demo",
+                transport="stdio",
+                command="uv",
+                args=["run", "python", "/tmp/nu50_mcp_server.py"],
+            )
+        ],
+    )
 
     with (
         patch("core.runtime.agent.LeonAgent._create_model", return_value=mock_model),
@@ -711,8 +713,7 @@ async def test_leon_agent_agent_config_id_registers_mcp_resource_tools(tmp_path)
     ):
         agent = LeonAgent(
             workspace_root=str(tmp_path),
-            agent_config_id="cfg-1",
-            agent_config_repo=_Repo(),
+            resolved_agent_config=resolved_config,
             api_key="sk-test-integration",
         )
         await agent.ainit()
@@ -725,27 +726,24 @@ async def test_leon_agent_agent_config_id_registers_mcp_resource_tools(tmp_path)
 
 @pytest.mark.asyncio
 @_patch_env_api_key()
-async def test_leon_agent_agent_config_id_registers_repo_backed_skills(tmp_path):
+async def test_leon_agent_resolved_config_registers_skills(tmp_path):
     from core.runtime.agent import LeonAgent
 
-    class _Repo:
-        def get_agent_config(self, agent_config_id: str):
-            assert agent_config_id == "cfg-1"
-            return _agent_config(
-                name="Repo Toad",
-                system_prompt="You are Repo Toad.",
-                skills=[
-                    AgentSkill(
-                        skill_id="fastapi",
-                        package_id="fastapi-package",
-                        name="FastAPI",
-                        version="1.0.0",
-                        source={"desc": "Build FastAPI services"},
-                    )
-                ],
-            )
-
     mock_model = _mock_model("Repo skill response")
+    resolved_config = _resolved_agent_config(
+        skill_repo=_SkillRepo(files={"references/routing.md": "Prefer APIRouter over app-level route decorators."}),
+        name="Repo Toad",
+        system_prompt="You are Repo Toad.",
+        skills=[
+            AgentSkill(
+                skill_id="fastapi",
+                package_id="fastapi-package",
+                name="FastAPI",
+                version="1.0.0",
+                source={"desc": "Build FastAPI services"},
+            )
+        ],
+    )
 
     with (
         patch("core.runtime.agent.LeonAgent._create_model", return_value=mock_model),
@@ -755,9 +753,7 @@ async def test_leon_agent_agent_config_id_registers_repo_backed_skills(tmp_path)
     ):
         agent = LeonAgent(
             workspace_root=str(tmp_path),
-            agent_config_id="cfg-1",
-            agent_config_repo=_Repo(),
-            skill_repo=_SkillRepo(files={"references/routing.md": "Prefer APIRouter over app-level route decorators."}),
+            resolved_agent_config=resolved_config,
             api_key="sk-test-integration",
         )
         await agent.ainit()
@@ -782,22 +778,19 @@ async def test_leon_agent_passes_resolved_skill_models_to_runtime_service(tmp_pa
     from core.runtime.agent import LeonAgent
 
     captured: list[ResolvedSkill] = []
-
-    class _Repo:
-        def get_agent_config(self, agent_config_id: str):
-            assert agent_config_id == "cfg-1"
-            return _agent_config(
-                name="Repo Toad",
-                system_prompt="You are Repo Toad.",
-                skills=[
-                    AgentSkill(
-                        skill_id="fastapi",
-                        package_id="fastapi-package",
-                        name="FastAPI",
-                        version="1.0.0",
-                    )
-                ],
+    resolved_config = _resolved_agent_config(
+        skill_repo=_SkillRepo(),
+        name="Repo Toad",
+        system_prompt="You are Repo Toad.",
+        skills=[
+            AgentSkill(
+                skill_id="fastapi",
+                package_id="fastapi-package",
+                name="FastAPI",
+                version="1.0.0",
             )
+        ],
+    )
 
     class _CapturingSkillsService:
         def __init__(self, *, registry, skills):
@@ -814,9 +807,7 @@ async def test_leon_agent_passes_resolved_skill_models_to_runtime_service(tmp_pa
     ):
         agent = LeonAgent(
             workspace_root=str(tmp_path),
-            agent_config_id="cfg-1",
-            agent_config_repo=_Repo(),
-            skill_repo=_SkillRepo(),
+            resolved_agent_config=resolved_config,
             api_key="sk-test-integration",
         )
         await agent.ainit()
@@ -829,7 +820,7 @@ async def test_leon_agent_passes_resolved_skill_models_to_runtime_service(tmp_pa
 
 @pytest.mark.asyncio
 @_patch_env_api_key()
-async def test_leon_agent_agent_config_id_does_not_register_host_file_skills(tmp_path):
+async def test_leon_agent_resolved_config_does_not_register_host_file_skills(tmp_path):
     from core.runtime.agent import LeonAgent
 
     _write_file_skill_dir(
@@ -839,23 +830,20 @@ async def test_leon_agent_agent_config_id_does_not_register_host_file_skills(tmp
         description="must not leak into repo-backed agents",
     )
 
-    class _Repo:
-        def get_agent_config(self, agent_config_id: str):
-            assert agent_config_id == "cfg-1"
-            return _agent_config(
-                name="Repo Toad",
-                system_prompt="You are Repo Toad.",
-                skills=[
-                    AgentSkill(
-                        skill_id="fastapi",
-                        package_id="fastapi-package",
-                        name="FastAPI",
-                        version="1.0.0",
-                    )
-                ],
-            )
-
     mock_model = _mock_model("Repo skill response")
+    resolved_config = _resolved_agent_config(
+        skill_repo=_SkillRepo(),
+        name="Repo Toad",
+        system_prompt="You are Repo Toad.",
+        skills=[
+            AgentSkill(
+                skill_id="fastapi",
+                package_id="fastapi-package",
+                name="FastAPI",
+                version="1.0.0",
+            )
+        ],
+    )
 
     with (
         patch("core.runtime.agent.LeonAgent._create_model", return_value=mock_model),
@@ -865,9 +853,7 @@ async def test_leon_agent_agent_config_id_does_not_register_host_file_skills(tmp
     ):
         agent = LeonAgent(
             workspace_root=str(tmp_path),
-            agent_config_id="cfg-1",
-            agent_config_repo=_Repo(),
-            skill_repo=_SkillRepo(),
+            resolved_agent_config=resolved_config,
             api_key="sk-test-integration",
         )
         await agent.ainit()
@@ -884,7 +870,7 @@ async def test_leon_agent_agent_config_id_does_not_register_host_file_skills(tmp
 
 @pytest.mark.asyncio
 @_patch_env_api_key()
-async def test_leon_agent_empty_agent_config_skills_do_not_enable_host_file_skills(tmp_path):
+async def test_leon_agent_empty_resolved_config_skills_do_not_enable_host_file_skills(tmp_path):
     from core.runtime.agent import LeonAgent
 
     _write_file_skill_dir(
@@ -894,12 +880,8 @@ async def test_leon_agent_empty_agent_config_skills_do_not_enable_host_file_skil
         description="must not leak into repo-backed agents",
     )
 
-    class _Repo:
-        def get_agent_config(self, agent_config_id: str):
-            assert agent_config_id == "cfg-1"
-            return _agent_config(name="Repo Toad", system_prompt="You are Repo Toad.", skills=[])
-
     mock_model = _mock_model("Repo skill response")
+    resolved_config = _resolved_agent_config(name="Repo Toad", system_prompt="You are Repo Toad.", skills=[])
 
     with (
         patch("core.runtime.agent.LeonAgent._create_model", return_value=mock_model),
@@ -909,8 +891,7 @@ async def test_leon_agent_empty_agent_config_skills_do_not_enable_host_file_skil
     ):
         agent = LeonAgent(
             workspace_root=str(tmp_path),
-            agent_config_id="cfg-1",
-            agent_config_repo=_Repo(),
+            resolved_agent_config=resolved_config,
             api_key="sk-test-integration",
         )
         await agent.ainit()
@@ -982,7 +963,7 @@ async def test_leon_agent_default_runtime_does_not_read_missing_runtime_skill_pa
 
 @pytest.mark.asyncio
 @_patch_env_api_key()
-async def test_leon_agent_agent_config_id_does_not_read_stale_runtime_skill_toggle(tmp_path):
+async def test_leon_agent_resolved_config_does_not_read_stale_runtime_skill_toggle(tmp_path):
     from core.runtime.agent import LeonAgent
 
     leon_dir = tmp_path / ".leon"
@@ -992,23 +973,20 @@ async def test_leon_agent_agent_config_id_does_not_read_stale_runtime_skill_togg
         encoding="utf-8",
     )
 
-    class _Repo:
-        def get_agent_config(self, agent_config_id: str):
-            assert agent_config_id == "cfg-1"
-            return _agent_config(
-                name="Repo Toad",
-                system_prompt="You are Repo Toad.",
-                skills=[
-                    AgentSkill(
-                        skill_id="fastapi",
-                        package_id="fastapi-package",
-                        name="FastAPI",
-                        version="1.0.0",
-                    )
-                ],
-            )
-
     mock_model = _mock_model("Repo skill response")
+    resolved_config = _resolved_agent_config(
+        skill_repo=_SkillRepo(),
+        name="Repo Toad",
+        system_prompt="You are Repo Toad.",
+        skills=[
+            AgentSkill(
+                skill_id="fastapi",
+                package_id="fastapi-package",
+                name="FastAPI",
+                version="1.0.0",
+            )
+        ],
+    )
 
     with (
         patch("core.runtime.agent.LeonAgent._create_model", return_value=mock_model),
@@ -1018,9 +996,7 @@ async def test_leon_agent_agent_config_id_does_not_read_stale_runtime_skill_togg
     ):
         agent = LeonAgent(
             workspace_root=str(tmp_path),
-            agent_config_id="cfg-1",
-            agent_config_repo=_Repo(),
-            skill_repo=_SkillRepo(),
+            resolved_agent_config=resolved_config,
             api_key="sk-test-integration",
         )
         await agent.ainit()
@@ -1033,8 +1009,8 @@ async def test_leon_agent_agent_config_id_does_not_read_stale_runtime_skill_togg
 
 @pytest.mark.asyncio
 @_patch_env_api_key()
-async def test_leon_agent_agent_config_id_ignores_conflicting_stale_member_shell(tmp_path):
-    """Repo-rooted live startup must ignore a stale member-dir shell with conflicting MCP state."""
+async def test_leon_agent_resolved_config_ignores_conflicting_stale_member_shell(tmp_path):
+    """Resolved config startup must ignore a stale member-dir shell with conflicting MCP state."""
     from core.runtime.agent import LeonAgent
 
     stale_member_dir = tmp_path / "members" / "toad"
@@ -1045,23 +1021,19 @@ async def test_leon_agent_agent_config_id_ignores_conflicting_stale_member_shell
     )
     (stale_member_dir / ".mcp.json").write_text('{"mcpServers":{}}', encoding="utf-8")
 
-    class _Repo:
-        def get_agent_config(self, agent_config_id: str):
-            assert agent_config_id == "cfg-1"
-            return _agent_config(
-                name="Repo Toad",
-                system_prompt="You are Repo Toad.",
-                mcp_servers=[
-                    McpServerConfig(
-                        name="nu50demo",
-                        transport="stdio",
-                        command="uv",
-                        args=["run", "python", "/tmp/nu50_mcp_server.py"],
-                    )
-                ],
-            )
-
     mock_model = _mock_model("Repo MCP response")
+    resolved_config = _resolved_agent_config(
+        name="Repo Toad",
+        system_prompt="You are Repo Toad.",
+        mcp_servers=[
+            McpServerConfig(
+                name="nu50demo",
+                transport="stdio",
+                command="uv",
+                args=["run", "python", "/tmp/nu50_mcp_server.py"],
+            )
+        ],
+    )
 
     with (
         patch("core.runtime.agent.LeonAgent._create_model", return_value=mock_model),
@@ -1071,14 +1043,13 @@ async def test_leon_agent_agent_config_id_ignores_conflicting_stale_member_shell
     ):
         agent = LeonAgent(
             workspace_root=str(tmp_path),
-            agent_config_id="cfg-1",
-            agent_config_repo=_Repo(),
+            resolved_agent_config=resolved_config,
             api_key="sk-test-integration",
         )
         await agent.ainit()
 
-        # @@@runtime-repo-source-of-truth - repo-backed live startup must ignore
-        # conflicting stale member shells and keep MCP registration sourced from agent_config_repo.
+        # @@@runtime-resolved-config-source - runtime startup must ignore
+        # conflicting stale member shells and keep MCP registration sourced from ResolvedAgentConfig.
         assert "Repo Toad" in agent.system_prompt
         assert "Stale Toad" not in agent.system_prompt
         assert agent._tool_registry.get("ListMcpResources") is not None
@@ -1088,18 +1059,13 @@ async def test_leon_agent_agent_config_id_ignores_conflicting_stale_member_shell
 
 
 @_patch_env_api_key()
-def test_leon_agent_agent_config_id_missing_config_fails_loudly(tmp_path):
+def test_leon_agent_rejects_runtime_repository_arguments(tmp_path):
     from core.runtime.agent import LeonAgent
 
-    class _Repo:
-        def get_agent_config(self, agent_config_id: str):
-            assert agent_config_id == "cfg-missing"
-
-    with pytest.raises(RuntimeError, match="Agent config not found: cfg-missing"):
-        LeonAgent(
+    with pytest.raises(TypeError, match="agent_config_id"):
+        cast(Any, LeonAgent)(
             workspace_root=str(tmp_path),
             agent_config_id="cfg-missing",
-            agent_config_repo=_Repo(),
             api_key="sk-test-integration",
         )
 
@@ -1115,23 +1081,21 @@ async def test_leon_agent_announces_integration_instruction_delta_once_and_reann
         nonlocal mcp_instructions
         mcp_instructions = instructions
 
-    class _Repo:
-        def get_agent_config(self, agent_config_id: str):
-            assert agent_config_id == "cfg-1"
-            return _agent_config(
-                name="Toad",
-                description="Demo agent",
-                system_prompt="You are Toad.",
-                mcp_servers=[
-                    McpServerConfig(
-                        name="nu50demo",
-                        transport="stdio",
-                        command="uv",
-                        args=["run", "python", "/tmp/nu50_mcp_server.py"],
-                        instructions=mcp_instructions,
-                    )
-                ],
-            )
+    def _resolved_mcp_config() -> ResolvedAgentConfig:
+        return _resolved_agent_config(
+            name="Toad",
+            description="Demo agent",
+            system_prompt="You are Toad.",
+            mcp_servers=[
+                McpServerConfig(
+                    name="nu50demo",
+                    transport="stdio",
+                    command="uv",
+                    args=["run", "python", "/tmp/nu50_mcp_server.py"],
+                    instructions=mcp_instructions,
+                )
+            ],
+        )
 
     def _message_text(message: object) -> str:
         content = getattr(message, "content", "")
@@ -1161,8 +1125,7 @@ async def test_leon_agent_announces_integration_instruction_delta_once_and_reann
     ):
         agent = LeonAgent(
             workspace_root=str(tmp_path),
-            agent_config_id="cfg-1",
-            agent_config_repo=_Repo(),
+            resolved_agent_config=_resolved_mcp_config(),
             api_key="sk-test-integration",
         )
         await agent.ainit()
@@ -1196,8 +1159,7 @@ async def test_leon_agent_announces_integration_instruction_delta_once_and_reann
     ):
         agent = LeonAgent(
             workspace_root=str(tmp_path),
-            agent_config_id="cfg-1",
-            agent_config_repo=_Repo(),
+            resolved_agent_config=_resolved_mcp_config(),
             api_key="sk-test-integration",
         )
         await agent.ainit()
