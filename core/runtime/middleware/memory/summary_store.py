@@ -96,7 +96,6 @@ class SummaryStore:
                     created_at=now,
                 )
 
-                logger.info(f"[SummaryStore] Saved summary {summary_id} for thread {thread_id}")
                 return summary_id
 
             except Exception as e:
@@ -161,5 +160,3 @@ class SummaryStore:
 
     def delete_thread_summaries(self, thread_id: str) -> None:
         self._repo.delete_thread_summaries(thread_id)
-
-        logger.info(f"[SummaryStore] Deleted all summaries for thread {thread_id}")
