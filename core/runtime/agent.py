@@ -463,6 +463,12 @@ class LeonAgent:
             return {server.name: server for server in resolved_config.mcp_servers if server.enabled}
         return self.config.mcp.servers
 
+    def _mcp_enabled(self) -> bool:
+        resolved_config = getattr(self, "_resolved_agent_config", None)
+        if resolved_config is not None:
+            return bool(self._get_mcp_server_configs())
+        return bool(self.config.mcp.enabled)
+
     def _get_integration_instruction_blocks(self) -> dict[str, str]:
         return mcp_gateway.instruction_blocks(self._get_mcp_server_configs())
 
@@ -1234,7 +1240,7 @@ class LeonAgent:
 
     async def _init_mcp_tools(self) -> list:
         client, tools = await mcp_gateway.init_client_tools(
-            enabled=self.config.mcp.enabled,
+            enabled=self._mcp_enabled(),
             server_configs=self._get_mcp_server_configs(),
         )
         self._mcp_client = client
