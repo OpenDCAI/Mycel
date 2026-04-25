@@ -173,3 +173,23 @@ def test_load_inline_skill_normalizes_adjacent_file_paths() -> None:
 
     assert "--- references/query.md ---" in result
     assert "references\\query.md" not in result
+
+
+def test_inline_skill_rejects_adjacent_file_path_collision() -> None:
+    registry = ToolRegistry()
+
+    with pytest.raises(ValueError, match="Inline Skill files contain duplicate path after normalization: references/query.md"):
+        SkillsService(
+            registry=registry,
+            skill_paths=[],
+            inline_skills=[
+                {
+                    "name": "query-helper",
+                    "content": "---\nname: query-helper\n---\nUse exact terms.",
+                    "files": {
+                        "references\\query.md": "Windows-shaped key.",
+                        "references/query.md": "POSIX-shaped key.",
+                    },
+                }
+            ],
+        )
