@@ -435,7 +435,7 @@ def list_library_names(
 
 def get_resource_used_by(
     resource_type: str,
-    resource_name: str,
+    resource_id: str,
     owner_user_id: str,
     *,
     user_repo: Any = None,
@@ -456,7 +456,7 @@ def get_resource_used_by(
         config = agent_config_repo.get_agent_config(agent_config_id)
         if config is None:
             raise RuntimeError(f"Agent config {agent_config_id} is missing for {getattr(agent, 'id', 'unknown')}")
-        if any(getattr(item, "name", None) == resource_name for item in getattr(config, config_attr)):
+        if any(getattr(item, "skill_id", None) == resource_id for item in getattr(config, config_attr)):
             names.append(str(getattr(config, "name", None) or getattr(agent, "display_name", None) or getattr(agent, "id", "unknown")))
     return names
 
