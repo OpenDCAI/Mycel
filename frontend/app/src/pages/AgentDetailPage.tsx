@@ -52,9 +52,8 @@ export default function AgentDetail() {
   const updateAgentConfig = useAppStore(s => s.updateAgentConfig);
   const ensureLibrary = useAppStore(s => s.ensureLibrary);
   const librarySkills = useAppStore(s => s.librarySkills);
-  const libraryAgents = useAppStore(s => s.libraryAgents);
 
-  const [pickerType, setPickerType] = useState<"skill" | "agent" | null>(null);
+  const [pickerType, setPickerType] = useState<"skill" | null>(null);
   const [editingName, setEditingName] = useState(false);
   const [nameDraft, setNameDraft] = useState("");
   const [loadFailure, setLoadFailure] = useState<{ id: string; message: string } | null>(null);
@@ -119,7 +118,7 @@ export default function AgentDetail() {
     } catch (err) { toast.error(`更新失败：${errorText(err)}`); }
   };
 
-  const handleAssign = async (type: "skill" | "agent", names: string[]) => {
+  const handleAssign = async (type: "skill", names: string[]) => {
     if (!agent) return;
     try {
       if (type === "skill") {
@@ -129,13 +128,6 @@ export default function AgentDetail() {
           return { name: n, desc: lib?.desc || "", enabled: true };
         });
         if (newSkills.length) await updateAgentConfig(agent.id, { skills: [...agent.config.skills, ...newSkills] });
-      } else {
-        const existing = new Set(agent.config.subAgents.map(a => a.name));
-        const newAgents = names.filter(n => !existing.has(n)).map(n => {
-          const lib = libraryAgents.find(a => a.name === n);
-          return { name: n, desc: lib?.desc || "", tools: [] as CrudItem[], system_prompt: "" };
-        });
-        if (newAgents.length) await updateAgentConfig(agent.id, { subAgents: [...agent.config.subAgents, ...newAgents] });
       }
       toast.success("已添加");
     } catch (err) { toast.error(`添加失败：${errorText(err)}`); }
@@ -208,7 +200,6 @@ export default function AgentDetail() {
               await updateAgentConfig(agent.id, { subAgents: updated });
               toast.success("Agent 配置已保存");
             }}
-            onAdd={() => setPickerType("agent")}
             onDelete={(name) => handleRemove("subagents", name)}
           />
         );
@@ -288,16 +279,11 @@ export default function AgentDetail() {
 
       {showPublish && <PublishDialog open={showPublish} onOpenChange={setShowPublish} agentId={agent.id} />}
       {pickerType && (() => {
-        const libraryMap = { skill: librarySkills, agent: libraryAgents };
-        const assignedMap = {
-          skill: agent.config.skills.map(s => s.name),
-          agent: agent.config.subAgents.map(a => a.name),
-        };
         return (
           <ResourcePicker
             type={pickerType}
-            library={libraryMap[pickerType]}
-            assigned={assignedMap[pickerType]}
+            library={librarySkills}
+            assigned={agent.config.skills.map(s => s.name)}
             onConfirm={(names) => { handleAssign(pickerType, names); setPickerType(null); }}
             onClose={() => setPickerType(null)}
           />
@@ -537,7 +523,7 @@ function RuleEditor({ rule, onSave, onDelete }: {
 function SubAgentsPanel({ agents, onSave, onAdd, onDelete }: {
   agents: SubAgent[];
   onSave: (updated: SubAgent[]) => Promise<void>;
-  onAdd: () => void;
+  onAdd?: () => void;
   onDelete: (name: string) => void;
 }) {
   const builtinAgents = useMemo(() => agents.filter(a => a.builtin), [agents]);
@@ -590,9 +576,11 @@ function SubAgentsPanel({ agents, onSave, onAdd, onDelete }: {
       <div className="w-52 shrink-0 border-r flex flex-col">
         <div className="flex items-center justify-between px-3 py-2 border-b">
           <span className="text-xs font-medium text-muted-foreground">子 Agent</span>
-          <Button variant="ghost" size="icon" className="h-6 w-6" onClick={onAdd} title="添加子 Agent">
-            <Plus className="h-3.5 w-3.5" />
-          </Button>
+          {onAdd && (
+            <Button variant="ghost" size="icon" className="h-6 w-6" onClick={onAdd} title="添加子 Agent">
+              <Plus className="h-3.5 w-3.5" />
+            </Button>
+          )}
         </div>
         <div className="flex-1 overflow-auto">
           {/* Builtin agents section */}
@@ -623,7 +611,7 @@ function SubAgentsPanel({ agents, onSave, onAdd, onDelete }: {
                 <p className="px-3 py-1 text-2xs font-medium text-muted-foreground">自定义</p>
               )}
               {customAgents.length === 0 ? (
-                <p className="px-3 py-2 text-2xs text-muted-foreground/60">点击 + 添加</p>
+                <p className="px-3 py-2 text-2xs text-muted-foreground/60">暂无自定义子 Agent</p>
               ) : (
                 customAgents.map(a => (
                   <button
@@ -836,13 +824,13 @@ function ResourceCards({ type, items, onToggle, onRemove, onAdd }: {
 // ==================== ResourcePicker ====================
 
 function ResourcePicker({ type, library, assigned, onConfirm, onClose }: {
-  type: "skill" | "agent";
+  type: "skill";
   library: ResourceItem[];
   assigned: string[];
   onConfirm: (names: string[]) => void;
   onClose: () => void;
 }) {
-  const labels = { skill: "Skill", agent: "子 Agent" };
+  const labels = { skill: "Skill" };
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [filter, setFilter] = useState("");
   const assignedSet = useMemo(() => new Set(assigned), [assigned]);

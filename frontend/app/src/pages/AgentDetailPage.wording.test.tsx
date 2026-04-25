@@ -7,13 +7,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import AgentDetailPage from "./AgentDetailPage";
 import { toast } from "sonner";
 
-const { getAgentById, fetchAgent, updateAgent, updateAgentConfig, ensureLibrary, libraryAgents } = vi.hoisted(() => ({
+const { getAgentById, fetchAgent, updateAgent, updateAgentConfig, ensureLibrary } = vi.hoisted(() => ({
   getAgentById: vi.fn(),
   fetchAgent: vi.fn(),
   updateAgent: vi.fn(),
   updateAgentConfig: vi.fn(),
   ensureLibrary: vi.fn(),
-  libraryAgents: [] as Array<{ id: string; name: string; desc: string; type: string; created_at: number; updated_at: number }>,
 }));
 
 const { navigateMock } = vi.hoisted(() => ({
@@ -55,7 +54,6 @@ vi.mock("@/store/app-store", () => ({
       ensureLibrary,
       loadAll: vi.fn(),
       librarySkills: [],
-      libraryAgents,
     }),
 }));
 
@@ -80,7 +78,6 @@ describe("AgentDetailPage wording contract", () => {
     getAgentById.mockReturnValue(agentFixture);
     fetchAgent.mockResolvedValue(agentFixture);
     ensureLibrary.mockResolvedValue(undefined);
-    libraryAgents.splice(0, libraryAgents.length);
     navigateMock.mockReset();
   });
 
@@ -228,7 +225,7 @@ describe("AgentDetailPage wording contract", () => {
     expect(ensureLibrary).not.toHaveBeenCalled();
   });
 
-  it("uses subagent wording in the Library picker for Library agent resources", async () => {
+  it("does not expose a Library picker for subagents", async () => {
     render(
       <MemoryRouter initialEntries={["/contacts/agents/agent-1"]}>
         <Routes>
@@ -238,15 +235,13 @@ describe("AgentDetailPage wording contract", () => {
     );
 
     fireEvent.click(screen.getByRole("button", { name: /^子 Agent/ }));
-    const addButton = document.querySelector(".lucide-plus")?.closest("button");
-    expect(addButton).toBeTruthy();
-    fireEvent.click(addButton as HTMLButtonElement);
 
-    expect(await screen.findByRole("heading", { name: "从 Library 添加 子 Agent" })).toBeTruthy();
-    expect(screen.queryByRole("heading", { name: ["从 Library 添加", "Agent"].join(" ") })).toBeNull();
+    expect(screen.queryByTitle("添加子 Agent")).toBeNull();
+    expect(screen.queryByRole("heading", { name: /从 Library 添加/ })).toBeNull();
+    expect(ensureLibrary).not.toHaveBeenCalled();
   });
 
-  it("uses subagent wording for the inline subagent add control", () => {
+  it("keeps subagents editable without a Library add control", () => {
     getAgentById.mockReturnValue({
       ...agentFixture,
       config: {
@@ -265,8 +260,8 @@ describe("AgentDetailPage wording contract", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /^子 Agent/ }));
 
-    expect(screen.getByTitle("添加子 Agent")).toBeTruthy();
-    expect(screen.queryByTitle("添加 Agent")).toBeNull();
+    expect(screen.queryByTitle("添加子 Agent")).toBeNull();
+    expect(screen.getAllByText("Helper").length).toBeGreaterThan(0);
   });
 
   it("uses subagent wording for the empty subagent detail prompt", () => {
