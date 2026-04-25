@@ -135,6 +135,73 @@ def test_relationship_bodies_do_not_accept_identity_fields() -> None:
         relationships_router.RelationshipRequestBody.model_validate({"target_user_id": "user-2", "actor_user_id": "user-1"})
 
 
+def test_chat_join_request_bodies_do_not_accept_identity_fields() -> None:
+    request_body = chats_router.ChatJoinRequestBody(message="please add me")
+    action_body = chats_router.ChatJoinRequestActionBody()
+
+    assert request_body.message == "please add me"
+    assert action_body.model_dump() == {}
+    with pytest.raises(ValidationError):
+        chats_router.ChatJoinRequestBody.model_validate({"message": "please add me", "requester_user_id": "user-1"})
+    with pytest.raises(ValidationError):
+        chats_router.ChatJoinRequestActionBody.model_validate({"requester_user_id": "user-1"})
+    with pytest.raises(ValidationError):
+        chats_router.ChatJoinRequestBody.model_validate({"message": "please add me", "actor_user_id": "user-1"})
+
+
+def test_request_chat_join_uses_current_token_user() -> None:
+    seen: list[tuple[str, str, str | None]] = []
+    expected = {
+        "id": "join-request-1",
+        "chat_id": "chat-1",
+        "requester_user_id": "human-user-2",
+        "state": "pending",
+        "message": "please add me",
+        "created_at": 123.0,
+        "updated_at": 123.0,
+    }
+    chat_join_request_service = SimpleNamespace(
+        request=lambda chat_id, requester_user_id, message=None: seen.append((chat_id, requester_user_id, message)) or expected
+    )
+
+    result = chats_router.request_chat_join(
+        "chat-1",
+        chats_router.ChatJoinRequestBody(message="please add me"),
+        user_id="human-user-2",
+        chat_join_request_service=chat_join_request_service,
+    )
+
+    assert seen == [("chat-1", "human-user-2", "please add me")]
+    assert result == expected
+
+
+def test_approve_chat_join_uses_current_token_user() -> None:
+    seen: list[tuple[str, str, str]] = []
+    expected = {
+        "id": "join-request-1",
+        "chat_id": "chat-1",
+        "requester_user_id": "human-user-2",
+        "state": "approved",
+        "message": "please add me",
+        "created_at": 123.0,
+        "updated_at": 124.0,
+    }
+    chat_join_request_service = SimpleNamespace(
+        approve=lambda chat_id, request_id, approver_user_id: seen.append((chat_id, request_id, approver_user_id)) or expected
+    )
+
+    result = chats_router.approve_chat_join(
+        "chat-1",
+        "join-request-1",
+        chats_router.ChatJoinRequestActionBody(),
+        user_id="human-user-1",
+        chat_join_request_service=chat_join_request_service,
+    )
+
+    assert seen == [("chat-1", "join-request-1", "human-user-1")]
+    assert result == expected
+
+
 def test_get_accessible_chat_or_404_returns_chat():
     chat = _chat("chat-1")
     chat_repo = SimpleNamespace(get_by_id=lambda chat_id: chat if chat_id == "chat-1" else None)

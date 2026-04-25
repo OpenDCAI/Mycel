@@ -243,6 +243,25 @@ class ChatMemberRow(BaseModel):
         return value
 
 
+class ChatJoinRequestRow(BaseModel):
+    id: str
+    chat_id: str
+    requester_user_id: str
+    state: str = "pending"
+    message: str | None = None
+    decided_by_user_id: str | None = None
+    decided_at: float | None = None
+    created_at: float
+    updated_at: float | None = None
+
+    @field_validator("id", "chat_id", "requester_user_id", "state")
+    @classmethod
+    def _validate_chat_join_request_identity_fields(cls, value: str, info: Any) -> str:
+        if not value.strip():
+            raise ValueError(f"chat_join_request.{info.field_name} must not be blank")
+        return value
+
+
 class MessageRow(BaseModel):
     id: str
     chat_id: str

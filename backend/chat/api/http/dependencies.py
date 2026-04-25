@@ -33,6 +33,11 @@ def get_relationship_service(app: Annotated[Any, Depends(get_app)]) -> Any:
     return runtime_state.relationship_service
 
 
+def get_chat_join_request_service(app: Annotated[Any, Depends(get_app)]) -> Any:
+    runtime_state = _require_state_attr(app, "chat_runtime_state", "Chat join request service unavailable")
+    return runtime_state.chat_join_request_service
+
+
 def get_user_repo(app: Annotated[Any, Depends(get_app)]) -> Any:
     return _require_state_attr(app, "user_repo", "User repo unavailable")
 

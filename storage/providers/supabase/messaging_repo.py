@@ -77,6 +77,57 @@ class SupabaseChatMemberRepo:
         return q.schema_table(self._client, _SCHEMA, "chat_members", "chat member repo")
 
 
+class SupabaseChatJoinRequestRepo:
+    def __init__(self, client: Any) -> None:
+        self._client = client
+
+    def close(self) -> None:
+        pass
+
+    def _request_id(self, chat_id: str, requester_user_id: str) -> str:
+        return f"chat_join:{chat_id}:{requester_user_id}"
+
+    def upsert_request(self, chat_id: str, requester_user_id: str, *, message: str | None = None) -> dict[str, Any]:
+        now = time.time()
+        payload = {
+            "id": self._request_id(chat_id, requester_user_id),
+            "chat_id": chat_id,
+            "requester_user_id": requester_user_id,
+            "state": "pending",
+            "message": message,
+            "decided_by_user_id": None,
+            "decided_at": None,
+            "created_at": now,
+            "updated_at": now,
+        }
+        res = self._t().upsert(payload, on_conflict="chat_id,requester_user_id").execute()
+        return (res.data or [payload])[0]
+
+    def get_by_id(self, request_id: str) -> dict[str, Any] | None:
+        res = self._t().select("*").eq("id", request_id).limit(1).execute()
+        return res.data[0] if res.data else None
+
+    def list_for_chat(self, chat_id: str) -> list[dict[str, Any]]:
+        res = self._t().select("*").eq("chat_id", chat_id).execute()
+        return res.data or []
+
+    def set_state(self, request_id: str, *, state: str, decided_by_user_id: str) -> dict[str, Any]:
+        now = time.time()
+        payload = {
+            "state": state,
+            "decided_by_user_id": decided_by_user_id,
+            "decided_at": now,
+            "updated_at": now,
+        }
+        res = self._t().update(payload).eq("id", request_id).execute()
+        if not res.data:
+            raise RuntimeError(f"Chat join request not found: {request_id}")
+        return res.data[0]
+
+    def _t(self) -> Any:
+        return q.schema_table(self._client, _SCHEMA, "join_requests", "chat join request repo")
+
+
 class SupabaseMessagesRepo:
     def __init__(self, client: Any) -> None:
         self._client = client
