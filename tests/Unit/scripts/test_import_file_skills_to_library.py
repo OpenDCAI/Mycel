@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from os import PathLike
+from pathlib import Path, PureWindowsPath
 from types import SimpleNamespace
 
 import pytest
@@ -88,3 +90,25 @@ def test_import_file_skill_rejects_unreadable_adjacent_file(monkeypatch: pytest.
         import_file_skills_to_library.import_skills("owner-1", library_dir)
 
     assert repo.saved == []
+
+
+def test_import_file_skill_stores_adjacent_files_as_posix_paths(monkeypatch: pytest.MonkeyPatch, tmp_path):
+    library_dir = tmp_path / "library"
+    skill_dir = library_dir / "skills" / "new-skill"
+    refs_dir = skill_dir / "references"
+    refs_dir.mkdir(parents=True)
+    (skill_dir / "SKILL.md").write_text("---\nname: New Skill\n---\nBody", encoding="utf-8")
+    (refs_dir / "query.md").write_text("Use exact queries.", encoding="utf-8")
+    repo = _MemorySkillRepo()
+    original_relative_to = Path.relative_to
+
+    def windows_relative_to(self: Path, *other: str | PathLike[str]) -> PureWindowsPath:
+        relative_path = original_relative_to(self, *other)
+        return PureWindowsPath(*relative_path.parts)
+
+    monkeypatch.setattr(Path, "relative_to", windows_relative_to)
+    monkeypatch.setattr(import_file_skills_to_library, "build_storage_container", lambda: SimpleNamespace(skill_repo=lambda: repo))
+
+    import_file_skills_to_library.import_skills("owner-1", library_dir)
+
+    assert repo.saved[0].files == {"references/query.md": "Use exact queries."}

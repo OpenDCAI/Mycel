@@ -35,7 +35,7 @@ def _read_files(skill_dir: Path) -> dict[str, str]:
         if not path.is_file() or path.name == "SKILL.md":
             continue
         try:
-            files[str(path.relative_to(skill_dir))] = path.read_text(encoding="utf-8")
+            files[path.relative_to(skill_dir).as_posix()] = path.read_text(encoding="utf-8")
         except UnicodeDecodeError as exc:
             raise RuntimeError(f"Skill adjacent file could not be read: {path}") from exc
     return files
