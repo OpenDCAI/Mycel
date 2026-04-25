@@ -7,15 +7,20 @@ import pytest
 from fastapi import HTTPException
 
 from backend.web.models.marketplace import (
-    InstallFromMarketplaceRequest,
+    ApplyFromMarketplaceRequest,
     PublishAgentUserToMarketplaceRequest,
     UpgradeFromMarketplaceRequest,
 )
 from backend.web.routers import marketplace as marketplace_router
 
 
-def _runtime_storage_state(agent_config_repo: object) -> SimpleNamespace:
-    return SimpleNamespace(storage_container=SimpleNamespace(agent_config_repo=lambda: agent_config_repo))
+def _runtime_storage_state(agent_config_repo: object, skill_repo: object | None = None) -> SimpleNamespace:
+    return SimpleNamespace(
+        storage_container=SimpleNamespace(
+            agent_config_repo=lambda: agent_config_repo,
+            skill_repo=lambda: skill_repo,
+        )
+    )
 
 
 def test_marketplace_router_exposes_agent_user_marketplace_routes() -> None:
@@ -26,6 +31,8 @@ def test_marketplace_router_exposes_agent_user_marketplace_routes() -> None:
     assert "/api/marketplace/items/{item_id}" in paths
     assert "/api/marketplace/items/{item_id}/lineage" in paths
     assert "/api/marketplace/items/{item_id}/versions/{version}" in paths
+    assert "/api/marketplace/apply" in paths
+    assert "/api/marketplace/" + "download" not in paths
 
 
 @pytest.mark.asyncio
@@ -100,10 +107,10 @@ async def test_upgrade_from_marketplace_uses_user_repo_not_member_repo(monkeypat
 
 
 @pytest.mark.asyncio
-async def test_download_from_marketplace_uses_user_and_agent_config_repos(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_apply_marketplace_item_uses_user_and_agent_config_repos(monkeypatch: pytest.MonkeyPatch) -> None:
     seen: dict[str, object] = {}
 
-    monkeypatch.setattr(marketplace_router.marketplace_client, "download", lambda **kwargs: seen.update(kwargs) or {"ok": True})
+    monkeypatch.setattr(marketplace_router.marketplace_client, "apply_item", lambda **kwargs: seen.update(kwargs) or {"ok": True})
 
     owner_agent = SimpleNamespace(id="agent-1", owner_user_id="owner-1")
     request = SimpleNamespace(
@@ -114,16 +121,40 @@ async def test_download_from_marketplace_uses_user_and_agent_config_repos(monkey
             )
         )
     )
-    req = InstallFromMarketplaceRequest(item_id="item-1", agent_user_id="agent-1")
+    req = ApplyFromMarketplaceRequest(item_id="item-1", agent_user_id="agent-1")
 
-    result = await marketplace_router.download_from_marketplace(req=req, user_id="owner-1", request=cast(Any, request))
+    result = await marketplace_router.apply_marketplace_item(req=req, user_id="owner-1", request=cast(Any, request))
 
     assert result == {"ok": True}
     assert seen["item_id"] == "item-1"
     assert seen["owner_user_id"] == "owner-1"
     assert seen["user_repo"] is request.app.state.user_repo
     assert seen["agent_config_repo"] is request.app.state.runtime_storage_state.storage_container.agent_config_repo()
+    assert seen["skill_repo"] is request.app.state.runtime_storage_state.storage_container.skill_repo()
     assert seen["agent_user_id"] == "agent-1"
+
+
+@pytest.mark.asyncio
+async def test_apply_marketplace_item_maps_semantic_rejections_to_400(monkeypatch: pytest.MonkeyPatch) -> None:
+    def reject(**_kwargs: object) -> dict[str, object]:
+        raise ValueError("Skill snapshot frontmatter name must match existing Skill name")
+
+    monkeypatch.setattr(marketplace_router.marketplace_client, "apply_item", reject)
+    request = SimpleNamespace(
+        app=SimpleNamespace(
+            state=SimpleNamespace(
+                user_repo=SimpleNamespace(get_by_id=lambda _user_id: None),
+                runtime_storage_state=_runtime_storage_state(SimpleNamespace()),
+            )
+        )
+    )
+    req = ApplyFromMarketplaceRequest(item_id="item-1")
+
+    with pytest.raises(HTTPException) as exc_info:
+        await marketplace_router.apply_marketplace_item(req=req, user_id="owner-1", request=cast(Any, request))
+
+    assert exc_info.value.status_code == 400
+    assert exc_info.value.detail == "Skill snapshot frontmatter name must match existing Skill name"
 
 
 @pytest.mark.asyncio

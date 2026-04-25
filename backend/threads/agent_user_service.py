@@ -1,19 +1,20 @@
+"""Agent User CRUD over repo-backed users/configs."""
+
 import time
 from pathlib import Path
 from typing import Any
 
 import yaml
 
-import backend.hub.snapshot_install as _snapshot_install_owner
 from backend.hub.versioning import BumpType, bump_semver
 from backend.identity.avatar.urls import avatar_url
-from backend.library.service import get_mcp_config_by_name, get_skill_content_by_name
+from backend.library import mcp_library
+from config.agent_config_types import AgentConfig, AgentRule, AgentSkill, AgentSubAgent, McpServerConfig
 from config.defaults.tool_catalog import TOOLS_BY_NAME, ToolDef, tool_enabled_for_agent
 from config.loader import AgentLoader
 
 _SYSTEM_AGENTS_DIR = (Path(__file__).resolve().parents[2] / "config" / "defaults" / "agents").resolve()
 _MCP_CONFIG_KEYS = ("transport", "command", "args", "env", "url", "allowed_tools", "instructions")
-install_from_snapshot = _snapshot_install_owner.install_from_snapshot
 
 
 def _parse_agent_md_content(content: str) -> dict[str, Any] | None:
@@ -37,9 +38,9 @@ def _parse_agent_md_content(content: str) -> dict[str, Any] | None:
     }
 
 
-def _tools_from_repo(config: dict[str, Any]) -> list[dict[str, Any]]:
-    runtime = config.get("runtime", {}) if isinstance(config.get("runtime"), dict) else {}
-    enabled_tools = config.get("tools") or ["*"]
+def _tools_from_repo(config: AgentConfig) -> list[dict[str, Any]]:
+    runtime = config.runtime_settings
+    enabled_tools = config.tools or ["*"]
     tools_list = []
     for tool_name, tool_info in TOOLS_BY_NAME.items():
         runtime_key = f"tools:{tool_name}"
@@ -55,47 +56,35 @@ def _tools_from_repo(config: dict[str, Any]) -> list[dict[str, Any]]:
     return tools_list
 
 
-def _skills_from_repo(agent_config_id: str, config: dict[str, Any], agent_config_repo: Any) -> list[dict[str, Any]]:
-    runtime = config.get("runtime", {}) if isinstance(config.get("runtime"), dict) else {}
+def _skills_from_repo(config: AgentConfig) -> list[dict[str, Any]]:
+    runtime = config.runtime_settings
     skills_list = []
-    for row in agent_config_repo.list_skills(agent_config_id):
-        runtime_key = f"skills:{row['name']}"
+    for skill in config.skills:
+        runtime_key = f"skills:{skill.name}"
         override = runtime.get(runtime_key, {}) if isinstance(runtime.get(runtime_key), dict) else {}
-        desc = None
+        desc = ""
         if "desc" in override and override.get("desc") is not None:
             desc = str(override.get("desc") or "")
-        else:
-            # @@@skill-desc-precedence - repo skill meta is the stable slow-variable truth.
-            # Library desc is only the default when neither runtime override nor repo meta carries one.
-            meta = row.get("meta_json") if isinstance(row.get("meta_json"), dict) else {}
-            if "desc" in meta and meta.get("desc") is not None:
-                desc = str(meta.get("desc") or "")
-        if desc is None:
-            from backend.library.service import get_library_skill_desc
-
-            desc = get_library_skill_desc(str(row["name"]))
+        elif skill.description:
+            desc = skill.description
         skills_list.append(
             {
-                "name": row["name"],
-                "enabled": bool(override.get("enabled", True)),
-                "desc": desc or "",
+                "name": skill.name,
+                "enabled": bool(override.get("enabled", skill.enabled)),
+                "desc": desc,
             }
         )
     return skills_list
 
 
-def _rules_from_repo(agent_config_id: str, agent_config_repo: Any) -> list[dict[str, Any]]:
-    rules = []
-    for row in agent_config_repo.list_rules(agent_config_id):
-        filename = str(row.get("filename") or "")
-        rules.append({"name": filename.removesuffix(".md"), "content": row.get("content", "")})
-    return rules
+def _rules_from_repo(config: AgentConfig) -> list[dict[str, Any]]:
+    return [{"name": rule.name, "content": rule.content} for rule in config.rules]
 
 
-def _sub_agents_from_repo(agent_config_id: str, agent_config_repo: Any) -> list[dict[str, Any]]:
+def _sub_agents_from_repo(config: AgentConfig) -> list[dict[str, Any]]:
     sub_agents = {item["name"]: item for item in _load_builtin_agents(TOOLS_BY_NAME)}
-    for row in agent_config_repo.list_sub_agents(agent_config_id):
-        raw_tools = row.get("tools_json") or row.get("tools") or ["*"]
+    for row in config.sub_agents:
+        raw_tools = row.tools or ["*"]
         is_all = raw_tools == ["*"]
         tools = [
             {
@@ -106,29 +95,30 @@ def _sub_agents_from_repo(agent_config_id: str, agent_config_repo: Any) -> list[
             }
             for name, info in TOOLS_BY_NAME.items()
         ]
-        sub_agents[row["name"]] = {
-            "name": row["name"],
-            "desc": row.get("description", ""),
+        sub_agents[row.name] = {
+            "name": row.name,
+            "desc": row.description,
             "tools": tools,
-            "system_prompt": row.get("system_prompt", ""),
+            "system_prompt": row.system_prompt,
             "builtin": False,
         }
     return list(sub_agents.values())
 
 
-def _mcps_from_repo(config: dict[str, Any]) -> list[dict[str, Any]]:
-    raw = config.get("mcp", {}) if isinstance(config.get("mcp"), dict) else {}
+def _mcp_servers_from_repo(config: AgentConfig) -> list[dict[str, Any]]:
     items: list[dict[str, Any]] = []
-    for name, item in raw.items():
-        if isinstance(item, dict):
-            exposed = {"name": name, **{key: item[key] for key in _MCP_CONFIG_KEYS if key in item}}
-            exposed["disabled"] = bool(item.get("disabled", False))
-            items.append(exposed)
+    for server in config.mcp_servers:
+        exposed = server.model_dump(exclude_none=True)
+        exposed.pop("enabled", None)
+        if exposed.get("args") == []:
+            exposed.pop("args")
+        exposed["disabled"] = not server.enabled
+        items.append(exposed)
     return items
 
 
-def _compact_from_repo(config: dict[str, Any]) -> dict[str, Any]:
-    compact = config.get("compact")
+def _compact_from_repo(config: AgentConfig) -> dict[str, Any]:
+    compact = config.compact
     if compact is None:
         return {"trigger_tokens": None}
     if not isinstance(compact, dict):
@@ -136,8 +126,8 @@ def _compact_from_repo(config: dict[str, Any]) -> dict[str, Any]:
     return {"trigger_tokens": compact.get("trigger_tokens")}
 
 
-def _source_from_repo(config: dict[str, Any]) -> dict[str, Any] | None:
-    meta = config.get("meta") if isinstance(config.get("meta"), dict) else {}
+def _source_from_repo(config: AgentConfig) -> dict[str, Any] | None:
+    meta = config.meta
     source = meta.get("source") if isinstance(meta.get("source"), dict) else None
     if not source:
         return None
@@ -147,28 +137,28 @@ def _source_from_repo(config: dict[str, Any]) -> dict[str, Any] | None:
 def _agent_user_from_repos(user: Any, agent_config_repo: Any) -> dict[str, Any]:
     if user.agent_config_id is None:
         raise RuntimeError(f"Agent user {user.id} is missing agent_config_id")
-    config = agent_config_repo.get_config(user.agent_config_id)
+    config = agent_config_repo.get_agent_config(user.agent_config_id)
     if config is None:
         raise RuntimeError(f"Agent config {user.agent_config_id} is missing for {user.id}")
     item = {
         "id": user.id,
-        "name": config.get("name") or user.display_name,
-        "description": config.get("description", ""),
-        "model": config.get("model"),
-        "status": config.get("status", "draft"),
-        "version": config.get("version", "0.1.0"),
+        "name": config.name or user.display_name,
+        "description": config.description,
+        "model": config.model,
+        "status": config.status,
+        "version": config.version,
         "avatar_url": avatar_url(user.id, bool(user.avatar)),
         "config": {
-            "prompt": config.get("system_prompt", ""),
-            "rules": _rules_from_repo(user.agent_config_id, agent_config_repo),
+            "prompt": config.system_prompt,
+            "rules": _rules_from_repo(config),
             "tools": _tools_from_repo(config),
-            "mcps": _mcps_from_repo(config),
-            "skills": _skills_from_repo(user.agent_config_id, config, agent_config_repo),
-            "subAgents": _sub_agents_from_repo(user.agent_config_id, agent_config_repo),
+            "mcpServers": _mcp_servers_from_repo(config),
+            "skills": _skills_from_repo(config),
+            "subAgents": _sub_agents_from_repo(config),
             "compact": _compact_from_repo(config),
         },
-        "created_at": config.get("created_at", 0),
-        "updated_at": config.get("updated_at", 0),
+        "created_at": 0,
+        "updated_at": 0,
     }
     source = _source_from_repo(config)
     if source is not None:
@@ -179,19 +169,19 @@ def _agent_user_from_repos(user: Any, agent_config_repo: Any) -> dict[str, Any]:
 def _agent_user_summary_from_repos(user: Any, agent_config_repo: Any) -> dict[str, Any]:
     if user.agent_config_id is None:
         raise RuntimeError(f"Agent user {user.id} is missing agent_config_id")
-    config = agent_config_repo.get_config(user.agent_config_id)
+    config = agent_config_repo.get_agent_config(user.agent_config_id)
     if config is None:
         raise RuntimeError(f"Agent config {user.agent_config_id} is missing for {user.id}")
     item = {
         "id": user.id,
-        "name": config.get("name") or user.display_name,
-        "description": config.get("description", ""),
-        "model": config.get("model"),
-        "status": config.get("status", "draft"),
-        "version": config.get("version", "0.1.0"),
+        "name": config.name or user.display_name,
+        "description": config.description,
+        "model": config.model,
+        "status": config.status,
+        "version": config.version,
         "avatar_url": avatar_url(user.id, bool(user.avatar)),
-        "created_at": config.get("created_at", 0),
-        "updated_at": config.get("updated_at", 0),
+        "created_at": 0,
+        "updated_at": 0,
     }
     source = _source_from_repo(config)
     if source is not None:
@@ -203,7 +193,9 @@ def _agent_user_summary_from_repos(user: Any, agent_config_repo: Any) -> dict[st
 
 
 def _leon_builtin() -> dict[str, Any]:
+    """Build Leon builtin agent-user dict with full tool catalog."""
     tools = [{"name": k, "enabled": v.default, "desc": v.desc, "group": v.group} for k, v in TOOLS_BY_NAME.items()]
+    # Load built-in sub-agents (read-only display)
     builtin_agents = _load_builtin_agents(TOOLS_BY_NAME)
 
     return {
@@ -212,7 +204,7 @@ def _leon_builtin() -> dict[str, Any]:
         "description": "Universal digital worker, ready to work for you",
         "status": "active",
         "version": "1.0.0",
-        "config": {"prompt": "", "rules": [], "tools": tools, "mcps": [], "skills": [], "subAgents": builtin_agents},
+        "config": {"prompt": "", "rules": [], "tools": tools, "mcpServers": [], "skills": [], "subAgents": builtin_agents},
         "created_at": 0,
         "updated_at": 0,
         "builtin": True,
@@ -220,6 +212,7 @@ def _leon_builtin() -> dict[str, Any]:
 
 
 def _load_builtin_agents(catalog: dict[str, ToolDef]) -> list[dict[str, Any]]:
+    """Load system built-in agents for display (read-only)."""
     loader = AgentLoader()
     agents = []
     if _SYSTEM_AGENTS_DIR.is_dir():
@@ -300,7 +293,6 @@ def create_agent_user(
     from storage.utils import generate_agent_config_id, generate_agent_user_id
 
     now = time.time()
-    now_ms = int(now * 1000)
     agent_user_id = generate_agent_user_id()
     agent_config_id = generate_agent_config_id()
 
@@ -333,8 +325,6 @@ def create_agent_user(
             description=description,
             status="draft",
             version="0.1.0",
-            created_at=now_ms,
-            updated_at=now_ms,
         )
 
     created = get_agent_user(agent_user_id, user_repo=user_repo, agent_config_repo=agent_config_repo)
@@ -369,15 +359,14 @@ def update_agent_user(
         return get_agent_user(agent_user_id, user_repo=user_repo, agent_config_repo=agent_config_repo)
     if "name" in updates:
         user_repo.update(agent_user_id, display_name=updates["name"])
-    agent_config_repo.save_config(
-        user.agent_config_id,
-        {
-            **config,
-            "name": updates.get("name", config.get("name") or user.display_name),
-            "description": updates.get("description", config.get("description", "")),
-            "status": updates.get("status", config.get("status", "draft")),
-            "updated_at": int(time.time() * 1000),
-        },
+    agent_config_repo.save_agent_config(
+        config.model_copy(
+            update={
+                "name": updates.get("name", config.name or user.display_name),
+                "description": updates.get("description", config.description),
+                "status": updates.get("status", config.status),
+            }
+        )
     )
 
     return get_agent_user(agent_user_id, user_repo=user_repo, agent_config_repo=agent_config_repo)
@@ -388,10 +377,11 @@ def update_agent_user_config(
     config_patch: dict[str, Any],
     user_repo: Any = None,
     agent_config_repo: Any = None,
+    skill_repo: Any = None,
 ) -> dict[str, Any] | None:
     if agent_user_id == "__leon__":
         raise RuntimeError("Builtin agent is read-only")
-    return _sync_agent_config_patch_to_repo(agent_user_id, config_patch, user_repo, agent_config_repo)
+    return _sync_agent_config_patch_to_repo(agent_user_id, config_patch, user_repo, agent_config_repo, skill_repo)
 
 
 # ── Agent config repo helpers ──
@@ -410,36 +400,32 @@ def _save_config_to_repo(
     system_prompt: str = "",
     status: str = "draft",
     version: str = "0.1.0",
-    created_at: int = 0,
-    updated_at: int = 0,
-    runtime: dict | None = None,
-    mcp: dict | None = None,
+    runtime_settings: dict | None = None,
+    mcp_servers: list[McpServerConfig] | None = None,
     meta: dict | None = None,
 ) -> None:
-    agent_config_repo.save_config(
-        agent_config_id,
-        {
-            "agent_user_id": agent_user_id,
-            "owner_user_id": owner_user_id,
-            "name": name,
-            "description": description,
-            "model": model,
-            "tools": tools or ["*"],
-            "system_prompt": system_prompt,
-            "status": status,
-            "version": version,
-            "created_at": created_at,
-            "updated_at": updated_at,
-            "runtime": runtime or {},
-            "mcp": mcp or {},
-            "meta": meta or {},
-        },
+    agent_config_repo.save_agent_config(
+        AgentConfig(
+            id=agent_config_id,
+            agent_user_id=agent_user_id,
+            owner_user_id=owner_user_id,
+            name=name,
+            description=description,
+            model=model,
+            tools=tools or ["*"],
+            system_prompt=system_prompt,
+            status=status,
+            version=version,
+            runtime_settings=runtime_settings or {},
+            mcp_servers=mcp_servers or [],
+            meta=meta or {},
+        )
     )
 
 
-def _runtime_and_tools_from_patch(current_config: dict[str, Any], config_patch: dict[str, Any]) -> tuple[dict[str, Any], list[str]]:
-    runtime = dict(current_config.get("runtime", {}) if isinstance(current_config.get("runtime"), dict) else {})
-    tools = list(current_config.get("tools") or ["*"])
+def _runtime_and_tools_from_patch(current_config: AgentConfig, config_patch: dict[str, Any]) -> tuple[dict[str, Any], list[str]]:
+    runtime = dict(current_config.runtime_settings)
+    tools = list(current_config.tools or ["*"])
 
     if "tools" in config_patch and config_patch["tools"] is not None:
         tool_items = [item for item in config_patch["tools"] if isinstance(item, dict) and item.get("name")]
@@ -452,20 +438,11 @@ def _runtime_and_tools_from_patch(current_config: dict[str, Any], config_patch: 
         enabled_tools = [item["name"] for item in tool_items if item.get("enabled", True)]
         tools = ["*"] if tool_items and len(enabled_tools) == len(tool_items) else enabled_tools
 
-    if "skills" in config_patch and config_patch["skills"] is not None:
-        skill_items = [item for item in config_patch["skills"] if isinstance(item, dict) and item.get("name")]
-        runtime = {k: v for k, v in runtime.items() if not k.startswith("skills:")}
-        for item in skill_items:
-            runtime[f"skills:{item['name']}"] = {
-                "enabled": item.get("enabled", True),
-                "desc": item.get("desc", ""),
-            }
-
     return runtime, tools
 
 
-def _compact_from_patch(current_config: dict[str, Any], config_patch: dict[str, Any]) -> dict[str, Any]:
-    current = current_config.get("compact")
+def _compact_from_patch(current_config: AgentConfig, config_patch: dict[str, Any]) -> dict[str, Any]:
+    current = current_config.compact
     if current is None:
         compact: dict[str, Any] = {}
     elif isinstance(current, dict):
@@ -489,97 +466,194 @@ def _compact_from_patch(current_config: dict[str, Any], config_patch: dict[str, 
     return compact
 
 
-def _mcp_from_patch(config_patch: dict[str, Any], current_config: dict[str, Any]) -> dict[str, Any]:
-    if "mcps" not in config_patch or config_patch["mcps"] is None:
-        return dict(current_config.get("mcp", {}) if isinstance(current_config.get("mcp"), dict) else {})
-    servers: dict[str, Any] = {}
-    for item in config_patch["mcps"]:
-        if isinstance(item, dict) and item.get("name"):
-            name = str(item["name"])
-            library_config = get_mcp_config_by_name(name)
-            direct_config = {key: item[key] for key in _MCP_CONFIG_KEYS if key in item and item[key] is not None}
-            config = dict(library_config if library_config is not None else direct_config)
-            config["disabled"] = bool(item.get("disabled", config.get("disabled", False)))
-            servers[name] = config
+def _mcp_from_patch(config_patch: dict[str, Any], current_config: AgentConfig) -> list[McpServerConfig]:
+    if "mcpServers" not in config_patch or config_patch["mcpServers"] is None:
+        return list(current_config.mcp_servers)
+    servers: list[McpServerConfig] = []
+    seen_names: set[str] = set()
+    for item in config_patch["mcpServers"]:
+        if not (isinstance(item, dict) and item.get("name")):
+            raise RuntimeError("MCP server patch item must include name")
+        name = str(item["name"])
+        if name in seen_names:
+            raise RuntimeError(f"Duplicate MCP server name in patch: {name}")
+        seen_names.add(name)
+        library_config = mcp_library.get_config_by_name(name)
+        direct_config = {key: item[key] for key in _MCP_CONFIG_KEYS if key in item and item[key] is not None}
+        config = dict(library_config if library_config is not None else direct_config)
+        servers.append(
+            McpServerConfig(
+                name=name,
+                transport=config.get("transport"),
+                command=config.get("command"),
+                args=list(config.get("args") or []),
+                env=dict(config.get("env") or {}),
+                url=config.get("url"),
+                instructions=config.get("instructions"),
+                allowed_tools=config.get("allowed_tools"),
+                enabled=not bool(item.get("disabled", False)),
+            )
+        )
     return servers
 
 
-def _sync_repo_children(agent_config_id: str, config_patch: dict[str, Any], agent_config_repo: Any) -> None:
+def _rules_from_patch(current_config: AgentConfig, config_patch: dict[str, Any]) -> list[AgentRule]:
+    if "rules" not in config_patch or config_patch["rules"] is None:
+        return list(current_config.rules)
+    rules: list[AgentRule] = []
+    seen_names: set[str] = set()
     if "rules" in config_patch and config_patch["rules"] is not None:
-        for row in agent_config_repo.list_rules(agent_config_id):
-            agent_config_repo.delete_rule(row["id"])
         for rule in config_patch["rules"]:
-            if isinstance(rule, dict) and rule.get("name"):
-                agent_config_repo.save_rule(agent_config_id, f"{rule['name']}.md", rule.get("content", ""))
+            if not (isinstance(rule, dict) and rule.get("name")):
+                raise RuntimeError("Rule patch item must include name")
+            name = str(rule["name"])
+            if name in seen_names:
+                raise RuntimeError(f"Duplicate Rule name in patch: {name}")
+            seen_names.add(name)
+            rules.append(AgentRule(name=name, content=str(rule.get("content", ""))))
+    return rules
 
-    if "skills" in config_patch and config_patch["skills"] is not None:
-        existing = {row["name"]: row for row in agent_config_repo.list_skills(agent_config_id)}
-        for row in existing.values():
-            agent_config_repo.delete_skill(row["id"])
-        for skill in config_patch["skills"]:
-            if isinstance(skill, dict) and skill.get("name"):
-                prior = existing.get(skill["name"], {})
-                content = str(prior.get("content") or "")
-                meta = prior.get("meta_json") if isinstance(prior.get("meta_json"), dict) else None
-                if not content:
-                    content = get_skill_content_by_name(str(skill["name"])) or ""
-                    meta = {"desc": str(skill.get("desc") or "")}
-                if not content:
-                    raise RuntimeError(f"Library skill content not found: {skill['name']}")
-                agent_config_repo.save_skill(
-                    agent_config_id,
-                    skill["name"],
-                    content,
-                    meta=meta,
-                )
 
+def _sub_agents_from_patch(current_config: AgentConfig, config_patch: dict[str, Any]) -> list[AgentSubAgent]:
+    if "subAgents" not in config_patch or config_patch["subAgents"] is None:
+        return list(current_config.sub_agents)
+    sub_agents: list[AgentSubAgent] = []
+    seen_names: set[str] = set()
     if "subAgents" in config_patch and config_patch["subAgents"] is not None:
-        for row in agent_config_repo.list_sub_agents(agent_config_id):
-            agent_config_repo.delete_sub_agent(row["id"])
         for item in config_patch["subAgents"]:
             if not (isinstance(item, dict) and item.get("name")):
-                continue
+                raise RuntimeError("SubAgent patch item must include name")
             if item.get("builtin"):
                 continue
+            name = str(item["name"])
+            if name in seen_names:
+                raise RuntimeError(f"Duplicate SubAgent name in patch: {name}")
+            seen_names.add(name)
             raw_tools = item.get("tools") or []
             if isinstance(raw_tools, list) and raw_tools and isinstance(raw_tools[0], dict):
                 enabled_tools = [tool["name"] for tool in raw_tools if tool.get("enabled")]
             else:
                 enabled_tools = list(raw_tools)
-            agent_config_repo.save_sub_agent(
-                agent_config_id,
-                item["name"],
-                description=item.get("desc", ""),
-                tools=enabled_tools,
-                system_prompt=item.get("system_prompt", ""),
+            sub_agents.append(
+                AgentSubAgent(
+                    name=name,
+                    description=str(item.get("desc", "")),
+                    tools=enabled_tools,
+                    system_prompt=str(item.get("system_prompt", "")),
+                )
             )
+    return sub_agents
+
+
+def _library_skill_by_name(owner_user_id: str, name: str, skill_repo: Any) -> Any | None:
+    for skill in skill_repo.list_for_owner(owner_user_id):
+        if skill.name == name:
+            return skill
+    return None
+
+
+def _current_skill_by_name_or_id(config: AgentConfig, name: str, skill_id: str | None) -> AgentSkill | None:
+    for skill in config.skills:
+        if skill.name == name:
+            return skill
+        if skill_id is not None and (skill.skill_id == skill_id or skill.id == skill_id):
+            return skill
+    return None
+
+
+def _skills_from_patch(current_config: AgentConfig, config_patch: dict[str, Any], owner_user_id: str, skill_repo: Any) -> list[AgentSkill]:
+    if "skills" not in config_patch or config_patch["skills"] is None:
+        return list(current_config.skills)
+    if skill_repo is None:
+        raise RuntimeError("skill_repo is required for agent config skill writes")
+
+    skills: list[AgentSkill] = []
+    seen_names: set[str] = set()
+    for item in config_patch["skills"]:
+        if not (isinstance(item, dict) and item.get("name")):
+            raise RuntimeError("Skill patch item must include name")
+        name = str(item["name"])
+        if name in seen_names:
+            raise RuntimeError(f"Duplicate Skill name in patch: {name}")
+        seen_names.add(name)
+        enabled = bool(item.get("enabled", not bool(item.get("disabled", False))))
+        explicit_skill_id = item.get("id") or item.get("skill_id")
+        explicit_skill_id_str = str(explicit_skill_id) if explicit_skill_id else None
+        current_skill = _current_skill_by_name_or_id(current_config, name, explicit_skill_id_str)
+        library_skill = (
+            skill_repo.get_by_id(owner_user_id, explicit_skill_id_str) if explicit_skill_id_str else None
+        ) or _library_skill_by_name(owner_user_id, name, skill_repo)
+        if explicit_skill_id_str and library_skill is None:
+            raise RuntimeError(f"Library skill not found: {explicit_skill_id_str}")
+        content = str(
+            (library_skill.content if library_skill is not None else "")
+            or item.get("content")
+            or (current_skill.content if current_skill is not None else "")
+        )
+        if enabled and not content.strip():
+            raise RuntimeError(f"Skill {name!r} has no content")
+        description = item.get("desc") or item.get("description")
+        if description is None and library_skill is not None:
+            description = library_skill.description
+        if description is None and current_skill is not None:
+            description = current_skill.description
+        if library_skill is not None:
+            description = library_skill.description
+        skills.append(
+            AgentSkill(
+                id=str(item.get("agent_skill_id") or item.get("row_id") or (current_skill.id if current_skill is not None else "")),
+                skill_id=(library_skill.id if library_skill is not None else None),
+                name=library_skill.name if library_skill is not None else current_skill.name if current_skill is not None else name,
+                description=str(description or ""),
+                version=str(
+                    (library_skill.version if library_skill is not None else "")
+                    or item.get("version")
+                    or (current_skill.version if current_skill is not None else "")
+                    or "0.1.0"
+                ),
+                content=content,
+                files=dict(
+                    (library_skill.files if library_skill is not None else {})
+                    or item.get("files")
+                    or (current_skill.files if current_skill is not None else {})
+                ),
+                source=dict(
+                    (library_skill.source if library_skill is not None else {})
+                    or item.get("source")
+                    or (current_skill.source if current_skill is not None else {})
+                ),
+                enabled=enabled,
+            )
+        )
+    return skills
 
 
 def _sync_agent_config_patch_to_repo(
-    agent_user_id: str, config_patch: dict[str, Any], user_repo: Any, agent_config_repo: Any
+    agent_user_id: str, config_patch: dict[str, Any], user_repo: Any, agent_config_repo: Any, skill_repo: Any = None
 ) -> dict[str, Any] | None:
     user, current_config = _resolve_repo_backed_agent(agent_user_id, user_repo, agent_config_repo)
     if user is None or current_config is None:
         return None
 
     runtime, tools = _runtime_and_tools_from_patch(current_config, config_patch)
-    updated_config = {
-        **current_config,
-        "name": current_config.get("name") or user.display_name,
-        "description": current_config.get("description", ""),
-        "model": current_config.get("model"),
-        "tools": tools,
-        "system_prompt": config_patch.get("prompt", current_config.get("system_prompt", "")),
-        "status": current_config.get("status", "draft"),
-        "version": current_config.get("version", "0.1.0"),
-        "created_at": current_config.get("created_at", 0),
-        "updated_at": int(time.time() * 1000),
-        "runtime": runtime,
-        "compact": _compact_from_patch(current_config, config_patch),
-        "mcp": _mcp_from_patch(config_patch, current_config),
-    }
-    agent_config_repo.save_config(user.agent_config_id, updated_config)
-    _sync_repo_children(user.agent_config_id, config_patch, agent_config_repo)
+    updated_config = current_config.model_copy(
+        update={
+            "name": current_config.name or user.display_name,
+            "description": current_config.description,
+            "model": current_config.model,
+            "tools": tools,
+            "system_prompt": config_patch.get("prompt", current_config.system_prompt),
+            "status": current_config.status,
+            "version": current_config.version,
+            "runtime_settings": runtime,
+            "compact": _compact_from_patch(current_config, config_patch),
+            "mcp_servers": _mcp_from_patch(config_patch, current_config),
+            "skills": _skills_from_patch(current_config, config_patch, current_config.owner_user_id, skill_repo),
+            "rules": _rules_from_patch(current_config, config_patch),
+            "sub_agents": _sub_agents_from_patch(current_config, config_patch),
+        }
+    )
+    agent_config_repo.save_agent_config(updated_config)
     return get_agent_user(agent_user_id, user_repo=user_repo, agent_config_repo=agent_config_repo)
 
 
@@ -595,30 +669,21 @@ def publish_agent_user(
     user, config = _resolve_repo_backed_agent(agent_user_id, user_repo, agent_config_repo)
     if user is None or config is None:
         return None
-    next_version = bump_semver(config.get("version", "0.1.0"), bump_type)
-    updated_at = int(time.time() * 1000)
+    next_version = bump_semver(config.version, bump_type)
 
-    agent_config_repo.save_config(
-        user.agent_config_id,
-        {
-            **config,
-            "version": next_version,
-            "status": "active",
-            "updated_at": updated_at,
-        },
-    )
+    agent_config_repo.save_agent_config(config.model_copy(update={"version": next_version, "status": "active"}))
 
     return get_agent_user(agent_user_id, user_repo=user_repo, agent_config_repo=agent_config_repo)
 
 
 def _resolve_repo_backed_agent(
     agent_user_id: str, user_repo: Any = None, agent_config_repo: Any = None
-) -> tuple[Any | None, dict[str, Any] | None]:
+) -> tuple[Any | None, AgentConfig | None]:
     _require_repo_backed_agent_ops(user_repo, agent_config_repo)
     user = user_repo.get_by_id(agent_user_id)
     if user is None or user.agent_config_id is None:
         return None, None
-    config = agent_config_repo.get_config(user.agent_config_id)
+    config = agent_config_repo.get_agent_config(user.agent_config_id)
     if config is None:
         raise RuntimeError(f"Agent config {user.agent_config_id} is missing for {agent_user_id}")
     return user, config
@@ -643,7 +708,7 @@ def delete_agent_user(
         raise RuntimeError(f"Agent user {agent_user_id} is missing agent_config_id")
     # @@@delete-agent-order - fail before deleting roots if dependency cleanup fails.
     contact_repo.delete_for_user(agent_user_id)
-    agent_config_repo.delete_config(user.agent_config_id)
+    agent_config_repo.delete_agent_config(user.agent_config_id)
 
     # Also remove from unified users table
     user_repo.delete(agent_user_id)

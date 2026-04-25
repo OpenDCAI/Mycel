@@ -11,7 +11,7 @@ class PublishAgentUserToMarketplaceRequest(BaseModel):
     visibility: Literal["public", "private"] = "public"
 
 
-class InstallFromMarketplaceRequest(BaseModel):
+class ApplyFromMarketplaceRequest(BaseModel):
     item_id: str
     agent_user_id: str | None = None
 
@@ -21,10 +21,10 @@ class UpgradeFromMarketplaceRequest(BaseModel):
     item_id: str  # marketplace item id
 
 
-class InstalledItemInfo(BaseModel):
+class MarketplaceSourceInfo(BaseModel):
     marketplace_item_id: str
-    installed_version: str
+    source_version: str
 
 
 class CheckUpdatesRequest(BaseModel):
-    items: list[InstalledItemInfo]
+    items: list[MarketplaceSourceInfo]
