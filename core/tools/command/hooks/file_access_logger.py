@@ -8,7 +8,6 @@ class FileAccessLoggerHook:
     def __init__(self, workspace_root: Path | str | None = None, log_file: str = "file_access.log"):
         self.workspace_root = Path(workspace_root) if workspace_root else None
         self.log_path = (Path(workspace_root) / log_file) if workspace_root else Path(log_file)
-        self.log_path.parent.mkdir(parents=True, exist_ok=True)
 
     def check_file_operation(self, file_path: str, operation: str) -> HookResult:
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")

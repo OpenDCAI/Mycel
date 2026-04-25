@@ -235,8 +235,6 @@ class LeonAgent:
         # Override workspace_root for sandbox mode
         if self._sandbox.name != "local":
             self.workspace_root = Path(self._sandbox.working_dir)
-        else:
-            self.workspace_root.mkdir(parents=True, exist_ok=True)
 
         # Initialize model
         self._model_http_client: httpx.Client | None = None
