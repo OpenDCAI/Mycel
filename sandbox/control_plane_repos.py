@@ -3,7 +3,6 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-from storage.providers.sqlite.kernel import SQLiteDBRole, resolve_role_db_path
 from storage.runtime import (
     build_sandbox_runtime_repo,
     uses_supabase_runtime_defaults,
@@ -16,7 +15,7 @@ def resolve_sandbox_db_path(db_path: Path | None = None) -> Path:
     raw_path = os.getenv("LEON_SANDBOX_DB_PATH")
     if not raw_path:
         raise RuntimeError("LEON_SANDBOX_DB_PATH is required for sqlite sandbox control-plane storage.")
-    return resolve_role_db_path(SQLiteDBRole.SANDBOX)
+    return Path(raw_path)
 
 
 def _use_strategy_control_plane_repo(db_path: Path | None = None) -> bool:
