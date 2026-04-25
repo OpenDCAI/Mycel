@@ -2,7 +2,7 @@
 
 Combines:
 - Three-tier runtime config merge (system > user > project) — for default agent
-- Agent .md parsing (YAML frontmatter + system prompt)
+- Built-in runtime agent .md parsing (YAML frontmatter + system prompt)
 
 Configuration priority (highest to lowest):
 1. CLI overrides
@@ -84,7 +84,7 @@ class AgentLoader:
 
         return LeonSettings(**final_config)
 
-    # ── Agent .md parsing (merged from core/task/loader) ──
+    # ── Built-in runtime agent .md parsing ──
 
     def load_runtime_agents(self) -> dict[str, RuntimeAgentDefinition]:
         """Load runtime-facing agent definitions."""
@@ -93,17 +93,7 @@ class AgentLoader:
 
     def _load_agent_layers(self) -> None:
         self._agents = {}
-
-        # 1. Built-in agents (lowest priority)
         self._load_agents_from_dir(self._system_defaults_dir / "agents")
-
-        # 2. User-level agents
-        for path in user_home_read_candidates("agents"):
-            self._load_agents_from_dir(path)
-
-        # 3. Project-level agents
-        if self.workspace_root:
-            self._load_agents_from_dir(self.workspace_root / ".leon" / "agents")
 
     def _load_agents_from_dir(self, dir_path: Path) -> None:
         """Load all .md files from a directory."""
