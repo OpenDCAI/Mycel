@@ -1434,6 +1434,63 @@ def test_leon_agent_registers_relationship_tools_from_runtime_relationship_servi
     assert captured["relationship_service"] is relationship_service
 
 
+def test_leon_agent_registers_chat_join_request_tools_from_runtime_service(monkeypatch: pytest.MonkeyPatch, tmp_path) -> None:
+    from core.runtime.agent import LeonAgent
+    from core.runtime.registry import ToolRegistry
+
+    captured: dict[str, Any] = {}
+
+    class _NoopService:
+        def __init__(self, *args, **kwargs) -> None:
+            return None
+
+    class _FakeChatJoinRequestToolService:
+        def __init__(self, *args, **kwargs) -> None:
+            captured.update(kwargs)
+
+    monkeypatch.setattr("core.runtime.agent.TaskService", _NoopService)
+    monkeypatch.setattr("core.runtime.agent.mcp_gateway.register_resource_tools", _NoopService)
+    monkeypatch.setattr("core.runtime.agent.ToolSearchService", _NoopService)
+    monkeypatch.setattr("core.runtime.agent.AgentService", _NoopService)
+    monkeypatch.setattr("messaging.tools.chat_tool_service.ChatToolService", _NoopService)
+    monkeypatch.setattr("messaging.tools.chat_join_request_tool_service.ChatJoinRequestToolService", _FakeChatJoinRequestToolService)
+
+    chat_join_request_service = object()
+    agent = object.__new__(LeonAgent)
+    agent._sandbox = SimpleNamespace(name="local", fs=lambda: None, shell=lambda: None)
+    agent._tool_registry = ToolRegistry()
+    agent.workspace_root = str(tmp_path)
+    agent.model_name = "test-model"
+    agent._thread_repo = SimpleNamespace()
+    agent._user_repo = SimpleNamespace()
+    agent.queue_manager = SimpleNamespace()
+    agent._web_app = None
+    agent.allowed_file_extensions = []
+    agent.extra_allowed_paths = []
+    agent.enable_audit_log = False
+    agent.block_dangerous_commands = False
+    agent.block_network_commands = False
+    agent._get_mcp_server_configs = lambda: {}
+    agent._chat_repos = {
+        "chat_identity_id": "thread-user-9",
+        "messaging_service": SimpleNamespace(),
+        "chat_join_request_service": chat_join_request_service,
+    }
+    cast(Any, agent).config = SimpleNamespace(
+        tools=SimpleNamespace(
+            filesystem=SimpleNamespace(enabled=False),
+            search=SimpleNamespace(enabled=False),
+            web=SimpleNamespace(enabled=False),
+            command=SimpleNamespace(enabled=False),
+        ),
+    )
+
+    LeonAgent._init_services(agent)
+
+    assert captured["chat_join_identity_id"] == "thread-user-9"
+    assert captured["chat_join_request_service"] is chat_join_request_service
+
+
 def test_leon_agent_init_services_passes_child_thread_live_runner(monkeypatch: pytest.MonkeyPatch, tmp_path) -> None:
     from core.runtime.agent import LeonAgent
     from core.runtime.registry import ToolRegistry
