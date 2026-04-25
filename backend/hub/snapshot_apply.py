@@ -11,17 +11,17 @@ from config.agent_config_types import AgentConfig, AgentSkill, AgentSnapshot, Re
 from config.skill_package import build_skill_package_hash, build_skill_package_manifest
 
 
-def _skill_id_from_name(name: str) -> str:
-    skill_id = name.strip().lower().replace(" ", "-")
-    if "/" in skill_id or "\\" in skill_id or skill_id in {"", ".", ".."}:
-        raise ValueError(f"Invalid Skill name for Library id: {name}")
-    return skill_id
-
-
 def _required_text(value: Any, *, label: str) -> str:
     if not isinstance(value, str) or not value.strip():
         raise ValueError(f"{label} must be a string")
     return value.strip()
+
+
+def _required_skill_id(skill_id: str) -> str:
+    skill_id = _required_text(skill_id, label="Snapshot Skill id")
+    if "/" in skill_id or "\\" in skill_id or skill_id in {".", ".."}:
+        raise ValueError(f"Invalid Snapshot Skill id: {skill_id}")
+    return skill_id
 
 
 def _materialize_snapshot_skills(
@@ -38,9 +38,13 @@ def _materialize_snapshot_skills(
     if skill_repo is None:
         raise RuntimeError("skill_repo is required to apply snapshot Skills")
 
+    seen_ids: set[str] = set()
     seen_names: set[str] = set()
     for snapshot_skill in skills:
         validate_resolved_skill_content(snapshot_skill)
+        if snapshot_skill.id in seen_ids:
+            raise ValueError(f"Duplicate Skill id in snapshot: {snapshot_skill.id}")
+        seen_ids.add(snapshot_skill.id)
         if snapshot_skill.name in seen_names:
             raise ValueError(f"Duplicate Skill name in snapshot: {snapshot_skill.name}")
         seen_names.add(snapshot_skill.name)
@@ -49,7 +53,7 @@ def _materialize_snapshot_skills(
     timestamp = datetime.now(UTC)
     library_skills = skill_repo.list_for_owner(owner_user_id)
     for snapshot_skill in skills:
-        skill_id = _skill_id_from_name(snapshot_skill.name)
+        skill_id = _required_skill_id(snapshot_skill.id)
         existing = skill_repo.get_by_id(owner_user_id, skill_id)
         if existing is not None and existing.name != snapshot_skill.name:
             raise ValueError("Snapshot Skill frontmatter name must match existing Skill name")

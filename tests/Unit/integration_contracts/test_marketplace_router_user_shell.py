@@ -387,6 +387,7 @@ async def test_apply_member_snapshot_materializes_skill_through_router(monkeypat
                     "name": "Snapshot Agent",
                     "skills": [
                         {
+                            "id": "snapshot-core",
                             "name": "Snapshot Skill",
                             "description": "skill desc",
                             "version": "1.2.3",
@@ -419,7 +420,7 @@ async def test_apply_member_snapshot_materializes_skill_through_router(monkeypat
     saved_config = agent_config_repo.saved[0]
     saved_skill = saved_config.skills[0]
     assert result == {"user_id": saved_config.agent_user_id, "type": "user", "version": "1.2.3"}
-    assert saved_skill.skill_id == "snapshot-skill"
+    assert saved_skill.skill_id == "snapshot-core"
     assert saved_skill.package_id
     package = skill_repo.get_package("owner-1", saved_skill.package_id)
     assert package is not None
