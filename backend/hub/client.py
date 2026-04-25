@@ -1,11 +1,9 @@
 """HTTP client for Mycel Hub marketplace API."""
 
 import copy
-import json
 import os
 import time
 from datetime import UTC, datetime
-from pathlib import Path
 from typing import Any
 
 import httpx
@@ -13,7 +11,6 @@ import yaml
 from fastapi import HTTPException
 
 import backend.hub.snapshot_apply as _snapshot_apply
-import backend.library.paths as _lib_paths
 from backend.hub.versioning import BumpType, bump_semver
 from config.agent_config_resolver import resolve_agent_config
 from config.agent_config_types import AgentSkill, Skill, SkillPackage
@@ -118,11 +115,6 @@ def get_item_lineage(item_id: str) -> dict:
 
 def get_item_version_snapshot(item_id: str, version: str) -> dict:
     return _hub_api("GET", f"/items/{item_id}/versions/{version}")
-
-
-def _write_json(path: Path, data: dict) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
 def _agent_snapshot_payload(config: Any) -> dict:
@@ -325,31 +317,7 @@ def apply_item(
         return {"resource_id": slug, "package_id": package.id, "type": "skill", "version": source_version}
 
     if item_type == "agent":
-        slug = item.get("slug", item["name"].lower().replace(" ", "-"))
-        agent_dir = (_lib_paths.LIBRARY_DIR / "agents").resolve()
-        if not (agent_dir / slug).resolve().is_relative_to(agent_dir):
-            raise ValueError(f"Invalid slug: {slug}")
-        agent_dir.mkdir(parents=True, exist_ok=True)
-
-        content = snapshot.get("content", "")
-        if not isinstance(content, str):
-            raise ValueError("Agent snapshot content must be a string")
-        (agent_dir / f"{slug}.md").write_text(content, encoding="utf-8")
-
-        meta_data = {
-            "name": item["name"],
-            "desc": item.get("description", ""),
-            "created_at": now,
-            "updated_at": now,
-            "source": {
-                "marketplace_item_id": item_id,
-                "source_version": source_version,
-                "source_at": now,
-                "publisher": item.get("publisher_username", ""),
-            },
-        }
-        _write_json(agent_dir / f"{slug}.json", meta_data)
-        return {"resource_id": slug, "type": "agent", "version": source_version}
+        raise ValueError("Marketplace agent items are not supported; apply Agent user items instead")
 
     if item_type == HUB_AGENT_USER_ITEM_TYPE:
         if user_repo is None or agent_config_repo is None:

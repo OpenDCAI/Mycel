@@ -10,7 +10,6 @@ import httpx
 import pytest
 from fastapi import HTTPException
 
-import backend.library.paths as _lib_paths
 from backend.hub.versioning import bump_semver
 from config.agent_config_types import AgentConfig, AgentRule, AgentSkill, AgentSubAgent, McpServerConfig, Skill, SkillPackage
 
@@ -491,47 +490,14 @@ class TestApplySkill:
 
 
 class TestApplyAgent:
-    def test_apply_agent_rejects_non_string_snapshot_content(self, tmp_path, monkeypatch):
+    def test_apply_agent_item_type_is_not_supported(self):
         import backend.hub.client as marketplace_client
 
-        monkeypatch.setattr(_lib_paths, "LIBRARY_DIR", tmp_path)
-        hub_resp = _make_hub_response("agent", "broken-agent", content="# Agent")
-        hub_resp["snapshot"]["content"] = []
+        hub_resp = _make_hub_response("agent", "old-agent-template", content="# Agent")
 
         with patch("backend.hub.client._hub_api", return_value=hub_resp):
-            with pytest.raises(ValueError, match="Agent snapshot content must be a string"):
+            with pytest.raises(ValueError, match="Marketplace agent items are not supported"):
                 marketplace_client.apply_item("item-agent")
-
-    def test_writes_agent_md(self, tmp_path, monkeypatch):
-        lib = tmp_path / "library"
-        monkeypatch.setattr(_lib_paths, "LIBRARY_DIR", lib)
-        hub_resp = _make_hub_response("agent", "cool-agent", content="# Cool Agent")
-
-        with patch("backend.hub.client._hub_api", return_value=hub_resp):
-            from backend.hub.client import apply_item
-
-            result = apply_item("item-a1")
-
-        assert result["type"] == "agent"
-        assert result["resource_id"] == "cool-agent"
-        md_path = lib / "agents" / "cool-agent.md"
-        assert md_path.exists()
-        assert md_path.read_text(encoding="utf-8") == "# Cool Agent"
-
-    def test_meta_json_written(self, tmp_path, monkeypatch):
-        lib = tmp_path / "library"
-        monkeypatch.setattr(_lib_paths, "LIBRARY_DIR", lib)
-        hub_resp = _make_hub_response("agent", "meta-agent", version="3.0.0", publisher="bob")
-
-        with patch("backend.hub.client._hub_api", return_value=hub_resp):
-            from backend.hub.client import apply_item
-
-            apply_item("item-a2")
-
-        meta = json.loads((lib / "agents" / "meta-agent.json").read_text(encoding="utf-8"))
-        assert meta["source"]["marketplace_item_id"] == "item-a2"
-        assert meta["source"]["source_version"] == "3.0.0"
-        assert meta["source"]["publisher"] == "bob"
 
 
 class TestApplyUser:
