@@ -25,7 +25,7 @@ Mycel uses split configuration files for runtime defaults, models, observation, 
 
     | File | Purpose |
     |------|---------|
-    | `config.env` | Quick API key setup |
+    | `ENV_FILE` | Optional explicit env file |
     | `$LEON_SANDBOXES_DIR/<name>.json` | Per-provider sandbox config |
     | `.mcp.json` | Advanced MCP servers for local runtime config |
   </div>
@@ -46,7 +46,7 @@ Mycel uses split configuration files for runtime defaults, models, observation, 
 
 ## First run
 
-Create `~/.leon/config.env`:
+Export variables in the shell, or set `ENV_FILE=/path/to/mycel.env` before starting the service:
 
 ```env
 OPENAI_API_KEY=sk-xxx
@@ -328,6 +328,7 @@ All string values in JSON config files support `${VAR}` expansion and `~` for ho
 | `OPENROUTER_API_KEY` | OpenRouter API key |
 | `MODEL_NAME` | Override active model |
 | `LEON_SANDBOX` | Default sandbox name |
+| `LEON_FILE_CHANNEL_ROOT` | Host-side staging root for thread file uploads |
 | `TAVILY_API_KEY` | Tavily web search |
 | `EXA_API_KEY` | Exa search |
 | `JINA_API_KEY` | Jina AI fetch |

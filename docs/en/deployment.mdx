@@ -54,30 +54,13 @@ keywords: [deployment, install, production, Docker, configuration, troubleshooti
 
 ## Configuration
 
-### User config directory
+### Runtime configuration
 
-Mycel stores configuration in `~/.leon/`:
-
-```
-~/.leon/
-├── config.env          # API keys and base URL
-├── runtime.json        # Runtime behavior
-├── models.json         # LLM providers and model mapping
-├── observation.json    # Tracing (Langfuse / LangSmith)
-├── sandboxes/          # Sandbox provider configs
-│   ├── docker.json
-│   ├── e2b.json
-│   └── daytona.json
-├── agents/             # Local Agent config directories
-├── skills/             # Skill directories
-├── leon.db             # Thread history and agent state
-├── chat.db             # Social layer (chats, participants)
-└── sandbox.db          # Sandbox runtime tracking
-```
+Mycel service configuration comes from process environment variables and explicit server configuration. Agent configs, Skills, threads, Library resources, and user profiles are product state and are stored through the configured backend storage.
 
 ### Quick setup
 
-Create `~/.leon/config.env` manually:
+Export variables in the shell or point `ENV_FILE` at an explicit env file:
 
 ```env
 ANTHROPIC_API_KEY=sk-ant-xxx
@@ -233,9 +216,9 @@ Multi-user deployments may require PostgreSQL — this requires code changes to 
 
 ### Security
 
-- Store API keys in `~/.leon/config.env`, never in code or version control
+- Store API keys in the deployment secret store or an explicit env file, never in code or version control
 - Use `${VAR}` substitution in JSON config files instead of hardcoding keys
-- Restrict file permissions: `chmod 600 ~/.leon/config.env`
+- Restrict env file permissions when using one: `chmod 600 /path/to/mycel.env`
 - The `block_dangerous_commands` setting (default: `true`) prevents `rm -rf` and similar shell commands
 
 ### Proxy environments
