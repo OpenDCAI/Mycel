@@ -6,7 +6,7 @@ from datetime import UTC, datetime
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 from backend.chat.api.http.dependencies import (
     get_chat_event_bus,
@@ -31,11 +31,10 @@ class CreateChatBody(BaseModel):
 
 
 class SendMessageBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     content: str
-    sender_id: str | None = None
     mentioned_ids: list[str] | None = None
-    message_type: str = "human"
-    signal: str | None = None
     reply_to: str | None = None
     enforce_caught_up: bool = False
 
@@ -208,7 +207,7 @@ def send_message(
 ):
     if not body.content.strip():
         raise HTTPException(400, "Content cannot be empty")
-    sender_id = body.sender_id or user_id
+    sender_id = user_id
     _verify_user_ownership(messaging_service, sender_id, user_id)
     if not messaging_service.is_chat_member(chat_id, sender_id):
         raise HTTPException(403, "Not a participant of this chat")
@@ -218,8 +217,8 @@ def send_message(
             sender_id,
             body.content,
             mentions=body.mentioned_ids,
-            signal=body.signal,
-            message_type=body.message_type,
+            signal=None,
+            message_type="human",
             reply_to=body.reply_to,
             enforce_caught_up=body.enforce_caught_up,
         )
