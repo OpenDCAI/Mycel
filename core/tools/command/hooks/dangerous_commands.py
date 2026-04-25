@@ -71,7 +71,6 @@ class DangerousCommandsHook(BashHook):
         verbose: bool = True,
     ):
         super().__init__(workspace_root)
-        self.verbose = verbose
 
         patterns = self.DEFAULT_BLOCKED_COMMANDS.copy()
         if block_network:
@@ -83,9 +82,6 @@ class DangerousCommandsHook(BashHook):
         self.blocked_base_commands = set(self.DEFAULT_BLOCKED_BASE_COMMANDS)
         if block_network:
             self.blocked_base_commands.update(self.NETWORK_BASE_COMMANDS)
-
-        if verbose:
-            print(f"[DangerousCommands] Loaded {len(self.compiled_patterns)} blocked command patterns")
 
     @staticmethod
     def _unquoted_command(command: str) -> str:
