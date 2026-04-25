@@ -55,8 +55,20 @@ def test_available_sandbox_types_marks_e2b_unavailable_when_sdk_missing(monkeypa
     assert "unavailable in the current process" in e2b["reason"]
 
 
+def test_build_providers_and_managers_uses_explicit_local_workspace_root(monkeypatch, tmp_path: Path) -> None:
+    workspace_root = tmp_path / "workspace"
+    monkeypatch.setenv("LEON_LOCAL_WORKSPACE_ROOT", str(workspace_root))
+    monkeypatch.setenv("LEON_SANDBOX_DB_PATH", str(tmp_path / "sandbox.db"))
+    monkeypatch.setattr(sandbox_service, "SANDBOXES_DIR", tmp_path / "missing-configs")
+
+    providers, _managers = sandbox_service._build_providers_and_managers()
+
+    assert providers["local"].default_cwd == str(workspace_root.resolve())
+
+
 def test_build_providers_and_managers_passes_agentbay_pause_capability_overrides(monkeypatch, tmp_path: Path) -> None:
     (tmp_path / "agentbay.json").write_text("{}")
+    monkeypatch.setenv("LEON_LOCAL_WORKSPACE_ROOT", str(tmp_path / "workspace"))
     monkeypatch.setattr(sandbox_service, "SANDBOXES_DIR", tmp_path)
 
     captured: dict[str, object] = {}
@@ -107,6 +119,7 @@ def test_build_providers_and_managers_passes_agentbay_pause_capability_overrides
 
 def test_build_providers_and_managers_uses_current_daytona_contract(monkeypatch, tmp_path: Path) -> None:
     (tmp_path / "daytona_selfhost.json").write_text("{}")
+    monkeypatch.setenv("LEON_LOCAL_WORKSPACE_ROOT", str(tmp_path / "workspace"))
     monkeypatch.setattr(sandbox_service, "SANDBOXES_DIR", tmp_path)
 
     captured: dict[str, object] = {}

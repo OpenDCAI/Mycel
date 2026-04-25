@@ -8,13 +8,13 @@ from backend.sandboxes import provider_availability as _sandbox_provider_availab
 from backend.sandboxes import provider_factory as _sandbox_provider_factory
 from backend.sandboxes import recipe_catalog as _sandbox_recipe_catalog
 from backend.sandboxes import thread_resources as _sandbox_thread_resources
+from backend.sandboxes.local_workspace import local_workspace_root
 from backend.sandboxes.paths import SANDBOXES_DIR
 from backend.sandboxes.runtime import metrics as _sandbox_runtime_metrics
 from backend.sandboxes.runtime import mutations as _sandbox_runtime_mutations
 from backend.sandboxes.runtime import reads as _sandbox_runtime_reads
 from backend.threads.projection import canonical_owner_threads
 from backend.threads.virtual_threads import is_virtual_thread_id
-from backend.web.core.config import LOCAL_WORKSPACE_ROOT
 from sandbox.config import SandboxConfig
 from sandbox.manager import SandboxManager
 from storage.runtime import build_sandbox_monitor_repo as make_sandbox_monitor_repo
@@ -95,7 +95,7 @@ def _build_providers_and_managers() -> tuple[dict[str, Any], dict[str, Any]]:
         sandboxes_dir=SANDBOXES_DIR,
         sandbox_manager_cls=SandboxManager,
         sandbox_config_cls=SandboxConfig,
-        local_workspace_root_path=LOCAL_WORKSPACE_ROOT,
+        local_workspace_root_path=local_workspace_root(),
     )
 
 

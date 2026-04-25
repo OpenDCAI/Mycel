@@ -573,10 +573,13 @@ def _create_thread_sandbox_resources(
     try:
         terminal_id = f"term-{uuid.uuid4().hex[:12]}"
         # @@@initial-cwd - local threads own their requested cwd; remote threads start from provider defaults.
-        from backend.web.core.config import LOCAL_WORKSPACE_ROOT
-
         if sandbox_type == "local":
-            initial_cwd = cwd or str(LOCAL_WORKSPACE_ROOT)
+            if cwd:
+                initial_cwd = cwd
+            else:
+                from backend.sandboxes.local_workspace import local_workspace_root
+
+                initial_cwd = str(local_workspace_root())
         else:
             from sandbox.manager import resolve_provider_cwd
 

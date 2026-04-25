@@ -26,6 +26,7 @@ def _patch_lifespan_runtime_contract(
 ):
     monkeypatch.setattr(web_lifespan, "_require_web_runtime_contract", lambda: None)
     monkeypatch.setenv("LEON_POSTGRES_URL", "postgres://unit-test")
+    monkeypatch.setenv("LEON_LOCAL_WORKSPACE_ROOT", "/tmp/mycel-unit-workspace")
 
     async def _no_validate():
         return None
@@ -164,6 +165,7 @@ async def test_web_lifespan_passes_borrowed_contact_repo_into_auth_runtime(monke
 
     monkeypatch.setattr(web_lifespan, "_require_web_runtime_contract", lambda: None)
     monkeypatch.setenv("LEON_POSTGRES_URL", "postgres://unit-test")
+    monkeypatch.setenv("LEON_LOCAL_WORKSPACE_ROOT", "/tmp/mycel-unit-workspace")
 
     async def _no_validate():
         return None

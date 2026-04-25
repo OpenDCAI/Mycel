@@ -39,6 +39,7 @@ def test_create_thread_sandbox_resources_uses_runtime_factories_without_db_path(
     workspace_repo = object()
     materialize_calls: list[dict[str, object]] = []
 
+    monkeypatch.delenv("LEON_LOCAL_WORKSPACE_ROOT", raising=False)
     monkeypatch.setattr(container_cache, "get_storage_container", lambda: _Container())
     monkeypatch.setattr("storage.runtime.build_sandbox_runtime_repo", lambda: sandbox_runtime_repo)
     monkeypatch.setattr("sandbox.control_plane_repos.make_terminal_repo", lambda: terminal_repo)
