@@ -396,12 +396,15 @@ def _runtime_and_tools_from_patch(current_config: AgentConfig, config_patch: dic
     if "tools" in config_patch and config_patch["tools"] is not None:
         tool_items = [item for item in config_patch["tools"] if isinstance(item, dict) and item.get("name")]
         runtime = {k: v for k, v in runtime.items() if not k.startswith("tools:")}
+        enabled_tools = []
         for item in tool_items:
+            enabled = _enabled_from_patch_item(item, label="Tool patch item")
             runtime[f"tools:{item['name']}"] = {
-                "enabled": item.get("enabled", True),
+                "enabled": enabled,
                 "desc": item.get("desc", ""),
             }
-        enabled_tools = [item["name"] for item in tool_items if item.get("enabled", True)]
+            if enabled:
+                enabled_tools.append(item["name"])
         tools = ["*"] if tool_items and len(enabled_tools) == len(tool_items) else enabled_tools
 
     return runtime, tools
@@ -442,6 +445,7 @@ def _mcp_from_patch(config_patch: dict[str, Any], current_config: AgentConfig) -
             raise RuntimeError("MCP server patch item must include name")
         if "disabled" in item:
             raise RuntimeError("MCP server patch item must use enabled, not disabled")
+        enabled = _enabled_from_patch_item(item, label="MCP server patch item")
         name = str(item["name"])
         if name in seen_names:
             raise RuntimeError(f"Duplicate MCP server name in patch: {name}")
@@ -459,10 +463,19 @@ def _mcp_from_patch(config_patch: dict[str, Any], current_config: AgentConfig) -
                 url=direct_config.get("url"),
                 instructions=direct_config.get("instructions"),
                 allowed_tools=direct_config.get("allowed_tools"),
-                enabled=bool(item.get("enabled", True)),
+                enabled=enabled,
             )
         )
     return servers
+
+
+def _enabled_from_patch_item(item: dict[str, Any], *, label: str) -> bool:
+    if "enabled" not in item:
+        return True
+    enabled = item["enabled"]
+    if not isinstance(enabled, bool):
+        raise RuntimeError(f"{label} enabled must be a boolean")
+    return enabled
 
 
 def _rules_from_patch(current_config: AgentConfig, config_patch: dict[str, Any]) -> list[AgentRule]:
@@ -499,7 +512,13 @@ def _sub_agents_from_patch(current_config: AgentConfig, config_patch: dict[str, 
             seen_names.add(name)
             raw_tools = item.get("tools") or []
             if isinstance(raw_tools, list) and raw_tools and isinstance(raw_tools[0], dict):
-                enabled_tools = [tool["name"] for tool in raw_tools if tool.get("enabled")]
+                enabled_tools = []
+                for tool in raw_tools:
+                    if not isinstance(tool, dict):
+                        continue
+                    enabled = _enabled_from_patch_item(tool, label="SubAgent tool patch item")
+                    if enabled:
+                        enabled_tools.append(tool["name"])
             else:
                 enabled_tools = list(raw_tools)
             sub_agents.append(
@@ -555,13 +574,14 @@ def _skills_from_patch(current_config: AgentConfig, config_patch: dict[str, Any]
             raise RuntimeError("Skill patch item must not include content or files")
         if "disabled" in item:
             raise RuntimeError("Skill patch item must use enabled, not disabled")
+        _enabled_from_patch_item(item, label="Skill patch item")
         name = str(item["name"])
         if name in seen_names:
             raise RuntimeError(f"Duplicate Skill name in patch: {name}")
         seen_names.add(name)
     for item in skill_items:
         name = str(item["name"])
-        enabled = bool(item.get("enabled", True))
+        enabled = _enabled_from_patch_item(item, label="Skill patch item")
         explicit_skill_id = item.get("id") or item.get("skill_id")
         explicit_skill_id_str = str(explicit_skill_id) if explicit_skill_id else None
         current_skill = _current_skill_by_name_or_id(current_config, name, explicit_skill_id_str)

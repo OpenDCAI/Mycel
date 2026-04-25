@@ -65,6 +65,10 @@ def test_agent_config_schema_requires_enabled_direction_for_skill_and_mcp_state(
 
     assert "agent_config.skills child state must use enabled" in sql
     assert "agent_config.mcp_servers child state must use enabled" in sql
+    assert "agent_config.skills child.enabled must be a JSON boolean" in sql
+    assert "agent_config.rules child.enabled must be a JSON boolean" in sql
+    assert "agent_config.sub_agents child.enabled must be a JSON boolean" in sql
+    assert "agent_config.mcp_servers child.enabled must be a JSON boolean" in sql
     assert "skill_item.value ? 'disabled'" in sql
     assert "mcp_item.value ? 'disabled'" in sql
 
