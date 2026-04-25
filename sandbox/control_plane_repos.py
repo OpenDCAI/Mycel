@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 from storage.providers.sqlite.kernel import SQLiteDBRole, resolve_role_db_path
@@ -10,11 +11,16 @@ from storage.runtime import (
 
 
 def resolve_sandbox_db_path(db_path: Path | None = None) -> Path:
-    return db_path or resolve_role_db_path(SQLiteDBRole.SANDBOX)
+    if db_path is not None:
+        return db_path
+    raw_path = os.getenv("LEON_SANDBOX_DB_PATH")
+    if not raw_path:
+        raise RuntimeError("LEON_SANDBOX_DB_PATH is required for sqlite sandbox control-plane storage.")
+    return resolve_role_db_path(SQLiteDBRole.SANDBOX)
 
 
 def _use_strategy_control_plane_repo(db_path: Path | None = None) -> bool:
-    return uses_supabase_runtime_defaults() and resolve_sandbox_db_path(db_path) == resolve_role_db_path(SQLiteDBRole.SANDBOX)
+    return db_path is None and not os.getenv("LEON_SANDBOX_DB_PATH") and uses_supabase_runtime_defaults()
 
 
 def make_chat_session_repo(db_path: Path | None = None):
