@@ -26,6 +26,13 @@ def _user_repo() -> SimpleNamespace:
                 avatar=None,
                 owner_user_id=None,
             ),
+            "external-user-1": SimpleNamespace(
+                id="external-user-1",
+                display_name="External",
+                type="external",
+                avatar=None,
+                owner_user_id=None,
+            ),
             "agent-user-1": SimpleNamespace(
                 id="agent-user-1",
                 display_name="Morel",
@@ -113,6 +120,22 @@ def test_dispatcher_agent_turn_delivers_only_to_sibling_agent() -> None:
     dispatcher.dispatch("chat-1", "agent-user-1", "hello", [])
 
     assert delivered == ["agent-user-2"]
+
+
+def test_dispatcher_does_not_runtime_deliver_to_external_users() -> None:
+    delivered: list[str] = []
+    dispatcher = ChatDeliveryDispatcher(
+        chat_member_repo=_member_repo(["agent-user-1", "external-user-1"]),
+        user_repo=_user_repo(),
+        avatar_url_builder=lambda _user_id, _has_avatar: None,
+        unread_counter=lambda _chat_id, _user_id: 0,
+        delivery_resolver=SimpleNamespace(resolve=lambda *_args, **_kwargs: DeliveryAction.DELIVER),
+        delivery_fn=lambda request: delivered.append(request.recipient_id),
+    )
+
+    dispatcher.dispatch("chat-1", "agent-user-1", "hello", [])
+
+    assert delivered == []
 
 
 @pytest.mark.parametrize("action", [DeliveryAction.NOTIFY, DeliveryAction.DROP])
