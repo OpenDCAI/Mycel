@@ -467,6 +467,7 @@ def test_send_message_consumes_service_owned_message_projection() -> None:
                         if uid == "thread-user-1"
                         else None
                     ),
+                    is_chat_member=lambda _chat_id, _user_id: True,
                     send=lambda chat_id, sender_id, content, **_kwargs: (
                         seen.append((chat_id, sender_id, content))
                         or {
@@ -531,6 +532,7 @@ def test_send_message_defaults_sender_to_authenticated_user() -> None:
             if uid == "external-user-1"
             else None
         ),
+        is_chat_member=lambda _chat_id, _user_id: True,
         send=lambda chat_id, sender_id, content, **_kwargs: (
             seen.append((chat_id, sender_id, content))
             or {
@@ -595,10 +597,30 @@ def test_send_message_still_rejects_unowned_explicit_sender_id() -> None:
     assert "does not belong" in str(exc_info.value.detail)
 
 
+def test_send_message_rejects_sender_that_is_not_chat_member() -> None:
+    messaging_service = SimpleNamespace(
+        resolve_display_user=lambda uid: SimpleNamespace(id=uid, owner_user_id=None),
+        is_chat_member=lambda _chat_id, _user_id: False,
+        send=lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("send should not be called")),
+    )
+
+    with pytest.raises(HTTPException) as exc_info:
+        chats_router.send_message(
+            "chat-1",
+            chats_router.SendMessageBody(content="hello"),
+            user_id="external-user-1",
+            messaging_service=messaging_service,
+        )
+
+    assert exc_info.value.status_code == 403
+    assert exc_info.value.detail == "Not a participant of this chat"
+
+
 def test_send_message_can_enforce_authenticated_user_caught_up_state() -> None:
     seen: list[dict[str, object]] = []
     messaging_service = SimpleNamespace(
         resolve_display_user=lambda uid: SimpleNamespace(id=uid, owner_user_id=None),
+        is_chat_member=lambda _chat_id, _user_id: True,
         send=lambda chat_id, sender_id, content, **kwargs: (
             seen.append({"chat_id": chat_id, "sender_id": sender_id, "content": content, **kwargs})
             or {
@@ -639,6 +661,7 @@ def test_send_message_maps_caught_up_conflict_to_409() -> None:
 
     messaging_service = SimpleNamespace(
         resolve_display_user=lambda uid: SimpleNamespace(id=uid, owner_user_id=None),
+        is_chat_member=lambda _chat_id, _user_id: True,
         send=lambda *_args, **_kwargs: (_ for _ in ()).throw(ChatNotCaughtUpError("read unread messages first")),
     )
 
@@ -672,6 +695,23 @@ def test_list_unread_messages_uses_authenticated_user_membership() -> None:
     assert result == [{"id": "msg-1", "chat_id": "chat-1", "sender_id": "human-1"}]
 
 
+def test_mark_read_rejects_non_member_user() -> None:
+    messaging_service = SimpleNamespace(
+        is_chat_member=lambda _chat_id, _user_id: False,
+        mark_read=lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("mark_read should not be called")),
+    )
+
+    with pytest.raises(HTTPException) as exc_info:
+        chats_router.mark_read(
+            "chat-1",
+            user_id="external-user-1",
+            messaging_service=messaging_service,
+        )
+
+    assert exc_info.value.status_code == 403
+    assert exc_info.value.detail == "Not a participant of this chat"
+
+
 def test_send_message_accepts_owned_thread_user_sender_id_via_thread_repo():
     seen: list[tuple[str, str, str]] = []
     app = SimpleNamespace(
@@ -701,6 +741,7 @@ def test_send_message_accepts_owned_thread_user_sender_id_via_thread_repo():
                         if uid == "thread-user-1"
                         else None
                     ),
+                    is_chat_member=lambda _chat_id, _user_id: True,
                     send=lambda chat_id, sender_id, content, **_kwargs: (
                         seen.append((chat_id, sender_id, content))
                         or {
@@ -816,6 +857,35 @@ def test_create_chat_accepts_human_and_thread_social_user_ids_for_group_particip
         "status": "active",
         "created_at": 0,
     }
+
+
+def test_create_chat_rejects_participants_unrelated_to_requester() -> None:
+    state, called = _create_chat_route_state(
+        users={
+            "human-user-2": SimpleNamespace(id="human-user-2", owner_user_id=None),
+            "human-user-3": SimpleNamespace(id="human-user-3", owner_user_id=None),
+            "human-user-4": SimpleNamespace(id="human-user-4", owner_user_id=None),
+        },
+        active_contact_pairs={
+            ("human-user-1", "human-user-2"),
+            ("human-user-1", "human-user-3"),
+            ("human-user-1", "human-user-4"),
+        },
+    )
+    app = SimpleNamespace(state=state)
+
+    with pytest.raises(HTTPException) as exc_info:
+        _create_chat(
+            app,
+            chats_router.CreateChatBody(
+                user_ids=["human-user-2", "human-user-3", "human-user-4"],
+                title="unrelated-group",
+            ),
+        )
+
+    assert exc_info.value.status_code == 400
+    assert "requester" in str(exc_info.value.detail).lower()
+    assert called == []
 
 
 def test_create_group_chat_rejects_external_participant_without_active_relationship() -> None:

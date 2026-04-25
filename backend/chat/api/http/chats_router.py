@@ -99,6 +99,15 @@ def _is_owned_participant(user_repo: Any, participant_id: str, requester_user_id
     return is_owned_by_viewer(requester_user_id, participant)
 
 
+def _validate_requester_is_participant(user_repo: Any, participant_ids: list[str], requester_user_id: str) -> None:
+    for participant_id in participant_ids:
+        if participant_id == requester_user_id:
+            return
+        if _is_owned_participant(user_repo, participant_id, requester_user_id):
+            return
+    raise ValueError("Chat participants must include the requester or a requester-owned participant")
+
+
 def _validate_group_chat_relationships(
     relationship_service: Any,
     contact_repo: Any,
@@ -144,6 +153,7 @@ def create_chat(
 ):
     try:
         participant_ids = _validate_chat_participant_ids(user_repo, thread_repo, body.user_ids, user_id)
+        _validate_requester_is_participant(user_repo, participant_ids, user_id)
         if len(participant_ids) >= 3:
             _validate_group_chat_relationships(
                 relationship_service,
@@ -200,6 +210,8 @@ def send_message(
         raise HTTPException(400, "Content cannot be empty")
     sender_id = body.sender_id or user_id
     _verify_user_ownership(messaging_service, sender_id, user_id)
+    if not messaging_service.is_chat_member(chat_id, sender_id):
+        raise HTTPException(403, "Not a participant of this chat")
     try:
         msg = messaging_service.send(
             chat_id,
@@ -257,6 +269,8 @@ def mark_read(
     user_id: Annotated[str, Depends(get_current_user_id)],
     messaging_service: Annotated[Any, Depends(get_messaging_service)],
 ):
+    if not messaging_service.is_chat_member(chat_id, user_id):
+        raise HTTPException(403, "Not a participant of this chat")
     messaging_service.mark_read(chat_id, user_id)
     return {"status": "ok"}
 
