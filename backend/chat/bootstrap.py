@@ -6,6 +6,7 @@ from typing import Any
 from backend.identity.avatar.urls import avatar_url
 from backend.threads.chat_adapters.chat_inlet import make_chat_delivery_fn
 from messaging.delivery.resolver import HireVisitDeliveryResolver
+from messaging.join_requests import ChatJoinRequestService
 from messaging.realtime.events import ChatEventBus
 from messaging.realtime.typing import TypingTracker
 from messaging.relationships.service import RelationshipService
@@ -19,6 +20,7 @@ class ChatRuntimeState:
     contact_repo: Any
     typing_tracker: Any
     relationship_service: Any
+    chat_join_request_service: Any
     messaging_service: Any
 
 
@@ -34,6 +36,7 @@ def attach_chat_runtime(
     chat_member_repo = storage_container.chat_member_repo()
     messages_repo = storage_container.messages_repo()
     relationship_repo = storage_container.relationship_repo()
+    chat_join_request_repo = storage_container.chat_join_request_repo()
     chat_event_bus = ChatEventBus()
     typing_tracker = TypingTracker(chat_event_bus)
     relationship_service = RelationshipService(relationship_repo)
@@ -54,6 +57,12 @@ def attach_chat_runtime(
         delivery_resolver=delivery_resolver,
         avatar_url_builder=avatar_url,
     )
+    chat_join_request_service = ChatJoinRequestService(
+        chat_repo=chat_repo,
+        chat_member_repo=chat_member_repo,
+        chat_join_request_repo=chat_join_request_repo,
+        messaging_service=messaging_service,
+    )
 
     # @@@chat-bootstrap-borrowable-state - chat bootstrap now keeps its owned
     # runtime objects inside the returned chat_runtime_state so the app
@@ -64,6 +73,7 @@ def attach_chat_runtime(
         contact_repo=contact_repo,
         typing_tracker=typing_tracker,
         relationship_service=relationship_service,
+        chat_join_request_service=chat_join_request_service,
         messaging_service=messaging_service,
     )
     app.state.chat_runtime_state = state

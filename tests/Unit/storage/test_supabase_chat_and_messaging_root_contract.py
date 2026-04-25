@@ -7,6 +7,7 @@ from storage.errors import StorageConflictError
 from storage.providers.supabase.chat_repo import SupabaseChatRepo
 from storage.providers.supabase.contact_repo import SupabaseContactRepo
 from storage.providers.supabase.messaging_repo import (
+    SupabaseChatJoinRequestRepo,
     SupabaseChatMemberRepo,
     SupabaseMessagesRepo,
     SupabaseRelationshipRepo,
@@ -283,6 +284,22 @@ def test_supabase_chat_member_repo_add_member_persists_numeric_joined_at() -> No
     assert payload["user_id"] == "user-1"
     assert client.tables["chat.chat_members"].on_conflict == "chat_id,user_id"
     assert isinstance(payload["joined_at"], float)
+
+
+def test_supabase_chat_join_request_repo_uses_chat_schema() -> None:
+    client = _FakeClient()
+    repo = SupabaseChatJoinRequestRepo(client)
+
+    repo.upsert_request("chat-1", "user-2", message="please add me")
+
+    payload = client.tables["chat.join_requests"].upsert_payload
+    assert payload is not None
+    assert payload["chat_id"] == "chat-1"
+    assert payload["requester_user_id"] == "user-2"
+    assert payload["state"] == "pending"
+    assert payload["message"] == "please add me"
+    assert client.tables["chat.join_requests"].on_conflict == "chat_id,requester_user_id"
+    assert "join_requests" not in client.tables
 
 
 def test_supabase_messages_repo_create_allocates_seq_and_uses_message_root_fields() -> None:

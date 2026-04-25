@@ -10,6 +10,7 @@ from pydantic import BaseModel, ConfigDict
 
 from backend.chat.api.http.dependencies import (
     get_chat_event_bus,
+    get_chat_join_request_service,
     get_chat_repo,
     get_contact_repo,
     get_current_user_id,
@@ -43,6 +44,27 @@ class MuteChatBody(BaseModel):
     user_id: str
     muted: bool
     mute_until: float | None = None
+
+
+class ChatJoinRequestBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    message: str | None = None
+
+
+class ChatJoinRequestActionBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    pass
+
+
+def _map_chat_join_error(exc: Exception) -> HTTPException:
+    if isinstance(exc, LookupError):
+        return HTTPException(404, str(exc))
+    if isinstance(exc, PermissionError):
+        return HTTPException(403, str(exc))
+    if isinstance(exc, ValueError):
+        return HTTPException(409, str(exc))
+    raise exc
 
 
 def _verify_user_ownership(messaging_service: Any, sender_id: str, user_id: str) -> None:
@@ -196,6 +218,59 @@ def list_messages(
     if not messaging_service.is_chat_member(chat_id, user_id):
         raise HTTPException(403, "Not a participant of this chat")
     return messaging_service.list_message_responses(chat_id, limit=limit, before=before, viewer_id=user_id)
+
+
+@router.get("/{chat_id}/join-requests")
+def list_chat_join_requests(
+    chat_id: str,
+    user_id: Annotated[str, Depends(get_current_user_id)],
+    chat_join_request_service: Annotated[Any, Depends(get_chat_join_request_service)],
+):
+    try:
+        return chat_join_request_service.list_for_chat(chat_id, user_id)
+    except Exception as exc:
+        raise _map_chat_join_error(exc) from exc
+
+
+@router.post("/{chat_id}/join-requests")
+def request_chat_join(
+    chat_id: str,
+    body: ChatJoinRequestBody,
+    user_id: Annotated[str, Depends(get_current_user_id)],
+    chat_join_request_service: Annotated[Any, Depends(get_chat_join_request_service)],
+):
+    try:
+        return chat_join_request_service.request(chat_id, user_id, body.message)
+    except Exception as exc:
+        raise _map_chat_join_error(exc) from exc
+
+
+@router.post("/{chat_id}/join-requests/{request_id}/approve")
+def approve_chat_join(
+    chat_id: str,
+    request_id: str,
+    body: ChatJoinRequestActionBody,
+    user_id: Annotated[str, Depends(get_current_user_id)],
+    chat_join_request_service: Annotated[Any, Depends(get_chat_join_request_service)],
+):
+    try:
+        return chat_join_request_service.approve(chat_id, request_id, user_id)
+    except Exception as exc:
+        raise _map_chat_join_error(exc) from exc
+
+
+@router.post("/{chat_id}/join-requests/{request_id}/reject")
+def reject_chat_join(
+    chat_id: str,
+    request_id: str,
+    body: ChatJoinRequestActionBody,
+    user_id: Annotated[str, Depends(get_current_user_id)],
+    chat_join_request_service: Annotated[Any, Depends(get_chat_join_request_service)],
+):
+    try:
+        return chat_join_request_service.reject(chat_id, request_id, user_id)
+    except Exception as exc:
+        raise _map_chat_join_error(exc) from exc
 
 
 @router.post("/{chat_id}/messages")
