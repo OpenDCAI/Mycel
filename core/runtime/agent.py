@@ -1166,9 +1166,8 @@ class LeonAgent:
         if resolved_skills:
             self._skills_service = SkillsService(
                 registry=self._tool_registry,
-                skill_paths=[],
+                skills=resolved_skills,
                 enabled_skills={skill["name"]: True for skill in resolved_skills},
-                inline_skills=resolved_skills,
             )
 
         # Task tools (DEFERRED - discoverable via tool_search)

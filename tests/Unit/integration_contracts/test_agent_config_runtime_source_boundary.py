@@ -18,7 +18,7 @@ def test_runtime_skill_registration_reads_resolved_config_only() -> None:
     source = inspect.getsource(LeonAgent._init_services)
 
     assert "self.config.skills" not in source
-    assert "skill_paths=[]" in source
+    assert "skill_paths" not in source
     assert "resolved_skills" in source
 
 
