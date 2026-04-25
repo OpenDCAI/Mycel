@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from storage.providers.supabase import terminal_repo as terminal_repo_module
 from storage.providers.supabase.chat_session_repo import SupabaseChatSessionRepo
 from storage.providers.supabase.terminal_repo import SupabaseTerminalRepo
 from tests.fakes.supabase import FakeSupabaseClient
@@ -12,9 +13,11 @@ def _client(tables: dict[str, list[dict]] | None = None) -> FakeSupabaseClient:
     )
 
 
-def test_supabase_terminal_repo_tracks_active_and_default_terminal() -> None:
+def test_supabase_terminal_repo_tracks_active_and_default_terminal(monkeypatch) -> None:
     tables: dict[str, list[dict]] = {}
     repo = SupabaseTerminalRepo(client=_client(tables))
+    seconds = iter(range(20))
+    monkeypatch.setattr(terminal_repo_module, "_now", lambda: f"2026-04-25T00:00:{next(seconds):02d}+00:00")
 
     first = repo.create("term-1", "thread-1", "runtime-1", initial_cwd="/workspace")
     second = repo.create("term-2", "thread-1", "runtime-1", initial_cwd="/workspace/app")

@@ -475,7 +475,7 @@ def test_enforce_idle_timeouts_destroys_when_provider_cannot_pause(monkeypatch):
     monkeypatch.setattr(
         sandbox_manager_module,
         "terminal_from_row",
-        lambda _row, _db_path: SimpleNamespace(terminal_id="term-1", sandbox_runtime_id="runtime-1"),
+        lambda _row, _db_path, **_kwargs: SimpleNamespace(terminal_id="term-1", sandbox_runtime_id="runtime-1"),
     )
 
     manager.enforce_idle_timeouts()
@@ -552,7 +552,10 @@ def test_enforce_idle_timeouts_keeps_shared_runtime_alive_when_peer_session_is_s
     monkeypatch.setattr(
         sandbox_manager_module,
         "terminal_from_row",
-        lambda row, _db_path: SimpleNamespace(terminal_id=row["terminal_id"], sandbox_runtime_id=row["sandbox_runtime_id"]),
+        lambda row, _db_path, **_kwargs: SimpleNamespace(
+            terminal_id=row["terminal_id"],
+            sandbox_runtime_id=row["sandbox_runtime_id"],
+        ),
     )
 
     assert manager.enforce_idle_timeouts() == 1
@@ -986,7 +989,7 @@ def test_get_sandbox_creates_runtime_handle_with_runtime_prefix(monkeypatch):
         create=lambda **kwargs: created_terminal_rows.append(kwargs) or kwargs,
     )
 
-    def _create_sandbox_runtime(runtime_id: str, provider_name: str):
+    def _create_sandbox_runtime(runtime_id: str, provider_name: str, **_kwargs):
         created_runtime_ids.append(runtime_id)
         created_runtime.sandbox_runtime_id = runtime_id
         created_runtime.provider_name = provider_name
@@ -997,7 +1000,7 @@ def test_get_sandbox_creates_runtime_handle_with_runtime_prefix(monkeypatch):
         get=lambda _thread_id, _terminal_id: None,
         create=lambda **kwargs: created_sessions.append(kwargs) or SimpleNamespace(**kwargs),
     )
-    monkeypatch.setattr(sandbox_manager_module, "terminal_from_row", lambda _row, _db_path: _CreatedTerminal())
+    monkeypatch.setattr(sandbox_manager_module, "terminal_from_row", lambda _row, _db_path, **_kwargs: _CreatedTerminal())
 
     manager.get_sandbox("thread-1")
 
@@ -1143,7 +1146,7 @@ def test_background_command_inherits_default_terminal_environment(monkeypatch):
     created_rows: list[dict[str, str]] = []
     created_background_commands: list[dict[str, Any]] = []
 
-    def from_row(row, _db_path):
+    def from_row(row, _db_path, **_kwargs):
         if row["terminal_id"] == "term-default":
             return default_terminal
         return created_terminal

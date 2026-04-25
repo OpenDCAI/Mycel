@@ -63,8 +63,8 @@ async def test_ingest_provider_webhook_keeps_unmatched_payload_shape(monkeypatch
 
 
 @pytest.mark.asyncio
-async def test_ingest_provider_webhook_uses_control_plane_db_path_for_matched_sandbox_runtime(
-    monkeypatch: pytest.MonkeyPatch, tmp_path
+async def test_ingest_provider_webhook_hydrates_matched_sandbox_runtime_without_local_db_path(
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     class _RuntimeRepo:
         def find_by_instance(self, *, provider_name: str, instance_id: str):
@@ -112,18 +112,22 @@ async def test_ingest_provider_webhook_uses_control_plane_db_path_for_matched_sa
         def __init__(self) -> None:
             self.provider = object()
 
-    expected_db_path = tmp_path / "sandbox.db"
     event_repo = _EventRepo()
     sandbox_runtime = _SandboxRuntime()
 
-    monkeypatch.setattr(webhooks, "resolve_sandbox_db_path", lambda: expected_db_path, raising=False)
+    monkeypatch.setattr(
+        webhooks,
+        "resolve_sandbox_db_path",
+        lambda: (_ for _ in ()).throw(AssertionError("webhook hydration must not resolve sandbox db path")),
+        raising=False,
+    )
     monkeypatch.setattr(webhooks, "make_sandbox_runtime_repo", lambda: _RuntimeRepo())
     monkeypatch.setattr(webhooks, "_get_container", lambda: _Container(event_repo))
     monkeypatch.setattr(webhooks, "init_providers_and_managers", lambda: ({}, {"local": _Manager()}))
 
-    def _fake_sandbox_runtime_from_row(row, db_path):
+    def _fake_sandbox_runtime_from_row(row, db_path=None):
         assert row == {"lease_" + "id": "runtime-1", "sandbox_id": "sandbox-1"}
-        assert db_path == expected_db_path
+        assert db_path is None
         return sandbox_runtime
 
     monkeypatch.setattr(webhooks, "sandbox_runtime_from_row", _fake_sandbox_runtime_from_row)

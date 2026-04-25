@@ -7,8 +7,8 @@ def test_local_sandbox_defers_manager_creation_until_control_plane_use(monkeypat
     captured: list[dict[str, object]] = []
 
     class _SandboxManagerProbe:
-        def __init__(self, *, provider, db_path=None):
-            captured.append({"provider": provider, "db_path": db_path})
+        def __init__(self, *, provider, db_path=None, thread_repo=None):
+            captured.append({"provider": provider, "db_path": db_path, "thread_repo": thread_repo})
 
     monkeypatch.setattr("sandbox.manager.SandboxManager", _SandboxManagerProbe)
 
