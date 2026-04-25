@@ -11,6 +11,7 @@ import time
 import uuid
 from abc import ABC, abstractmethod
 from collections.abc import Callable
+from contextlib import suppress
 from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -293,10 +294,8 @@ class _SubprocessPtySession:
 
     def close(self) -> None:
         if self._master_fd is not None:
-            try:
+            with suppress(OSError):
                 os.close(self._master_fd)
-            except OSError:
-                pass
             self._master_fd = None
 
         if self._proc and self._proc.poll() is None:
