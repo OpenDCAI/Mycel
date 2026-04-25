@@ -131,9 +131,7 @@ def test_import_file_skill_does_not_store_local_skill_path(monkeypatch: pytest.M
     library_dir = tmp_path / "library"
     skill_dir = library_dir / "skills" / "new-skill"
     skill_dir.mkdir(parents=True)
-    (skill_dir / "SKILL.md").write_text(
-        "---\nname: New Skill\ndescription: Imported skill\nversion: 1.0.0\n---\nBody", encoding="utf-8"
-    )
+    (skill_dir / "SKILL.md").write_text("---\nname: New Skill\ndescription: Imported skill\nversion: 1.0.0\n---\nBody", encoding="utf-8")
     repo = _MemorySkillRepo()
     monkeypatch.setattr(import_file_skills_to_library, "build_storage_container", lambda: SimpleNamespace(skill_repo=lambda: repo))
 
@@ -176,6 +174,27 @@ def test_import_file_skill_has_no_default_package_version() -> None:
 
     assert "INITIAL_SKILL_PACKAGE_VERSION" not in source
     assert 'return "0.1.0"' not in source
+
+
+@pytest.mark.parametrize(
+    "version_line",
+    [
+        "version: ''",
+        "version: 1",
+    ],
+)
+def test_import_file_skill_rejects_invalid_version_frontmatter(monkeypatch: pytest.MonkeyPatch, tmp_path, version_line: str):
+    library_dir = tmp_path / "library"
+    skill_dir = library_dir / "skills" / "new-skill"
+    skill_dir.mkdir(parents=True)
+    (skill_dir / "SKILL.md").write_text(f"---\nname: New Skill\ndescription: New\n{version_line}\n---\nBody", encoding="utf-8")
+    repo = _MemorySkillRepo()
+    monkeypatch.setattr(import_file_skills_to_library, "build_storage_container", lambda: SimpleNamespace(skill_repo=lambda: repo))
+
+    with pytest.raises(ValueError, match="SKILL.md frontmatter version must be a string"):
+        import_file_skills_to_library.import_skills("owner-1", library_dir)
+
+    assert repo.saved == []
 
 
 def test_import_file_skill_rejects_adjacent_file_path_collision(monkeypatch: pytest.MonkeyPatch, tmp_path):
