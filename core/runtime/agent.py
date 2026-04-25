@@ -337,13 +337,6 @@ class LeonAgent:
             self._steering_middleware._agent_runtime = self.runtime
             self._memory_middleware.set_model(self.model, self._current_model_config)
 
-        if self.verbose:
-            print("[LeonAgent] Initialized successfully")
-            print(f"[LeonAgent] Workspace: {self.workspace_root}")
-            print(f"[LeonAgent] Audit log: {self.enable_audit_log}")
-            if self.checkpointer is None:
-                print("[LeonAgent] Note: Async components need initialization via ainit()")
-
         # Wire CleanupRegistry for priority-ordered resource teardown
         self._cleanup_registry = CleanupRegistry()
         self._cleanup_registry.register(self._cleanup_model_clients, priority=1)
