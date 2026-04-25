@@ -26,6 +26,7 @@ import yaml
 from config.agent_config_resolver import resolve_agent_config
 from config.agent_config_types import AgentConfig, AgentRule, AgentSkill, AgentSubAgent, McpServerConfig, ResolvedAgentConfig
 from config.schema import LeonSettings
+from config.skill_files import normalize_skill_file_entries
 from config.types import RuntimeAgentDefinition
 from config.user_paths import remap_default_user_home_string, user_home_path, user_home_read_candidates
 
@@ -302,14 +303,15 @@ class AgentLoader:
                 raise ValueError(f"Local Skill directory must contain SKILL.md: {skill_dir}")
             content = skill_md.read_text(encoding="utf-8")
             metadata = AgentLoader._skill_frontmatter(content)
-            files: dict[str, str] = {}
+            file_entries: list[tuple[Path, str]] = []
             for file_path in sorted(skill_dir.rglob("*")):
                 if not file_path.is_file() or file_path.name == "SKILL.md":
                     continue
                 try:
-                    files[file_path.relative_to(skill_dir).as_posix()] = file_path.read_text(encoding="utf-8")
+                    file_entries.append((file_path.relative_to(skill_dir), file_path.read_text(encoding="utf-8")))
                 except UnicodeDecodeError as exc:
                     raise RuntimeError(f"Local Skill adjacent file could not be read: {file_path}") from exc
+            files = normalize_skill_file_entries(file_entries, context="Local Skill files")
             skills.append(
                 AgentSkill(
                     name=str(metadata["name"]),
