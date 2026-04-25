@@ -59,8 +59,7 @@ def _resource_row_identity(resource_row: dict[str, Any]) -> str:
 
 
 def _resource_running_identity(resource_row: dict[str, Any]) -> str:
-    sandbox_id = str(resource_row.get("sandbox_id") or "").strip()
-    return sandbox_id
+    return str(resource_row.get("sandbox_id") or "").strip()
 
 
 def _resource_display_status(

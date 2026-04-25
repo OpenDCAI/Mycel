@@ -667,7 +667,6 @@ class LeonAgent:
         if provider == "anthropic":
             return base_url
 
-        # Default: add /v1
         return f"{base_url}/v1"
 
     def _create_model(self):

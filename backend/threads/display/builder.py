@@ -338,7 +338,6 @@ class DisplayBuilder:
     ) -> tuple[dict | None, str | None]:
         display = msg.get("display") or {}
 
-        # Hidden: skip
         if display.get("showing") is False:
             return current_turn, current_run_id
 

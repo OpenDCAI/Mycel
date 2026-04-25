@@ -892,8 +892,7 @@ async def get_default_thread_config(
     user_id: Annotated[str, Depends(get_current_user_id)],
     app: Annotated[Any, Depends(get_app)] = None,
 ) -> dict[str, Any]:
-    config = await asyncio.to_thread(_resolve_default_config_for_owned_agent, app, user_id, agent_user_id)
-    return config
+    return await asyncio.to_thread(_resolve_default_config_for_owned_agent, app, user_id, agent_user_id)
 
 
 @router.get("")
