@@ -14,5 +14,7 @@ def normalize_skill_file_entries(entries: Iterable[tuple[Any, Any]], *, context:
         normalized_path = str(path).replace("\\", "/")
         if normalized_path in result:
             raise ValueError(f"{context} contain duplicate path after normalization: {normalized_path}")
-        result[normalized_path] = str(content)
+        if not isinstance(content, str):
+            raise ValueError(f"{context} content must be a string: {normalized_path}")
+        result[normalized_path] = content
     return result
