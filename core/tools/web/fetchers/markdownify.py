@@ -58,10 +58,7 @@ class MarkdownifyFetcher(BaseFetcher):
             response = await self._do_fetch(url)
             content_type = response.headers.get("Content-Type", "")
 
-            if "text/html" in content_type:
-                content = self._process_html(response.text, result)
-            else:
-                content = response.text
+            content = self._process_html(response.text, result) if "text/html" in content_type else response.text
 
             if len(content) > self.limits.max_chars:
                 content = content[: self.limits.max_chars]
