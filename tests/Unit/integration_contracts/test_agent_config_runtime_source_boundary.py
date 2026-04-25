@@ -1,6 +1,7 @@
 import inspect
 
 from config.loader import AgentLoader
+from config.schema import SkillsConfig
 from core.runtime.agent import LeonAgent
 
 
@@ -18,3 +19,11 @@ def test_repo_backed_skill_registration_does_not_read_configured_skill_paths() -
 
     assert blocked_assignment not in source
     assert "has_repo_backed_agent_config" in source
+
+
+def test_config_loading_does_not_create_skill_directories() -> None:
+    loader_source = inspect.getsource(AgentLoader.load)
+    skills_config_source = inspect.getsource(SkillsConfig)
+
+    assert "mkdir" not in loader_source
+    assert "path.exists()" not in skills_config_source
