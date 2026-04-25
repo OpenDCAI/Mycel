@@ -1697,7 +1697,14 @@ def test_apply_snapshot_saves_one_agent_config_aggregate():
                 "model": "leon:large",
                 "tools": ["Read"],
                 "system_prompt": "main prompt",
-                "skills": [{"name": "Search", "content": "---\nname: Search\n---\nbody", "description": "skill desc"}],
+                "skills": [
+                    {
+                        "name": "Search",
+                        "content": "---\nname: Search\n---\nbody",
+                        "description": "skill desc",
+                        "source": {"source_version": "snapshot-stale", "extra": "drop"},
+                    }
+                ],
                 "rules": [{"name": "Rule_Unsafe", "content": "rule body"}],
                 "sub_agents": [{"name": "Scout", "description": "scout desc", "tools": ["Read"], "system_prompt": "scout prompt"}],
             },
@@ -1719,6 +1726,13 @@ def test_apply_snapshot_saves_one_agent_config_aggregate():
     package = skill_repo.get_package("user-1", saved_configs[0].skills[0].package_id or "")
     assert package is not None
     assert package.skill_md == "---\nname: Search\n---\nbody"
+    assert package.source == {
+        "marketplace_item_id": "item-1",
+        "source_version": "1.0.0",
+        "source_at": saved_configs[0].skills[0].source["source_at"],
+    }
+    assert saved_configs[0].skills[0].source == package.source
+    assert skill_repo.get_by_id("user-1", "search").source == package.source
     assert saved_configs[0].rules[0].content == "rule body"
     assert saved_configs[0].sub_agents[0].name == "Scout"
     assert saved_configs[0].meta["source"]["source_version"] == "1.0.0"
