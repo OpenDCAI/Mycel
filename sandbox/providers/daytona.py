@@ -611,13 +611,12 @@ class DaytonaSessionRuntime(_RemoteRuntimeBase):
             if marker_done_re.search(decoded):
                 cleaned, exit_code = _extract_marker_exit(decoded, marker, command)
                 return cleaned, "", exit_code
-            if on_stdout_chunk is not None:
-                if len(decoded) > emitted_raw_len:
-                    delta_raw = decoded[emitted_raw_len:]
-                    emitted_raw_len = len(decoded)
-                    delta = _sanitize_shell_output(delta_raw)
-                    if delta:
-                        on_stdout_chunk(delta)
+            if on_stdout_chunk is not None and len(decoded) > emitted_raw_len:
+                delta_raw = decoded[emitted_raw_len:]
+                emitted_raw_len = len(decoded)
+                delta = _sanitize_shell_output(delta_raw)
+                if delta:
+                    on_stdout_chunk(delta)
 
     def _ensure_session_sync(self, timeout: float | None):
         instance = self.sandbox_runtime.ensure_active_instance(self.provider)

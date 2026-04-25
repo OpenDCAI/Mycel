@@ -1141,14 +1141,13 @@ class LeonAgent:
         if self.config.tools.command.enabled:
             command_hooks = []
             event_bus_factory = getattr(self, "_event_bus_factory", None)
-            if self._sandbox.name == "local":
-                if self.block_dangerous_commands:
-                    command_hooks.append(
-                        DangerousCommandsHook(
-                            workspace_root=self.workspace_root,
-                            block_network=self.block_network_commands,
-                        )
+            if self._sandbox.name == "local" and self.block_dangerous_commands:
+                command_hooks.append(
+                    DangerousCommandsHook(
+                        workspace_root=self.workspace_root,
+                        block_network=self.block_network_commands,
                     )
+                )
             self._command_service = CommandService(
                 registry=self._tool_registry,
                 workspace_root=self.workspace_root,

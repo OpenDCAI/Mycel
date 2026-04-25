@@ -163,7 +163,7 @@ def list_library(
             )
             for skill in sorted(skill_repo.list_for_owner(owner_user_id), key=lambda item: item.name.lower())
         ]
-    elif resource_type == "agent":
+    if resource_type == "agent":
         agents_dir = LIBRARY_DIR / "agents"
         if agents_dir.exists():
             for f in sorted(agents_dir.glob("*.md")):
