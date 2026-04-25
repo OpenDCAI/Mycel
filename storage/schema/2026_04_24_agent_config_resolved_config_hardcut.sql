@@ -215,6 +215,38 @@ begin
     if exists (
         select 1
         from jsonb_array_elements(coalesce(payload->'skills', '[]'::jsonb)) as skill_item(value)
+        where skill_item.value ? 'enabled'
+          and jsonb_typeof(skill_item.value->'enabled') <> 'boolean'
+    ) then
+        raise exception 'agent_config.skills child.enabled must be a JSON boolean';
+    end if;
+    if exists (
+        select 1
+        from jsonb_array_elements(coalesce(payload->'rules', '[]'::jsonb)) as rule_item(value)
+        where rule_item.value ? 'enabled'
+          and jsonb_typeof(rule_item.value->'enabled') <> 'boolean'
+    ) then
+        raise exception 'agent_config.rules child.enabled must be a JSON boolean';
+    end if;
+    if exists (
+        select 1
+        from jsonb_array_elements(coalesce(payload->'sub_agents', '[]'::jsonb)) as sub_agent_item(value)
+        where sub_agent_item.value ? 'enabled'
+          and jsonb_typeof(sub_agent_item.value->'enabled') <> 'boolean'
+    ) then
+        raise exception 'agent_config.sub_agents child.enabled must be a JSON boolean';
+    end if;
+    if exists (
+        select 1
+        from jsonb_array_elements(coalesce(payload->'mcp_servers', '[]'::jsonb)) as mcp_item(value)
+        where mcp_item.value ? 'enabled'
+          and jsonb_typeof(mcp_item.value->'enabled') <> 'boolean'
+    ) then
+        raise exception 'agent_config.mcp_servers child.enabled must be a JSON boolean';
+    end if;
+    if exists (
+        select 1
+        from jsonb_array_elements(coalesce(payload->'skills', '[]'::jsonb)) as skill_item(value)
         where btrim(coalesce(skill_item.value->>'name', '')) = ''
     ) then
         raise exception 'agent_config.skills child.name is required';
