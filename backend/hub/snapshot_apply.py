@@ -9,6 +9,7 @@ from typing import Any
 from config.agent_config_resolver import validate_resolved_skill_content
 from config.agent_config_types import AgentConfig, AgentSkill, AgentSnapshot, ResolvedSkill, Skill, SkillPackage
 from config.skill_package import build_skill_package_hash, build_skill_package_manifest
+from storage.utils import generate_skill_id
 
 
 def _required_text(value: Any, *, label: str) -> str:
@@ -17,11 +18,11 @@ def _required_text(value: Any, *, label: str) -> str:
     return value.strip()
 
 
-def _required_skill_id(skill_id: str) -> str:
-    skill_id = _required_text(skill_id, label="Snapshot Skill id")
-    if "/" in skill_id or "\\" in skill_id or skill_id in {".", ".."}:
-        raise ValueError(f"Invalid Snapshot Skill id: {skill_id}")
-    return skill_id
+def _snapshot_source_skill(skills: list[Skill], marketplace_item_id: str, snapshot_skill_id: str) -> Skill | None:
+    for skill in skills:
+        if skill.source.get("marketplace_item_id") == marketplace_item_id and skill.source.get("snapshot_skill_id") == snapshot_skill_id:
+            return skill
+    return None
 
 
 def _materialize_snapshot_skills(
@@ -53,16 +54,23 @@ def _materialize_snapshot_skills(
     timestamp = datetime.now(UTC)
     library_skills = skill_repo.list_for_owner(owner_user_id)
     for snapshot_skill in skills:
-        skill_id = _required_skill_id(snapshot_skill.id)
-        existing = skill_repo.get_by_id(owner_user_id, skill_id)
+        snapshot_skill_id = _required_text(snapshot_skill.id, label="Snapshot Skill id")
+        existing = _snapshot_source_skill(library_skills, marketplace_item_id, snapshot_skill_id)
         if existing is not None and existing.name != snapshot_skill.name:
             raise ValueError("Snapshot Skill frontmatter name must match existing Skill name")
-        for library_skill in library_skills:
-            if library_skill.name == snapshot_skill.name and library_skill.id != skill_id:
-                raise ValueError("Snapshot Skill name already exists under a different Library id")
+        if existing is None:
+            skill_id = generate_skill_id()
+            if skill_repo.get_by_id(owner_user_id, skill_id) is not None:
+                raise RuntimeError("Generated Skill id already exists")
+            for library_skill in library_skills:
+                if library_skill.name == snapshot_skill.name:
+                    raise ValueError("Snapshot Skill name already exists under a different Library id")
+        else:
+            skill_id = existing.id
 
         source = {
             "marketplace_item_id": marketplace_item_id,
+            "snapshot_skill_id": snapshot_skill_id,
             "source_version": source_version,
             "source_at": source_at,
         }
