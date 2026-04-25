@@ -68,7 +68,7 @@ def _require_skill_repo(skill_repo: SkillRepo | None) -> SkillRepo:
     return skill_repo
 
 
-def _skill_frontmatter_name(content: str) -> str:
+def _skill_frontmatter_metadata(content: str) -> dict[str, Any]:
     # @@@skill-name-single-truth - runtime indexes Skills by SKILL.md frontmatter name, so Library name must not drift.
     match = _SKILL_FRONTMATTER_RE.search(content)
     if match is None:
@@ -76,10 +76,23 @@ def _skill_frontmatter_name(content: str) -> str:
     metadata = yaml.safe_load(match.group(1)) or {}
     if not isinstance(metadata, dict):
         raise ValueError("Skill content frontmatter must be a mapping")
+    return metadata
+
+
+def _skill_frontmatter_name(content: str) -> str:
+    metadata = _skill_frontmatter_metadata(content)
     name = metadata.get("name")
     if not isinstance(name, str) or not name.strip():
         raise ValueError("Skill content frontmatter name is required")
     return name.strip()
+
+
+def _skill_frontmatter_version(content: str) -> str:
+    metadata = _skill_frontmatter_metadata(content)
+    version = metadata.get("version")
+    if not isinstance(version, str) or not version.strip():
+        raise ValueError("Skill content frontmatter version is required")
+    return version.strip()
 
 
 def _now_dt() -> datetime:
@@ -107,7 +120,7 @@ def _write_skill_package(
     files: dict[str, str],
     skill_repo: SkillRepo,
     *,
-    version: str = "0.1.0",
+    version: str,
     source: dict[str, Any] | None = None,
 ) -> SkillPackage:
     package_hash = build_skill_package_hash(content, files)
@@ -220,6 +233,8 @@ def create_resource(
     owner_user_id: str | None = None,
     recipe_repo: RecipeRepo | None = None,
     skill_repo: SkillRepo | None = None,
+    *,
+    content: str | None = None,
 ) -> dict[str, Any]:
     now = int(time.time() * 1000)
     if resource_type == "sandbox-template":
@@ -254,12 +269,17 @@ def create_resource(
     if resource_type == "skill":
         owner_user_id = _require_skill_owner(owner_user_id)
         skill_repo = _require_skill_repo(skill_repo)
+        if not content or not content.strip():
+            raise ValueError("Skill creation requires SKILL.md content")
+        frontmatter_name = _skill_frontmatter_name(content)
+        if frontmatter_name != name:
+            raise ValueError("Skill content frontmatter name must match Skill name")
+        version = _skill_frontmatter_version(content)
         rid = name.lower().replace(" ", "-")
         existing = skill_repo.get_by_id(owner_user_id, rid)
         if existing is not None and existing.name != name:
             raise ValueError("Skill id already exists with a different Skill name")
         timestamp = _now_dt()
-        content = f"---\nname: {name}\ndescription: {desc}\n---\n\n{desc}\n"
         skill = skill_repo.upsert(
             Skill(
                 id=rid,
@@ -270,7 +290,7 @@ def create_resource(
                 updated_at=timestamp,
             )
         )
-        _write_skill_package(owner_user_id, skill, content, {}, skill_repo)
+        _write_skill_package(owner_user_id, skill, content, {}, skill_repo, version=version)
         return _library_resource_item(
             "skill",
             skill.id,
@@ -485,9 +505,10 @@ def update_resource_content(
         frontmatter_name = _skill_frontmatter_name(content)
         if frontmatter_name != current.name:
             raise ValueError("Skill content frontmatter name must match Skill name")
+        version = _skill_frontmatter_version(content)
         current_package = _selected_skill_package(owner_user_id, current, skill_repo)
         files = current_package.files if current_package is not None else {}
         updated = skill_repo.upsert(current.model_copy(update={"updated_at": _now_dt()}))
-        _write_skill_package(owner_user_id, updated, content, files, skill_repo)
+        _write_skill_package(owner_user_id, updated, content, files, skill_repo, version=version)
         return True
     return False
