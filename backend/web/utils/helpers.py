@@ -45,10 +45,7 @@ def resolve_local_workspace_path(
     if not raw_path:
         return base
     requested = Path(raw_path).expanduser()
-    if requested.is_absolute():
-        target = requested.resolve()
-    else:
-        target = (base / requested).resolve()
+    target = requested.resolve() if requested.is_absolute() else (base / requested).resolve()
     try:
         target.relative_to(base)
     except ValueError as exc:

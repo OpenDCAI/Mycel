@@ -92,10 +92,7 @@ class SupabaseRecipeRepo:
 
     def _hydrate(self, row: dict[str, Any]) -> dict[str, Any]:
         raw = row.get("data_json") or row.get("data") or "{}"
-        if isinstance(raw, dict):
-            payload = raw
-        else:
-            payload = json.loads(str(raw))
+        payload = raw if isinstance(raw, dict) else json.loads(str(raw))
         if not isinstance(payload, dict):
             raise ValueError("recipe payload must be an object")
         return {

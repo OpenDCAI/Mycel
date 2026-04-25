@@ -12,10 +12,7 @@ AVATARS_DIR = avatars_dir()
 def process_and_save_avatar(source: Path | bytes, user_id: str) -> str:
     from PIL import Image, ImageOps
 
-    if isinstance(source, (bytes, bytearray)):
-        img = Image.open(io.BytesIO(source))
-    else:
-        img = Image.open(source)
+    img = Image.open(io.BytesIO(source)) if isinstance(source, (bytes, bytearray)) else Image.open(source)
     img = ImageOps.exif_transpose(img)
     if img.mode not in ("RGB", "RGBA"):
         img = img.convert("RGB")
