@@ -66,7 +66,7 @@ def test_load_missing_skill_fails_loudly() -> None:
 def test_skill_without_frontmatter_name_fails_loudly() -> None:
     registry = ToolRegistry()
 
-    with pytest.raises(ValueError, match="Skill content must include frontmatter name"):
+    with pytest.raises(ValueError, match="Skill content must be a SKILL.md document with frontmatter"):
         SkillsService(
             registry=registry,
             skills=[

@@ -1,13 +1,9 @@
 from __future__ import annotations
 
-import re
 from typing import Any
 
-import yaml
-
 from config.agent_config_types import AgentConfig, AgentSkill, ResolvedAgentConfig, ResolvedSkill
-
-_FRONTMATTER_RE = re.compile(r"^---\s*\n(.*?)\n---\s*\n", re.DOTALL)
+from config.skill_document import parse_skill_document
 
 
 def resolve_agent_config(config: AgentConfig, *, skill_repo: Any = None) -> ResolvedAgentConfig:
@@ -56,9 +52,9 @@ def _resolve_skill(owner_user_id: str, skill: AgentSkill, skill_repo: Any) -> Re
         raise RuntimeError(f"Skill package not found while resolving AgentConfig: {skill.package_id}")
     if package.skill_id != skill.skill_id:
         raise RuntimeError(f"Skill package {skill.package_id} does not belong to Skill {skill.skill_id}")
-    frontmatter = _skill_frontmatter(package.skill_md, skill_label=skill.skill_id)
-    name = frontmatter["name"].strip()
-    description = frontmatter.get("description", "")
+    document = parse_skill_document(package.skill_md, label=f"Skill {skill.skill_id!r} on Agent config")
+    name = document.name
+    description = document.frontmatter.get("description", "")
     if not isinstance(description, str):
         description = ""
     resolved = ResolvedSkill(
@@ -73,24 +69,8 @@ def _resolve_skill(owner_user_id: str, skill: AgentSkill, skill_repo: Any) -> Re
     return validate_resolved_skill_content(resolved)
 
 
-def _skill_frontmatter(content: str, *, skill_label: str) -> dict[str, Any]:
-    if not content.strip():
-        raise ValueError(f"Skill {skill_label!r} on Agent config has blank content")
-    frontmatter_result = _FRONTMATTER_RE.search(content)
-    if frontmatter_result is None:
-        raise ValueError(f"Skill {skill_label!r} on Agent config is missing SKILL.md frontmatter")
-    frontmatter = yaml.safe_load(frontmatter_result.group(1)) or {}
-    if not isinstance(frontmatter, dict):
-        raise ValueError(f"Skill {skill_label!r} on Agent config frontmatter must be a mapping")
-    frontmatter_name = frontmatter.get("name")
-    if not isinstance(frontmatter_name, str) or not frontmatter_name.strip():
-        raise ValueError(f"Skill {skill_label!r} on Agent config frontmatter is missing name")
-    return frontmatter
-
-
 def validate_resolved_skill_content(skill: ResolvedSkill) -> ResolvedSkill:
-    frontmatter = _skill_frontmatter(skill.content, skill_label=skill.name)
-    frontmatter_name = frontmatter["name"]
-    if frontmatter_name.strip() != skill.name:
+    document = parse_skill_document(skill.content, label=f"Skill {skill.name!r} on Agent config")
+    if document.name != skill.name:
         raise ValueError(f"Skill {skill.name!r} on Agent config frontmatter name must match ResolvedSkill.name")
     return skill

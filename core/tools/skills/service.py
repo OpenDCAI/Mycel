@@ -1,11 +1,9 @@
 from __future__ import annotations
 
-import re
 from collections.abc import Sequence
 
-import yaml
-
 from config.agent_config_types import ResolvedSkill
+from config.skill_document import parse_skill_document
 from core.runtime.registry import ToolEntry, ToolMode, ToolRegistry, make_tool_schema
 
 
@@ -24,27 +22,11 @@ class SkillsService:
         for skill in skills:
             if not isinstance(skill, ResolvedSkill):
                 raise TypeError("SkillsService requires ResolvedSkill items")
-            metadata = self._parse_frontmatter(skill.content)
-            if "name" not in metadata:
-                raise ValueError("Skill content must include frontmatter name")
-            if metadata["name"] != skill.name:
+            document = parse_skill_document(skill.content, label="Skill content")
+            if document.name != skill.name:
                 raise ValueError("Skill frontmatter name must match ResolvedSkill.name")
             self._skills[skill.name] = skill.content
             self._skill_files[skill.name] = skill.files
-
-    @staticmethod
-    def _parse_frontmatter(content: str) -> dict[str, str]:
-        match = re.match(r"^---\s*\n(.*?)\n---\s*\n", content, re.DOTALL)
-        if not match:
-            return {}
-        metadata = yaml.safe_load(match.group(1)) or {}
-        if not isinstance(metadata, dict):
-            raise ValueError("Skill frontmatter must be a mapping")
-        result: dict[str, str] = {}
-        for key, value in metadata.items():
-            if isinstance(key, str) and isinstance(value, str):
-                result[key.strip()] = value.strip()
-        return result
 
     def _register(self, registry: ToolRegistry) -> None:
         if not self._skills:
@@ -88,7 +70,7 @@ class SkillsService:
             available = ", ".join(sorted(self._skills))
             raise ValueError(f"Skill '{skill_name}' not found. Available skills: {available}")
 
-        content = re.sub(r"^---\s*\n.*?\n---\s*\n", "", self._skills[skill_name], flags=re.DOTALL)
+        content = parse_skill_document(self._skills[skill_name], label="Skill content").body
         return f"Loaded skill: {skill_name}\n\n{self._append_adjacent_files(content, self._skill_files[skill_name])}"
 
     @staticmethod
