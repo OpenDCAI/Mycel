@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 from typing import Any
 
 from messaging.contracts import RelationshipEvent, RelationshipRow, RelationshipState
@@ -14,8 +15,17 @@ logger = logging.getLogger(__name__)
 class RelationshipService:
     """Manages Hire/Visit relationships between users."""
 
-    def __init__(self, relationship_repo: Any) -> None:
+    def __init__(
+        self,
+        relationship_repo: Any,
+        *,
+        on_relationship_requested: Callable[[RelationshipRow], None] | None = None,
+    ) -> None:
         self._repo = relationship_repo
+        self._on_relationship_requested = on_relationship_requested
+
+    def set_relationship_request_notification_fn(self, fn: Callable[[RelationshipRow], None]) -> None:
+        self._on_relationship_requested = fn
 
     def apply_event(
         self,
@@ -56,7 +66,10 @@ class RelationshipService:
         return RelationshipRow.model_validate(row)
 
     def request(self, requester_id: str, target_id: str) -> RelationshipRow:
-        return self.apply_event(requester_id, target_id, "request")
+        row = self.apply_event(requester_id, target_id, "request")
+        if self._on_relationship_requested is not None:
+            self._on_relationship_requested(row)
+        return row
 
     def approve(self, approver_id: str, requester_id: str) -> RelationshipRow:
         return self.apply_event(approver_id, requester_id, "approve")
