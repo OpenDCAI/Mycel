@@ -21,6 +21,7 @@ from .contracts import (
     SandboxMonitorRepo,
     SandboxRepo,
     SandboxRuntimeRepo,
+    SkillRepo,
     SummaryRepo,
     ThreadRepo,
     ToolTaskRepo,
@@ -56,6 +57,7 @@ _REPO_REGISTRY: dict[str, tuple[str, str]] = {
     "invite_code_repo": ("storage.providers.supabase.invite_code_repo", "SupabaseInviteCodeRepo"),
     "user_settings_repo": ("storage.providers.supabase.user_settings_repo", "SupabaseUserSettingsRepo"),
     "agent_config_repo": ("storage.providers.supabase.agent_config_repo", "SupabaseAgentConfigRepo"),
+    "skill_repo": ("storage.providers.supabase.skill_repo", "SupabaseSkillRepo"),
     "contact_repo": ("storage.providers.supabase.contact_repo", "SupabaseContactRepo"),
 }
 
@@ -148,6 +150,9 @@ class StorageContainer:
 
     def agent_config_repo(self) -> AgentConfigRepo:
         return self._build("agent_config_repo")
+
+    def skill_repo(self) -> SkillRepo:
+        return self._build("skill_repo")
 
     def contact_repo(self) -> ContactRepo:
         return self._build("contact_repo")

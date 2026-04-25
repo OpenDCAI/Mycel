@@ -14,6 +14,7 @@ from .run_event_repo import SupabaseRunEventRepo
 from .sandbox_monitor_repo import SupabaseSandboxMonitorRepo
 from .sandbox_runtime_repo import SupabaseSandboxRuntimeRepo
 from .schedule_repo import SupabaseScheduleRepo
+from .skill_repo import SupabaseSkillRepo
 from .summary_repo import SupabaseSummaryRepo
 from .thread_repo import SupabaseThreadRepo
 from .tool_task_repo import SupabaseToolTaskRepo
@@ -37,6 +38,7 @@ __all__ = [
     "SupabaseRunEventRepo",
     "SupabaseScheduleRepo",
     "SupabaseSandboxMonitorRepo",
+    "SupabaseSkillRepo",
     "SupabaseSummaryRepo",
     "SupabaseThreadRepo",
     "SupabaseToolTaskRepo",

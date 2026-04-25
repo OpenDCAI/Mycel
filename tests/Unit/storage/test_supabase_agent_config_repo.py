@@ -1,215 +1,377 @@
+import pytest
+
+from config.agent_config_types import AgentConfig, AgentRule, AgentSkill, AgentSubAgent, McpServerConfig
 from storage.providers.supabase.agent_config_repo import SupabaseAgentConfigRepo
-from tests.fakes.supabase import FakeSupabaseClient
 
 
-class _FakeTable:
-    def __init__(self) -> None:
+class _FakeResponse:
+    def __init__(self, data):
+        self.data = data
+
+
+class _FakeQuery:
+    def __init__(self, table_name: str, tables: dict[str, list[dict]]) -> None:
+        self.table_name = table_name
+        self.tables = tables
         self.eq_calls: list[tuple[str, object]] = []
-        self.upsert_payload = None
-        self.upsert_conflict = None
-        self.rows = [
-            {
-                "id": "cfg-1",
-                "agent_user_id": "user-agent-1",
-                "name": "Toad",
-                "description": "test config",
-            }
-        ]
+        self._delete = False
 
-    def select(self, _cols):
+    def select(self, _columns: str):
         return self
 
-    def eq(self, key, value):
-        self.eq_calls.append((key, value))
-        return self
-
-    def upsert(self, payload, on_conflict=None):
-        self.upsert_payload = payload
-        self.upsert_conflict = on_conflict
+    def eq(self, column: str, value: object):
+        self.eq_calls.append((column, value))
         return self
 
     def delete(self):
+        self._delete = True
         return self
 
     def execute(self):
-        return type("Resp", (), {"data": self.rows})()
+        rows = self.tables.setdefault(self.table_name, [])
+        matching = [row for row in rows if all(row.get(column) == value for column, value in self.eq_calls)]
+        if self._delete:
+            self.tables[self.table_name] = [row for row in rows if row not in matching]
+        return _FakeResponse([dict(row) for row in matching])
+
+
+class _FakeRpc:
+    def __init__(self, client: "_FakeClient", name: str, params: dict) -> None:
+        self.client = client
+        self.name = name
+        self.params = params
+
+    def execute(self):
+        self.client.root.rpc_calls.append((self.client.schema_name, self.name, self.params))
+        return _FakeResponse([])
 
 
 class _FakeClient:
-    def __init__(self, tables: dict[str, _FakeTable] | None = None, schema_name: str | None = None) -> None:
-        self.tables: dict[str, _FakeTable] = tables if tables is not None else {}
+    def __init__(
+        self, tables: dict[str, list[dict]] | None = None, schema_name: str | None = None, root: "_FakeClient | None" = None
+    ) -> None:
+        self.root = root or self
+        self.tables = self.root.tables if root else (tables if tables is not None else {})
+        self.rpc_calls = self.root.rpc_calls if root else []
+        self.table_queries = self.root.table_queries if root else {}
         self.schema_name = schema_name
 
-    def table(self, name):
+    def table(self, name: str):
         resolved = f"{self.schema_name}.{name}" if self.schema_name else name
-        table = self.tables.get(resolved)
-        if table is None:
-            table = _FakeTable()
-            self.tables[resolved] = table
-        return table
+        query = _FakeQuery(resolved, self.tables)
+        self.root.table_queries.setdefault(resolved, []).append(query)
+        return query
 
-    def schema(self, name):
-        return _FakeClient(self.tables, schema_name=name)
+    def schema(self, name: str):
+        return _FakeClient(schema_name=name, root=self.root)
 
-
-def test_supabase_agent_config_repo_get_config_filters_on_agent_config_id() -> None:
-    client = _FakeClient()
-    repo = SupabaseAgentConfigRepo(client)
-
-    row = repo.get_config("cfg-1")
-
-    assert row is not None
-    assert ("id", "cfg-1") in client.tables["agent.agent_configs"].eq_calls
-    assert ("member_id", "cfg-1") not in client.tables["agent.agent_configs"].eq_calls
+    def rpc(self, name: str, params: dict):
+        return _FakeRpc(self, name, params)
 
 
-def test_supabase_agent_config_repo_save_config_uses_agent_config_id_payload() -> None:
-    client = _FakeClient()
-    repo = SupabaseAgentConfigRepo(client)
-
-    repo.save_config(
-        "cfg-1",
-        {
-            "id": "cfg-1",
-            "agent_user_id": "user-agent-1",
-            "owner_user_id": "owner-1",
-            "name": "Toad",
-            "tools": ["search"],
-            "runtime": {"tools:search": {"enabled": True}},
-            "mcp": {"demo": {"command": "npx"}},
-            "meta": {"source": {"marketplace_item_id": "item-1"}},
-            "compact": {"trigger_tokens": 1000},
-        },
-    )
-
-    payload = client.tables["agent.agent_configs"].upsert_payload
-    assert payload is not None
-    assert payload["id"] == "cfg-1"
-    assert payload["owner_user_id"] == "owner-1"
-    assert "member_id" not in payload
-    assert payload["tools_json"] == ["search"]
-    assert payload["runtime_json"] == {"tools:search": {"enabled": True}}
-    assert payload["mcp_json"] == {"demo": {"command": "npx"}}
-    assert payload["meta_json"] == {
-        "source": {"marketplace_item_id": "item-1"},
-        "compact": {"trigger_tokens": 1000},
-    }
-    assert "tools" not in payload
-    assert "runtime" not in payload
-    assert "mcp" not in payload
-    assert "meta" not in payload
-    assert "compact" not in payload
-
-
-def test_supabase_agent_config_repo_converts_millisecond_timestamps_for_timestamptz() -> None:
-    client = _FakeClient()
-    repo = SupabaseAgentConfigRepo(client)
-
-    repo.save_config(
-        "cfg-1",
-        {
-            "agent_user_id": "user-agent-1",
-            "owner_user_id": "owner-1",
-            "name": "Toad",
-            "created_at": 123000,
-            "updated_at": 456000,
-        },
-    )
-
-    payload = client.tables["agent.agent_configs"].upsert_payload
-    assert payload is not None
-    assert payload["created_at"] == "1970-01-01T00:02:03+00:00"
-    assert payload["updated_at"] == "1970-01-01T00:07:36+00:00"
-
-
-def test_supabase_agent_config_repo_get_config_normalizes_json_columns() -> None:
-    client = _FakeClient()
-    client.tables["agent.agent_configs"] = _FakeTable()
-    client.tables["agent.agent_configs"].rows = [
-        {
-            "id": "cfg-1",
-            "agent_user_id": "user-agent-1",
-            "name": "Toad",
-            "tools_json": ["search"],
-            "runtime_json": {"tools:search": {"enabled": True}},
-            "mcp_json": {"demo": {"command": "npx"}},
-            "meta_json": {
-                "source": {"marketplace_item_id": "item-1"},
-                "compact": {"trigger_tokens": 1000},
-            },
-        }
-    ]
-    repo = SupabaseAgentConfigRepo(client)
-
-    row = repo.get_config("cfg-1")
-
-    assert row is not None
-    assert row["tools"] == ["search"]
-    assert row["runtime"] == {"tools:search": {"enabled": True}}
-    assert row["mcp"] == {"demo": {"command": "npx"}}
-    assert row["meta"] == {"source": {"marketplace_item_id": "item-1"}}
-    assert row["compact"] == {"trigger_tokens": 1000}
-
-
-def test_supabase_agent_config_repo_save_skill_conflicts_on_agent_config_id_and_name() -> None:
-    client = _FakeClient()
-    repo = SupabaseAgentConfigRepo(client)
-
-    repo.save_skill("cfg-1", "Search", "search skill", meta={"enabled": True})
-
-    table = client.tables["agent.agent_skills"]
-    assert table.upsert_payload is not None
-    assert table.upsert_payload["agent_config_id"] == "cfg-1"
-    assert table.upsert_conflict == "agent_config_id,name"
-    assert table.upsert_payload["meta_json"] == {"enabled": True}
-
-
-def test_supabase_agent_config_repo_list_rules_filters_on_agent_config_id() -> None:
-    client = _FakeClient()
-    repo = SupabaseAgentConfigRepo(client)
-
-    repo.list_rules("cfg-1")
-
-    assert ("agent_config_id", "cfg-1") in client.tables["agent.agent_rules"].eq_calls
-    assert ("member_id", "cfg-1") not in client.tables["agent.agent_rules"].eq_calls
-
-
-def test_supabase_agent_config_repo_save_sub_agent_uses_tools_json() -> None:
-    client = _FakeClient()
-    repo = SupabaseAgentConfigRepo(client)
-
-    repo.save_sub_agent("cfg-1", "Scout", tools=["search"])
-
-    table = client.tables["agent.agent_sub_agents"]
-    assert table.upsert_payload is not None
-    assert table.upsert_payload["agent_config_id"] == "cfg-1"
-    assert table.upsert_payload["tools_json"] == ["search"]
-
-
-def test_supabase_agent_config_repo_uses_agent_schema_tables() -> None:
-    tables: dict[str, list[dict]] = {
+def _tables() -> dict[str, list[dict]]:
+    return {
         "agent.agent_configs": [
             {
                 "id": "cfg-1",
-                "agent_user_id": "user-agent-1",
-                "name": "Toad",
-                "description": "target schema config",
+                "owner_user_id": "owner-1",
+                "agent_user_id": "agent-1",
+                "name": "Researcher",
+                "description": "Research agent",
+                "model": "gpt-test",
+                "tools_json": ["read", "shell"],
+                "system_prompt": "Base prompt",
+                "status": "active",
+                "version": "1.0.0",
+                "runtime_json": {"shell": {"enabled": False}},
+                "compact_json": {"trigger_tokens": 1000},
+                "mcp_json": [
+                    {
+                        "id": "mcp-1",
+                        "name": "filesystem",
+                        "transport": "stdio",
+                        "command": "fs",
+                        "args": ["--root", "."],
+                        "env": {"A": "B"},
+                        "url": None,
+                        "instructions": "Use narrowly.",
+                        "allowed_tools": ["read"],
+                        "enabled": True,
+                    }
+                ],
+                "meta_json": {"source": "unit"},
             }
         ],
-        "agent.agent_rules": [{"id": "rule-1", "agent_config_id": "cfg-1", "filename": "RULE.md", "content": "rule"}],
+        "agent.agent_skills": [
+            {
+                "id": "agent-skill-1",
+                "agent_config_id": "cfg-1",
+                "skill_id": "skill-1",
+                "name": "github",
+                "description": "GitHub guidance",
+                "version": "1.0.0",
+                "content": "---\nname: github\n---\n",
+                "files_json": {"references/query.md": "Prefer precise queries."},
+                "enabled": True,
+                "source_json": {"source_version": "1.0.0"},
+            }
+        ],
+        "agent.agent_rules": [{"id": "rule-1", "agent_config_id": "cfg-1", "name": "Cite", "content": "Always cite.", "enabled": True}],
+        "agent.agent_sub_agents": [
+            {
+                "id": "sub-1",
+                "agent_config_id": "cfg-1",
+                "name": "Planner",
+                "description": "Plans work",
+                "model": "gpt-planner",
+                "tools_json": ["read"],
+                "system_prompt": "Plan carefully.",
+                "enabled": True,
+            }
+        ],
     }
-    repo = SupabaseAgentConfigRepo(FakeSupabaseClient(tables))
 
-    config = repo.get_config("cfg-1")
-    repo.save_skill("cfg-1", "Search", "skill")
-    repo.save_sub_agent("cfg-1", "Scout")
 
-    assert config is not None
-    assert config["id"] == "cfg-1"
-    assert repo.list_rules("cfg-1")[0]["id"] == "rule-1"
-    assert "agent.agent_skills" in tables
-    assert "agent.agent_sub_agents" in tables
-    assert "agent_configs" not in tables
-    assert "agent_rules" not in tables
-    assert "agent_skills" not in tables
-    assert "agent_sub_agents" not in tables
+def test_get_agent_config_reads_full_aggregate_from_final_tables() -> None:
+    client = _FakeClient(_tables())
+    repo = SupabaseAgentConfigRepo(client)
+
+    config = repo.get_agent_config("cfg-1")
+
+    assert config == AgentConfig(
+        id="cfg-1",
+        owner_user_id="owner-1",
+        agent_user_id="agent-1",
+        name="Researcher",
+        description="Research agent",
+        model="gpt-test",
+        tools=["read", "shell"],
+        system_prompt="Base prompt",
+        status="active",
+        version="1.0.0",
+        runtime_settings={"shell": {"enabled": False}},
+        compact={"trigger_tokens": 1000},
+        meta={"source": "unit"},
+        skills=[
+            AgentSkill(
+                id="agent-skill-1",
+                skill_id="skill-1",
+                name="github",
+                description="GitHub guidance",
+                version="1.0.0",
+                content="---\nname: github\n---\n",
+                files={"references/query.md": "Prefer precise queries."},
+                source={"source_version": "1.0.0"},
+            )
+        ],
+        rules=[AgentRule(id="rule-1", name="Cite", content="Always cite.")],
+        sub_agents=[
+            AgentSubAgent(
+                id="sub-1",
+                name="Planner",
+                description="Plans work",
+                model="gpt-planner",
+                tools=["read"],
+                system_prompt="Plan carefully.",
+            )
+        ],
+        mcp_servers=[
+            McpServerConfig(
+                id="mcp-1",
+                name="filesystem",
+                transport="stdio",
+                command="fs",
+                args=["--root", "."],
+                env={"A": "B"},
+                instructions="Use narrowly.",
+                allowed_tools=["read"],
+            )
+        ],
+    )
+    assert ("id", "cfg-1") in client.table_queries["agent.agent_configs"][0].eq_calls
+
+
+def test_get_agent_config_returns_none_when_root_missing() -> None:
+    repo = SupabaseAgentConfigRepo(_FakeClient({"agent.agent_configs": []}))
+
+    assert repo.get_agent_config("missing") is None
+
+
+def test_get_agent_config_fails_loudly_when_mcp_json_is_not_an_array() -> None:
+    tables = _tables()
+    tables["agent.agent_configs"][0]["mcp_json"] = {"filesystem": {"command": "fs"}}
+    repo = SupabaseAgentConfigRepo(_FakeClient(tables))
+
+    with pytest.raises(RuntimeError, match="mcp_json must be a JSON array"):
+        repo.get_agent_config("cfg-1")
+
+
+def test_save_agent_config_calls_single_rpc_with_full_payload() -> None:
+    client = _FakeClient()
+    repo = SupabaseAgentConfigRepo(client)
+
+    repo.save_agent_config(
+        AgentConfig(
+            id="cfg-1",
+            owner_user_id="owner-1",
+            agent_user_id="agent-1",
+            name="Researcher",
+            tools=["read"],
+            runtime_settings={"shell": {"enabled": False}},
+            compact={"trigger_tokens": 1000},
+            skills=[
+                AgentSkill(
+                    id="agent-skill-1",
+                    skill_id="skill-1",
+                    name="github",
+                    content="---\nname: github\n---\n",
+                    files={"references/query.md": "Prefer precise queries."},
+                )
+            ],
+            rules=[AgentRule(id="rule-1", name="Cite", content="Always cite.")],
+        )
+    )
+
+    assert len(client.rpc_calls) == 1
+    schema_name, function_name, params = client.rpc_calls[0]
+    assert schema_name == "agent"
+    assert function_name == "save_agent_config"
+    payload = params["payload"]
+    assert payload["id"] == "cfg-1"
+    assert payload["owner_user_id"] == "owner-1"
+    assert payload["agent_user_id"] == "agent-1"
+    assert payload["runtime_settings"] == {"shell": {"enabled": False}}
+    assert payload["compact"] == {"trigger_tokens": 1000}
+    assert payload["skills"][0]["skill_id"] == "skill-1"
+    assert payload["skills"][0]["files"] == {"references/query.md": "Prefer precise queries."}
+    assert "runtime_" + "settings_json" not in payload
+
+
+def test_save_agent_config_rejects_blank_enabled_skill_content() -> None:
+    repo = SupabaseAgentConfigRepo(_FakeClient())
+    config = AgentConfig(
+        id="cfg-1",
+        owner_user_id="owner-1",
+        agent_user_id="agent-1",
+        name="Researcher",
+        skills=[AgentSkill.model_construct(name="broken", content="", enabled=True)],
+    )
+
+    with pytest.raises(ValueError) as excinfo:
+        repo.save_agent_config(config)
+
+    assert "has blank content" in str(excinfo.value)
+
+
+def test_save_agent_config_rejects_skill_frontmatter_name_drift() -> None:
+    repo = SupabaseAgentConfigRepo(_FakeClient())
+    config = AgentConfig(
+        id="cfg-1",
+        owner_user_id="owner-1",
+        agent_user_id="agent-1",
+        name="Researcher",
+        skills=[AgentSkill.model_construct(name="Visible Skill", content="---\nname: Runtime Skill\n---\nBody")],
+    )
+
+    with pytest.raises(ValueError, match="frontmatter name must match AgentSkill.name"):
+        repo.save_agent_config(config)
+
+
+def test_save_agent_config_rejects_duplicate_skill_names_before_rpc() -> None:
+    client = _FakeClient()
+    repo = SupabaseAgentConfigRepo(client)
+    config = AgentConfig(
+        id="cfg-1",
+        owner_user_id="owner-1",
+        agent_user_id="agent-1",
+        name="Researcher",
+        skills=[
+            AgentSkill(name="github", content="---\nname: github\n---\nOne"),
+            AgentSkill(name="github", content="---\nname: github\n---\nTwo"),
+        ],
+    )
+
+    with pytest.raises(ValueError, match="Duplicate Skill name in AgentConfig: github"):
+        repo.save_agent_config(config)
+
+    assert client.rpc_calls == []
+
+
+def test_save_agent_config_rejects_duplicate_mcp_server_names_before_rpc() -> None:
+    client = _FakeClient()
+    repo = SupabaseAgentConfigRepo(client)
+    config = AgentConfig(
+        id="cfg-1",
+        owner_user_id="owner-1",
+        agent_user_id="agent-1",
+        name="Researcher",
+        mcp_servers=[
+            McpServerConfig(name="filesystem", transport="stdio", command="fs-one"),
+            McpServerConfig(name="filesystem", transport="stdio", command="fs-two"),
+        ],
+    )
+
+    with pytest.raises(ValueError, match="Duplicate MCP server name in AgentConfig: filesystem"):
+        repo.save_agent_config(config)
+
+    assert client.rpc_calls == []
+
+
+def test_save_agent_config_rejects_duplicate_disabled_child_names_before_rpc() -> None:
+    client = _FakeClient()
+    repo = SupabaseAgentConfigRepo(client)
+    config = AgentConfig(
+        id="cfg-1",
+        owner_user_id="owner-1",
+        agent_user_id="agent-1",
+        name="Researcher",
+        skills=[
+            AgentSkill(name="github", content="---\nname: github\n---\nOne", enabled=False),
+            AgentSkill(name="github", content="---\nname: github\n---\nTwo", enabled=False),
+        ],
+        mcp_servers=[
+            McpServerConfig(name="filesystem", transport="stdio", command="fs-one", enabled=False),
+            McpServerConfig(name="filesystem", transport="stdio", command="fs-two", enabled=False),
+        ],
+    )
+
+    with pytest.raises(ValueError, match="Duplicate Skill name in AgentConfig: github"):
+        repo.save_agent_config(config)
+
+    assert client.rpc_calls == []
+
+
+def test_save_agent_config_rejects_duplicate_rule_and_sub_agent_names_before_rpc() -> None:
+    client = _FakeClient()
+    repo = SupabaseAgentConfigRepo(client)
+    config = AgentConfig(
+        id="cfg-1",
+        owner_user_id="owner-1",
+        agent_user_id="agent-1",
+        name="Researcher",
+        rules=[
+            AgentRule(name="coding", content="one"),
+            AgentRule(name="coding", content="two"),
+        ],
+        sub_agents=[
+            AgentSubAgent(name="Scout"),
+            AgentSubAgent(name="Scout"),
+        ],
+    )
+
+    with pytest.raises(ValueError, match="Duplicate Rule name in AgentConfig: coding"):
+        repo.save_agent_config(config)
+
+    assert client.rpc_calls == []
+
+
+def test_delete_agent_config_deletes_root_aggregate() -> None:
+    tables = _tables()
+    repo = SupabaseAgentConfigRepo(_FakeClient(tables))
+
+    repo.delete_agent_config("cfg-1")
+
+    assert tables["agent.agent_configs"] == []
+    assert tables["agent.agent_skills"] == []
+    assert tables["agent.agent_rules"] == []
+    assert tables["agent.agent_sub_agents"] == []
