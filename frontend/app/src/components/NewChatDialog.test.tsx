@@ -217,7 +217,7 @@ describe("NewChatDialog", () => {
     });
   });
 
-  it("hides owned agents without a default thread from the group-chat picker", async () => {
+  it("shows owned agent users without requiring a default thread", async () => {
     authFetch.mockResolvedValueOnce(okJson([
       {
         user_id: "agent-ready",
@@ -259,6 +259,6 @@ describe("NewChatDialog", () => {
 
     expect(await screen.findByRole("button", { name: /Ready Agent/ })).toBeTruthy();
     expect(screen.getByRole("button", { name: /Ada/ })).toBeTruthy();
-    expect(screen.queryByRole("button", { name: /Cold Agent/ })).toBeNull();
+    expect(screen.getByRole("button", { name: /Cold Agent/ })).toBeTruthy();
   });
 });
