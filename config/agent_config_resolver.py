@@ -11,7 +11,7 @@ _FRONTMATTER_RE = re.compile(r"^---\s*\n(.*?)\n---\s*\n", re.DOTALL)
 
 
 def resolve_agent_config(config: AgentConfig, *, skill_repo: Any = None) -> ResolvedAgentConfig:
-    enabled_skills = []
+    resolved_skills = []
     seen_skill_names: set[str] = set()
     for skill in config.skills:
         if not skill.enabled:
@@ -19,7 +19,7 @@ def resolve_agent_config(config: AgentConfig, *, skill_repo: Any = None) -> Reso
         if skill.name in seen_skill_names:
             raise ValueError(f"Duplicate Skill name in AgentConfig: {skill.name}")
         seen_skill_names.add(skill.name)
-        enabled_skills.append(_resolve_skill(config.owner_user_id, skill, skill_repo))
+        resolved_skills.append(_resolve_skill(config.owner_user_id, skill, skill_repo))
     enabled_mcp_servers = []
     seen_mcp_server_names: set[str] = set()
     for server in config.mcp_servers:
@@ -38,7 +38,7 @@ def resolve_agent_config(config: AgentConfig, *, skill_repo: Any = None) -> Reso
         system_prompt=config.system_prompt,
         runtime_settings=dict(config.runtime_settings),
         compact=dict(config.compact),
-        skills=enabled_skills,
+        skills=resolved_skills,
         rules=[rule for rule in config.rules if rule.enabled],
         sub_agents=[agent for agent in config.sub_agents if agent.enabled],
         mcp_servers=enabled_mcp_servers,
