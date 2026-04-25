@@ -7,6 +7,7 @@ import json
 import logging
 import threading
 from collections.abc import Awaitable, Callable
+from contextlib import suppress
 from typing import Any, cast
 
 from langchain_core.messages import ToolMessage
@@ -268,10 +269,8 @@ class ToolRunner(AgentMiddleware):
         except TimeoutError:
             logger.warning("Async hook %s timed out after %.3fs; ignoring hook result", hook_name, timeout_s)
             task.cancel()
-            try:
+            with suppress(asyncio.CancelledError):
                 await task
-            except asyncio.CancelledError:
-                pass
             return None
 
     @staticmethod
