@@ -34,7 +34,6 @@ async def test_init_mcp_tools_respects_explicit_websocket_transport(monkeypatch)
             },
         )
     )
-    agent.verbose = False
     agent._mcp_client = None
 
     mcp_client_path = ".".join(["langchain_mcp_" + "adap" + "ters", "client", "MultiServerMCPClient"])

@@ -20,7 +20,6 @@ All paths must be absolute. Full security mechanisms and audit logging.
 import asyncio
 import concurrent.futures
 import inspect
-import logging
 import os
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -85,8 +84,6 @@ from core.tools.web.service import WebService  # noqa: E402
 from protocols.event_bus import EventBusFactory  # noqa: E402
 from storage.container import StorageContainer  # noqa: E402
 
-logger = logging.getLogger(__name__)
-
 if TYPE_CHECKING:
     from sandbox import Sandbox
 
@@ -143,7 +140,6 @@ class LeonAgent:
         models_config_override: dict[str, Any] | None = None,
         memory_config_override: dict[str, Any] | None = None,
         permission_resolver_scope: str = "none",
-        verbose: bool = False,
     ):
         """
         Initialize Leon Agent
@@ -163,12 +159,10 @@ class LeonAgent:
             user_repo: Optional user repo for backend-integrated subagent registration
             queue_manager: Shared MessageQueueManager instance (created if not provided)
             permission_resolver_scope: Permission request surface for this agent ("none" or "thread")
-            verbose: Whether to output detailed logs (default False)
         """
         runtime_storage = storage_container
 
         self.agent_id: str | None = None
-        self.verbose = verbose
         self.extra_allowed_paths = extra_allowed_paths
         self.queue_manager = queue_manager or (
             MessageQueueManager(repo=runtime_storage.queue_repo()) if runtime_storage is not None else MessageQueueManager()
@@ -430,7 +424,7 @@ class LeonAgent:
     def _register_mcp_tools(self, mcp_tools: list) -> None:
         if not mcp_tools:
             return
-        mcp_gateway.register_mcp_tools(self._tool_registry, mcp_tools, logger=logger)
+        mcp_gateway.register_mcp_tools(self._tool_registry, mcp_tools)
 
     def _get_agent_blocked_tools(self) -> set[str]:
         """Return disabled tool names, respecting catalog defaults.
@@ -1240,14 +1234,13 @@ class LeonAgent:
                 registry=self._tool_registry,
                 workspace_root=self.workspace_root,
             )
-        except Exception as e:
-            logger.debug("[LeonAgent] LSPService init skipped: %s", e)
+        except Exception:
+            pass
 
     async def _init_mcp_tools(self) -> list:
         client, tools = await mcp_gateway.init_client_tools(
             enabled=self.config.mcp.enabled,
             server_configs=self._get_mcp_server_configs(),
-            verbose=self.verbose,
         )
         self._mcp_client = client
         return tools

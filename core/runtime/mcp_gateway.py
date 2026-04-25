@@ -50,12 +50,9 @@ def instruction_blocks(server_configs: dict[str, Any]) -> dict[str, str]:
     return blocks
 
 
-def register_mcp_tools(registry: ToolRegistry, mcp_tools: list[Any], *, logger: Any) -> None:
+def register_mcp_tools(registry: ToolRegistry, mcp_tools: list[Any]) -> None:
     for tool in mcp_tools:
-        try:
-            registry.register(make_tool_entry(tool))
-        except Exception as exc:
-            logger.warning("[LeonAgent] Failed to register MCP tool %s: %s", getattr(tool, "name", "<unknown>"), exc)
+        registry.register(make_tool_entry(tool))
 
 
 def register_resource_tools(
@@ -75,7 +72,6 @@ async def init_client_tools(
     *,
     enabled: bool,
     server_configs: dict[str, Any],
-    verbose: bool,
 ) -> tuple[Any | None, list[Any]]:
     if not enabled or not server_configs:
         return None, []
@@ -93,8 +89,6 @@ async def init_client_tools(
         tools = _filter_allowed_tools(tools, server_configs)
         return client, tools
     except Exception as exc:
-        if verbose:
-            print(f"[LeonAgent] MCP initialization failed: {exc}")
         raise RuntimeError(f"MCP initialization failed: {exc}") from exc
 
 

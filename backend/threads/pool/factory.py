@@ -44,7 +44,6 @@ def create_agent_sync(
         child_thread_live_runner=run_child_thread_live,
         models_config_override=models_config_override,
         memory_config_override=memory_config_override,
-        verbose=True,
         agent=agent,
         agent_config_dir=agent_config_dir,
         agent_config_id=agent_config_id,
