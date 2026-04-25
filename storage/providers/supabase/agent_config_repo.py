@@ -133,7 +133,9 @@ class SupabaseAgentConfigRepo:
             skill_id = row["skill_id"]
             package_id = row["package_id"]
             self._get_library_skill(owner_user_id, skill_id)
-            self._get_skill_package(owner_user_id, package_id)
+            package = self._get_skill_package(owner_user_id, package_id)
+            if package.get("skill_id") != skill_id:
+                raise RuntimeError(f"AgentConfig Skill binding package does not belong to Skill: {package_id}")
             skills.append(
                 AgentSkill(
                     id=row.get("id"),
