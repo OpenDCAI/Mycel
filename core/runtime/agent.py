@@ -1686,29 +1686,3 @@ def create_leon_agent(
         storage_container=storage_container,
         **kwargs,
     )
-
-
-if __name__ == "__main__":
-    # Example usage
-    leon_agent = create_leon_agent()
-
-    try:
-        print("=== Example 1: File Operations ===")
-        response = leon_agent.get_response(
-            f"Create a Python file at {leon_agent.workspace_root}/hello.py that prints 'Hello, Mycel!'",
-            thread_id="demo",
-        )
-        print(response)
-        print()
-
-        print("=== Example 2: Read File ===")
-        response = leon_agent.get_response(f"Read the file {leon_agent.workspace_root}/hello.py", thread_id="demo")
-        print(response)
-        print()
-
-        print("=== Example 3: Search ===")
-        response = leon_agent.get_response(f"Search for 'Hello' in {leon_agent.workspace_root}", thread_id="demo")
-        print(response)
-
-    finally:
-        leon_agent.cleanup()
