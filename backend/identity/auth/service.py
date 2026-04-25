@@ -10,6 +10,7 @@ import jwt
 from backend.identity.avatar.files import process_and_save_avatar
 from backend.identity.contact_bootstrap import ensure_owner_agent_contact
 from backend.sandboxes.recipe_bootstrap import seed_default_recipes
+from config.agent_config_types import AgentConfig
 from storage.contracts import InviteCodeRepo, UserRepo, UserRow, UserType
 from storage.providers.supabase import _query as q
 
@@ -235,18 +236,16 @@ class AuthService:
                     created_at=now,
                 )
             )
-            self._agent_configs.save_config(
-                agent_config_id,
-                {
-                    "agent_user_id": agent_id,
-                    "owner_user_id": owner_user_id,
-                    "name": agent_def["name"],
-                    "description": agent_def["description"],
-                    "status": "active",
-                    "version": "1.0.0",
-                    "created_at": int(now * 1000),
-                    "updated_at": int(now * 1000),
-                },
+            self._agent_configs.save_agent_config(
+                AgentConfig(
+                    id=agent_config_id,
+                    agent_user_id=agent_id,
+                    owner_user_id=owner_user_id,
+                    name=agent_def["name"],
+                    description=agent_def["description"],
+                    status="active",
+                    version="1.0.0",
+                )
             )
             src_avatar = assets_dir / agent_def["avatar"]
             if not src_avatar.exists():

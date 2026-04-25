@@ -43,7 +43,7 @@ def attach_threads_runtime(
     runtime_state = build_agent_runtime_state(app, typing_tracker=typing_tracker)
     app.state.threads_runtime_state = None
     # @@@threads-bootstrap-borrowable-state - threads runtime now exposes its
-    # shared handles only through the returned/state bundle so downstream code
+    # shared handles only through the returned runtime state so downstream code
     # has one canonical read surface instead of loose app.state mirrors.
     state = ThreadsRuntimeState(
         queue_manager=app.state.queue_manager,

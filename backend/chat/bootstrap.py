@@ -56,7 +56,7 @@ def attach_chat_runtime(
     )
 
     # @@@chat-bootstrap-borrowable-state - chat bootstrap now keeps its owned
-    # runtime objects inside the returned/chat_runtime_state bundle so the app
+    # runtime objects inside the returned chat_runtime_state so the app
     # has one canonical read surface instead of loose top-level mirrors.
     state = ChatRuntimeState(
         chat_repo=chat_repo,

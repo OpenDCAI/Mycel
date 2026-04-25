@@ -16,7 +16,7 @@ async def test_init_mcp_tools_respects_explicit_websocket_transport(monkeypatch)
         def __init__(self, configs, tool_name_prefix=False):
             captured["configs"] = configs
 
-        async def get_tools(self):
+        async def get_tools(self, *, server_name: str | None = None):
             return []
 
         async def close(self):

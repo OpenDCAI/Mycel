@@ -56,5 +56,5 @@ def build_agent_runtime_state(app: Any, *, typing_tracker: Any) -> AgentRuntimeG
     )
     # @@@gateway-bootstrap-borrowable-state - gateway bootstrap now returns the
     # runtime handles without mirroring them onto loose app.state attrs, so
-    # callers must keep borrowing through the bundle they just built.
+    # callers must keep borrowing through the runtime state they just built.
     return AgentRuntimeGatewayState(gateway=gateway, activity_reader=activity_reader)

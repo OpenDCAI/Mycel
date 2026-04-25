@@ -16,7 +16,7 @@ Invariants checked:
    local_workspace*, profile.py, contact_bootstrap.py, recipe_bootstrap.py,
    virtual_threads.py, message_content.py, event_bus.py, file_channel.py,
    display_builder.py, library_paths.py, versioning.py,
-   agent_user_snapshot_install.py, app_entrypoint.py, request_app.py,
+   agent_user_snapshot_apply.py, app_entrypoint.py, request_app.py,
    runtime_storage_bootstrap.py, storage_container_cache.py.
 
 2. Forbidden directories at backend/ root: utils/, common/, shared/, helpers/,
@@ -80,7 +80,7 @@ FORBIDDEN_ROOT_FILES_EXACT = {
     "display_builder.py",
     "library_paths.py",
     "versioning.py",
-    "agent_user_snapshot_install.py",
+    "agent_user_snapshot_apply.py",
     "app_entrypoint.py",
     "request_app.py",
     "runtime_storage_bootstrap.py",

@@ -13,8 +13,8 @@ import pytest
 from langchain_core.messages import ToolMessage
 from langchain_core.tools import tool
 
-from core.runtime.agent import _make_mcp_tool_entry
 from core.runtime.errors import InputValidationError
+from core.runtime.mcp_gateway import make_tool_entry as make_mcp_tool_entry
 from core.runtime.middleware import AgentMiddleware, ToolCallRequest
 from core.runtime.permissions import ToolPermissionContext, can_auto_approve
 from core.runtime.registry import ToolEntry, ToolMode, ToolRegistry
@@ -1009,7 +1009,7 @@ class TestToolRunnerErrorNormalization:
             return f"mcp:{x}"
 
         registry = ToolRegistry()
-        registry.register(_make_mcp_tool_entry(sample_mcp_tool))
+        registry.register(make_mcp_tool_entry(sample_mcp_tool))
         runner = ToolRunner(registry=registry)
         req = _make_tool_call_request("sample_mcp_tool", {"x": 3})
         req.state = MagicMock()
@@ -1029,7 +1029,7 @@ class TestToolRunnerErrorNormalization:
             return f"mcp:{x}"
 
         registry = ToolRegistry()
-        registry.register(_make_mcp_tool_entry(sample_mcp_tool))
+        registry.register(make_mcp_tool_entry(sample_mcp_tool))
         runner = ToolRunner(registry=registry)
         req = _make_tool_call_request("sample_mcp_tool", {"x": 3})
         req.state = MagicMock()
@@ -1059,7 +1059,7 @@ class TestToolRunnerErrorNormalization:
             ]
 
         registry = ToolRegistry()
-        registry.register(_make_mcp_tool_entry(sample_mcp_tool))
+        registry.register(make_mcp_tool_entry(sample_mcp_tool))
         runner = ToolRunner(registry=registry)
         req = _make_tool_call_request("sample_mcp_tool", {"x": 3})
         req.state = MagicMock()
@@ -1080,7 +1080,7 @@ class TestToolRunnerErrorNormalization:
             return f"mcp:{x}"
 
         registry = ToolRegistry()
-        registry.register(_make_mcp_tool_entry(sample_mcp_tool))
+        registry.register(make_mcp_tool_entry(sample_mcp_tool))
         runner = ToolRunner(registry=registry)
         req = _make_tool_call_request("sample_mcp_tool", {"x": 3})
         req.state = MagicMock()

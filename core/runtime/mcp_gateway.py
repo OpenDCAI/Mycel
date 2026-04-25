@@ -1,5 +1,8 @@
+"""Small MCP boundary for LeonAgent."""
+
 from __future__ import annotations
 
+import asyncio
 import base64
 import json
 from collections.abc import Callable
@@ -38,7 +41,95 @@ READ_MCP_RESOURCE_SCHEMA = make_tool_schema(
 )
 
 
-class McpResourceToolService:
+def instruction_blocks(server_configs: dict[str, Any]) -> dict[str, str]:
+    blocks: dict[str, str] = {}
+    for name, cfg in server_configs.items():
+        instructions = getattr(cfg, "instructions", None)
+        if isinstance(instructions, str) and instructions.strip():
+            blocks[name] = instructions.strip()
+    return blocks
+
+
+def register_mcp_tools(registry: ToolRegistry, mcp_tools: list[Any], *, logger: Any) -> None:
+    for tool in mcp_tools:
+        try:
+            registry.register(make_tool_entry(tool))
+        except Exception as exc:
+            logger.warning("[LeonAgent] Failed to register MCP tool %s: %s", getattr(tool, "name", "<unknown>"), exc)
+
+
+def register_resource_tools(
+    registry: ToolRegistry,
+    *,
+    client_fn: Callable[[], Any],
+    server_configs_fn: Callable[[], dict[str, Any]],
+) -> Any:
+    return _ResourceToolRegistrar(
+        registry=registry,
+        client_fn=client_fn,
+        server_configs_fn=server_configs_fn,
+    )
+
+
+async def init_client_tools(
+    *,
+    enabled: bool,
+    server_configs: dict[str, Any],
+    verbose: bool,
+) -> tuple[Any | None, list[Any]]:
+    if not enabled or not server_configs:
+        return None, []
+
+    from langchain_mcp_adapters.client import MultiServerMCPClient
+
+    configs = _adapter_configs(server_configs)
+    try:
+        client = MultiServerMCPClient(configs, tool_name_prefix=False)
+        tools: list[Any] = []
+        for server_name in configs:
+            server_tools = await client.get_tools(server_name=server_name)
+            _apply_server_prefixes(server_tools, server_name)
+            tools.extend(server_tools)
+        tools = _filter_allowed_tools(tools, server_configs)
+        if verbose:
+            print(f"[LeonAgent] Loaded {len(tools)} MCP tools from {len(configs)} servers")
+        return client, tools
+    except Exception as exc:
+        if verbose:
+            print(f"[LeonAgent] MCP initialization failed: {exc}")
+        raise RuntimeError(f"MCP initialization failed: {exc}") from exc
+
+
+def make_tool_entry(tool: Any) -> ToolEntry:
+    schema_model = getattr(tool, "tool_call_schema", None)
+    if schema_model is not None and hasattr(schema_model, "model_json_schema"):
+        parameters = schema_model.model_json_schema()
+    else:
+        parameters = {
+            "type": "object",
+            "properties": getattr(tool, "args", {}) or {},
+        }
+
+    async def mcp_handler(**kwargs: Any) -> Any:
+        if hasattr(tool, "ainvoke"):
+            return await tool.ainvoke(kwargs)
+        return await asyncio.to_thread(tool.invoke, kwargs)
+
+    return ToolEntry(
+        name=tool.name,
+        mode=ToolMode.INLINE,
+        schema=make_tool_schema(
+            name=tool.name,
+            description=getattr(tool, "description", "") or tool.name,
+            properties={},
+            parameter_overrides=parameters,
+        ),
+        handler=mcp_handler,
+        source="mcp",
+    )
+
+
+class _ResourceToolRegistrar:
     def __init__(
         self,
         *,
@@ -63,7 +154,7 @@ class McpResourceToolService:
                     mode=ToolMode.DEFERRED,
                     schema=schema,
                     handler=handler,
-                    source="McpResourceToolService",
+                    source="mcp",
                     is_concurrency_safe=True,
                     is_read_only=True,
                 )
@@ -151,3 +242,55 @@ class McpResourceToolService:
             ensure_ascii=False,
             indent=2,
         )
+
+
+def _adapter_configs(server_configs: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    configs: dict[str, dict[str, Any]] = {}
+    for name, cfg in server_configs.items():
+        transport = getattr(cfg, "transport", None)
+        if cfg.url:
+            # @@@mcp-transport-honesty - URL-based MCP is not always streamable_http;
+            # websocket/sse must stay explicit.
+            config = {
+                "transport": transport or "streamable_http",
+                "url": cfg.url,
+            }
+        else:
+            config = {
+                "transport": transport or "stdio",
+                "command": cfg.command,
+                "args": cfg.args,
+            }
+        if cfg.env:
+            config["env"] = cfg.env
+        configs[name] = config
+    return configs
+
+
+def _apply_server_prefixes(tools: list[Any], server_name: str) -> None:
+    for tool in tools:
+        tool.name = f"mcp__{server_name}__{tool.name}"
+
+
+def _filter_allowed_tools(tools: list[Any], server_configs: dict[str, Any]) -> list[Any]:
+    if not any(cfg.allowed_tools for cfg in server_configs.values()):
+        return tools
+    return [tool for tool in tools if _is_tool_allowed(tool, server_configs)]
+
+
+def _is_tool_allowed(tool: Any, server_configs: dict[str, Any]) -> bool:
+    tool_name = tool.name
+    if tool_name.startswith("mcp__"):
+        parts = tool_name.split("__", 2)
+        if len(parts) == 3:
+            server_name = parts[1]
+            tool_name = parts[2]
+            cfg = server_configs.get(server_name)
+            if cfg is None or not cfg.allowed_tools:
+                return True
+            return tool_name in cfg.allowed_tools
+
+    for cfg in server_configs.values():
+        if cfg.allowed_tools:
+            return tool_name in cfg.allowed_tools
+    return True

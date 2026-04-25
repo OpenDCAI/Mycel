@@ -11,7 +11,7 @@ class ThreadCheckpointState:
     pending_permission_requests: dict[str, dict[str, Any]]
     resolved_permission_requests: dict[str, dict[str, Any]]
     memory_compaction_state: dict[str, Any]
-    mcp_instruction_state: dict[str, Any]
+    integration_instruction_state: dict[str, Any]
 
 
 class CheckpointStore(Protocol):

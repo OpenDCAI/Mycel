@@ -19,5 +19,5 @@ class AgentRuntimeGatewayPort(Protocol):
 def get_agent_runtime_gateway(app: Any) -> AgentRuntimeGatewayPort:
     # @@@agent-runtime-port-borrowed-state - web routes still read the agent
     # runtime gateway from app state, but they now borrow it through the
-    # threads_runtime_state bundle instead of a loose top-level attribute.
+    # threads_runtime_state object instead of a loose top-level attribute.
     return app.state.threads_runtime_state.agent_runtime_gateway

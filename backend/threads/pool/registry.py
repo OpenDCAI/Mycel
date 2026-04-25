@@ -99,7 +99,7 @@ async def get_or_create_agent(
         # @@@agent-vs-agent-user - thread row agent_user_id resolves an agent user for display,
         # NOT an agent type name ("bash", "general", etc.). Never pass it to create_leon_agent.
         agent_name = agent  # explicit caller-provided type only; None -> default Leon agent
-        bundle_dir = None
+        agent_config_dir = None
         agent_config_id = None
         memory_config_override = None
         runtime_storage = getattr(app_obj.state, "runtime_storage_state", None)
@@ -115,10 +115,10 @@ async def get_or_create_agent(
             agent_config_id = agent_user.agent_config_id
             if agent_config_repo is None:
                 raise RuntimeError(f"agent_config_repo is required to resolve runtime config for thread {thread_id}")
-            agent_config = agent_config_repo.get_config(agent_config_id)
+            agent_config = agent_config_repo.get_agent_config(agent_config_id)
             if agent_config is None:
                 raise RuntimeError(f"Agent config {agent_config_id} is missing for runtime startup: {thread_id}")
-            raw_compact = agent_config.get("compact")
+            raw_compact = agent_config.compact
             if raw_compact is not None and not isinstance(raw_compact, dict):
                 raise RuntimeError(f"agent config compact must be a JSON object for runtime startup: {agent_config_id}")
             if raw_compact is not None:
@@ -172,7 +172,7 @@ async def get_or_create_agent(
             "workspace_root": workspace_root,
             "model_name": model_name,
             "agent": agent_name,
-            "bundle_dir": bundle_dir,
+            "agent_config_dir": agent_config_dir,
             "thread_repo": getattr(app_obj.state, "thread_repo", None),
             "user_repo": getattr(app_obj.state, "user_repo", None),
             "queue_manager": qm,

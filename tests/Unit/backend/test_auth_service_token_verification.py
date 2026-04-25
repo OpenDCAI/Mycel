@@ -324,7 +324,7 @@ def test_complete_register_seeds_user_sandbox_recipes(monkeypatch: pytest.Monkey
         update=lambda _user_id, **_fields: None,
         list_by_owner_user_id=lambda _user_id: [],
     )
-    agent_configs = SimpleNamespace(save_config=lambda _config_id, _payload: None)
+    agent_configs = SimpleNamespace(save_agent_config=lambda _config: None)
     invite_codes = SimpleNamespace(is_valid=lambda code: code == "invite-1", use=lambda _code, _user_id: None)
     contact_repo = SimpleNamespace(upsert=lambda _row: None)
     recipe_rows: dict[str, dict] = {}
@@ -353,7 +353,7 @@ def test_complete_register_seeds_user_sandbox_recipes(monkeypatch: pytest.Monkey
 def test_create_initial_agents_keeps_avatar_column_null_under_file_backed_avatar_shell(monkeypatch: pytest.MonkeyPatch):
     created_users: list[SimpleNamespace] = []
     updates: list[tuple[str, dict[str, object]]] = []
-    saved_configs: list[tuple[str, dict[str, object]]] = []
+    saved_configs: list[object] = []
     contact_edges: list[object] = []
     user_ids = iter(["agent-toad", "agent-morel"])
     config_ids = iter(["cfg-toad", "cfg-morel"])
@@ -366,15 +366,15 @@ def test_create_initial_agents_keeps_avatar_column_null_under_file_backed_avatar
         create=lambda row: created_users.append(row),
         update=lambda user_id, **fields: updates.append((user_id, fields)),
     )
-    agent_configs = SimpleNamespace(save_config=lambda config_id, payload: saved_configs.append((config_id, payload)))
+    agent_configs = SimpleNamespace(save_agent_config=lambda config: saved_configs.append(config))
     contact_repo = SimpleNamespace(upsert=lambda row: contact_edges.append(row))
 
     result = _service(user_repo=user_repo, agent_configs=agent_configs, contact_repo=contact_repo)._create_initial_agents("owner-1", 123.0)
 
     assert [row.id for row in created_users] == ["agent-toad", "agent-morel"]
     assert [row.display_name for row in created_users] == ["Toad", "Morel"]
-    assert [item[0] for item in saved_configs] == ["cfg-toad", "cfg-morel"]
-    assert [item[1]["owner_user_id"] for item in saved_configs] == ["owner-1", "owner-1"]
+    assert [item.id for item in saved_configs] == ["cfg-toad", "cfg-morel"]
+    assert [item.owner_user_id for item in saved_configs] == ["owner-1", "owner-1"]
     assert updates == []
     assert [(row.source_user_id, row.target_user_id, row.kind, row.state) for row in contact_edges] == [
         ("owner-1", "agent-toad", "normal", "active"),
