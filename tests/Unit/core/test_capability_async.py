@@ -58,10 +58,19 @@ class _DummyRuntime:
         )
 
 
+class _DummyCommandRepo:
+    def find_command_terminal_id(self, *, command_id: str, thread_id: str) -> str | None:
+        assert command_id.startswith("cmd_")
+        assert thread_id == "thread-1"
+        return "dummy-term"
+
+
 class _DummySession:
     def __init__(self):
+        self.thread_id = "thread-1"
         self.terminal = _DummyTerminal()
         self.runtime = _DummyRuntime()
+        self._session_repo = _DummyCommandRepo()
         self.touches = 0
 
     def touch(self):

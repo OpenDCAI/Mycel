@@ -12,7 +12,6 @@ from sandbox.control_plane_repos import (
     make_chat_session_repo,
     make_sandbox_runtime_repo,
     make_terminal_repo,
-    resolve_sandbox_db_path,
 )
 from sandbox.lifecycle import (
     ChatSessionState,
@@ -90,7 +89,7 @@ class ChatSession:
         self.budget_json = budget_json
         self.ended_at = ended_at
         self.close_reason = close_reason
-        self._db_path = resolve_sandbox_db_path(db_path) if session_repo is None else db_path
+        self._db_path = db_path
         self._session_repo = session_repo or make_chat_session_repo(db_path=self._db_path)
 
     def is_expired(self) -> bool:
@@ -135,16 +134,27 @@ class ChatSessionManager:
         sandbox_runtime_repo=None,
     ):
         self.provider = provider
-        needs_db_path = chat_session_repo is None or terminal_repo is None or sandbox_runtime_repo is None
-        self.db_path = resolve_sandbox_db_path(db_path) if needs_db_path else db_path
+        self.db_path = db_path
         self.default_policy = default_policy or ChatSessionPolicy()
         self._live_sessions: dict[str, ChatSession] = {}
         if chat_session_repo:
             self._repo = chat_session_repo
+            self._owns_repo = False
         else:
             self._repo = make_chat_session_repo(db_path=self.db_path)
-        self._terminal_repo = terminal_repo
-        self._sandbox_runtime_repo = sandbox_runtime_repo
+            self._owns_repo = True
+        if terminal_repo:
+            self._terminal_repo = terminal_repo
+            self._owns_terminal_repo = False
+        else:
+            self._terminal_repo = make_terminal_repo(db_path=self.db_path)
+            self._owns_terminal_repo = True
+        if sandbox_runtime_repo:
+            self._sandbox_runtime_repo = sandbox_runtime_repo
+            self._owns_sandbox_runtime_repo = False
+        else:
+            self._sandbox_runtime_repo = make_sandbox_runtime_repo(db_path=self.db_path)
+            self._owns_sandbox_runtime_repo = True
 
     def _close_runtime(self, session: ChatSession, reason: str) -> None:
         try:
@@ -175,18 +185,8 @@ class ChatSessionManager:
 
     def get(self, thread_id: str, terminal_id: str | None = None) -> ChatSession | None:
         if terminal_id is None:
-            from sandbox.terminal import terminal_from_row
-
             # @@@thread-scoped-get - Thread-level callers resolve through the current active terminal.
-            _term_repo = self._terminal_repo
-            own_term_repo = _term_repo is None
-            if _term_repo is None:
-                _term_repo = make_terminal_repo(db_path=self.db_path)
-            try:
-                _term_row = _term_repo.get_active(thread_id)
-            finally:
-                if own_term_repo:
-                    _term_repo.close()
+            _term_row = self._terminal_repo.get_active(thread_id)
             if _term_row is None:
                 return None
             terminal_id = _require_row_text(dict(_term_row), "terminal_id")
@@ -206,25 +206,9 @@ class ChatSessionManager:
         from sandbox.runtime_handle import sandbox_runtime_from_row
         from sandbox.terminal import terminal_from_row
 
-        _term_repo = self._terminal_repo
-        own_term_repo = _term_repo is None
-        if _term_repo is None:
-            _term_repo = make_terminal_repo(db_path=self.db_path)
-        try:
-            _term_row = _term_repo.get_by_id(row["terminal_id"])
-        finally:
-            if own_term_repo:
-                _term_repo.close()
-        terminal = terminal_from_row(_term_row, self.db_path) if _term_row else None
-        _sandbox_runtime_repo = self._sandbox_runtime_repo
-        own_sandbox_runtime_repo = _sandbox_runtime_repo is None
-        if _sandbox_runtime_repo is None:
-            _sandbox_runtime_repo = make_sandbox_runtime_repo(db_path=self.db_path)
-        try:
-            _sandbox_runtime_row = _sandbox_runtime_repo.get(row["sandbox_runtime_id"])
-        finally:
-            if own_sandbox_runtime_repo:
-                _sandbox_runtime_repo.close()
+        _term_row = self._terminal_repo.get_by_id(row["terminal_id"])
+        terminal = terminal_from_row(_term_row, self.db_path, terminal_repo=self._terminal_repo) if _term_row else None
+        _sandbox_runtime_row = self._sandbox_runtime_repo.get(row["sandbox_runtime_id"])
         sandbox_runtime = sandbox_runtime_from_row(_sandbox_runtime_row, self.db_path) if _sandbox_runtime_row else None
         if not terminal or not sandbox_runtime:
             return None
@@ -395,7 +379,12 @@ class ChatSessionManager:
             self._live_sessions.pop(live_terminal_id, None)
 
         self._repo.close_all_active(reason)
-        self._repo.close()
+        if self._owns_repo:
+            self._repo.close()
+        if self._owns_terminal_repo:
+            self._terminal_repo.close()
+        if self._owns_sandbox_runtime_repo:
+            self._sandbox_runtime_repo.close()
 
     def list_active(self) -> list[dict]:
         return self._repo.list_active()
