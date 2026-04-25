@@ -14,7 +14,7 @@ from backend.sandboxes.runtime import mutations as _sandbox_runtime_mutations
 from backend.sandboxes.runtime import reads as _sandbox_runtime_reads
 from backend.threads.projection import canonical_owner_threads
 from backend.threads.virtual_threads import is_virtual_thread_id
-from backend.web.core.config import LOCAL_WORKSPACE_ROOT
+from backend.sandboxes.local_workspace import local_workspace_root
 from sandbox.config import SandboxConfig
 from sandbox.manager import SandboxManager
 from storage.runtime import build_sandbox_monitor_repo as make_sandbox_monitor_repo
@@ -95,7 +95,7 @@ def _build_providers_and_managers() -> tuple[dict[str, Any], dict[str, Any]]:
         sandboxes_dir=SANDBOXES_DIR,
         sandbox_manager_cls=SandboxManager,
         sandbox_config_cls=SandboxConfig,
-        local_workspace_root_path=LOCAL_WORKSPACE_ROOT,
+        local_workspace_root_path=local_workspace_root(),
     )
 
 

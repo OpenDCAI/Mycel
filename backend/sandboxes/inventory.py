@@ -14,7 +14,6 @@ from sandbox.provider import ProviderCapability
 
 logger = logging.getLogger(__name__)
 
-LOCAL_WORKSPACE_ROOT = local_workspace_root()
 _SANDBOX_INVENTORY_LOCK = threading.Lock()
 _SANDBOX_INVENTORY: tuple[dict[str, Any], dict[str, Any]] | None = None
 
@@ -61,7 +60,7 @@ def _build_providers_and_managers(
     from sandbox.providers.local import LocalSessionProvider
 
     config_dir = sandboxes_dir or SANDBOXES_DIR
-    workspace_root = local_workspace_root_path or LOCAL_WORKSPACE_ROOT
+    workspace_root = local_workspace_root_path or local_workspace_root()
     providers: dict[str, Any] = {
         "local": LocalSessionProvider(default_cwd=str(workspace_root)),
     }
