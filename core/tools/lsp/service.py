@@ -478,7 +478,6 @@ class LSPService:
                 is_concurrency_safe=True,
             )
         )
-        logger.debug("[LSPService] registered (workspace=%s)", self._workspace_root)
 
     async def _get_session(self, language: str) -> _LSPSession:
         return await lsp_pool.get_session(language, self._workspace_root)
