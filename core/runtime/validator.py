@@ -10,10 +10,7 @@ def _required_sets(parameters: dict, key: str) -> list[list[str]]:
         return []
     sets: list[list[str]] = []
     for item in value:
-        if isinstance(item, dict):
-            required = item.get("required", [])
-        else:
-            required = item
+        required = item.get("required", []) if isinstance(item, dict) else item
         if isinstance(required, list):
             sets.append([field for field in required if isinstance(field, str)])
     return sets
@@ -25,9 +22,7 @@ def _arg_counts_as_present(args: dict, field: str) -> bool:
     value = args[field]
     if value is None:
         return False
-    if isinstance(value, str) and value == "":
-        return False
-    return True
+    return not (isinstance(value, str) and value == "")
 
 
 def _required_sets_match(parameters: dict, args: dict) -> bool:
