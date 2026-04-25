@@ -99,3 +99,23 @@ async def test_resolved_agent_config_without_mcp_disables_mcp(monkeypatch):
 
     assert captured["enabled"] is False
     assert captured["server_configs"] == {}
+
+
+@pytest.mark.asyncio
+async def test_missing_resolved_agent_config_disables_mcp(monkeypatch):
+    captured: dict[str, object] = {}
+
+    async def fake_init_client_tools(*, enabled: bool, server_configs: dict[str, object]):
+        captured["enabled"] = enabled
+        captured["server_configs"] = server_configs
+        return None, []
+
+    agent = LeonAgent.__new__(LeonAgent)
+    agent.config = LeonSettings()
+
+    monkeypatch.setattr("core.runtime.agent.mcp_gateway.init_client_tools", fake_init_client_tools)
+
+    await LeonAgent._init_mcp_tools(agent)
+
+    assert captured["enabled"] is False
+    assert captured["server_configs"] == {}
