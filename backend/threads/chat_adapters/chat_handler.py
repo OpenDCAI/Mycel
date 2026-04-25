@@ -1,11 +1,7 @@
 from __future__ import annotations
 
-import logging
-
 from backend.threads.chat_adapters.chat_runtime_services import AgentChatRuntimeServices
 from protocols import agent_runtime as agent_runtime_protocol
-
-logger = logging.getLogger(__name__)
 
 
 class NativeAgentChatDeliveryHandler:
@@ -20,14 +16,6 @@ class NativeAgentChatDeliveryHandler:
         from langchain_core.runnables.config import var_child_runnable_config  # pyright: ignore[reportMissingImports]
 
         var_child_runnable_config.set(None)
-
-        logger.info(
-            "[agent-runtime-gateway] dispatch_chat: recipient=%s user=%s thread=%s from=%s",
-            envelope.recipient.agent_user_id,
-            envelope.recipient.agent_user_id,
-            envelope.recipient.thread_id,
-            envelope.sender.display_name,
-        )
 
         thread_id = envelope.recipient.thread_id
         if not thread_id:

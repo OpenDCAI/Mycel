@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import logging
 from enum import Enum
 from typing import Any
 
@@ -16,8 +15,6 @@ from protocols.agent_runtime import (
     AgentRuntimeMessage,
 )
 
-logger = logging.getLogger(__name__)
-
 
 def make_chat_delivery_fn(app: Any, *, activity_reader: Any, thread_repo: Any):
     import asyncio
@@ -25,7 +22,6 @@ def make_chat_delivery_fn(app: Any, *, activity_reader: Any, thread_repo: Any):
     if activity_reader is None:
         raise RuntimeError("Agent runtime thread activity reader is not configured")
     loop = asyncio.get_running_loop()
-    logger.info("[delivery] make_chat_delivery_fn: loop=%s", loop)
 
     async def deliver_to_runtime_gateway(request: ChatDeliveryRequest) -> None:
         raw_recipient_type = getattr(request.recipient_user, "type", None)
@@ -72,9 +68,7 @@ def make_chat_delivery_fn(app: Any, *, activity_reader: Any, thread_repo: Any):
         await get_agent_runtime_gateway(app).dispatch_chat(envelope)
 
     def _deliver(request: ChatDeliveryRequest) -> None:
-        logger.info("[delivery] _deliver called: recipient=%s", request.recipient_id)
         future = asyncio.run_coroutine_threadsafe(deliver_to_runtime_gateway(request), loop)
         future.result()
-        logger.info("[delivery] async delivery completed for %s", request.recipient_id)
 
     return _deliver

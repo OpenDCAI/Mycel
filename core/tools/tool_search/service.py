@@ -1,11 +1,8 @@
 from __future__ import annotations
 
 import json
-import logging
 
 from core.runtime.registry import ToolEntry, ToolMode, ToolRegistry, make_tool_schema
-
-logger = logging.getLogger(__name__)
 
 TOOL_SEARCH_SCHEMA = make_tool_schema(
     name="tool_search",
@@ -39,7 +36,6 @@ class ToolSearchService:
                 is_read_only=True,
             )
         )
-        logger.info("ToolSearchService initialized")
 
     def _search(self, query: str = "", tool_context=None) -> str:
         select_names: list[str] = []
