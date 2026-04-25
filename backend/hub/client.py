@@ -18,6 +18,7 @@ from backend.hub.versioning import BumpType, bump_semver
 from config.agent_config_resolver import resolve_agent_config
 from config.agent_config_types import AgentSkill, Skill
 from config.agent_snapshot import snapshot_from_resolved_config
+from config.skill_files import normalize_skill_file_map
 
 HUB_URL = os.environ.get("MYCEL_HUB_URL", "https://hub.mycel.nextmind.space")
 # @@@hub-agent-user-item-type - Hub still names published Agent users "member";
@@ -83,7 +84,7 @@ def _skill_files_from_snapshot(snapshot: dict[str, Any]) -> dict[str, str]:
         return {}
     if not isinstance(files, dict):
         raise ValueError("Skill snapshot files must be an object")
-    return {str(path).replace("\\", "/"): str(content) for path, content in files.items()}
+    return normalize_skill_file_map(files, context="Skill snapshot files")
 
 
 def list_items(
