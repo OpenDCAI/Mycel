@@ -57,6 +57,21 @@ def _build_providers_and_managers(
     sandbox_config_cls=SandboxConfig,
     local_workspace_root_path: Path | None = None,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
+    providers = _build_providers(
+        sandboxes_dir=sandboxes_dir,
+        sandbox_config_cls=sandbox_config_cls,
+        local_workspace_root_path=local_workspace_root_path,
+    )
+    managers = {name: sandbox_manager_cls(provider=provider) for name, provider in providers.items()}
+    return providers, managers
+
+
+def _build_providers(
+    *,
+    sandboxes_dir: Path | None = None,
+    sandbox_config_cls=SandboxConfig,
+    local_workspace_root_path: Path | None = None,
+) -> dict[str, Any]:
     from sandbox.providers.local import LocalSessionProvider
 
     config_dir = sandboxes_dir if sandboxes_dir is not None else SANDBOXES_DIR
@@ -65,8 +80,7 @@ def _build_providers_and_managers(
         "local": LocalSessionProvider(default_cwd=str(workspace_root)),
     }
     if config_dir is None or not config_dir.exists():
-        managers = {name: sandbox_manager_cls(provider=provider) for name, provider in providers.items()}
-        return providers, managers
+        return providers
 
     for config_file in config_dir.glob("*.json"):
         name = config_file.stem
@@ -134,18 +148,23 @@ def _build_providers_and_managers(
         except Exception as exc:
             logger.warning("[sandbox] failed to init provider %s: %s", name, exc)
 
-    managers = {name: sandbox_manager_cls(provider=provider) for name, provider in providers.items()}
-    return providers, managers
+    return providers
 
 
 def available_sandbox_types(
     *,
     sandboxes_dir: Path | None = None,
-    init_providers_and_managers_fn=None,
+    build_providers_fn=None,
     sandbox_config_cls=SandboxConfig,
 ) -> list[dict[str, Any]]:
-    init_fn = init_providers_and_managers_fn or init_providers_and_managers
-    providers, _ = init_fn()
+    providers = (
+        build_providers_fn()
+        if build_providers_fn is not None
+        else _build_providers(
+            sandboxes_dir=sandboxes_dir,
+            sandbox_config_cls=sandbox_config_cls,
+        )
+    )
     local_capability = providers["local"].get_capability()
     types = [
         {
