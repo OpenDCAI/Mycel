@@ -461,11 +461,7 @@ class TestApplySkill:
         assert saved[0].skills[1].skill_id == "fastapi"
         assert saved[0].skills[1].package_id == packages[0].id
         assert saved[0].skills[1].description == "Build FastAPI APIs"
-        assert saved[0].skills[1].source == {
-            "marketplace_item_id": "skillsmp:fastapi",
-            "source_version": "1.2.3",
-            "publisher": "skillsmp",
-        }
+        assert saved[0].skills[1].source == packages[0].source
 
     def test_saves_skill_to_library_when_agent_user_id_is_provided(self):
         import backend.hub.client as marketplace_client
