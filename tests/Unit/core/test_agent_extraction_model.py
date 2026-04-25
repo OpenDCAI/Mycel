@@ -10,7 +10,6 @@ class _ExtractionAgentProbe:
     def __init__(self, config: ModelsConfig, *, api_key: str | None = None) -> None:
         self.api_key = api_key
         self.models_config = config
-        self.verbose = False
         self._model_http_client = None
         self._model_http_async_client = None
 

@@ -19,9 +19,7 @@ from .token_monitor import TokenMonitor
 class MonitorMiddleware(AgentMiddleware):
     tools = ()
 
-    def __init__(self, context_limit: int = 0, model_name: str = "", verbose: bool = False):
-        self.verbose = verbose
-
+    def __init__(self, context_limit: int = 0, model_name: str = ""):
         self._token_monitor = TokenMonitor()
         self._state_monitor = StateMonitor()
 
