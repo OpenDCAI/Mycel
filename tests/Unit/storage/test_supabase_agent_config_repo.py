@@ -384,6 +384,24 @@ def test_get_agent_config_fails_loudly_when_sub_agent_tools_json_is_not_an_array
         repo.get_agent_config("cfg-1")
 
 
+def test_get_agent_config_fails_loudly_when_rule_name_is_null() -> None:
+    tables = _tables()
+    tables["agent.agent_rules"][0]["name"] = None
+    repo = SupabaseAgentConfigRepo(_FakeClient(tables))
+
+    with pytest.raises(RuntimeError, match="agent_rules name must be text"):
+        repo.get_agent_config("cfg-1")
+
+
+def test_get_agent_config_fails_loudly_when_rule_content_is_null() -> None:
+    tables = _tables()
+    tables["agent.agent_rules"][0]["content"] = None
+    repo = SupabaseAgentConfigRepo(_FakeClient(tables))
+
+    with pytest.raises(RuntimeError, match="agent_rules content must be text"):
+        repo.get_agent_config("cfg-1")
+
+
 def test_get_agent_config_fails_loudly_when_mcp_json_is_not_an_array() -> None:
     tables = _tables()
     tables["agent.agent_configs"][0]["mcp_json"] = {"filesystem": {"command": "fs"}}

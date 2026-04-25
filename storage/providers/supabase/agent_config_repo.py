@@ -177,8 +177,8 @@ class SupabaseAgentConfigRepo:
         return [
             AgentRule(
                 id=row.get("id"),
-                name=row.get("name") or row.get("filename") or "rule",
-                content=row.get("content") or "",
+                name=_required_text(row, "name", label="agent_rules name"),
+                content=_required_text(row, "content", label="agent_rules content"),
                 enabled=_enabled_from_row(row, label="agent_rules"),
             )
             for row in rows
