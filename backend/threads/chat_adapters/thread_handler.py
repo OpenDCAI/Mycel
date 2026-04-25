@@ -1,13 +1,10 @@
 from __future__ import annotations
 
 import asyncio
-import logging
 from typing import Any
 
 from core.runtime.middleware.monitor import AgentState
 from protocols import agent_runtime as agent_runtime_protocol
-
-logger = logging.getLogger(__name__)
 
 
 class NativeAgentThreadInputHandler:
@@ -51,9 +48,8 @@ class NativeAgentThreadInputHandler:
                 return agent_runtime_protocol.AgentThreadInputResult(status="cancelled", routing="cancelled", thread_id=thread_id)
 
             state = agent.runtime.current_state
-            logger.debug("[agent-runtime-gateway] thread=%s state=%s source=%s", thread_id[:15], state, envelope.sender.source)
 
-            if agent.runtime.current_state == AgentState.ACTIVE:
+            if state == AgentState.ACTIVE:
                 qm.enqueue(
                     envelope.message.content,
                     thread_id,
@@ -63,7 +59,6 @@ class NativeAgentThreadInputHandler:
                     sender_avatar_url=envelope.sender.avatar_url,
                     is_steer=True,
                 )
-                logger.debug("[agent-runtime-gateway] thread input enqueued")
                 return agent_runtime_protocol.AgentThreadInputResult(status="injected", routing="steer", thread_id=thread_id)
 
             locks = self._thread_locks
@@ -80,9 +75,7 @@ class NativeAgentThreadInputHandler:
                         sender_avatar_url=envelope.sender.avatar_url,
                         is_steer=True,
                     )
-                    logger.debug("[agent-runtime-gateway] thread input enqueued after transition race")
                     return agent_runtime_protocol.AgentThreadInputResult(status="injected", routing="steer", thread_id=thread_id)
-                logger.debug("[agent-runtime-gateway] thread input starts run")
                 meta = {
                     "source": envelope.sender.source,
                     "sender_name": envelope.sender.display_name,
