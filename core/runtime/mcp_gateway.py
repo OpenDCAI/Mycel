@@ -91,8 +91,6 @@ async def init_client_tools(
             _apply_server_prefixes(server_tools, server_name)
             tools.extend(server_tools)
         tools = _filter_allowed_tools(tools, server_configs)
-        if verbose:
-            print(f"[LeonAgent] Loaded {len(tools)} MCP tools from {len(configs)} servers")
         return client, tools
     except Exception as exc:
         if verbose:
