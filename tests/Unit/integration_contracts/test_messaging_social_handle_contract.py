@@ -2813,6 +2813,38 @@ def test_same_owner_agent_turn_delivers_to_sibling_user_without_relationship() -
     assert delivered == [("agent-user-2", "agent-user-2")]
 
 
+def test_same_owner_group_delivery_honors_chat_mute_until_mentioned() -> None:
+    delivered: list[tuple[str, str]] = []
+    dispatcher = ChatDeliveryDispatcher(
+        chat_member_repo=SimpleNamespace(
+            list_members=lambda _chat_id: [
+                {"user_id": "human-user-1", "muted": False},
+                {"user_id": "agent-user-1", "muted": False},
+                {"user_id": "agent-user-2", "muted": True},
+            ]
+        ),
+        user_repo=SimpleNamespace(
+            get_by_id=lambda uid: (
+                SimpleNamespace(id=uid, display_name="Human", type="human", avatar=None, owner_user_id=None)
+                if uid == "human-user-1"
+                else SimpleNamespace(id=uid, display_name="Morel", type="agent", avatar=None, owner_user_id="human-user-1")
+                if uid == "agent-user-1"
+                else SimpleNamespace(id=uid, display_name="Toad", type="agent", avatar=None, owner_user_id="human-user-1")
+                if uid == "agent-user-2"
+                else None
+            )
+        ),
+        unread_counter=lambda _chat_id, _user_id: 0,
+        delivery_resolver=SimpleNamespace(resolve=lambda *_args, **_kwargs: DeliveryAction.DELIVER),
+        delivery_fn=lambda request: delivered.append((request.recipient_id, request.recipient_user.id)),
+    )
+
+    dispatcher.dispatch("chat-1", "human-user-1", "plain update", [])
+    dispatcher.dispatch("chat-1", "human-user-1", "explicit mention", ["agent-user-2"])
+
+    assert delivered == [("agent-user-1", "agent-user-1"), ("agent-user-1", "agent-user-1"), ("agent-user-2", "agent-user-2")]
+
+
 @pytest.mark.asyncio
 async def test_agent_runtime_gateway_uses_recipient_social_user_id_for_thread_lookup_and_passes_through_envelope_content(
     monkeypatch: pytest.MonkeyPatch,
