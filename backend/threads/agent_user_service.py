@@ -8,7 +8,6 @@ import yaml
 
 from backend.hub.versioning import BumpType, bump_semver
 from backend.identity.avatar.urls import avatar_url
-from backend.library import mcp_library
 from config.agent_config_types import AgentConfig, AgentRule, AgentSkill, AgentSubAgent, McpServerConfig
 from config.defaults.tool_catalog import TOOLS_BY_NAME, ToolDef, tool_enabled_for_agent
 from config.loader import AgentLoader
@@ -478,19 +477,19 @@ def _mcp_from_patch(config_patch: dict[str, Any], current_config: AgentConfig) -
         if name in seen_names:
             raise RuntimeError(f"Duplicate MCP server name in patch: {name}")
         seen_names.add(name)
-        library_config = mcp_library.get_config_by_name(name)
         direct_config = {key: item[key] for key in _MCP_CONFIG_KEYS if key in item and item[key] is not None}
-        config = dict(library_config if library_config is not None else direct_config)
+        if "command" not in direct_config and "url" not in direct_config:
+            raise RuntimeError(f"MCP server config must include command or url: {name}")
         servers.append(
             McpServerConfig(
                 name=name,
-                transport=config.get("transport"),
-                command=config.get("command"),
-                args=list(config.get("args") or []),
-                env=dict(config.get("env") or {}),
-                url=config.get("url"),
-                instructions=config.get("instructions"),
-                allowed_tools=config.get("allowed_tools"),
+                transport=direct_config.get("transport"),
+                command=direct_config.get("command"),
+                args=list(direct_config.get("args") or []),
+                env=dict(direct_config.get("env") or {}),
+                url=direct_config.get("url"),
+                instructions=direct_config.get("instructions"),
+                allowed_tools=direct_config.get("allowed_tools"),
                 enabled=not bool(item.get("disabled", False)),
             )
         )

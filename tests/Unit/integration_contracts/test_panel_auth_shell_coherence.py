@@ -8,7 +8,6 @@ import pytest
 from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
 
-from backend.library import mcp_library
 from backend.library import service as library_service
 from backend.threads import agent_user_service
 from backend.web.models.panel import PublishAgentRequest, UpdateAgentRequest
@@ -771,18 +770,13 @@ def test_file_backed_library_metadata_fails_loudly_when_json_is_corrupt(monkeypa
         library_service.list_library("agent")
 
 
-def test_assigning_library_mcp_to_agent_copies_mcp_config_into_repo(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+def test_library_rejects_mcp_resource_type() -> None:
+    with pytest.raises(ValueError, match="Unknown resource type: mcp"):
+        library_service.list_library("mcp")
+
+
+def test_agent_config_patch_persists_explicit_mcp_config() -> None:
     saved_configs: list[AgentConfig] = []
-    monkeypatch.setattr(mcp_library, "LIBRARY_DIR", tmp_path / "library")
-    library_service.create_resource("mcp", "demo-mcp", "Demo MCP")
-    assert library_service.update_resource_content(
-        "mcp",
-        "demo-mcp",
-        (
-            '{"transport":"stdio","command":"uv","args":["run","python","/tmp/demo_mcp.py"],'
-            '"env":{"DEMO":"1"},"allowed_tools":["read"],"instructions":"Use demo resources."}'
-        ),
-    )
 
     class _AgentConfigRepo:
         def get_agent_config(self, _agent_config_id: str):
@@ -797,9 +791,12 @@ def test_assigning_library_mcp_to_agent_copies_mcp_config_into_repo(monkeypatch:
             "mcpServers": [
                 {
                     "name": "demo-mcp",
-                    "command": "Demo MCP",
-                    "args": [],
-                    "env": {},
+                    "transport": "stdio",
+                    "command": "uv",
+                    "args": ["run", "python", "/tmp/demo_mcp.py"],
+                    "env": {"DEMO": "1"},
+                    "allowed_tools": ["read"],
+                    "instructions": "Use demo resources.",
                     "disabled": False,
                 }
             ]
@@ -1022,30 +1019,35 @@ def test_agent_config_patch_rejects_duplicate_sub_agent_names() -> None:
     assert saved_configs == []
 
 
-def test_library_mcp_file_fails_loudly_when_json_is_corrupt(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-    monkeypatch.setattr(mcp_library, "LIBRARY_DIR", tmp_path / "library")
-    (tmp_path / "library").mkdir()
-    (tmp_path / "library" / ".mcp.json").write_text("{bad json", encoding="utf-8")
+def test_agent_config_patch_rejects_mcp_without_runtime_target() -> None:
+    saved_configs: list[AgentConfig] = []
 
-    with pytest.raises(ValueError):
-        mcp_library.list_items()
+    class _AgentConfigRepo:
+        def get_agent_config(self, _agent_config_id: str):
+            return _agent_config(mcp_servers=[])
 
+        def save_agent_config(self, config: AgentConfig) -> None:
+            saved_configs.append(config)
 
-def test_library_mcp_file_rejects_non_object_server_entry(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-    monkeypatch.setattr(mcp_library, "LIBRARY_DIR", tmp_path / "library")
-    (tmp_path / "library").mkdir()
-    (tmp_path / "library" / ".mcp.json").write_text('{"mcpServers":{"demo":[]}}', encoding="utf-8")
+    with pytest.raises(RuntimeError, match="MCP server config must include command or url: demo-mcp"):
+        agent_user_service.update_agent_user_config(
+            "agent-1",
+            {"mcpServers": [{"name": "demo-mcp", "disabled": False}]},
+            user_repo=SimpleNamespace(
+                get_by_id=lambda _agent_id: UserRow(
+                    id="agent-1",
+                    type=UserType.AGENT,
+                    display_name="Toad",
+                    owner_user_id="user-1",
+                    agent_config_id="cfg-1",
+                    created_at=1,
+                )
+            ),
+            agent_config_repo=_AgentConfigRepo(),
+            skill_repo=_MemorySkillRepo(),
+        )
 
-    with pytest.raises(RuntimeError, match="Library MCP server config must be a JSON object"):
-        mcp_library.list_items()
-
-
-def test_library_mcp_content_update_fails_loudly_when_json_is_invalid(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-    monkeypatch.setattr(mcp_library, "LIBRARY_DIR", tmp_path / "library")
-    library_service.create_resource("mcp", "demo-mcp", "Demo MCP")
-
-    with pytest.raises(ValueError, match="valid JSON"):
-        library_service.update_resource_content("mcp", "demo-mcp", "{bad json")
+    assert saved_configs == []
 
 
 def test_agent_config_exposes_mcp_config_fields_for_lossless_toggle() -> None:
