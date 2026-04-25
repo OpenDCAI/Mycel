@@ -4,6 +4,8 @@ import threading
 import time
 from pathlib import Path, PurePosixPath
 
+import pytest
+
 from core.runtime.registry import ToolRegistry
 from core.runtime.tool_result import ToolResultEnvelope
 from core.tools.filesystem.service import FileSystemService, _ReadFileStateCache
@@ -27,6 +29,15 @@ def _make_service(
 def _require_text_result(result: str | ToolResultEnvelope) -> str:
     assert isinstance(result, str)
     return result
+
+
+def test_filesystem_service_rejects_missing_local_workspace(tmp_path: Path):
+    missing = tmp_path / "missing-workspace"
+
+    with pytest.raises(RuntimeError, match="workspace_root must exist"):
+        _make_service(missing)
+
+    assert not missing.exists()
 
 
 def test_edit_rejects_if_last_read_was_partial_view(tmp_path: Path):
