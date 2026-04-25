@@ -426,6 +426,37 @@ def test_agent_config_patch_rejects_inline_skill_content() -> None:
     assert saved_configs == []
 
 
+def test_agent_config_patch_rejects_skill_disabled_flag() -> None:
+    saved_configs: list[AgentConfig] = []
+
+    class _AgentConfigRepo:
+        def get_agent_config(self, _agent_config_id: str):
+            return _agent_config(skills=[])
+
+        def save_agent_config(self, config: AgentConfig) -> None:
+            saved_configs.append(config)
+
+    with pytest.raises(RuntimeError, match="Skill patch item must use enabled, not disabled"):
+        agent_user_service.update_agent_user_config(
+            "agent-1",
+            {"skills": [{"name": "Loadable Skill", "disabled": False}]},
+            user_repo=SimpleNamespace(
+                get_by_id=lambda _agent_id: UserRow(
+                    id="agent-1",
+                    type=UserType.AGENT,
+                    display_name="Toad",
+                    owner_user_id="user-1",
+                    agent_config_id="cfg-1",
+                    created_at=1,
+                )
+            ),
+            agent_config_repo=_AgentConfigRepo(),
+            skill_repo=_MemorySkillRepo(),
+        )
+
+    assert saved_configs == []
+
+
 def test_agent_config_patch_rejects_library_id_in_skill_name_field() -> None:
     saved_configs: list[AgentConfig] = []
     skill_repo = _MemorySkillRepo()
@@ -787,7 +818,7 @@ def test_agent_config_patch_persists_explicit_mcp_config() -> None:
                     "env": {"DEMO": "1"},
                     "allowed_tools": ["read"],
                     "instructions": "Use demo resources.",
-                    "disabled": False,
+                    "enabled": True,
                 }
             ]
         },
@@ -831,7 +862,7 @@ def test_agent_config_patch_rejects_mcp_item_without_name() -> None:
     with pytest.raises(RuntimeError, match="MCP server patch item must include name"):
         agent_user_service.update_agent_user_config(
             "agent-1",
-            {"mcpServers": [{"disabled": False}]},
+            {"mcpServers": [{"enabled": True}]},
             user_repo=SimpleNamespace(
                 get_by_id=lambda _agent_id: UserRow(
                     id="agent-1",
@@ -844,6 +875,66 @@ def test_agent_config_patch_rejects_mcp_item_without_name() -> None:
             ),
             agent_config_repo=_AgentConfigRepo(),
             skill_repo=_MemorySkillRepo(),
+        )
+
+    assert saved_configs == []
+
+
+def test_agent_config_patch_persists_mcp_enabled_false() -> None:
+    saved_configs: list[AgentConfig] = []
+
+    class _AgentConfigRepo:
+        def get_agent_config(self, _agent_config_id: str):
+            return _agent_config(system_prompt="", mcp_servers=[])
+
+        def save_agent_config(self, config: AgentConfig) -> None:
+            saved_configs.append(config)
+
+    result = agent_user_service.update_agent_user_config(
+        "agent-1",
+        {"mcpServers": [{"name": "demo-mcp", "transport": "stdio", "command": "uv", "enabled": False}]},
+        user_repo=SimpleNamespace(
+            get_by_id=lambda _agent_id: UserRow(
+                id="agent-1",
+                type=UserType.AGENT,
+                display_name="Toad",
+                owner_user_id="owner-1",
+                agent_config_id="cfg-1",
+                created_at=1,
+            )
+        ),
+        agent_config_repo=_AgentConfigRepo(),
+    )
+
+    assert result is not None
+    assert saved_configs[-1].mcp_servers == [McpServerConfig(name="demo-mcp", transport="stdio", command="uv", enabled=False)]
+
+
+def test_agent_config_patch_rejects_mcp_disabled_flag() -> None:
+    saved_configs: list[AgentConfig] = []
+
+    class _AgentConfigRepo:
+        def get_agent_config(self, _agent_config_id: str):
+            return _agent_config(mcp_servers=[])
+
+        def save_agent_config(self, config: AgentConfig) -> None:
+            saved_configs.append(config)
+
+    with pytest.raises(RuntimeError, match="MCP server patch item must use enabled, not disabled"):
+        agent_user_service.update_agent_user_config(
+            "agent-1",
+            {"mcpServers": [{"name": "demo-mcp", "transport": "stdio", "command": "uv", "disabled": False}]},
+            user_repo=SimpleNamespace(
+                get_by_id=lambda _agent_id: UserRow(
+                    id="agent-1",
+                    type=UserType.AGENT,
+                    display_name="Toad",
+                    owner_user_id="owner-1",
+                    agent_config_id="cfg-1",
+                    created_at=1,
+                )
+            ),
+            agent_config_repo=_AgentConfigRepo(),
         )
 
     assert saved_configs == []
@@ -1022,7 +1113,7 @@ def test_agent_config_patch_rejects_mcp_without_runtime_target() -> None:
     with pytest.raises(RuntimeError, match="MCP server config must include command or url: demo-mcp"):
         agent_user_service.update_agent_user_config(
             "agent-1",
-            {"mcpServers": [{"name": "demo-mcp", "disabled": False}]},
+            {"mcpServers": [{"name": "demo-mcp", "enabled": True}]},
             user_repo=SimpleNamespace(
                 get_by_id=lambda _agent_id: UserRow(
                     id="agent-1",
@@ -1083,7 +1174,7 @@ def test_agent_config_exposes_mcp_config_fields_for_lossless_toggle() -> None:
             "env": {"DEMO": "1"},
             "allowed_tools": ["read"],
             "instructions": "Use demo resources.",
-            "disabled": False,
+            "enabled": True,
         }
     ]
 
