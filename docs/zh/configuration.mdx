@@ -170,13 +170,13 @@ Mycel 提供四个 `leon:*` 别名：
 | `leon:large` | claude-opus-4-6 | 复杂推理 |
 | `leon:max` | claude-opus-4-6 + temp=0 | 最高精度 |
 
-通过 **Settings → Models** 在 Web UI 中设置，或在 `~/.leon/models.json` 中：
+通过 **Settings → Models** 在 Web UI 中设置：
 
 ```json
 { "active": { "model": "leon:large" } }
 ```
 
-可在 `models.json` 中重新映射这些别名：
+可通过 Settings 持久化的模型配置重新映射这些别名：
 
 ```json
 {
