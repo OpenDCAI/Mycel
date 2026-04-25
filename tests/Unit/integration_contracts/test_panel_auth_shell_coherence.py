@@ -941,6 +941,48 @@ def test_agent_config_patch_explicit_library_id_uses_library_package_choice() ->
     assert "content" not in saved_configs[-1].skills[0].model_dump()
 
 
+def test_select_agent_skill_uses_agent_config_skill_patch_boundary() -> None:
+    saved_configs: list[AgentConfig] = []
+    skill_repo = _MemorySkillRepo()
+    library_skill = _put_skill(
+        skill_repo,
+        owner_user_id="user-1",
+        skill_id="loadable-skill",
+        name="Loadable Skill",
+        description="loadable",
+        content="---\nname: Loadable Skill\n---\nUse it.",
+    )
+
+    class _AgentConfigRepo:
+        def get_agent_config(self, _agent_config_id: str):
+            return _agent_config(skills=[])
+
+        def save_agent_config(self, config: AgentConfig) -> None:
+            saved_configs.append(config)
+
+    result = agent_user_service.select_agent_skill(
+        "agent-1",
+        "loadable-skill",
+        user_repo=SimpleNamespace(
+            get_by_id=lambda _agent_id: UserRow(
+                id="agent-1",
+                type=UserType.AGENT,
+                display_name="Toad",
+                owner_user_id="user-1",
+                agent_config_id="cfg-1",
+                created_at=1,
+            )
+        ),
+        agent_config_repo=_AgentConfigRepo(),
+        skill_repo=skill_repo,
+    )
+
+    assert result is not None
+    assert saved_configs[-1].skills[0].skill_id == "loadable-skill"
+    assert saved_configs[-1].skills[0].package_id == library_skill.package_id
+    assert saved_configs[-1].skills[0].description == "loadable"
+
+
 def test_panel_library_skill_routes_use_skill_repo_without_recipe_repo() -> None:
     app = FastAPI()
     app.include_router(panel_router.router)

@@ -352,6 +352,34 @@ def update_agent_user_config(
     return _sync_agent_config_patch_to_repo(agent_user_id, config_patch, user_repo, agent_config_repo, skill_repo)
 
 
+def select_agent_skill(
+    agent_user_id: str,
+    skill_id: str,
+    user_repo: Any = None,
+    agent_config_repo: Any = None,
+    skill_repo: Any = None,
+) -> dict[str, Any] | None:
+    if skill_repo is None:
+        raise RuntimeError("skill_repo is required for agent config skill writes")
+    user, current_config = _resolve_repo_backed_agent(agent_user_id, user_repo, agent_config_repo)
+    if user is None or current_config is None:
+        return None
+    if user.owner_user_id != current_config.owner_user_id:
+        raise RuntimeError(f"Agent user owner does not match Agent config owner: {agent_user_id}")
+    library_skill = skill_repo.get_by_id(current_config.owner_user_id, skill_id)
+    if library_skill is None:
+        raise RuntimeError(f"Library skill not found: {skill_id}")
+    current_items = [item for item in _skills_from_repo(current_config) if item["id"] != library_skill.id]
+    current_items.append({"id": library_skill.id, "name": library_skill.name, "enabled": True})
+    return _sync_agent_config_patch_to_repo(
+        agent_user_id,
+        {"skills": current_items},
+        user_repo,
+        agent_config_repo,
+        skill_repo,
+    )
+
+
 # ── Agent config repo helpers ──
 
 

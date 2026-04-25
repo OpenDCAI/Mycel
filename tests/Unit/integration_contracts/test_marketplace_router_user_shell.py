@@ -291,8 +291,18 @@ async def test_upgrade_from_marketplace_uses_user_repo_not_member_repo(monkeypat
 @pytest.mark.asyncio
 async def test_apply_marketplace_item_uses_user_and_agent_config_repos(monkeypatch: pytest.MonkeyPatch) -> None:
     seen: dict[str, object] = {}
+    selected: dict[str, object] = {}
 
-    monkeypatch.setattr(marketplace_router.marketplace_client, "apply_item", lambda **kwargs: seen.update(kwargs) or {"ok": True})
+    monkeypatch.setattr(
+        marketplace_router.marketplace_client,
+        "apply_item",
+        lambda **kwargs: seen.update(kwargs) or {"resource_id": "skill-1", "type": "skill", "version": "1.0.0"},
+    )
+    monkeypatch.setattr(
+        marketplace_router.agent_user_service,
+        "select_agent_skill",
+        lambda **kwargs: selected.update(kwargs) or {"id": "agent-1"},
+    )
 
     owner_agent = SimpleNamespace(id="agent-1", owner_user_id="owner-1")
     request = SimpleNamespace(
@@ -307,13 +317,18 @@ async def test_apply_marketplace_item_uses_user_and_agent_config_repos(monkeypat
 
     result = await marketplace_router.apply_marketplace_item(req=req, user_id="owner-1", request=cast(Any, request))
 
-    assert result == {"ok": True}
+    assert result == {"resource_id": "skill-1", "type": "skill", "version": "1.0.0", "agent_user_id": "agent-1"}
     assert seen["item_id"] == "item-1"
     assert seen["owner_user_id"] == "owner-1"
     assert seen["user_repo"] is request.app.state.user_repo
     assert seen["agent_config_repo"] is request.app.state.runtime_storage_state.storage_container.agent_config_repo()
     assert seen["skill_repo"] is request.app.state.runtime_storage_state.storage_container.skill_repo()
-    assert seen["agent_user_id"] == "agent-1"
+    assert "agent_user_id" not in seen
+    assert selected["agent_user_id"] == "agent-1"
+    assert selected["skill_id"] == "skill-1"
+    assert selected["user_repo"] is request.app.state.user_repo
+    assert selected["agent_config_repo"] is request.app.state.runtime_storage_state.storage_container.agent_config_repo()
+    assert selected["skill_repo"] is request.app.state.runtime_storage_state.storage_container.skill_repo()
 
 
 @pytest.mark.asyncio

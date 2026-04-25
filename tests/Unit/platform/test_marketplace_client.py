@@ -400,7 +400,7 @@ class TestApplySkill:
             with pytest.raises(ValueError, match="Invalid slug"):
                 apply_item("item-evil", owner_user_id="owner-1", skill_repo=skill_repo)
 
-    def test_apply_with_agent_user_id_selects_skill_package_for_agent_config(self):
+    def test_apply_skill_saves_library_package_without_agent_config_write(self):
         import backend.hub.client as marketplace_client
 
         saved: list[AgentConfig] = []
@@ -443,7 +443,6 @@ class TestApplySkill:
                 user_repo=user_repo,
                 agent_config_repo=_AgentConfigRepo(),
                 skill_repo=skill_repo,
-                agent_user_id="agent-user-1",
             )
 
         assert result == {
@@ -451,22 +450,15 @@ class TestApplySkill:
             "package_id": packages[0].id,
             "type": "skill",
             "version": "1.2.3",
-            "agent_user_id": "agent-user-1",
         }
         assert saved_skills[0].name == "FastAPI"
         assert saved_skills[0].description == "Build FastAPI APIs"
         assert packages[0].skill_md == "---\nname: FastAPI\ndescription: Build FastAPI APIs\n---\nAlways use APIRouter."
         assert packages[0].manifest["files"][0]["path"] == "references/routing.md"
         assert selected == [("owner-1", "fastapi", packages[0].id)]
-        assert saved[0].id == "cfg-1"
-        assert [skill.name for skill in saved[0].skills] == ["Existing", "FastAPI"]
-        assert saved[0].skills[1].skill_id == "fastapi"
-        assert saved[0].skills[1].package_id == packages[0].id
-        assert saved[0].skills[1].description == "Build FastAPI APIs"
-        assert saved[0].skills[1].source == packages[0].source
-        assert "source_at" in saved[0].skills[1].source
+        assert saved == []
 
-    def test_saves_skill_to_library_when_agent_user_id_is_provided(self):
+    def test_saves_skill_to_library_without_agent_config_repo(self):
         import backend.hub.client as marketplace_client
 
         saved_configs: list[AgentConfig] = []
@@ -503,7 +495,6 @@ class TestApplySkill:
                 user_repo=user_repo,
                 agent_config_repo=_AgentConfigRepo(),
                 skill_repo=skill_repo,
-                agent_user_id="agent-user-1",
             )
 
         assert saved_skills[0].id == "fastapi"
@@ -513,13 +504,10 @@ class TestApplySkill:
             "package_id": packages[0].id,
             "type": "skill",
             "version": "1.2.3",
-            "agent_user_id": "agent-user-1",
         }
-        assert saved_configs[0].skills[0].name == "FastAPI"
-        assert saved_configs[0].skills[0].skill_id == "fastapi"
-        assert saved_configs[0].skills[0].package_id == packages[0].id
+        assert saved_configs == []
 
-    def test_apply_with_agent_user_id_selects_trimmed_frontmatter_name(self):
+    def test_apply_skill_uses_trimmed_frontmatter_name(self):
         import backend.hub.client as marketplace_client
 
         saved: list[AgentConfig] = []
@@ -555,13 +543,12 @@ class TestApplySkill:
                 user_repo=user_repo,
                 agent_config_repo=_AgentConfigRepo(),
                 skill_repo=skill_repo,
-                agent_user_id="agent-user-1",
             )
 
         assert result["resource_id"] == "fastapi"
         assert result["package_id"] == packages[0].id
         assert saved_skills[0].name == "FastAPI"
-        assert saved[0].skills[0].name == "FastAPI"
+        assert saved == []
 
 
 def test_apply_skill_to_agent_does_not_handwrite_binding_source() -> None:
@@ -572,6 +559,18 @@ def test_apply_skill_to_agent_does_not_handwrite_binding_source() -> None:
     source = inspect.getsource(marketplace_client.apply_item)
 
     assert 'source={\n                        "marketplace_item_id": item_id' not in source
+
+
+def test_apply_skill_does_not_write_agent_config() -> None:
+    import inspect
+
+    import backend.hub.client as marketplace_client
+
+    source = inspect.getsource(marketplace_client.apply_item)
+
+    assert "AgentSkill(" not in source
+    assert "save_agent_config" not in source
+    assert "agent_user_id" not in inspect.signature(marketplace_client.apply_item).parameters
 
 
 def test_apply_skill_to_agent_does_not_use_source_version_for_binding_version() -> None:

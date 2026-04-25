@@ -13,7 +13,7 @@ from fastapi import HTTPException
 import backend.hub.snapshot_apply as _snapshot_apply
 from backend.hub.versioning import BumpType, bump_semver
 from config.agent_config_resolver import resolve_agent_config
-from config.agent_config_types import AgentSkill, Skill, SkillPackage
+from config.agent_config_types import Skill, SkillPackage
 from config.agent_snapshot import snapshot_from_resolved_config
 from config.skill_files import normalize_skill_file_map
 from config.skill_package import build_skill_package_hash, build_skill_package_manifest
@@ -232,7 +232,6 @@ def apply_item(
     user_repo: Any = None,
     agent_config_repo: Any = None,
     skill_repo: Any = None,
-    agent_user_id: str | None = None,
 ) -> dict:
     """Apply a Hub item into the owner account.
 
@@ -300,37 +299,6 @@ def apply_item(
         )
         skill_repo.select_package(owner_user_id, skill.id, package.id)
 
-        if agent_user_id is not None:
-            if user_repo is None or agent_config_repo is None:
-                raise RuntimeError("user_repo and agent_config_repo are required to add a skill to an agent")
-            user = user_repo.get_by_id(agent_user_id)
-            if user is None or user.owner_user_id != owner_user_id:
-                raise RuntimeError(f"Agent user not found for owner: {agent_user_id}")
-            if not getattr(user, "agent_config_id", None):
-                raise RuntimeError(f"Agent user has no agent_config_id: {agent_user_id}")
-
-            config = agent_config_repo.get_agent_config(user.agent_config_id)
-            if config is None:
-                raise RuntimeError(f"Agent config not found for agent user: {agent_user_id}")
-            next_skills = [skill for skill in config.skills if skill.name != skill_name]
-            next_skills.append(
-                AgentSkill(
-                    skill_id=slug,
-                    package_id=package.id,
-                    name=skill_name,
-                    description=skill_description,
-                    version=package.version,
-                    source=dict(package.source),
-                )
-            )
-            agent_config_repo.save_agent_config(config.model_copy(update={"skills": next_skills}))
-            return {
-                "resource_id": slug,
-                "package_id": package.id,
-                "type": "skill",
-                "version": source_version,
-                "agent_user_id": agent_user_id,
-            }
         return {"resource_id": slug, "package_id": package.id, "type": "skill", "version": source_version}
 
     if item_type == "agent":
