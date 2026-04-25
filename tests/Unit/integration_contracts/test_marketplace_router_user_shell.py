@@ -364,6 +364,7 @@ async def test_apply_member_snapshot_materializes_skill_through_router(monkeypat
                         {
                             "name": "Snapshot Skill",
                             "description": "skill desc",
+                            "version": "1.2.3",
                             "content": "---\nname: Snapshot Skill\n---\nbody",
                             "files": {"references/routing.md": "route narrowly"},
                         }
