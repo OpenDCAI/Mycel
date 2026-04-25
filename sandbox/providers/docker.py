@@ -7,6 +7,7 @@ import shlex
 import subprocess
 import uuid
 from collections.abc import Callable
+from contextlib import suppress
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal, overload
 
@@ -325,10 +326,8 @@ class DockerProvider(SandboxProvider):
             if len(lines) >= 2:
                 df_parts = lines[1].split()
                 if len(df_parts) >= 3:
-                    try:
+                    with suppress(ValueError):
                         disk_used_gb = float(df_parts[2].rstrip("G"))
-                    except ValueError:
-                        pass
 
         return Metrics(
             cpu_percent=cpu_percent,
@@ -351,7 +350,7 @@ class DockerProvider(SandboxProvider):
             return None
         # Output: "8.19kB (virtual 159MB)" — first token is writable layer
         writable = size_str.split(" (")[0]
-        try:
+        with suppress(ValueError):
             if writable.endswith("GB"):
                 return float(writable[:-2])
             if writable.endswith("MB"):
@@ -360,8 +359,6 @@ class DockerProvider(SandboxProvider):
                 return float(writable[:-2]) / (1024.0 * 1024.0)
             if writable.endswith("B"):
                 return float(writable[:-1]) / (1024.0**3)
-        except ValueError:
-            pass
         return None
 
     def _copy_host_path_into_container(self, container_id: str, *, source: str, target: str) -> None:
