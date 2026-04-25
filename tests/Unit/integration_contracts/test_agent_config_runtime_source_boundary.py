@@ -1,4 +1,6 @@
 import inspect
+import json
+from pathlib import Path
 
 from config.loader import AgentLoader
 from config.schema import SkillsConfig
@@ -27,3 +29,11 @@ def test_config_loading_does_not_create_skill_directories() -> None:
 
     assert "mkdir" not in loader_source
     assert "path.exists()" not in skills_config_source
+
+
+def test_runtime_defaults_do_not_read_host_skill_directory() -> None:
+    runtime_defaults_path = Path(__file__).parents[3] / "config" / "defaults" / "runtime.json"
+    runtime_defaults = json.loads(runtime_defaults_path.read_text())
+
+    assert runtime_defaults["skills"]["paths"] == []
+    assert AgentLoader().load().skills.paths == []
