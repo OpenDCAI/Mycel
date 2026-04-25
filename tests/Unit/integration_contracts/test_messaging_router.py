@@ -517,6 +517,84 @@ def test_send_message_consumes_service_owned_message_projection() -> None:
     }
 
 
+def test_send_message_defaults_sender_to_authenticated_user() -> None:
+    seen: list[tuple[str, str, str]] = []
+    messaging_service = SimpleNamespace(
+        resolve_display_user=lambda uid: (
+            SimpleNamespace(
+                id="external-user-1",
+                display_name="Codex Local",
+                type="external",
+                avatar=None,
+                owner_user_id=None,
+            )
+            if uid == "external-user-1"
+            else None
+        ),
+        send=lambda chat_id, sender_id, content, **_kwargs: (
+            seen.append((chat_id, sender_id, content))
+            or {
+                "id": "msg-1",
+                "chat_id": chat_id,
+                "sender_id": sender_id,
+                "content": content,
+                "message_type": "human",
+                "created_at": "2026-04-07T00:00:00Z",
+            }
+        ),
+        project_message_response=lambda msg: {
+            "id": msg["id"],
+            "chat_id": msg["chat_id"],
+            "sender_id": msg["sender_id"],
+            "sender_name": "Codex Local",
+            "content": msg["content"],
+            "message_type": msg["message_type"],
+            "mentioned_ids": [],
+            "signal": None,
+            "retracted_at": None,
+            "created_at": msg["created_at"],
+        },
+    )
+
+    result = chats_router.send_message(
+        "chat-1",
+        chats_router.SendMessageBody(content="hello"),
+        user_id="external-user-1",
+        messaging_service=messaging_service,
+    )
+
+    assert seen == [("chat-1", "external-user-1", "hello")]
+    assert result["sender_id"] == "external-user-1"
+
+
+def test_send_message_still_rejects_unowned_explicit_sender_id() -> None:
+    messaging_service = SimpleNamespace(
+        resolve_display_user=lambda uid: (
+            SimpleNamespace(
+                id="other-user-1",
+                display_name="Other User",
+                type="external",
+                avatar=None,
+                owner_user_id=None,
+            )
+            if uid == "other-user-1"
+            else None
+        ),
+        send=lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("send should not be called")),
+    )
+
+    with pytest.raises(HTTPException) as exc_info:
+        chats_router.send_message(
+            "chat-1",
+            chats_router.SendMessageBody(content="hello", sender_id="other-user-1"),
+            user_id="external-user-1",
+            messaging_service=messaging_service,
+        )
+
+    assert exc_info.value.status_code == 403
+    assert "does not belong" in str(exc_info.value.detail)
+
+
 def test_send_message_accepts_owned_thread_user_sender_id_via_thread_repo():
     seen: list[tuple[str, str, str]] = []
     app = SimpleNamespace(

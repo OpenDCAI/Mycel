@@ -31,7 +31,7 @@ class CreateChatBody(BaseModel):
 
 class SendMessageBody(BaseModel):
     content: str
-    sender_id: str
+    sender_id: str | None = None
     mentioned_ids: list[str] | None = None
     message_type: str = "human"
     signal: str | None = None
@@ -195,10 +195,11 @@ def send_message(
 ):
     if not body.content.strip():
         raise HTTPException(400, "Content cannot be empty")
-    _verify_user_ownership(messaging_service, body.sender_id, user_id)
+    sender_id = body.sender_id or user_id
+    _verify_user_ownership(messaging_service, sender_id, user_id)
     msg = messaging_service.send(
         chat_id,
-        body.sender_id,
+        sender_id,
         body.content,
         mentions=body.mentioned_ids,
         signal=body.signal,

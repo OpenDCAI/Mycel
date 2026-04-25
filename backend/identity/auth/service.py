@@ -18,6 +18,10 @@ logger = logging.getLogger(__name__)
 SUPABASE_JWT_ALGORITHM = "HS256"
 
 
+class ExternalUserAlreadyExistsError(ValueError):
+    pass
+
+
 class AuthService:
     def __init__(
         self,
@@ -184,6 +188,44 @@ class AuthService:
             raise ValueError("Token 已过期，请重新登录")
         except jwt.InvalidTokenError as e:
             raise ValueError(f"Token 无效: {e}")
+
+    def create_external_user_token(self, user_id: str, display_name: str, *, created_by_user_id: str) -> dict:
+        external_user_id = user_id.strip()
+        external_display_name = display_name.strip()
+        if not external_user_id:
+            raise ValueError("external user_id is required")
+        if not external_display_name:
+            raise ValueError("external display_name is required")
+        if self._users.get_by_id(external_user_id) is not None:
+            raise ExternalUserAlreadyExistsError(f"external user already exists: {external_user_id}")
+
+        jwt_secret = os.getenv("SUPABASE_JWT_SECRET")
+        if not jwt_secret:
+            raise RuntimeError("SUPABASE_JWT_SECRET env var required for external user token creation.")
+
+        now = time.time()
+        self._users.create(
+            UserRow(
+                id=external_user_id,
+                type=UserType.EXTERNAL,
+                display_name=external_display_name,
+                created_at=now,
+            )
+        )
+        token = jwt.encode(
+            {
+                "sub": external_user_id,
+                "iat": int(now),
+                "mycel_user_type": "external",
+                "created_by_user_id": created_by_user_id,
+            },
+            jwt_secret,
+            algorithm=SUPABASE_JWT_ALGORITHM,
+        )
+        return {
+            "token": token,
+            "user": {"id": external_user_id, "name": external_display_name, "type": "external"},
+        }
 
     def _resolve_email(self, identifier: str) -> str:
         if identifier.strip().lstrip("0123456789") == "" and identifier.strip().isdigit():

@@ -6,7 +6,8 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 from backend.identity.auth.dependencies import _get_auth_service
-from backend.web.core.dependencies import get_app
+from backend.identity.auth.service import ExternalUserAlreadyExistsError
+from backend.web.core.dependencies import get_app, get_current_user, get_current_user_id
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
@@ -75,3 +76,41 @@ async def login(payload: LoginRequest, app: Annotated[Any, Depends(get_app)]) ->
         401,
         lambda service: service.login(payload.identifier, payload.password),
     )
+
+
+class CreateExternalUserRequest(BaseModel):
+    user_id: str
+    display_name: str
+
+
+@router.get("/me")
+async def me(user: Annotated[Any, Depends(get_current_user)]) -> dict:
+    user_type = getattr(user.type, "value", user.type)
+    return {
+        "id": user.id,
+        "name": user.display_name,
+        "type": user_type,
+        "email": user.email,
+        "mycel_id": user.mycel_id,
+        "avatar": user.avatar,
+    }
+
+
+@router.post("/external-users")
+async def create_external_user(
+    payload: CreateExternalUserRequest,
+    app: Annotated[Any, Depends(get_app)],
+    current_user_id: Annotated[str, Depends(get_current_user_id)],
+) -> dict:
+    try:
+        return await asyncio.to_thread(
+            lambda: _get_auth_service(app).create_external_user_token(
+                payload.user_id,
+                payload.display_name,
+                created_by_user_id=current_user_id,
+            )
+        )
+    except ExternalUserAlreadyExistsError as e:
+        raise HTTPException(409, str(e))
+    except ValueError as e:
+        raise HTTPException(400, str(e))
