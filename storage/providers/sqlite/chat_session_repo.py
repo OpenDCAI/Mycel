@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from sandbox.chat_session import REQUIRED_CHAT_SESSION_COLUMNS
-from storage.providers.sqlite.kernel import SQLiteDBRole, connect_sqlite, resolve_role_db_path
+from storage.providers.sqlite.kernel import SQLiteDBRole, connect_sqlite, resolve_explicit_role_db_path
 
 
 class SQLiteChatSessionRepo:
@@ -19,7 +19,7 @@ class SQLiteChatSessionRepo:
             self._db_path = Path(db_path) if db_path else Path("")
         else:
             if db_path is None:
-                db_path = resolve_role_db_path(SQLiteDBRole.SANDBOX)
+                db_path = resolve_explicit_role_db_path(SQLiteDBRole.SANDBOX)
             self._db_path = Path(db_path)
             self._db_path.parent.mkdir(parents=True, exist_ok=True)
             self._conn = connect_sqlite(db_path, check_same_thread=False)

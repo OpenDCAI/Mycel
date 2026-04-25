@@ -6,6 +6,9 @@ import pytest
 
 from sandbox import control_plane_repos
 from sandbox.manager import SandboxManager
+from storage.providers.sqlite.chat_session_repo import SQLiteChatSessionRepo
+from storage.providers.sqlite.sandbox_runtime_repo import SQLiteSandboxRuntimeRepo
+from storage.providers.sqlite.terminal_repo import SQLiteTerminalRepo
 
 
 class _Provider:
@@ -52,5 +55,23 @@ def test_sandbox_manager_requires_explicit_control_plane_db_path(monkeypatch, tm
 
     with pytest.raises(RuntimeError, match="LEON_SANDBOX_DB_PATH"):
         SandboxManager(provider=_Provider())
+
+    assert not (tmp_path / ".leon").exists()
+
+
+@pytest.mark.parametrize(
+    "repo_cls",
+    [
+        SQLiteTerminalRepo,
+        SQLiteChatSessionRepo,
+        SQLiteSandboxRuntimeRepo,
+    ],
+)
+def test_sqlite_sandbox_repos_require_explicit_db_path(repo_cls, monkeypatch, tmp_path):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.delenv("LEON_SANDBOX_DB_PATH", raising=False)
+
+    with pytest.raises(RuntimeError, match="LEON_SANDBOX_DB_PATH"):
+        repo_cls()
 
     assert not (tmp_path / ".leon").exists()
