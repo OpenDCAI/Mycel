@@ -135,10 +135,7 @@ class _VersionedCheckpointSaver:
         return SimpleNamespace(checkpoint=self.checkpoint, metadata=self.metadata)
 
     def get_next_version(self, current: str | None, _channel) -> str:
-        if current is None:
-            current_v = 0
-        else:
-            current_v = int(str(current).split(".")[0])
+        current_v = 0 if current is None else int(str(current).split(".")[0])
         return f"{current_v + 1:032}.test"
 
     async def aput(self, _config, checkpoint, metadata, new_versions):
