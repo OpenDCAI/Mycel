@@ -2126,6 +2126,26 @@ def test_chat_tool_create_group_chat_uses_current_identity_as_group_owner() -> N
     assert created == [(["agent-user-1", "human-user-1", "human-user-2"], "debate room")]
 
 
+def test_chat_tool_create_group_chat_ignores_current_identity_when_agent_includes_it() -> None:
+    registry = ToolRegistry()
+    created: list[tuple[list[str], str | None]] = []
+    ChatToolService(
+        registry=registry,
+        chat_identity_id="agent-user-1",
+        messaging_service=SimpleNamespace(
+            create_group_chat=lambda user_ids, title=None: created.append((user_ids, title)) or {"id": "chat-1", "title": title}
+        ),
+    )
+
+    create_group_chat = registry.get("create_group_chat")
+    assert create_group_chat is not None
+
+    result = create_group_chat.handler(participant_ids=["agent-user-1", "human-user-1", "human-user-2"], title="debate room")
+
+    assert result == "Group chat created: debate room [chat_id: chat-1]"
+    assert created == [(["agent-user-1", "human-user-1", "human-user-2"], "debate room")]
+
+
 def test_chat_tool_create_group_chat_fails_when_created_chat_has_invalid_id() -> None:
     registry = ToolRegistry()
     ChatToolService(

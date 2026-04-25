@@ -226,9 +226,8 @@ class ChatToolService:
         eid = self._chat_identity_id
 
         def handle(participant_ids: list[str], title: str | None = None) -> str:
-            if eid in participant_ids:
-                raise RuntimeError("participant_ids must contain only other users")
-            chat = self._messaging.create_group_chat([eid, *participant_ids], title=title)
+            other_ids = [participant_id for participant_id in dict.fromkeys(participant_ids) if participant_id != eid]
+            chat = self._messaging.create_group_chat([eid, *other_ids], title=title)
             if not isinstance(chat, dict):
                 raise RuntimeError("Created group chat row is invalid")
             chat_id = chat.get("id")
@@ -247,7 +246,7 @@ class ChatToolService:
                     "name": "create_group_chat",
                     "description": (
                         "Create a group chat owned by your current social identity. "
-                        "participant_ids must contain the other users only; your own id is added automatically."
+                        "Your own id is added automatically and ignored if participant_ids includes it."
                     ),
                     "parameters": {
                         "type": "object",
