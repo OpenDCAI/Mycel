@@ -113,29 +113,36 @@ def test_summary_store_defaults_to_runtime_repo_when_strategy_missing(monkeypatc
     assert store._repo is fake_repo
 
 
-def test_summary_store_keeps_sqlite_when_strategy_missing_and_runtime_config_missing(monkeypatch) -> None:
+def test_summary_store_requires_runtime_repo_or_explicit_db_path(monkeypatch, tmp_path) -> None:
     monkeypatch.delenv("LEON_STORAGE_STRATEGY", raising=False)
     monkeypatch.delenv("LEON_SUPABASE_CLIENT_FACTORY", raising=False)
+    monkeypatch.setenv("HOME", str(tmp_path))
     monkeypatch.setattr(
         "core.runtime.middleware.memory.summary_store.build_summary_repo",
         lambda **_kwargs: (_ for _ in ()).throw(AssertionError("runtime repo should not be used")),
     )
 
-    class _SQLiteSummaryRepoStub:
-        def __init__(self, db_path, connect_fn=None):
-            self.db_path = db_path
+    try:
+        SummaryStore()
+    except RuntimeError as exc:
+        assert "SummaryStore requires summary_repo or db_path" in str(exc)
+    else:
+        raise AssertionError("SummaryStore should require an explicit storage source")
 
-        def ensure_tables(self) -> None:
-            return None
+    assert not (tmp_path / ".leon").exists()
 
-        def close(self) -> None:
-            return None
 
-    monkeypatch.setattr("core.runtime.middleware.memory.summary_store.SQLiteSummaryRepo", _SQLiteSummaryRepoStub)
+def test_summary_store_repo_injection_does_not_select_local_db_path(monkeypatch, tmp_path) -> None:
+    fake_repo = _FakeSummaryRepo()
+    monkeypatch.delenv("LEON_STORAGE_STRATEGY", raising=False)
+    monkeypatch.delenv("LEON_SUPABASE_CLIENT_FACTORY", raising=False)
+    monkeypatch.setenv("HOME", str(tmp_path))
 
-    store = SummaryStore()
+    store = SummaryStore(summary_repo=fake_repo)
 
-    assert isinstance(store._repo, _SQLiteSummaryRepoStub)
+    assert store._repo is fake_repo
+    assert store.db_path is None
+    assert not (tmp_path / ".leon").exists()
 
 
 def test_summary_store_explicit_db_path_keeps_sqlite_under_supabase(monkeypatch, tmp_path) -> None:
