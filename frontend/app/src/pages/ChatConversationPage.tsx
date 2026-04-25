@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, Link, useOutletContext } from "react-router-dom";
-import { Check, PanelLeft, Send, UserPlus, X } from "lucide-react";
+import { Check, Clipboard, PanelLeft, Send, UserPlus, X } from "lucide-react";
 import { authFetch, useAuthStore } from "../store/auth-store";
 import { parseChatMessageEventData, parseChatTypingUserId, streamChatEvents } from "../api/chat-events";
 import { UserBubble } from "../components/chat-area/UserBubble";
@@ -57,6 +57,7 @@ function ChatConversationInner({ chatId }: { chatId: string }) {
   const [joinRequests, setJoinRequests] = useState<ChatJoinRequest[]>([]);
   const [joinRequestError, setJoinRequestError] = useState<string | null>(null);
   const [joinRequestBusyId, setJoinRequestBusyId] = useState<string | null>(null);
+  const [shareStatus, setShareStatus] = useState<string | null>(null);
   const [typingUsers, setTypingUsers] = useState<Set<string>>(new Set());
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -339,6 +340,18 @@ function ChatConversationInner({ chatId }: { chatId: string }) {
     }
   }, [chatId, joinMessage, joinSubmitting, joinTarget]);
 
+  const copyGroupLink = useCallback(async () => {
+    setShareStatus(null);
+    try {
+      if (!navigator.clipboard?.writeText) throw new Error("Clipboard API unavailable");
+      await navigator.clipboard.writeText(`${window.location.origin}/chat/visit/${chatId}`);
+      setShareStatus("已复制");
+    } catch (err) {
+      console.error("[ChatShare] copy failed:", err);
+      setShareStatus("复制失败");
+    }
+  }, [chatId]);
+
   // Typing indicator display — works for both 1:1 and group
   const typingNames = [...typingUsers]
     .map(id => memberMap.get(id)?.name)
@@ -469,6 +482,22 @@ function ChatConversationInner({ chatId }: { chatId: string }) {
             </span>
           )}
         </div>
+        {chat?.type === "group" && (
+          <div className="flex shrink-0 items-center gap-2">
+            {shareStatus && (
+              <span className="text-2xs text-muted-foreground">{shareStatus}</span>
+            )}
+            <button
+              type="button"
+              aria-label="复制群链接"
+              onClick={() => void copyGroupLink()}
+              className="inline-flex h-8 items-center gap-1.5 rounded-md border border-border px-2 text-2xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground"
+            >
+              <Clipboard className="h-3.5 w-3.5" />
+              复制群链接
+            </button>
+          </div>
+        )}
       </header>
 
       {isGroupOwner && (pendingJoinRequests.length > 0 || joinRequestError) && (

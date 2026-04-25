@@ -16,11 +16,19 @@ const statusDot: Record<string, string> = {
 };
 
 function contactStatusLabel(contact: UserChatCandidate): string {
+  if (contact.relationship_state === "pending") {
+    return contact.relationship_is_requester ? "已申请" : "待处理";
+  }
   if (contact.relationship_state === "visit" || contact.relationship_state === "hire") {
     return contact.relationship_state;
   }
   if (contact.can_chat) return "联系人";
   return contact.relationship_state;
+}
+
+function isVisibleContact(candidate: UserChatCandidate, myUserId: string | null): boolean {
+  if (candidate.user_id === myUserId || candidate.is_owned) return false;
+  return candidate.can_chat || candidate.relationship_state === "pending";
 }
 
 export default function ContactList() {
@@ -47,7 +55,7 @@ export default function ContactList() {
   const contacts = useMemo(() => {
     const query = search.trim().toLowerCase();
     return chatCandidates
-      .filter((candidate) => candidate.user_id !== myUserId && !candidate.is_owned && candidate.can_chat)
+      .filter((candidate) => isVisibleContact(candidate, myUserId))
       .filter((item) => {
         if (!query) return true;
         return [item.name, item.owner_name ?? "", item.type, item.relationship_state].join(" ").toLowerCase().includes(query);
