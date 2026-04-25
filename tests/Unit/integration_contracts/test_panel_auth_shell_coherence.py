@@ -457,6 +457,37 @@ def test_agent_config_patch_rejects_skill_disabled_flag() -> None:
     assert saved_configs == []
 
 
+def test_agent_config_patch_rejects_skill_enabled_string() -> None:
+    saved_configs: list[AgentConfig] = []
+
+    class _AgentConfigRepo:
+        def get_agent_config(self, _agent_config_id: str):
+            return _agent_config(skills=[])
+
+        def save_agent_config(self, config: AgentConfig) -> None:
+            saved_configs.append(config)
+
+    with pytest.raises(RuntimeError, match="Skill patch item enabled must be a boolean"):
+        agent_user_service.update_agent_user_config(
+            "agent-1",
+            {"skills": [{"name": "Loadable Skill", "enabled": "false"}]},
+            user_repo=SimpleNamespace(
+                get_by_id=lambda _agent_id: UserRow(
+                    id="agent-1",
+                    type=UserType.AGENT,
+                    display_name="Toad",
+                    owner_user_id="user-1",
+                    agent_config_id="cfg-1",
+                    created_at=1,
+                )
+            ),
+            agent_config_repo=_AgentConfigRepo(),
+            skill_repo=_MemorySkillRepo(),
+        )
+
+    assert saved_configs == []
+
+
 def test_agent_config_patch_rejects_library_id_in_skill_name_field() -> None:
     saved_configs: list[AgentConfig] = []
     skill_repo = _MemorySkillRepo()
@@ -940,6 +971,36 @@ def test_agent_config_patch_rejects_mcp_disabled_flag() -> None:
     assert saved_configs == []
 
 
+def test_agent_config_patch_rejects_mcp_enabled_string() -> None:
+    saved_configs: list[AgentConfig] = []
+
+    class _AgentConfigRepo:
+        def get_agent_config(self, _agent_config_id: str):
+            return _agent_config(mcp_servers=[])
+
+        def save_agent_config(self, config: AgentConfig) -> None:
+            saved_configs.append(config)
+
+    with pytest.raises(RuntimeError, match="MCP server patch item enabled must be a boolean"):
+        agent_user_service.update_agent_user_config(
+            "agent-1",
+            {"mcpServers": [{"name": "demo-mcp", "transport": "stdio", "command": "uv", "enabled": "false"}]},
+            user_repo=SimpleNamespace(
+                get_by_id=lambda _agent_id: UserRow(
+                    id="agent-1",
+                    type=UserType.AGENT,
+                    display_name="Toad",
+                    owner_user_id="owner-1",
+                    agent_config_id="cfg-1",
+                    created_at=1,
+                )
+            ),
+            agent_config_repo=_AgentConfigRepo(),
+        )
+
+    assert saved_configs == []
+
+
 def test_agent_config_patch_rejects_duplicate_mcp_server_names() -> None:
     saved_configs: list[AgentConfig] = []
 
@@ -1100,6 +1161,37 @@ def test_agent_config_patch_rejects_duplicate_sub_agent_names() -> None:
     assert saved_configs == []
 
 
+def test_agent_config_patch_rejects_sub_agent_tool_enabled_string() -> None:
+    saved_configs: list[AgentConfig] = []
+
+    class _AgentConfigRepo:
+        def get_agent_config(self, _agent_config_id: str):
+            return _agent_config()
+
+        def save_agent_config(self, config: AgentConfig) -> None:
+            saved_configs.append(config)
+
+    with pytest.raises(RuntimeError, match="SubAgent tool patch item enabled must be a boolean"):
+        agent_user_service.update_agent_user_config(
+            "agent-1",
+            {"subAgents": [{"name": "Scout", "tools": [{"name": "Read", "enabled": "false"}]}]},
+            user_repo=SimpleNamespace(
+                get_by_id=lambda _agent_id: UserRow(
+                    id="agent-1",
+                    type=UserType.AGENT,
+                    display_name="Toad",
+                    owner_user_id="user-1",
+                    agent_config_id="cfg-1",
+                    created_at=1,
+                )
+            ),
+            agent_config_repo=_AgentConfigRepo(),
+            skill_repo=_MemorySkillRepo(),
+        )
+
+    assert saved_configs == []
+
+
 def test_agent_config_patch_rejects_mcp_without_runtime_target() -> None:
     saved_configs: list[AgentConfig] = []
 
@@ -1221,6 +1313,36 @@ def test_agent_config_exposes_and_persists_compaction_trigger_tokens():
     assert after["config"]["compact"] == {"trigger_tokens": 100000}
     assert configs["cfg-1"].compact == {"trigger_tokens": 100000}
     assert configs["cfg-1"].runtime_settings == {"tools:Bash": {"enabled": True, "desc": "shell"}}
+
+
+def test_agent_config_patch_rejects_tool_enabled_string() -> None:
+    saved_configs: list[AgentConfig] = []
+
+    class _AgentConfigRepo:
+        def get_agent_config(self, _agent_config_id: str):
+            return _agent_config(runtime_settings={})
+
+        def save_agent_config(self, config: AgentConfig) -> None:
+            saved_configs.append(config)
+
+    with pytest.raises(RuntimeError, match="Tool patch item enabled must be a boolean"):
+        agent_user_service.update_agent_user_config(
+            "agent-1",
+            {"tools": [{"name": "Bash", "enabled": "false"}]},
+            user_repo=SimpleNamespace(
+                get_by_id=lambda _agent_id: UserRow(
+                    id="agent-1",
+                    type=UserType.AGENT,
+                    display_name="Toad",
+                    owner_user_id="user-1",
+                    agent_config_id="cfg-1",
+                    created_at=1,
+                )
+            ),
+            agent_config_repo=_AgentConfigRepo(),
+        )
+
+    assert saved_configs == []
 
 
 def test_get_agent_user_uses_repo_skill_desc():
