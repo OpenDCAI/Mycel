@@ -49,6 +49,20 @@ def test_agent_config_child_models_reject_string_enabled(model_cls, kwargs) -> N
         model_cls(enabled="false", **kwargs)
 
 
+@pytest.mark.parametrize(
+    ("model_cls", "kwargs"),
+    [
+        (AgentSkill, {"name": "query-helper"}),
+        (AgentRule, {"name": "cite", "content": "cite sources"}),
+        (AgentSubAgent, {"name": "worker"}),
+        (McpServerConfig, {"name": "filesystem", "command": "fs"}),
+    ],
+)
+def test_agent_config_child_models_reject_numeric_enabled(model_cls, kwargs) -> None:
+    with pytest.raises(ValueError, match="enabled must be a boolean"):
+        model_cls(enabled=1, **kwargs)
+
+
 def test_skill_package_requires_package_identity_and_skill_md() -> None:
     package = SkillPackage(
         id="package-1",
