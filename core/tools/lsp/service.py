@@ -417,12 +417,10 @@ class _LSPSessionPool:
         if key not in self._starting:
 
             async def _start() -> _LSPSession:
-                logger.info("[LSPPool] starting %s language server (workspace=%s)...", language, workspace_root)
                 s = _LSPSession(language, workspace_root)
                 await s.start()
                 self._sessions[key] = s
                 self._starting.pop(key, None)
-                logger.info("[LSPPool] %s language server ready", language)
                 return s
 
             self._starting[key] = asyncio.create_task(_start(), name=f"lsp-start-{language}")
@@ -434,12 +432,10 @@ class _LSPSessionPool:
         if workspace_root not in self._starting_pyright:
 
             async def _start() -> _PyrightSession:
-                logger.info("[LSPPool] starting pyright (workspace=%s)...", workspace_root)
                 s = _PyrightSession(workspace_root)
                 await s.start()
                 self._pyright[workspace_root] = s
                 self._starting_pyright.pop(workspace_root, None)
-                logger.info("[LSPPool] pyright ready")
                 return s
 
             self._starting_pyright[workspace_root] = asyncio.create_task(_start(), name="lsp-start-pyright")
