@@ -226,7 +226,7 @@ Mycel 默认使用 SQLite。生产环境建议：
 
 ```bash
 # 定期备份
-cp ~/.leon/leon.db ~/.leon/leon.db.backup
+cp "$LEON_DB_PATH" "$LEON_DB_PATH.backup"
 ```
 
 多用户部署可能需要 PostgreSQL — 需要对存储层进行代码改动。

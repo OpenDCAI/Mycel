@@ -226,7 +226,7 @@ Mycel uses SQLite by default. For production:
 
 ```bash
 # Backup regularly
-cp ~/.leon/leon.db ~/.leon/leon.db.backup
+cp "$LEON_DB_PATH" "$LEON_DB_PATH.backup"
 ```
 
 Multi-user deployments may require PostgreSQL — this requires code changes to the storage layer.
