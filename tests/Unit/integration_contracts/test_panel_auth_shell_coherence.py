@@ -1816,9 +1816,7 @@ def test_get_agent_user_uses_repo_skill_desc():
                 description="probe",
                 model="leon:large",
                 system_prompt="",
-                skills=[
-                    AgentSkill(skill_id="search", package_id="search-package", name="Search", description="repo desc")
-                ],
+                skills=[AgentSkill(skill_id="search", package_id="search-package", name="Search", description="repo desc")],
             )
 
     result = agent_user_service.get_agent_user(
@@ -1848,9 +1846,7 @@ def test_get_agent_user_ignores_runtime_skill_desc_override():
                 model="leon:large",
                 system_prompt="",
                 runtime_settings={"skills:Search": {"desc": "runtime desc", "enabled": False}},
-                skills=[
-                    AgentSkill(skill_id="search", package_id="search-package", name="Search", description="repo desc")
-                ],
+                skills=[AgentSkill(skill_id="search", package_id="search-package", name="Search", description="repo desc")],
             )
 
     result = agent_user_service.get_agent_user(

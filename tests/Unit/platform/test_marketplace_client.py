@@ -451,9 +451,7 @@ class TestApplySkill:
         class _AgentConfigRepo:
             def get_agent_config(self, agent_config_id: str) -> AgentConfig | None:
                 assert agent_config_id == "cfg-1"
-                return _agent_config(
-                    skills=[AgentSkill(skill_id="existing", package_id="existing-package", name="Existing")]
-                )
+                return _agent_config(skills=[AgentSkill(skill_id="existing", package_id="existing-package", name="Existing")])
 
             def save_agent_config(self, config: AgentConfig) -> None:
                 saved.append(config)

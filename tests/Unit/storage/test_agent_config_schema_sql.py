@@ -55,14 +55,14 @@ def test_agent_config_schema_rejects_duplicate_child_names_inside_rpc() -> None:
     assert "agent_config.rules must be a JSON array" in sql
     assert "agent_config.sub_agents must be a JSON array" in sql
     assert "agent_config.mcp_servers must be a JSON array" in sql
-    assert "agent_config.skills child.name is required" in sql
+    assert "agent_config.skills child.name is required" not in sql
     assert "agent_config.rules child.name is required" in sql
     assert "agent_config.sub_agents child.name is required" in sql
     assert "agent_config.mcp_servers child.name is required" in sql
     assert "agent_config.sub_agents child.tools must be a JSON array" in sql
     assert "agent_config.mcp_servers child.args must be a JSON array" in sql
     assert "agent_config.mcp_servers child.env must be a JSON object" in sql
-    assert "agent_config.skills contains duplicate name" in sql
+    assert "agent_config.skills contains duplicate name" not in sql
     assert "agent_config.rules contains duplicate name" in sql
     assert "agent_config.sub_agents contains duplicate name" in sql
     assert "agent_config.mcp_servers contains duplicate name" in sql

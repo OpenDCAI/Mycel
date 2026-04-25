@@ -370,9 +370,7 @@ def select_agent_skill(
     if library_skill is None:
         raise RuntimeError(f"Library skill not found: {skill_id}")
     current_items = [
-        {"id": skill.skill_id, "enabled": skill.enabled}
-        for skill in current_config.skills
-        if skill.skill_id != library_skill.id
+        {"id": skill.skill_id, "enabled": skill.enabled} for skill in current_config.skills if skill.skill_id != library_skill.id
     ]
     current_items.append({"id": library_skill.id, "enabled": True})
     return _sync_agent_config_patch_to_repo(
