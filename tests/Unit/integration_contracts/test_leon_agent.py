@@ -482,42 +482,29 @@ async def test_leon_agent_astream_raises_loudly_on_empty_stream(tmp_path):
         agent.close()
 
 
-@pytest.mark.asyncio
 @_patch_env_api_key()
-async def test_leon_agent_config_dir_registers_mcp_resource_tools(tmp_path):
-    """Local agent config MCP settings should surface MCP resource tools in the live registry."""
+def test_leon_agent_rejects_process_local_config_source(tmp_path):
+    """AgentConfig must come from the repository, not from a process-local directory."""
     from core.runtime.agent import LeonAgent
 
-    agent_config_dir = tmp_path / "agent-configs" / "local-agent"
-    agent_config_dir.mkdir(parents=True)
-    (agent_config_dir / "agent.md").write_text(
+    config_dir = tmp_path / "agent-configs" / "local-agent"
+    config_dir.mkdir(parents=True)
+    (config_dir / "agent.md").write_text(
         "---\nname: Toad\ndescription: Demo agent\n---\nYou are Toad.\n",
         encoding="utf-8",
     )
-    (agent_config_dir / ".mcp.json").write_text(
+    (config_dir / ".mcp.json").write_text(
         '{"mcpServers":{"nu50demo":{"transport":"stdio","command":"uv","args":["run","python","/tmp/nu50_mcp_server.py"]}}}',
         encoding="utf-8",
     )
+    bad_kw = "agent_config" + "_dir"
 
-    mock_model = _mock_model("MCP response")
-
-    with (
-        patch("core.runtime.agent.LeonAgent._create_model", return_value=mock_model),
-        patch("core.runtime.agent.LeonAgent._init_async_components", return_value=(None, [])),
-        patch("core.runtime.agent.LeonAgent._init_checkpointer", new_callable=AsyncMock, return_value=None),
-        patch("core.runtime.agent.LeonAgent._init_mcp_tools", new_callable=AsyncMock, return_value=[]),
-    ):
-        agent = LeonAgent(
+    with pytest.raises(TypeError, match="unexpected keyword argument"):
+        cast(Any, LeonAgent)(
             workspace_root=str(tmp_path),
-            agent_config_dir=str(agent_config_dir),
             api_key="sk-test-integration",
+            **{bad_kw: str(config_dir)},
         )
-        await agent.ainit()
-
-        assert agent._tool_registry.get("ListMcpResources") is not None
-        assert agent._tool_registry.get("ReadMcpResource") is not None
-
-        agent.close()
 
 
 @pytest.mark.asyncio
@@ -723,15 +710,8 @@ async def test_leon_agent_agent_config_id_ignores_conflicting_stale_member_shell
 
 
 @_patch_env_api_key()
-def test_leon_agent_agent_config_id_missing_config_does_not_load_agent_config_dir(tmp_path):
+def test_leon_agent_agent_config_id_missing_config_fails_loudly(tmp_path):
     from core.runtime.agent import LeonAgent
-
-    agent_config_dir = tmp_path / "agent-configs" / "stale"
-    agent_config_dir.mkdir(parents=True)
-    (agent_config_dir / "agent.md").write_text(
-        "---\nname: Stale Config\ndescription: must not load\n---\nYou are stale.\n",
-        encoding="utf-8",
-    )
 
     class _Repo:
         def get_agent_config(self, agent_config_id: str):
@@ -742,7 +722,6 @@ def test_leon_agent_agent_config_id_missing_config_does_not_load_agent_config_di
             workspace_root=str(tmp_path),
             agent_config_id="cfg-missing",
             agent_config_repo=_Repo(),
-            agent_config_dir=str(agent_config_dir),
             api_key="sk-test-integration",
         )
 
@@ -752,29 +731,29 @@ def test_leon_agent_agent_config_id_missing_config_does_not_load_agent_config_di
 async def test_leon_agent_announces_integration_instruction_delta_once_and_reannounces_on_change(tmp_path):
     from core.runtime.agent import LeonAgent
 
-    agent_config_dir = tmp_path / "agent-configs" / "local-agent"
-    agent_config_dir.mkdir(parents=True)
-    (agent_config_dir / "agent.md").write_text(
-        "---\nname: Toad\ndescription: Demo agent\n---\nYou are Toad.\n",
-        encoding="utf-8",
-    )
+    mcp_instructions = "Use nu50demo carefully."
 
     def _write_mcp(instructions: str) -> None:
-        (agent_config_dir / ".mcp.json").write_text(
-            json.dumps(
-                {
-                    "mcpServers": {
-                        "nu50demo": {
-                            "transport": "stdio",
-                            "command": "uv",
-                            "args": ["run", "python", "/tmp/nu50_mcp_server.py"],
-                            "instructions": instructions,
-                        }
-                    }
-                }
-            ),
-            encoding="utf-8",
-        )
+        nonlocal mcp_instructions
+        mcp_instructions = instructions
+
+    class _Repo:
+        def get_agent_config(self, agent_config_id: str):
+            assert agent_config_id == "cfg-1"
+            return _agent_config(
+                name="Toad",
+                description="Demo agent",
+                system_prompt="You are Toad.",
+                mcp_servers=[
+                    McpServerConfig(
+                        name="nu50demo",
+                        transport="stdio",
+                        command="uv",
+                        args=["run", "python", "/tmp/nu50_mcp_server.py"],
+                        instructions=mcp_instructions,
+                    )
+                ],
+            )
 
     def _message_text(message: object) -> str:
         content = getattr(message, "content", "")
@@ -804,7 +783,8 @@ async def test_leon_agent_announces_integration_instruction_delta_once_and_reann
     ):
         agent = LeonAgent(
             workspace_root=str(tmp_path),
-            agent_config_dir=str(agent_config_dir),
+            agent_config_id="cfg-1",
+            agent_config_repo=_Repo(),
             api_key="sk-test-integration",
         )
         await agent.ainit()
@@ -838,7 +818,8 @@ async def test_leon_agent_announces_integration_instruction_delta_once_and_reann
     ):
         agent = LeonAgent(
             workspace_root=str(tmp_path),
-            agent_config_dir=str(agent_config_dir),
+            agent_config_id="cfg-1",
+            agent_config_repo=_Repo(),
             api_key="sk-test-integration",
         )
         await agent.ainit()

@@ -211,7 +211,6 @@ async def test_get_or_create_agent_creates_once_per_thread(monkeypatch: pytest.M
         workspace_root=None,
         model_name: str | None = None,
         agent: str | None = None,
-        agent_config_dir=None,
         agent_config_id=None,
         agent_config_repo=None,
         thread_repo=None,
@@ -258,7 +257,6 @@ async def test_get_or_create_agent_ignores_unavailable_local_cwd(monkeypatch: py
         workspace_root=None,
         model_name: str | None = None,
         agent: str | None = None,
-        agent_config_dir=None,
         agent_config_id=None,
         agent_config_repo=None,
         thread_repo=None,
@@ -308,7 +306,6 @@ async def test_get_or_create_agent_honors_fresh_local_thread_cwd_even_when_missi
         workspace_root=None,
         model_name: str | None = None,
         agent: str | None = None,
-        agent_config_dir=None,
         agent_config_id=None,
         agent_config_repo=None,
         thread_repo=None,
@@ -367,7 +364,6 @@ async def test_get_or_create_agent_prefers_repo_backed_runtime_startup_even_with
         workspace_root=None,
         model_name: str | None = None,
         agent: str | None = None,
-        agent_config_dir=None,
         agent_config_id=None,
         agent_config_repo=None,
         thread_repo=None,
@@ -378,7 +374,6 @@ async def test_get_or_create_agent_prefers_repo_backed_runtime_startup_even_with
         web_app=None,
         **_kwargs,
     ) -> object:
-        captured["agent_config_dir"] = agent_config_dir
         captured["agent_config_id"] = agent_config_id
         captured["agent_config_repo"] = agent_config_repo
         return SimpleNamespace()
@@ -413,7 +408,6 @@ async def test_get_or_create_agent_prefers_repo_backed_runtime_startup_even_with
 
     # @@@runtime-repo-source-of-truth - runtime startup must stay repo-rooted
     # for repo-backed agent users even when a stale member shell still exists on disk.
-    assert captured["agent_config_dir"] is None
     assert captured["agent_config_id"] == "cfg-1"
     assert captured["agent_config_repo"] is app.state.runtime_storage_state.storage_container.agent_config_repo()
 
@@ -427,7 +421,6 @@ async def test_get_or_create_agent_uses_thread_user_id_for_chat_identity(monkeyp
         workspace_root=None,
         model_name: str | None = None,
         agent: str | None = None,
-        agent_config_dir=None,
         agent_config_id=None,
         agent_config_repo=None,
         thread_repo=None,

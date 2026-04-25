@@ -113,7 +113,6 @@ class LeonAgent:
         workspace_root: str | Path | None = None,
         *,
         agent: str | None = None,
-        agent_config_dir: str | Path | None = None,
         agent_config_id: str | None = None,
         agent_config_repo: Any = None,
         allowed_file_extensions: list[str] | None = None,
@@ -183,7 +182,6 @@ class LeonAgent:
         # New config system mode
         self.config, self.models_config = self._load_config(
             agent_name=agent,
-            agent_config_dir=agent_config_dir,
             agent_config_id=agent_config_id,
             agent_config_repo=agent_config_repo,
             workspace_root=workspace_root,
@@ -459,7 +457,6 @@ class LeonAgent:
     def _load_config(
         self,
         agent_name: str | None,
-        agent_config_dir: str | Path | None,
         agent_config_id: str | None,
         agent_config_repo: Any,
         workspace_root: str | Path | None,
@@ -534,16 +531,6 @@ class LeonAgent:
             if agent_config is None:
                 raise RuntimeError(f"Agent config not found: {agent_config_id}")
             self._resolved_agent_config = resolve_agent_config(agent_config)
-            self._agent_override = RuntimeAgentDefinition(
-                name=self._resolved_agent_config.name,
-                description=self._resolved_agent_config.description,
-                tools=self._resolved_agent_config.tools,
-                system_prompt=self._resolved_agent_config.system_prompt,
-                model=self._resolved_agent_config.model,
-            )
-        elif agent_config_dir is not None:
-            config_path = Path(agent_config_dir).expanduser().resolve()
-            self._resolved_agent_config = loader.load_resolved_config_from_dir(config_path)
             self._agent_override = RuntimeAgentDefinition(
                 name=self._resolved_agent_config.name,
                 description=self._resolved_agent_config.description,

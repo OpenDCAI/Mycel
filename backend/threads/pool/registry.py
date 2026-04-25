@@ -99,7 +99,6 @@ async def get_or_create_agent(
         # @@@agent-vs-agent-user - thread row agent_user_id resolves an agent user for display,
         # NOT an agent type name ("bash", "general", etc.). Never pass it to create_leon_agent.
         agent_name = agent  # explicit caller-provided type only; None -> default Leon agent
-        agent_config_dir = None
         agent_config_id = None
         memory_config_override = None
         runtime_storage = getattr(app_obj.state, "runtime_storage_state", None)
@@ -172,7 +171,6 @@ async def get_or_create_agent(
             "workspace_root": workspace_root,
             "model_name": model_name,
             "agent": agent_name,
-            "agent_config_dir": agent_config_dir,
             "thread_repo": getattr(app_obj.state, "thread_repo", None),
             "user_repo": getattr(app_obj.state, "user_repo", None),
             "queue_manager": qm,
