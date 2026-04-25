@@ -33,7 +33,7 @@ CATALOG: dict[str, CatalogEntry] = {
 }
 
 
-def resolve_provider_name(config_name: str, *, sandboxes_dir: Path) -> str:
+def resolve_provider_name(config_name: str, *, sandboxes_dir: Path | None) -> str:
     payload = _load_sandbox_config(config_name, sandboxes_dir)
     provider = str(payload.get("provider") or "").strip()
     if not provider:
@@ -50,7 +50,7 @@ def resolve_provider_type(provider_name: str) -> str:
     return entry.provider_type
 
 
-def resolve_console_url(provider_name: str, config_name: str, *, sandboxes_dir: Path) -> str | None:
+def resolve_console_url(provider_name: str, config_name: str, *, sandboxes_dir: Path | None) -> str | None:
     payload = _load_sandbox_config(config_name, sandboxes_dir)
     override = str(payload.get("console_url") or "").strip()
     if override:
@@ -70,9 +70,11 @@ def resolve_console_url(provider_name: str, config_name: str, *, sandboxes_dir: 
     return None
 
 
-def _load_sandbox_config(config_name: str, sandboxes_dir: Path) -> dict[str, Any]:
+def _load_sandbox_config(config_name: str, sandboxes_dir: Path | None) -> dict[str, Any]:
     if config_name == "local":
         return {"provider": "local"}
+    if sandboxes_dir is None:
+        raise RuntimeError(f"LEON_SANDBOXES_DIR is required for sandbox config: {config_name}")
     config_path = sandboxes_dir / f"{config_name}.json"
     payload = json.loads(config_path.read_text())
     if not isinstance(payload, dict):
