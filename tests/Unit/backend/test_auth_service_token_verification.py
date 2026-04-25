@@ -425,7 +425,7 @@ def test_complete_register_seeds_user_sandbox_recipes(monkeypatch: pytest.Monkey
     assert sorted(recipe_id for (_owner, recipe_id) in recipe_rows) == ["daytona_selfhost:default", "local:default"]
 
 
-def test_create_initial_agents_keeps_avatar_column_null_under_file_backed_avatar_shell(monkeypatch: pytest.MonkeyPatch):
+def test_create_initial_agents_persist_avatar_storage_key(monkeypatch: pytest.MonkeyPatch):
     created_users: list[SimpleNamespace] = []
     updates: list[tuple[str, dict[str, object]]] = []
     saved_configs: list[object] = []
@@ -448,6 +448,7 @@ def test_create_initial_agents_keeps_avatar_column_null_under_file_backed_avatar
 
     assert [row.id for row in created_users] == ["agent-toad", "agent-morel"]
     assert [row.display_name for row in created_users] == ["Toad", "Morel"]
+    assert [row.avatar for row in created_users] == ["avatars/agent-toad.png", "avatars/agent-morel.png"]
     assert [item.id for item in saved_configs] == ["cfg-toad", "cfg-morel"]
     assert [item.owner_user_id for item in saved_configs] == ["owner-1", "owner-1"]
     assert updates == []

@@ -6,7 +6,6 @@ from pathlib import Path
 from backend.identity.avatar.paths import avatars_dir
 
 AVATAR_SIZE = 256
-AVATARS_DIR = avatars_dir()
 
 
 def process_and_save_avatar(source: Path | bytes, user_id: str) -> str:
@@ -17,6 +16,7 @@ def process_and_save_avatar(source: Path | bytes, user_id: str) -> str:
     if img.mode not in ("RGB", "RGBA"):
         img = img.convert("RGB")
     img = ImageOps.fit(img, (AVATAR_SIZE, AVATAR_SIZE), method=Image.Resampling.LANCZOS)
-    AVATARS_DIR.mkdir(parents=True, exist_ok=True)
-    img.save(AVATARS_DIR / f"{user_id}.png", format="PNG", optimize=True)
+    storage_dir = avatars_dir()
+    storage_dir.mkdir(parents=True, exist_ok=True)
+    img.save(storage_dir / f"{user_id}.png", format="PNG", optimize=True)
     return f"avatars/{user_id}.png"

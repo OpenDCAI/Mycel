@@ -16,7 +16,6 @@ from storage.contracts import UserType
 
 logger = logging.getLogger(__name__)
 
-AVATARS_DIR = avatars_dir()
 MAX_UPLOAD_BYTES = 5 * 1024 * 1024
 ALLOWED_CONTENT_TYPES = {"image/png", "image/jpeg", "image/webp", "image/gif"}
 
@@ -55,7 +54,7 @@ async def list_users(
 
 def _avatar_path(user_id: str) -> Path:
     safe_id = Path(user_id).name
-    return AVATARS_DIR / f"{safe_id}.png"
+    return avatars_dir() / f"{safe_id}.png"
 
 
 def _get_owned_avatar_user_or_404(user_id: str, current_user_id: str, user_repo: Any) -> Any:
@@ -86,12 +85,12 @@ async def upload_avatar(
     if len(data) > MAX_UPLOAD_BYTES:
         raise HTTPException(400, f"File too large (max {MAX_UPLOAD_BYTES // 1024 // 1024}MB)")
     try:
-        process_and_save_avatar(data, user_id)
+        avatar_path = process_and_save_avatar(data, user_id)
     except Exception as e:
         logger.error(f"Avatar processing failed for {user_id}: {e}")
         raise HTTPException(400, f"Invalid image: {e}")
-    repo.update(user_id, updated_at=time.time())
-    return {"status": "ok", "avatar": f"avatars/{user_id}.png"}
+    repo.update(user_id, avatar=avatar_path, updated_at=time.time())
+    return {"status": "ok", "avatar": avatar_path}
 
 
 @users_router.get("/{user_id}/avatar")
