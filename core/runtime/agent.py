@@ -235,8 +235,6 @@ class LeonAgent:
         # Override workspace_root for sandbox mode
         if self._sandbox.name != "local":
             self.workspace_root = Path(self._sandbox.working_dir)
-        else:
-            self.workspace_root.mkdir(parents=True, exist_ok=True)
 
         # Initialize model
         self._model_http_client: httpx.Client | None = None
@@ -586,10 +584,14 @@ class LeonAgent:
         self._session_pool: dict[str, Any] = {}
         env_db_path = os.getenv("LEON_DB_PATH")
         env_sandbox_db_path = os.getenv("LEON_SANDBOX_DB_PATH")
-        self.db_path = Path(env_db_path).expanduser() if env_db_path else (Path.home() / ".leon" / "leon.db")
-        self.sandbox_db_path = Path(env_sandbox_db_path).expanduser() if env_sandbox_db_path else (Path.home() / ".leon" / "sandbox.db")
-        self.db_path.parent.mkdir(parents=True, exist_ok=True)
-        self.sandbox_db_path.parent.mkdir(parents=True, exist_ok=True)
+        # @@@operator-owned-db-paths - server Agent construction must not create
+        # host-local state directories. SQLite paths only exist when explicitly configured.
+        self.db_path = Path(env_db_path).expanduser() if env_db_path else None
+        self.sandbox_db_path = Path(env_sandbox_db_path).expanduser() if env_sandbox_db_path else None
+        if self.db_path is not None:
+            self.db_path.parent.mkdir(parents=True, exist_ok=True)
+        if self.sandbox_db_path is not None:
+            self.sandbox_db_path.parent.mkdir(parents=True, exist_ok=True)
 
     def _init_sandbox(self, sandbox: Any) -> Any:
         """Initialize sandbox infrastructure layer."""

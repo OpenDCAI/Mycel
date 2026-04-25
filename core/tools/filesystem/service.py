@@ -118,8 +118,8 @@ class FileSystemService:
         self.extra_allowed_paths = [_remote_path(p) if backend.is_remote else Path(p).resolve() for p in (extra_allowed_paths or [])]
         self._edit_critical_section = threading.Lock()
 
-        if not backend.is_remote and isinstance(self.workspace_root, Path):
-            self.workspace_root.mkdir(parents=True, exist_ok=True)
+        if not backend.is_remote and isinstance(self.workspace_root, Path) and not self.workspace_root.is_dir():
+            raise RuntimeError(f"workspace_root must exist for local filesystem service: {self.workspace_root}")
 
         self._register(registry)
 
