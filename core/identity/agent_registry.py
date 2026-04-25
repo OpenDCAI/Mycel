@@ -56,5 +56,4 @@ def get_or_create_agent_id(
 
     instances[agent_id] = entry
     _save(instances)
-    logger.info("Created agent identity %s for user_id=%s thread=%s", agent_id, user_id, thread_id)
     return agent_id
