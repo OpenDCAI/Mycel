@@ -836,9 +836,6 @@ class LeonAgent:
         """
         self._observation_config = ObservationLoader(workspace_root=self.workspace_root).load(cli_overrides=overrides or None)
 
-        if self.verbose:
-            print(f"[LeonAgent] Observation updated: active={self._observation_config.active}")
-
     def close(self, *, cleanup_sandbox: bool = True):
         """Clean up resources via CleanupRegistry (priority-ordered).
 
@@ -1245,12 +1242,6 @@ class LeonAgent:
             )
         except Exception as e:
             logger.debug("[LeonAgent] LSPService init skipped: %s", e)
-
-        if self.verbose:
-            all_tools = self._tool_registry.list_all()
-            inline = [t for t in all_tools if t.mode.value == "inline"]
-            deferred = [t for t in all_tools if t.mode.value == "deferred"]
-            print(f"[LeonAgent] ToolRegistry: {len(inline)} inline, {len(deferred)} deferred tools")
 
     async def _init_mcp_tools(self) -> list:
         client, tools = await mcp_gateway.init_client_tools(
