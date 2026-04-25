@@ -478,6 +478,18 @@ def test_agent_config_patch_uses_selected_package_source_only() -> None:
     assert saved_configs[-1].skills[0].source == {}
 
 
+def test_agent_config_patch_does_not_fill_skill_identity_from_patch_or_current_binding() -> None:
+    import inspect
+
+    source = inspect.getsource(agent_user_service._skills_from_patch)
+
+    assert 'item.get("version")' not in source
+    assert "current_skill.version" not in source
+    assert "library_skill.source" not in source
+    assert 'item.get("source")' not in source
+    assert "current_skill.source" not in source
+
+
 def test_agent_config_patch_rejects_inline_skill_content() -> None:
     saved_configs: list[AgentConfig] = []
 
