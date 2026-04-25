@@ -3,11 +3,14 @@ from pathlib import Path
 
 import pytest
 
+import config.schema as runtime_schema
 from config.schema import LeonSettings
 
 
 def test_runtime_schema_has_no_top_level_mcp_config() -> None:
     assert not hasattr(LeonSettings(), "mcp")
+    assert not hasattr(runtime_schema, "MCPConfig")
+    assert not hasattr(runtime_schema, "MCPServerConfig")
     with pytest.raises(ValueError, match="mcp"):
         LeonSettings.model_validate({"mcp": {"enabled": True, "servers": {}}})
 
