@@ -374,9 +374,6 @@ class LeonAgent:
 
             self._monitor_middleware.mark_ready()
 
-            if self.verbose:
-                print("[LeonAgent] Async initialization completed")
-
         if not self._session_started:
             await self._run_session_hooks("SessionStart")
             self._session_started = True
@@ -538,10 +535,6 @@ class LeonAgent:
         else:
             self._agent_override = None
             self._agent_bundle = None
-
-        if self.verbose:
-            active_name = models_config.active.model if models_config.active else model_name
-            print(f"[LeonAgent] Config: agent={agent_name or 'default'}, model={active_name}")
 
         return config, models_config
 
@@ -767,18 +760,12 @@ class LeonAgent:
             self._memory_middleware.set_context_limit(model_overrides.get("context_limit") or get_model_context_limit(lookup_name))
             self._memory_middleware.set_model(self.model, self._current_model_config)
 
-        if self.verbose:
-            print(f"[LeonAgent] Config updated: model={resolved_model}")
-
     @property
     def observation_config(self) -> ObservationConfig:
         return self._observation_config
 
     def update_observation(self, **overrides) -> None:
         self._observation_config = ObservationLoader(workspace_root=self.workspace_root).load(cli_overrides=overrides or None)
-
-        if self.verbose:
-            print(f"[LeonAgent] Observation updated: active={self._observation_config.active}")
 
     def close(self, *, cleanup_sandbox: bool = True):
         # @@@close-idempotent - child agents may explicitly skip sandbox cleanup
@@ -1218,8 +1205,6 @@ class LeonAgent:
             if any(cfg.allowed_tools for cfg in mcp_servers.values()):
                 tools = [t for t in tools if self._is_tool_allowed(t)]
 
-            if self.verbose:
-                print(f"[LeonAgent] Loaded {len(tools)} MCP tools from {len(configs)} servers")
             return tools
         except Exception as e:
             if self.verbose:
