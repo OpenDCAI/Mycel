@@ -16,7 +16,7 @@ from pathlib import Path
 from typing import Any
 
 from config.models_schema import ModelsConfig
-from config.user_paths import remap_default_user_home_string
+from config.path_remap import remap_default_home_string
 
 
 class ModelsLoader:
@@ -118,7 +118,7 @@ class ModelsLoader:
         if isinstance(obj, list):
             return [self._expand_env_vars(v) for v in obj]
         if isinstance(obj, str):
-            return remap_default_user_home_string(obj)
+            return remap_default_home_string(obj)
         return obj
 
 

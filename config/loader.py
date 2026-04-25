@@ -18,9 +18,9 @@ from typing import Any
 
 import yaml
 
+from config.path_remap import remap_default_home_string
 from config.schema import LeonSettings
 from config.types import RuntimeAgentDefinition
-from config.user_paths import remap_default_user_home_string
 
 logger = logging.getLogger(__name__)
 
@@ -180,7 +180,7 @@ class AgentLoader:
         if isinstance(obj, list):
             return [self._expand_env_vars(v) for v in obj]
         if isinstance(obj, str):
-            return remap_default_user_home_string(obj)
+            return remap_default_home_string(obj)
         return obj
 
     def _remove_none_values(self, obj: Any) -> Any:
