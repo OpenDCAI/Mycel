@@ -7,12 +7,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import AgentDetailPage from "./AgentDetailPage";
 import { toast } from "sonner";
 
-const { getAgentById, fetchAgent, updateAgent, updateAgentConfig, ensureLibrary } = vi.hoisted(() => ({
+const { getAgentById, fetchAgent, updateAgent, updateAgentConfig, ensureLibrary, librarySkills } = vi.hoisted(() => ({
   getAgentById: vi.fn(),
   fetchAgent: vi.fn(),
   updateAgent: vi.fn(),
   updateAgentConfig: vi.fn(),
   ensureLibrary: vi.fn(),
+  librarySkills: [] as Array<{ id: string; name: string; desc: string; type: string; created_at: number; updated_at: number }>,
 }));
 
 const { navigateMock } = vi.hoisted(() => ({
@@ -53,7 +54,7 @@ vi.mock("@/store/app-store", () => ({
       updateAgentConfig,
       ensureLibrary,
       loadAll: vi.fn(),
-      librarySkills: [],
+      librarySkills,
     }),
 }));
 
@@ -75,6 +76,7 @@ afterEach(() => {
 
 describe("AgentDetailPage wording contract", () => {
   beforeEach(() => {
+    librarySkills.splice(0);
     getAgentById.mockReturnValue(agentFixture);
     fetchAgent.mockResolvedValue(agentFixture);
     ensureLibrary.mockResolvedValue(undefined);
@@ -223,6 +225,43 @@ describe("AgentDetailPage wording contract", () => {
 
     expect(screen.getByText("暂无MCP 服务器")).toBeTruthy();
     expect(ensureLibrary).not.toHaveBeenCalled();
+  });
+
+  it("adds a Skill from Library with the Library Skill id", async () => {
+    librarySkills.push({
+      id: "loadable-skill",
+      name: "Loadable Skill",
+      desc: "loadable",
+      type: "skill",
+      created_at: 0,
+      updated_at: 0,
+    });
+
+    render(
+      <MemoryRouter initialEntries={["/contacts/agents/agent-1"]}>
+        <Routes>
+          <Route path="/contacts/agents/:id" element={<AgentDetailPage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /^技能/ }));
+    fireEvent.click(screen.getByText("点击 + 从 Library 添加 技能"));
+    fireEvent.click(await screen.findByText("Loadable Skill"));
+    fireEvent.click(screen.getByRole("button", { name: /添加 \(1\)/ }));
+
+    await waitFor(() => {
+      expect(updateAgentConfig).toHaveBeenCalledWith("agent-1", {
+        skills: [
+          {
+            id: "loadable-skill",
+            name: "Loadable Skill",
+            desc: "loadable",
+            enabled: true,
+          },
+        ],
+      });
+    });
   });
 
   it("toggles MCP servers with enabled config", async () => {

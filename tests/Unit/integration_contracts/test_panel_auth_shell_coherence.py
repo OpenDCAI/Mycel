@@ -195,6 +195,50 @@ async def test_panel_agent_detail_keeps_full_config_for_owner_scope(monkeypatch:
 
 
 @pytest.mark.asyncio
+async def test_panel_agent_detail_exposes_library_skill_id_for_round_trip() -> None:
+    agent = UserRow(
+        id="agent-1",
+        type=UserType.AGENT,
+        display_name="Toad",
+        owner_user_id="user-1",
+        agent_config_id="cfg-1",
+        created_at=1.0,
+    )
+    fake_repo = SimpleNamespace(
+        get_by_id=lambda agent_id: agent if agent_id == "agent-1" else None,
+    )
+    fake_agent_config_repo = SimpleNamespace(
+        get_agent_config=lambda agent_config_id: _agent_config(
+            id=agent_config_id,
+            skills=[
+                AgentSkill(
+                    id="agent-skill-1",
+                    skill_id="loadable-skill",
+                    package_id="loadable-skill-package",
+                    name="Loadable Skill",
+                    description="loadable",
+                    version="1.0.0",
+                    enabled=True,
+                )
+            ],
+        ),
+    )
+
+    result = await panel_router.get_agent(
+        "agent-1",
+        user_id="user-1",
+        request=SimpleNamespace(
+            app=SimpleNamespace(
+                state=SimpleNamespace(user_repo=fake_repo, runtime_storage_state=_runtime_storage_state(fake_agent_config_repo))
+            )
+        ),
+    )
+
+    assert result["config"]["skills"][0]["id"] == "loadable-skill"
+    assert result["config"]["skills"][0]["name"] == "Loadable Skill"
+
+
+@pytest.mark.asyncio
 async def test_update_agent_route_returns_404_for_missing_agent(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(agent_user_service, "get_agent_user", lambda _agent_user_id: None)
 
@@ -404,7 +448,7 @@ def test_agent_config_patch_saves_library_skill_package_choice() -> None:
 
     result = agent_user_service.update_agent_user_config(
         "agent-1",
-        {"skills": [{"name": "Loadable Skill", "desc": "loadable", "enabled": True}]},
+        {"skills": [{"id": "loadable-skill", "name": "Loadable Skill", "desc": "loadable", "enabled": True}]},
         user_repo=SimpleNamespace(
             get_by_id=lambda _agent_id: UserRow(
                 id="agent-1",
@@ -465,7 +509,7 @@ def test_agent_config_patch_uses_selected_package_source_only() -> None:
 
     agent_user_service.update_agent_user_config(
         "agent-1",
-        {"skills": [{"name": "Loadable Skill", "enabled": True}]},
+        {"skills": [{"id": "loadable-skill", "name": "Loadable Skill", "enabled": True}]},
         user_repo=SimpleNamespace(
             get_by_id=lambda _agent_id: UserRow(
                 id="agent-1",
@@ -622,6 +666,46 @@ def test_agent_config_patch_rejects_skill_enabled_string() -> None:
     assert saved_configs == []
 
 
+def test_agent_config_patch_rejects_skill_item_without_library_skill_id() -> None:
+    saved_configs: list[AgentConfig] = []
+    skill_repo = _MemorySkillRepo()
+    _put_skill(
+        skill_repo,
+        owner_user_id="user-1",
+        skill_id="loadable-skill",
+        name="Loadable Skill",
+        description="loadable",
+        content="---\nname: Loadable Skill\n---\nUse it.",
+    )
+
+    class _AgentConfigRepo:
+        def get_agent_config(self, _agent_config_id: str):
+            return _agent_config(skills=[])
+
+        def save_agent_config(self, config: AgentConfig) -> None:
+            saved_configs.append(config)
+
+    with pytest.raises(RuntimeError, match="Skill patch item must include id"):
+        agent_user_service.update_agent_user_config(
+            "agent-1",
+            {"skills": [{"name": "Loadable Skill", "enabled": True}]},
+            user_repo=SimpleNamespace(
+                get_by_id=lambda _agent_id: UserRow(
+                    id="agent-1",
+                    type=UserType.AGENT,
+                    display_name="Toad",
+                    owner_user_id="user-1",
+                    agent_config_id="cfg-1",
+                    created_at=1,
+                )
+            ),
+            agent_config_repo=_AgentConfigRepo(),
+            skill_repo=skill_repo,
+        )
+
+    assert saved_configs == []
+
+
 def test_agent_config_patch_rejects_library_id_in_skill_name_field() -> None:
     saved_configs: list[AgentConfig] = []
     skill_repo = _MemorySkillRepo()
@@ -641,7 +725,7 @@ def test_agent_config_patch_rejects_library_id_in_skill_name_field() -> None:
         def save_agent_config(self, config: AgentConfig) -> None:
             saved_configs.append(config)
 
-    with pytest.raises(RuntimeError, match="Library skill not found: loadable-skill"):
+    with pytest.raises(RuntimeError, match="Skill patch item must include id"):
         agent_user_service.update_agent_user_config(
             "agent-1",
             {"skills": [{"name": "loadable-skill", "desc": "loadable", "enabled": True}]},
@@ -708,8 +792,8 @@ def test_agent_config_patch_rejects_duplicate_skill_names() -> None:
             "agent-1",
             {
                 "skills": [
-                    {"name": "Loadable Skill"},
-                    {"name": "Loadable Skill"},
+                    {"id": "loadable-skill", "name": "Loadable Skill"},
+                    {"id": "loadable-skill-copy", "name": "Loadable Skill"},
                 ]
             },
             user_repo=SimpleNamespace(
@@ -748,10 +832,10 @@ def test_agent_config_patch_rejects_skill_after_library_delete() -> None:
         def save_agent_config(self, config: AgentConfig) -> None:
             saved_configs.append(config)
 
-    with pytest.raises(RuntimeError, match="Library skill not found: Loadable Skill"):
+    with pytest.raises(RuntimeError, match="Library skill not found: loadable-skill"):
         agent_user_service.update_agent_user_config(
             "agent-1",
-            {"skills": [{"name": "Loadable Skill", "desc": "loadable", "enabled": False}]},
+            {"skills": [{"id": "loadable-skill", "name": "Loadable Skill", "desc": "loadable", "enabled": False}]},
             user_repo=SimpleNamespace(
                 get_by_id=lambda _agent_id: UserRow(
                     id="agent-1",
@@ -1645,7 +1729,7 @@ def test_get_agent_user_uses_repo_skill_desc():
         agent_config_repo=_AgentConfigRepo(),
     )
 
-    assert result["config"]["skills"] == [{"name": "Search", "enabled": True, "desc": "repo desc"}]
+    assert result["config"]["skills"] == [{"id": "search", "name": "Search", "enabled": True, "desc": "repo desc"}]
 
 
 def test_get_agent_user_ignores_runtime_skill_desc_override():
@@ -1677,7 +1761,7 @@ def test_get_agent_user_ignores_runtime_skill_desc_override():
         agent_config_repo=_AgentConfigRepo(),
     )
 
-    assert result["config"]["skills"] == [{"name": "Search", "enabled": True, "desc": "repo desc"}]
+    assert result["config"]["skills"] == [{"id": "search", "name": "Search", "enabled": True, "desc": "repo desc"}]
 
 
 @pytest.mark.asyncio
@@ -1822,7 +1906,7 @@ def test_get_agent_user_preserves_explicit_empty_repo_skill_desc():
         agent_config_repo=_AgentConfigRepo(),
     )
 
-    assert result["config"]["skills"] == [{"name": "Search", "enabled": True, "desc": ""}]
+    assert result["config"]["skills"] == [{"id": "search", "name": "Search", "enabled": True, "desc": ""}]
 
 
 def test_apply_snapshot_saves_one_agent_config_aggregate():
