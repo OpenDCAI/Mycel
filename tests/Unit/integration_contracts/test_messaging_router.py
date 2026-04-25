@@ -121,15 +121,16 @@ def test_messaging_crud_routes_are_sync_threadpool_boundaries() -> None:
     assert [fn.__name__ for fn in sync_routes if inspect.iscoroutinefunction(fn)] == []
 
 
-def test_relationship_bodies_use_requester_user_id_not_actor_id() -> None:
-    request_body = relationships_router.RelationshipRequestBody(
-        target_user_id="user-2",
-        requester_user_id="user-1",
-    )
-    action_body = relationships_router.RelationshipActionBody(requester_user_id="user-1")
+def test_relationship_bodies_do_not_accept_identity_fields() -> None:
+    request_body = relationships_router.RelationshipRequestBody(target_user_id="user-2")
+    action_body = relationships_router.RelationshipActionBody()
 
-    assert request_body.requester_user_id == "user-1"
-    assert action_body.requester_user_id == "user-1"
+    assert request_body.target_user_id == "user-2"
+    assert action_body.model_dump() == {}
+    with pytest.raises(ValidationError):
+        relationships_router.RelationshipRequestBody.model_validate({"target_user_id": "user-2", "requester_user_id": "user-1"})
+    with pytest.raises(ValidationError):
+        relationships_router.RelationshipActionBody.model_validate({"requester_user_id": "user-1"})
     with pytest.raises(ValidationError):
         relationships_router.RelationshipRequestBody.model_validate({"target_user_id": "user-2", "actor_user_id": "user-1"})
 

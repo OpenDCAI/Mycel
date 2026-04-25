@@ -9,11 +9,9 @@ from pydantic import BaseModel, ConfigDict
 from backend.chat.api.http.dependencies import (
     get_current_user_id,
     get_relationship_service,
-    get_user_repo,
 )
 from messaging.contracts import RelationshipRow
 from messaging.relationships.state_machine import TransitionError
-from messaging.user_ownership import is_owned_by_viewer
 
 logger = logging.getLogger(__name__)
 
@@ -24,13 +22,11 @@ class RelationshipRequestBody(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     target_user_id: str
-    requester_user_id: str | None = None
 
 
 class RelationshipActionBody(BaseModel):
     model_config = ConfigDict(extra="forbid")
-
-    requester_user_id: str | None = None
+    pass
 
 
 def _get_existing(svc, relationship_id: str, user_id: str) -> dict:
@@ -40,17 +36,6 @@ def _get_existing(svc, relationship_id: str, user_id: str) -> dict:
     if user_id not in (existing["user_low"], existing["user_high"]):
         raise HTTPException(403, "Not a party of this relationship")
     return existing
-
-
-def _resolve_requester_user_id(user_repo: Any, current_user_id: str, requester_user_id: str | None) -> str:
-    if requester_user_id is None or requester_user_id == current_user_id:
-        return current_user_id
-    requester = user_repo.get_by_id(requester_user_id)
-    if requester is None:
-        raise HTTPException(404, "Requester user not found")
-    if not is_owned_by_viewer(current_user_id, requester):
-        raise HTTPException(403, "Requester user does not belong to you")
-    return requester_user_id
 
 
 def _resolve_parties(existing: dict, viewer_user_id: str) -> tuple[str, str]:
@@ -86,14 +71,12 @@ async def request_relationship(
     body: RelationshipRequestBody,
     user_id: Annotated[str, Depends(get_current_user_id)],
     relationship_service: Annotated[Any, Depends(get_relationship_service)],
-    user_repo: Annotated[Any, Depends(get_user_repo)],
 ):
-    requester_user_id = _resolve_requester_user_id(user_repo, user_id, body.requester_user_id)
-    if requester_user_id == body.target_user_id:
+    if user_id == body.target_user_id:
         raise HTTPException(400, "Cannot request relationship with yourself")
     try:
-        row = relationship_service.request(requester_user_id, body.target_user_id)
-        return _row_to_dict(row, requester_user_id)
+        row = relationship_service.request(user_id, body.target_user_id)
+        return _row_to_dict(row, user_id)
     except TransitionError as e:
         raise HTTPException(409, str(e))
 
@@ -104,15 +87,13 @@ async def approve_relationship(
     body: RelationshipActionBody,
     user_id: Annotated[str, Depends(get_current_user_id)],
     relationship_service: Annotated[Any, Depends(get_relationship_service)],
-    user_repo: Annotated[Any, Depends(get_user_repo)],
 ):
-    requester_user_id = _resolve_requester_user_id(user_repo, user_id, body.requester_user_id)
-    existing = _get_existing(relationship_service, relationship_id, requester_user_id)
-    requester_id, _ = _resolve_parties(existing, requester_user_id)
-    if requester_user_id == requester_id:
+    existing = _get_existing(relationship_service, relationship_id, user_id)
+    requester_id, _ = _resolve_parties(existing, user_id)
+    if user_id == requester_id:
         raise HTTPException(409, "Cannot approve your own request")
     try:
-        return _row_to_dict(relationship_service.approve(requester_user_id, requester_id), requester_user_id)
+        return _row_to_dict(relationship_service.approve(user_id, requester_id), user_id)
     except TransitionError as e:
         raise HTTPException(409, str(e))
 
@@ -123,15 +104,13 @@ async def reject_relationship(
     body: RelationshipActionBody,
     user_id: Annotated[str, Depends(get_current_user_id)],
     relationship_service: Annotated[Any, Depends(get_relationship_service)],
-    user_repo: Annotated[Any, Depends(get_user_repo)],
 ):
-    requester_user_id = _resolve_requester_user_id(user_repo, user_id, body.requester_user_id)
-    existing = _get_existing(relationship_service, relationship_id, requester_user_id)
-    requester_id, _ = _resolve_parties(existing, requester_user_id)
-    if requester_user_id == requester_id:
+    existing = _get_existing(relationship_service, relationship_id, user_id)
+    requester_id, _ = _resolve_parties(existing, user_id)
+    if user_id == requester_id:
         raise HTTPException(409, "Cannot reject your own request")
     try:
-        return _row_to_dict(relationship_service.reject(requester_user_id, requester_id), requester_user_id)
+        return _row_to_dict(relationship_service.reject(user_id, requester_id), user_id)
     except TransitionError as e:
         raise HTTPException(409, str(e))
 
@@ -142,13 +121,11 @@ async def upgrade_relationship(
     body: RelationshipActionBody,
     user_id: Annotated[str, Depends(get_current_user_id)],
     relationship_service: Annotated[Any, Depends(get_relationship_service)],
-    user_repo: Annotated[Any, Depends(get_user_repo)],
 ):
-    requester_user_id = _resolve_requester_user_id(user_repo, user_id, body.requester_user_id)
-    existing = _get_existing(relationship_service, relationship_id, requester_user_id)
-    _, other_id = _resolve_parties(existing, requester_user_id)
+    existing = _get_existing(relationship_service, relationship_id, user_id)
+    _, other_id = _resolve_parties(existing, user_id)
     try:
-        return _row_to_dict(relationship_service.upgrade(requester_user_id, other_id), requester_user_id)
+        return _row_to_dict(relationship_service.upgrade(user_id, other_id), user_id)
     except TransitionError as e:
         raise HTTPException(409, str(e))
 
@@ -159,13 +136,11 @@ async def revoke_relationship(
     body: RelationshipActionBody,
     user_id: Annotated[str, Depends(get_current_user_id)],
     relationship_service: Annotated[Any, Depends(get_relationship_service)],
-    user_repo: Annotated[Any, Depends(get_user_repo)],
 ):
-    requester_user_id = _resolve_requester_user_id(user_repo, user_id, body.requester_user_id)
-    existing = _get_existing(relationship_service, relationship_id, requester_user_id)
-    _, other_id = _resolve_parties(existing, requester_user_id)
+    existing = _get_existing(relationship_service, relationship_id, user_id)
+    _, other_id = _resolve_parties(existing, user_id)
     try:
-        return _row_to_dict(relationship_service.revoke(requester_user_id, other_id), requester_user_id)
+        return _row_to_dict(relationship_service.revoke(user_id, other_id), user_id)
     except TransitionError as e:
         raise HTTPException(409, str(e))
 
@@ -176,12 +151,10 @@ async def downgrade_relationship(
     body: RelationshipActionBody,
     user_id: Annotated[str, Depends(get_current_user_id)],
     relationship_service: Annotated[Any, Depends(get_relationship_service)],
-    user_repo: Annotated[Any, Depends(get_user_repo)],
 ):
-    requester_user_id = _resolve_requester_user_id(user_repo, user_id, body.requester_user_id)
-    existing = _get_existing(relationship_service, relationship_id, requester_user_id)
-    _, other_id = _resolve_parties(existing, requester_user_id)
+    existing = _get_existing(relationship_service, relationship_id, user_id)
+    _, other_id = _resolve_parties(existing, user_id)
     try:
-        return _row_to_dict(relationship_service.downgrade(requester_user_id, other_id), requester_user_id)
+        return _row_to_dict(relationship_service.downgrade(user_id, other_id), user_id)
     except TransitionError as e:
         raise HTTPException(409, str(e))
