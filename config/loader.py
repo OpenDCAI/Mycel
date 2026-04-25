@@ -22,7 +22,7 @@ import yaml
 
 from config.schema import LeonSettings
 from config.types import RuntimeAgentDefinition
-from config.user_paths import remap_default_user_home_string, user_home_path, user_home_read_candidates
+from config.user_paths import remap_default_user_home_string, user_home_read_candidates
 
 logger = logging.getLogger(__name__)
 
@@ -80,7 +80,6 @@ class AgentLoader:
             final_config = self._deep_merge(final_config, cli_overrides)
 
         final_config = self._expand_env_vars(final_config)
-        self._ensure_default_skill_dir(final_config)
         final_config = self._remove_none_values(final_config)
 
         return LeonSettings(**final_config)
@@ -242,23 +241,6 @@ class AgentLoader:
         if isinstance(obj, list):
             return [self._remove_none_values(v) for v in obj if v is not None]
         return obj
-
-    def _ensure_default_skill_dir(self, config: dict[str, Any]) -> None:
-        """Create ~/.leon/skills when configured, so first-run validation succeeds."""
-        skills = config.get("skills")
-        if not isinstance(skills, dict):
-            return
-        paths = skills.get("paths")
-        if not isinstance(paths, list):
-            return
-        default_home_skills = user_home_path("skills")
-        for raw_path in paths:
-            if not isinstance(raw_path, str):
-                continue
-            path = Path(raw_path).expanduser()
-            # @@@tmp-home-normalization - macOS maps /tmp -> /private/tmp, so compare normalized paths before bootstrap.
-            if path.resolve() == default_home_skills.resolve() and not path.exists():
-                path.mkdir(parents=True, exist_ok=True)
 
 
 def load_config(
