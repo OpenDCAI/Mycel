@@ -1158,23 +1158,17 @@ class LeonAgent:
 
         # Skills tools
         resolved_skills = []
-        has_repo_backed_agent_config = getattr(self, "_resolved_agent_config", None) is not None
-        if has_repo_backed_agent_config:
+        if getattr(self, "_resolved_agent_config", None) is not None:
             resolved_skills = [
                 {"name": skill.name, "content": skill.content, "files": skill.files, "meta": skill.source}
                 for skill in self._resolved_agent_config.skills
             ]
-        inline_skills = resolved_skills
-        skill_paths = [] if has_repo_backed_agent_config else self.config.skills.paths if self.config.skills.enabled else []
-        if skill_paths or inline_skills:
-            enabled_skills = self.config.skills.skills
-            if resolved_skills:
-                enabled_skills = {skill["name"]: True for skill in resolved_skills}
+        if resolved_skills:
             self._skills_service = SkillsService(
                 registry=self._tool_registry,
-                skill_paths=skill_paths,
-                enabled_skills=enabled_skills,
-                inline_skills=inline_skills,
+                skill_paths=[],
+                enabled_skills={skill["name"]: True for skill in resolved_skills},
+                inline_skills=resolved_skills,
             )
 
         # Task tools (DEFERRED - discoverable via tool_search)
@@ -1384,7 +1378,7 @@ class LeonAgent:
 
         return self._get_cached_prompt_section(
             "common_sections",
-            lambda: build_common_sections(bool(self.config.skills.enabled and self.config.skills.paths)),
+            build_common_sections,
         )
 
     def invoke(self, message: str, thread_id: str = "default") -> dict:

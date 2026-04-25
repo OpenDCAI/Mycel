@@ -61,9 +61,10 @@ class AgentLoader:
             project_config.get("tools", {}),
         )
 
-        # Lookup strategy for mcp/skills (first found wins)
+        self._reject_removed_runtime_key("skills", system_config, user_config, project_config)
+
+        # Lookup strategy for mcp (first found wins)
         merged_mcp = self._lookup_merge("mcp", project_config, user_config, system_config)
-        merged_skills = self._lookup_merge("skills", project_config, user_config, system_config)
 
         system_prompt = project_config.get("system_prompt") or user_config.get("system_prompt") or system_config.get("system_prompt")
 
@@ -72,7 +73,6 @@ class AgentLoader:
             "memory": merged_memory,
             "tools": merged_tools,
             "mcp": merged_mcp,
-            "skills": merged_skills,
             "system_prompt": system_prompt,
         }
 
@@ -213,6 +213,12 @@ class AgentLoader:
             if key in config and config[key] is not None:
                 return config[key]
         return {}
+
+    @staticmethod
+    def _reject_removed_runtime_key(key: str, *configs: dict[str, Any]) -> None:
+        for config in configs:
+            if key in config:
+                raise ValueError(f"runtime.json must not define top-level {key!r}; assign Skills through AgentConfig.")
 
     def _expand_env_vars(self, obj: Any) -> Any:
         """Recursively expand ${VAR} and ~ in string values."""
