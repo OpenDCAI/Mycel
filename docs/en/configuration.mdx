@@ -6,13 +6,13 @@ icon: sliders
 keywords: [runtime.json, models.json, MCP, configuration, environment variables, memory]
 ---
 
-Mycel uses a split configuration system with three-tier merge: system defaults → user config (`~/.leon/`) → project config (`.leon/` in workspace root). CLI arguments override everything.
+Mycel uses split configuration files for runtime defaults, models, observation, and provider-specific infrastructure. Product runtime state is not loaded from workspace-local `runtime.json` files.
 
 ## Config file overview
 
 <Columns>
   <div>
-    **JSON config files** (three-tier merge):
+    **JSON config files:**
 
     | File | Purpose |
     |------|---------|
@@ -31,15 +31,15 @@ Mycel uses a split configuration system with three-tier merge: system defaults �
   </div>
 </Columns>
 
-**Priority** (highest to lowest): `.leon/<file>` in workspace → `~/.leon/<file>` → built-in defaults → CLI flags win over all.
+**Runtime priority:** explicit server/CLI overrides → built-in defaults.
 
 **Merge strategy per domain:**
 
 | Domain | Strategy |
 |--------|----------|
-| `runtime`, `memory`, `tools` | Deep merge — higher-priority tiers override individual fields |
-| `mcp` | Lookup — first tier that defines a key wins; no merging |
-| `system_prompt` | Lookup — project → user → system |
+| `runtime`, `memory`, `tools` | Deep merge — explicit overrides replace built-in defaults by field |
+| `mcp` | Explicit overrides replace built-in defaults |
+| `system_prompt` | Explicit override |
 | `providers`, `mapping` (models.json) | Deep merge per-key |
 | `pool` (models.json) | Last wins — no list merging |
 | `catalog`, `virtual_models` (models.json) | System-only — never overridden |
@@ -133,7 +133,7 @@ MODEL_NAME=claude-sonnet-4-5-20250929
   </Accordion>
 
   <Accordion title="Project-level example" icon="file-code">
-    `.leon/runtime.json` in your workspace root:
+    explicit runtime overrides:
 
     ```json
     {
