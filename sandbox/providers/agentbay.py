@@ -180,8 +180,7 @@ class AgentBayProvider(SandboxProvider):
         if getattr(session, "link_url", "") and getattr(session, "token", "") and shell_server:
             # @@@agentbay-shell-link-route - shared provider runs proved shell can degrade into the API path
             # despite hydrated direct-call metadata; take the explicit LinkUrl route when shell server is known.
-            result = self._call_link_url_tool(session, "shell", exec_args, shell_server)
-            return result
+            return self._call_link_url_tool(session, "shell", exec_args, shell_server)
 
         try:
             result = session.command.execute_command(**exec_args)

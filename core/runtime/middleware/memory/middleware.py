@@ -308,8 +308,7 @@ class MemoryMiddleware(AgentMiddleware):
         if not self._cached_summary or self._compact_up_to_index <= 0 or self._compact_up_to_index > len(messages):
             return None
         summary_msg = SystemMessage(content=f"[Conversation Summary]\n{self._cached_summary}")
-        summarized = [summary_msg] + messages[self._compact_up_to_index :]
-        return summarized
+        return [summary_msg] + messages[self._compact_up_to_index :]
 
     def snapshot_thread_state(self, thread_id: str) -> dict[str, Any]:
         return {
