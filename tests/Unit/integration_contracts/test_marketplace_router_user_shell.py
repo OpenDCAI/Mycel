@@ -104,6 +104,7 @@ async def test_upgrade_from_marketplace_uses_user_repo_not_member_repo(monkeypat
     assert seen["owner_user_id"] == "owner-1"
     assert seen["user_repo"] is request.app.state.user_repo
     assert seen["agent_config_repo"] is request.app.state.runtime_storage_state.storage_container.agent_config_repo()
+    assert seen["skill_repo"] is request.app.state.runtime_storage_state.storage_container.skill_repo()
 
 
 @pytest.mark.asyncio
