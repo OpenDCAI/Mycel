@@ -93,11 +93,6 @@ def tool_enabled_for_agent(tool_name: str, *, configured_tools: list[str] | None
         if not isinstance(enabled, bool):
             raise RuntimeError("Tool runtime override enabled must be a boolean")
         return enabled
-    if hasattr(override, "enabled"):
-        enabled = override.enabled
-        if not isinstance(enabled, bool):
-            raise RuntimeError("Tool runtime override enabled must be a boolean")
-        return enabled
 
     tools = ["*"] if configured_tools is None else configured_tools
     if tools == ["*"]:
