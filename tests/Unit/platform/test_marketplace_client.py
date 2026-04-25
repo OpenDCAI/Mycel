@@ -117,7 +117,8 @@ def _agent_config(**overrides: object) -> AgentConfig:
 
 
 class TestApplySkill:
-    def test_writes_skill_to_skill_repo(self):
+    def test_writes_skill_to_skill_repo(self, monkeypatch):
+        monkeypatch.setattr("backend.hub.client.generate_skill_id", lambda: "skill_generated123")
         saved: list[Skill] = []
         packages: list[SkillPackage] = []
         selected: list[tuple[str, str, str]] = []
@@ -137,16 +138,26 @@ class TestApplySkill:
             result = apply_item("item-123", owner_user_id="owner-1", skill_repo=skill_repo)
 
         assert result["type"] == "skill"
-        assert result["resource_id"] == "my-skill"
-        assert saved[0].id == "my-skill"
+        assert result["resource_id"] == "skill_generated123"
+        assert saved[0].id == "skill_generated123"
         assert saved[0].owner_user_id == "owner-1"
         assert saved[0].name == "My Skill"
         assert not hasattr(saved[0], "content")
-        assert packages[0].skill_id == "my-skill"
+        assert packages[0].skill_id == "skill_generated123"
         assert packages[0].skill_md == "---\nname: My Skill\n---\n# My Skill\nDo stuff"
         assert packages[0].manifest["files"][0]["path"] == "references/usage.md"
-        assert selected == [("owner-1", "my-skill", packages[0].id)]
+        assert selected == [("owner-1", "skill_generated123", packages[0].id)]
         assert result["package_id"] == packages[0].id
+
+    def test_apply_skill_does_not_use_hub_slug_as_library_id(self) -> None:
+        import inspect
+
+        import backend.hub.client as marketplace_client
+
+        source = inspect.getsource(marketplace_client.apply_item)
+
+        assert "id=slug" not in source
+        assert "get_by_id(owner_user_id, slug)" not in source
 
     def test_writes_hub_skill_files_as_posix_paths(self):
         saved: list[Skill] = []
