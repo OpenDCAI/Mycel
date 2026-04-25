@@ -529,6 +529,7 @@ def test_save_agent_config_calls_single_rpc_with_full_payload() -> None:
                     skill_id="skill-1",
                     package_id="package-1",
                     name="github",
+                    version="1.0.0",
                 )
             ],
             rules=[AgentRule(id="rule-1", name="Cite", content="Always cite.")],
@@ -560,8 +561,8 @@ def test_save_agent_config_rejects_duplicate_skill_names_before_rpc() -> None:
         agent_user_id="agent-1",
         name="Researcher",
         skills=[
-            AgentSkill(skill_id="github", package_id="package-1", name="github"),
-            AgentSkill(skill_id="github-two", package_id="package-2", name="github"),
+            AgentSkill(skill_id="github", package_id="package-1", name="github", version="1.0.0"),
+            AgentSkill(skill_id="github-two", package_id="package-2", name="github", version="1.0.0"),
         ],
     )
 
@@ -600,8 +601,8 @@ def test_save_agent_config_rejects_duplicate_inactive_child_names_before_rpc() -
         agent_user_id="agent-1",
         name="Researcher",
         skills=[
-            AgentSkill(skill_id="github", package_id="package-1", name="github", enabled=False),
-            AgentSkill(skill_id="github-two", package_id="package-2", name="github", enabled=False),
+            AgentSkill(skill_id="github", package_id="package-1", name="github", version="1.0.0", enabled=False),
+            AgentSkill(skill_id="github-two", package_id="package-2", name="github", version="1.0.0", enabled=False),
         ],
         mcp_servers=[
             McpServerConfig(name="filesystem", transport="stdio", command="fs-one", enabled=False),
