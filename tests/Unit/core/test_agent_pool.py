@@ -68,6 +68,25 @@ async def test_get_or_create_agent_borrows_relationship_service_for_registry(mon
 
 
 @pytest.mark.asyncio
+async def test_get_or_create_agent_borrows_chat_join_request_service_for_registry(monkeypatch: pytest.MonkeyPatch):
+    captured: dict[str, object] = {}
+    chat_join_request_service = object()
+
+    async def _fake_registry_get_or_create_agent(*args, **kwargs):
+        captured["args"] = args
+        captured["kwargs"] = kwargs
+        return SimpleNamespace()
+
+    monkeypatch.setattr(agent_pool._registry, "get_or_create_agent", _fake_registry_get_or_create_agent)
+    app = SimpleNamespace(state=SimpleNamespace(threads_runtime_state=SimpleNamespace(chat_join_request_service=chat_join_request_service)))
+
+    await agent_pool.get_or_create_agent(cast(Any, app), "local", thread_id="thread-borrowed")
+
+    kwargs = cast(dict[str, object], captured["kwargs"])
+    assert kwargs["chat_join_request_service"] is chat_join_request_service
+
+
+@pytest.mark.asyncio
 async def test_get_or_create_agent_skips_borrow_when_chat_bootstrap_missing(monkeypatch: pytest.MonkeyPatch):
     captured: dict[str, object] = {}
 
@@ -189,6 +208,60 @@ async def test_registry_get_or_create_agent_uses_explicit_relationship_service(
 
     chat_repos = cast(dict[str, object], captured["chat_repos"])
     assert chat_repos["relationship_service"] is relationship_service
+
+
+@pytest.mark.asyncio
+async def test_registry_get_or_create_agent_uses_explicit_chat_join_request_service(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    captured: dict[str, object] = {}
+    messaging_service = object()
+    chat_join_request_service = object()
+
+    def _fake_create_agent_sync(**kwargs) -> object:
+        captured["chat_repos"] = kwargs.get("chat_repos")
+        return SimpleNamespace()
+
+    class _ThreadRepo:
+        def get_by_id(self, thread_id: str):
+            return {
+                "id": thread_id,
+                "agent_user_id": "agent-user-explicit",
+                "cwd": None,
+                "model": "leon:large",
+            }
+
+    class _UserRepo:
+        def get_by_id(self, user_id: str):
+            return SimpleNamespace(id=user_id, owner_user_id="owner-explicit", agent_config_id="cfg-explicit")
+
+    monkeypatch.setattr(agent_pool._registry, "create_agent_sync", _fake_create_agent_sync)
+    monkeypatch.setattr(agent_pool._registry, "get_or_create_agent_id", lambda **_: "agent-explicit")
+    monkeypatch.setattr(
+        agent_pool._registry, "get_file_channel_binding", lambda _thread_id: (_ for _ in ()).throw(ValueError()), raising=False
+    )
+
+    app = SimpleNamespace(
+        state=SimpleNamespace(
+            agent_pool={},
+            thread_repo=_ThreadRepo(),
+            user_repo=_UserRepo(),
+            runtime_storage_state=_runtime_storage_state(_EmptyAgentConfigRepo()),
+            thread_cwd={},
+            thread_sandbox={},
+        )
+    )
+
+    await agent_pool._registry.get_or_create_agent(
+        cast(Any, app),
+        "local",
+        thread_id="thread-explicit",
+        messaging_service=messaging_service,
+        chat_join_request_service=chat_join_request_service,
+    )
+
+    chat_repos = cast(dict[str, object], captured["chat_repos"])
+    assert chat_repos["chat_join_request_service"] is chat_join_request_service
 
 
 @pytest.mark.asyncio
