@@ -194,10 +194,10 @@ class SupabaseAgentConfigRepo:
             AgentSubAgent(
                 id=row.get("id"),
                 name=row["name"],
-                description=row.get("description") or "",
+                description=_required_text(row, "description", label="agent_sub_agents description"),
                 model=row.get("model"),
                 tools=_json_array(row.get("tools_json"), label="agent_sub_agents tools_json"),
-                system_prompt=row.get("system_prompt") or "",
+                system_prompt=_required_text(row, "system_prompt", label="agent_sub_agents system_prompt"),
                 enabled=_enabled_from_row(row, label="agent_sub_agents"),
             )
             for row in rows

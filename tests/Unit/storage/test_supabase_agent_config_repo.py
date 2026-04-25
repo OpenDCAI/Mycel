@@ -384,6 +384,24 @@ def test_get_agent_config_fails_loudly_when_sub_agent_tools_json_is_not_an_array
         repo.get_agent_config("cfg-1")
 
 
+def test_get_agent_config_fails_loudly_when_sub_agent_description_is_null() -> None:
+    tables = _tables()
+    tables["agent.agent_sub_agents"][0]["description"] = None
+    repo = SupabaseAgentConfigRepo(_FakeClient(tables))
+
+    with pytest.raises(RuntimeError, match="agent_sub_agents description must be text"):
+        repo.get_agent_config("cfg-1")
+
+
+def test_get_agent_config_fails_loudly_when_sub_agent_system_prompt_is_null() -> None:
+    tables = _tables()
+    tables["agent.agent_sub_agents"][0]["system_prompt"] = None
+    repo = SupabaseAgentConfigRepo(_FakeClient(tables))
+
+    with pytest.raises(RuntimeError, match="agent_sub_agents system_prompt must be text"):
+        repo.get_agent_config("cfg-1")
+
+
 def test_get_agent_config_fails_loudly_when_rule_name_is_null() -> None:
     tables = _tables()
     tables["agent.agent_rules"][0]["name"] = None
