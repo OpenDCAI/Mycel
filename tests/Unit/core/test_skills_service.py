@@ -3,8 +3,17 @@ from typing import cast
 
 import pytest
 
+from config.agent_config_types import ResolvedSkill
 from core.runtime.registry import ToolRegistry
 from core.tools.skills.service import SkillsService
+
+
+def _skill(
+    name: str = "query-helper",
+    content: str = "---\nname: query-helper\n---\nUse exact terms.",
+    files: dict[str, str] | None = None,
+) -> ResolvedSkill:
+    return ResolvedSkill(name=name, content=content, files=files or {})
 
 
 def test_skills_service_has_no_filesystem_skill_index() -> None:
@@ -13,6 +22,7 @@ def test_skills_service_has_no_filesystem_skill_index() -> None:
     assert "skill_paths" not in source
     assert "rglob" not in source
     assert "SKILL.md" not in source
+    assert "enabled_skills" not in source
 
 
 def test_skills_service_does_not_register_without_skills() -> None:
@@ -29,10 +39,7 @@ def test_skill_frontmatter_uses_yaml_parser() -> None:
     SkillsService(
         registry=registry,
         skills=[
-            {
-                "name": "query-helper",
-                "content": '---\nname: "query-helper"\n---\nUse exact terms.',
-            }
+            _skill(content='---\nname: "query-helper"\n---\nUse exact terms.'),
         ],
     )
 
@@ -46,10 +53,7 @@ def test_load_missing_skill_fails_loudly() -> None:
     SkillsService(
         registry=registry,
         skills=[
-            {
-                "name": "query-helper",
-                "content": "---\nname: query-helper\n---\nUse exact terms.",
-            }
+            _skill(),
         ],
     )
 
@@ -66,41 +70,34 @@ def test_skill_without_frontmatter_name_fails_loudly() -> None:
         SkillsService(
             registry=registry,
             skills=[
-                {
-                    "name": "query-helper",
-                    "content": "Use exact terms.",
-                }
+                _skill(content="Use exact terms."),
             ],
         )
 
 
-def test_skill_without_string_content_fails_loudly() -> None:
+def test_skills_service_requires_resolved_skill_items() -> None:
     registry = ToolRegistry()
 
-    with pytest.raises(ValueError, match="Skill content must be a string"):
-        SkillsService(
-            registry=registry,
-            skills=[
-                {
-                    "name": "query-helper",
-                    "content": None,
-                }
-            ],
-        )
-
-
-def test_skill_files_must_be_an_object() -> None:
-    registry = ToolRegistry()
-
-    with pytest.raises(ValueError, match="Skill files must be an object"):
+    with pytest.raises(TypeError, match="SkillsService requires ResolvedSkill items"):
         SkillsService(
             registry=registry,
             skills=[
                 {
                     "name": "query-helper",
                     "content": "---\nname: query-helper\n---\nUse exact terms.",
-                    "files": ["references/query.md"],
                 }
+            ],
+        )
+
+
+def test_skill_frontmatter_name_must_match_resolved_skill_name() -> None:
+    registry = ToolRegistry()
+
+    with pytest.raises(ValueError, match="Skill frontmatter name must match ResolvedSkill.name"):
+        SkillsService(
+            registry=registry,
+            skills=[
+                _skill(name="query-helper", content="---\nname: other-helper\n---\nUse exact terms."),
             ],
         )
 
@@ -110,11 +107,7 @@ def test_load_skill_returns_adjacent_files() -> None:
     SkillsService(
         registry=registry,
         skills=[
-            {
-                "name": "query-helper",
-                "content": "---\nname: query-helper\n---\nUse exact terms.",
-                "files": {"references/query.md": "Prefer precise queries."},
-            }
+            _skill(files={"references/query.md": "Prefer precise queries."}),
         ],
     )
 
@@ -134,11 +127,7 @@ def test_load_skill_normalizes_adjacent_file_paths() -> None:
     SkillsService(
         registry=registry,
         skills=[
-            {
-                "name": "query-helper",
-                "content": "---\nname: query-helper\n---\nUse exact terms.",
-                "files": {"references\\query.md": "Prefer precise queries."},
-            }
+            _skill(files={"references\\query.md": "Prefer precise queries."}),
         ],
     )
 
@@ -158,13 +147,11 @@ def test_skill_rejects_adjacent_file_path_collision() -> None:
         SkillsService(
             registry=registry,
             skills=[
-                {
-                    "name": "query-helper",
-                    "content": "---\nname: query-helper\n---\nUse exact terms.",
-                    "files": {
+                _skill(
+                    files={
                         "references\\query.md": "Windows-shaped key.",
                         "references/query.md": "POSIX-shaped key.",
                     },
-                }
+                )
             ],
         )
