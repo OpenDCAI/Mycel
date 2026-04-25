@@ -257,13 +257,16 @@ async def list_library(
     request: Request,
     user_id: CurrentUserId,
 ) -> dict[str, Any]:
-    items = await asyncio.to_thread(
-        library_service.list_library,
-        resource_type,
-        user_id,
-        _recipe_repo_for(resource_type, request),
-        _skill_repo_for(resource_type, request),
-    )
+    try:
+        items = await asyncio.to_thread(
+            library_service.list_library,
+            resource_type,
+            user_id,
+            _recipe_repo_for(resource_type, request),
+            _skill_repo_for(resource_type, request),
+        )
+    except ValueError as error:
+        raise HTTPException(400, str(error)) from error
     return {"items": items}
 
 
@@ -341,14 +344,17 @@ async def delete_resource(
             )
             if used_by:
                 raise HTTPException(409, f"Skill is still assigned to Agent: {', '.join(used_by)}")
-    ok = await asyncio.to_thread(
-        library_service.delete_resource,
-        resource_type,
-        resource_id,
-        user_id,
-        recipe_repo,
-        skill_repo,
-    )
+    try:
+        ok = await asyncio.to_thread(
+            library_service.delete_resource,
+            resource_type,
+            resource_id,
+            user_id,
+            recipe_repo,
+            skill_repo,
+        )
+    except ValueError as error:
+        raise HTTPException(400, str(error)) from error
     if not ok:
         raise HTTPException(404, "Resource not found")
     return {"success": True}
@@ -360,13 +366,16 @@ async def list_library_names(
     request: Request,
     user_id: CurrentUserId,
 ) -> dict[str, Any]:
-    items = await asyncio.to_thread(
-        library_service.list_library_names,
-        resource_type,
-        user_id,
-        _recipe_repo_for(resource_type, request),
-        _skill_repo_for(resource_type, request),
-    )
+    try:
+        items = await asyncio.to_thread(
+            library_service.list_library_names,
+            resource_type,
+            user_id,
+            _recipe_repo_for(resource_type, request),
+            _skill_repo_for(resource_type, request),
+        )
+    except ValueError as error:
+        raise HTTPException(400, str(error)) from error
     return {"items": items}
 
 
@@ -377,14 +386,17 @@ async def get_used_by(
     request: Request,
     user_id: CurrentUserId,
 ) -> dict[str, Any]:
-    users = await asyncio.to_thread(
-        library_service.get_resource_used_by,
-        resource_type,
-        resource_name,
-        user_id,
-        user_repo=request.app.state.user_repo,
-        agent_config_repo=_agent_config_repo(request),
-    )
+    try:
+        users = await asyncio.to_thread(
+            library_service.get_resource_used_by,
+            resource_type,
+            resource_name,
+            user_id,
+            user_repo=request.app.state.user_repo,
+            agent_config_repo=_agent_config_repo(request),
+        )
+    except ValueError as error:
+        raise HTTPException(400, str(error)) from error
     return {"count": len(users), "users": users}
 
 
@@ -395,14 +407,17 @@ async def get_resource_content(
     request: Request,
     user_id: CurrentUserId,
 ) -> dict[str, Any]:
-    content = await asyncio.to_thread(
-        library_service.get_resource_content,
-        resource_type,
-        resource_id,
-        user_id,
-        _recipe_repo_for(resource_type, request),
-        _skill_repo_for(resource_type, request),
-    )
+    try:
+        content = await asyncio.to_thread(
+            library_service.get_resource_content,
+            resource_type,
+            resource_id,
+            user_id,
+            _recipe_repo_for(resource_type, request),
+            _skill_repo_for(resource_type, request),
+        )
+    except ValueError as error:
+        raise HTTPException(400, str(error)) from error
     if content is None:
         raise HTTPException(404, "Resource not found")
     return {"content": content}
