@@ -428,6 +428,56 @@ def test_agent_config_patch_saves_library_skill_package_choice() -> None:
     ]
 
 
+def test_agent_config_patch_uses_selected_package_source_only() -> None:
+    saved_configs: list[AgentConfig] = []
+    skill_repo = _MemorySkillRepo()
+    library_skill = _put_skill(
+        skill_repo,
+        owner_user_id="user-1",
+        skill_id="loadable-skill",
+        name="Loadable Skill",
+        description="loadable",
+        content="---\nname: Loadable Skill\n---\nUse it.",
+    )
+    skill_repo.upsert(library_skill.model_copy(update={"source": {"source_version": "library-stale"}}))
+
+    class _AgentConfigRepo:
+        def get_agent_config(self, _agent_config_id: str):
+            return _agent_config(
+                skills=[
+                    AgentSkill(
+                        id="agent-skill-1",
+                        skill_id="loadable-skill",
+                        package_id=library_skill.package_id,
+                        name="Loadable Skill",
+                        source={"source_version": "current-stale"},
+                    )
+                ]
+            )
+
+        def save_agent_config(self, config: AgentConfig) -> None:
+            saved_configs.append(config)
+
+    agent_user_service.update_agent_user_config(
+        "agent-1",
+        {"skills": [{"name": "Loadable Skill", "enabled": True}]},
+        user_repo=SimpleNamespace(
+            get_by_id=lambda _agent_id: UserRow(
+                id="agent-1",
+                type=UserType.AGENT,
+                display_name="Toad",
+                owner_user_id="user-1",
+                agent_config_id="cfg-1",
+                created_at=1,
+            )
+        ),
+        agent_config_repo=_AgentConfigRepo(),
+        skill_repo=skill_repo,
+    )
+
+    assert saved_configs[-1].skills[0].source == {}
+
+
 def test_agent_config_patch_rejects_inline_skill_content() -> None:
     saved_configs: list[AgentConfig] = []
 
