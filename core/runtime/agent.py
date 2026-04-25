@@ -1173,15 +1173,11 @@ class LeonAgent:
         resolved_skills = []
         resolved_config = getattr(self, "_resolved_agent_config", None)
         if resolved_config is not None:
-            resolved_skills = [
-                {"name": skill.name, "content": skill.content, "files": skill.files, "meta": skill.source}
-                for skill in resolved_config.skills
-            ]
+            resolved_skills = list(resolved_config.skills)
         if resolved_skills:
             self._skills_service = SkillsService(
                 registry=self._tool_registry,
                 skills=resolved_skills,
-                enabled_skills={skill["name"]: True for skill in resolved_skills},
             )
 
         # Task tools (DEFERRED - discoverable via tool_search)
