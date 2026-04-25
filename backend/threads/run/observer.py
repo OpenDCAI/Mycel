@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import AsyncGenerator
+from contextlib import suppress
 
 from backend.threads.events.buffer import RunEventBuffer, ThreadEventBuffer
 
@@ -44,10 +45,8 @@ async def observe_sse_buffer(
             continue
         for event in events:
             parsed_data = None
-            try:
+            with suppress(json.JSONDecodeError, TypeError):
                 parsed_data = json.loads(event.get("data", "{}"))
-            except (json.JSONDecodeError, TypeError):
-                pass
 
             if after > 0 and isinstance(parsed_data, dict) and "_seq" in parsed_data and parsed_data["_seq"] <= after:
                 continue
