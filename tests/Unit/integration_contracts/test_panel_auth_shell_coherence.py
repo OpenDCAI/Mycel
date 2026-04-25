@@ -2162,6 +2162,19 @@ def test_apply_snapshot_generates_library_skill_id() -> None:
     assert "existing = skill_repo.get_by_id(owner_user_id, skill_id)" not in source
 
 
+def test_apply_snapshot_source_keeps_snapshot_skill_id_out_of_library_identity() -> None:
+    import inspect
+
+    from backend.hub.snapshot_apply import _materialize_snapshot_skills
+
+    source = inspect.getsource(_materialize_snapshot_skills)
+
+    assert "snapshot_skill_id = _required_text(snapshot_skill.id" in source
+    assert "skill_id = generate_skill_id()" in source
+    assert "skill_id = snapshot_skill_id" not in source
+    assert "id=snapshot_skill_id" not in source
+
+
 def test_apply_snapshot_rejects_duplicate_skill_ids_before_library_write():
     from backend.hub.snapshot_apply import apply_snapshot
 
