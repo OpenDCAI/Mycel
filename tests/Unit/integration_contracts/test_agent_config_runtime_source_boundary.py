@@ -33,6 +33,13 @@ def test_runtime_skill_registration_reads_resolved_config_only() -> None:
     assert "resolved_skills" in source
 
 
+def test_runtime_mcp_registration_reads_resolved_config_only() -> None:
+    source = inspect.getsource(LeonAgent._get_mcp_server_configs) + inspect.getsource(LeonAgent._mcp_enabled)
+
+    assert "self.config.mcp" not in source
+    assert "resolved_config.mcp_servers" in source
+
+
 def test_config_loading_does_not_create_skill_directories() -> None:
     loader_source = inspect.getsource(AgentLoader.load)
 

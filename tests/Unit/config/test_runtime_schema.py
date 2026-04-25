@@ -3,17 +3,13 @@ from pathlib import Path
 
 import pytest
 
-from config.schema import LeonSettings, MCPConfig
+from config.schema import LeonSettings
 
 
-def test_mcp_config_rejects_string_enabled() -> None:
-    with pytest.raises(ValueError, match="enabled"):
-        MCPConfig.model_validate({"enabled": "false", "servers": {}})
-
-
-def test_mcp_config_rejects_numeric_enabled() -> None:
-    with pytest.raises(ValueError, match="enabled"):
-        MCPConfig.model_validate({"enabled": 1, "servers": {}})
+def test_runtime_schema_has_no_top_level_mcp_config() -> None:
+    assert not hasattr(LeonSettings(), "mcp")
+    with pytest.raises(ValueError, match="mcp"):
+        LeonSettings.model_validate({"mcp": {"enabled": True, "servers": {}}})
 
 
 def test_runtime_fields_must_live_under_runtime_object() -> None:
@@ -26,6 +22,7 @@ def test_default_runtime_config_uses_runtime_object() -> None:
     payload = json.loads(defaults_path.read_text(encoding="utf-8"))
 
     assert "runtime" in payload
+    assert "mcp" not in payload
     assert "context_limit" not in payload
     assert "block_network_commands" not in payload
 
