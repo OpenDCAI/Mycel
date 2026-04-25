@@ -1377,6 +1377,63 @@ def test_leon_agent_chat_tool_wiring_does_not_pass_dead_repo_dependencies(monkey
     assert "thread_repo" not in captured
 
 
+def test_leon_agent_registers_relationship_tools_from_runtime_relationship_service(monkeypatch: pytest.MonkeyPatch, tmp_path) -> None:
+    from core.runtime.agent import LeonAgent
+    from core.runtime.registry import ToolRegistry
+
+    captured: dict[str, Any] = {}
+
+    class _NoopService:
+        def __init__(self, *args, **kwargs) -> None:
+            return None
+
+    class _FakeRelationshipToolService:
+        def __init__(self, *args, **kwargs) -> None:
+            captured.update(kwargs)
+
+    monkeypatch.setattr("core.runtime.agent.TaskService", _NoopService)
+    monkeypatch.setattr("core.runtime.agent.mcp_gateway.register_resource_tools", _NoopService)
+    monkeypatch.setattr("core.runtime.agent.ToolSearchService", _NoopService)
+    monkeypatch.setattr("core.runtime.agent.AgentService", _NoopService)
+    monkeypatch.setattr("messaging.tools.chat_tool_service.ChatToolService", _NoopService)
+    monkeypatch.setattr("messaging.tools.relationship_tool_service.RelationshipToolService", _FakeRelationshipToolService)
+
+    relationship_service = object()
+    agent = object.__new__(LeonAgent)
+    agent._sandbox = SimpleNamespace(name="local", fs=lambda: None, shell=lambda: None)
+    agent._tool_registry = ToolRegistry()
+    agent.workspace_root = str(tmp_path)
+    agent.model_name = "test-model"
+    agent._thread_repo = SimpleNamespace()
+    agent._user_repo = SimpleNamespace()
+    agent.queue_manager = SimpleNamespace()
+    agent._web_app = None
+    agent.allowed_file_extensions = []
+    agent.extra_allowed_paths = []
+    agent.enable_audit_log = False
+    agent.block_dangerous_commands = False
+    agent.block_network_commands = False
+    agent._get_mcp_server_configs = lambda: {}
+    agent._chat_repos = {
+        "chat_identity_id": "thread-user-9",
+        "messaging_service": SimpleNamespace(),
+        "relationship_service": relationship_service,
+    }
+    cast(Any, agent).config = SimpleNamespace(
+        tools=SimpleNamespace(
+            filesystem=SimpleNamespace(enabled=False),
+            search=SimpleNamespace(enabled=False),
+            web=SimpleNamespace(enabled=False),
+            command=SimpleNamespace(enabled=False),
+        ),
+    )
+
+    LeonAgent._init_services(agent)
+
+    assert captured["relationship_identity_id"] == "thread-user-9"
+    assert captured["relationship_service"] is relationship_service
+
+
 def test_leon_agent_init_services_passes_child_thread_live_runner(monkeypatch: pytest.MonkeyPatch, tmp_path) -> None:
     from core.runtime.agent import LeonAgent
     from core.runtime.registry import ToolRegistry

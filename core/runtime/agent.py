@@ -1228,6 +1228,15 @@ class LeonAgent:
                     chat_identity_id=chat_identity_id,
                     messaging_service=repos.get("messaging_service"),
                 )
+                relationship_service = repos.get("relationship_service")
+                if relationship_service is not None:
+                    from messaging.tools.relationship_tool_service import RelationshipToolService
+
+                    self._relationship_tool_service = RelationshipToolService(
+                        registry=self._tool_registry,
+                        relationship_identity_id=chat_identity_id,
+                        relationship_service=relationship_service,
+                    )
 
         # LSP tools — DEFERRED, always registered, multilspy checked at call time
         self._lsp_service = None

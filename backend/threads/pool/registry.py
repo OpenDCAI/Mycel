@@ -30,6 +30,7 @@ async def get_or_create_agent(
     agent: str | None = None,
     *,
     messaging_service: Any | None = None,
+    relationship_service: Any | None = None,
 ) -> Any:
     if thread_id:
         set_current_thread_id(thread_id)
@@ -134,6 +135,7 @@ async def get_or_create_agent(
                 "owner_id": owner_id,
                 "user_repo": user_repo,
                 "messaging_service": messaging_service,
+                "relationship_service": relationship_service,
                 "agent_config_repo": agent_config_repo,
             }
 
