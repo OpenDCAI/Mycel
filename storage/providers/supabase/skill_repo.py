@@ -117,6 +117,6 @@ def _package_from_row(row: dict[str, Any]) -> SkillPackage:
         manifest=_json_object(row, "manifest_json", table="library.skill_packages"),
         skill_md=row["skill_md"],
         files=_json_object(row, "files_json", table="library.skill_packages"),
-        source=dict(row.get("source_json") or {}),
+        source=_json_object(row, "source_json", table="library.skill_packages"),
         created_at=row["created_at"],
     )
