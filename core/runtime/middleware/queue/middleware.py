@@ -1,5 +1,4 @@
 import json
-import logging
 from collections.abc import Awaitable, Callable
 from typing import Any
 
@@ -15,8 +14,6 @@ from core.runtime.middleware import (
 from core.runtime.notifications import is_terminal_background_notification
 
 from .manager import MessageQueueManager
-
-logger = logging.getLogger(__name__)
 
 _STEER_NON_PREEMPTIVE_SYSTEM_NOTE = (
     "Steer requests accepted during an active run are non-preemptive. "
@@ -90,7 +87,6 @@ class SteeringMiddleware(AgentMiddleware):
     ) -> dict[str, Any] | None:
         thread_id = (config or {}).get("configurable", {}).get("thread_id")
         if not thread_id:
-            logger.debug("SteeringMiddleware: no thread_id in config, skipping steer injection")
             return None
 
         items = self._queue_manager.drain_all(thread_id)

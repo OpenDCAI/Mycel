@@ -445,16 +445,14 @@ class _LSPSessionPool:
         for (lang, ws), session in list(self._sessions.items()):
             try:
                 await session.stop()
-                logger.debug("[LSPPool] stopped %s server (workspace=%s)", lang, ws)
-            except Exception as e:
-                logger.debug("[LSPPool] error stopping %s: %s", lang, e)
+            except Exception:
+                pass
         self._sessions.clear()
         for ws, session in list(self._pyright.items()):
             try:
                 await session.stop()
-                logger.debug("[LSPPool] stopped pyright (workspace=%s)", ws)
-            except Exception as e:
-                logger.debug("[LSPPool] error stopping pyright: %s", e)
+            except Exception:
+                pass
         self._pyright.clear()
 
 
@@ -480,7 +478,6 @@ class LSPService:
                 is_concurrency_safe=True,
             )
         )
-        logger.debug("[LSPService] registered (workspace=%s)", self._workspace_root)
 
     async def _get_session(self, language: str) -> _LSPSession:
         return await lsp_pool.get_session(language, self._workspace_root)

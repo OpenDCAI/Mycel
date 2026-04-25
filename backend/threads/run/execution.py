@@ -106,7 +106,6 @@ async def run_agent_to_buffer(
             await dedup.prepopulate_from_checkpoint(agent, config)
         except Exception:
             logger.warning("[stream:checkpoint] failed to pre-populate tc_ids for thread=%s", thread_id[:15], exc_info=True)
-        logger.debug("[stream:checkpoint] thread=%s pre-populated dedup state", thread_id[:15])
 
         await repair_incomplete_tool_calls(agent, config)
 
