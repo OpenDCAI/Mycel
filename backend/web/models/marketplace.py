@@ -17,8 +17,8 @@ class ApplyFromMarketplaceRequest(BaseModel):
 
 
 class UpgradeFromMarketplaceRequest(BaseModel):
-    user_id: str  # local agent user id
-    item_id: str  # marketplace item id
+    user_id: str  # Agent user id
+    item_id: str  # Marketplace item id
 
 
 class MarketplaceSourceInfo(BaseModel):
