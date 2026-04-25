@@ -205,6 +205,22 @@ def upload(payload: dict) -> bool:
     return False
 
 
+def publish_skill_package(
+    *,
+    slug: str,
+    package: dict,
+    publisher_user_id: str,
+    publisher_username: str,
+) -> bool:
+    payload = build_skill_payload(
+        slug=slug,
+        package=package,
+        publisher_user_id=publisher_user_id,
+        publisher_username=publisher_username,
+    )
+    return upload(payload)
+
+
 def main():
     # Register all publishers
     for key, (uid, uname, dname) in PUBLISHERS.items():
@@ -248,15 +264,13 @@ def main():
                 total_skip += 1
                 continue
 
-            payload = build_skill_payload(
+            print(f"  Upload: {slug} ...", end=" ")
+            if publish_skill_package(
                 slug=slug,
                 package=package,
                 publisher_user_id=uid,
                 publisher_username=uname,
-            )
-
-            print(f"  Upload: {slug} ...", end=" ")
-            if upload(payload):
+            ):
                 print("OK")
                 total_ok += 1
             else:

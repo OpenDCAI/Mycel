@@ -132,6 +132,33 @@ def test_seed_existing_hub_slugs_require_successful_response(monkeypatch: pytest
     assert slugs == {("anthropics", "skills--planner"), ("mycel", "skills--reviewer")}
 
 
+def test_seed_publish_skill_package_uses_package_payload(monkeypatch: pytest.MonkeyPatch) -> None:
+    seen: dict[str, dict] = {}
+
+    def fake_upload(payload: dict) -> bool:
+        seen["payload"] = payload
+        return True
+
+    monkeypatch.setattr(seed_github_skills, "upload", fake_upload)
+
+    ok = seed_github_skills.publish_skill_package(
+        slug="skills--api-design",
+        package={
+            "name": "API Design",
+            "description": "Design APIs",
+            "tags": ["backend"],
+            "content": "---\nname: API Design\n---\nUse REST carefully.",
+            "files": {"references/routing.md": "Prefer explicit routes."},
+        },
+        publisher_user_id="publisher-1",
+        publisher_username="publisher",
+    )
+
+    assert ok is True
+    assert seen["payload"]["snapshot"]["files"] == {"references/routing.md": "Prefer explicit routes."}
+    assert seen["payload"]["publisher_username"] == "publisher"
+
+
 def test_seed_skill_parser_does_not_swallow_parse_errors() -> None:
     source = inspect.getsource(seed_github_skills.parse_skill_md)
 
