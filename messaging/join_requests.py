@@ -30,11 +30,27 @@ class ChatJoinRequestService:
             message_type="notification",
             mentions=[owner_id],
         )
-        return row
+        return self._project_request(row)
+
+    def join_target(self, chat_id: str, viewer_user_id: str) -> dict[str, Any]:
+        chat = self._require_joinable_chat(chat_id)
+        current_request = next(
+            (self._project_request(row) for row in self._requests.list_for_chat(chat_id) if row.get("requester_user_id") == viewer_user_id),
+            None,
+        )
+        return {
+            "id": chat.id,
+            "type": chat.type,
+            "title": chat.title,
+            "status": chat.status,
+            "created_by_user_id": chat.created_by_user_id,
+            "is_member": self._members.is_member(chat_id, viewer_user_id),
+            "current_request": current_request,
+        }
 
     def list_for_chat(self, chat_id: str, viewer_user_id: str) -> list[dict[str, Any]]:
         self._require_chat_owner(chat_id, viewer_user_id)
-        return self._requests.list_for_chat(chat_id)
+        return [self._project_request(row) for row in self._requests.list_for_chat(chat_id)]
 
     def approve(self, chat_id: str, request_id: str, approver_user_id: str) -> dict[str, Any]:
         self._require_chat_owner(chat_id, approver_user_id)
@@ -49,7 +65,7 @@ class ChatJoinRequestService:
             message_type="notification",
             mentions=[requester_user_id],
         )
-        return row
+        return self._project_request(row)
 
     def reject(self, chat_id: str, request_id: str, rejecter_user_id: str) -> dict[str, Any]:
         self._require_chat_owner(chat_id, rejecter_user_id)
@@ -62,7 +78,7 @@ class ChatJoinRequestService:
             f"Rejected chat join request for {requester_user_id}.",
             message_type="notification",
         )
-        return row
+        return self._project_request(row)
 
     def _require_joinable_chat(self, chat_id: str) -> Any:
         chat = self._chats.get_by_id(chat_id)
@@ -92,3 +108,13 @@ class ChatJoinRequestService:
         if message and message.strip():
             return f"{requester_user_id} requested to join this chat: {message.strip()}"
         return f"{requester_user_id} requested to join this chat."
+
+    def _project_request(self, row: dict[str, Any]) -> dict[str, Any]:
+        projected = dict(row)
+        requester_user_id = str(projected.get("requester_user_id") or "")
+        requester = self._messaging.resolve_display_user(requester_user_id) if requester_user_id else None
+        if requester is not None:
+            projected["requester_name"] = requester.display_name
+            requester_type = getattr(requester, "type", None)
+            projected["requester_type"] = requester_type.value if hasattr(requester_type, "value") else str(requester_type)
+        return projected
