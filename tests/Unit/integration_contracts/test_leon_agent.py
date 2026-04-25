@@ -59,16 +59,11 @@ def _agent_config(**overrides: object) -> AgentConfig:
     return AgentConfig(**data)
 
 
-def _write_configured_file_skill(tmp_path, *, name: str, body: str, description: str = "configured file skill") -> None:
+def _write_file_skill_dir(tmp_path, *, name: str, body: str, description: str = "file skill") -> None:
     skill_dir = tmp_path / "file-skills" / name
     skill_dir.mkdir(parents=True)
     (skill_dir / "SKILL.md").write_text(
         f"---\nname: {name}\ndescription: {description}\n---\n{body}",
-        encoding="utf-8",
-    )
-    (tmp_path / ".leon").mkdir()
-    (tmp_path / ".leon" / "runtime.json").write_text(
-        json.dumps({"skills": {"enabled": True, "paths": [str(tmp_path / "file-skills")], "skills": {}}}),
         encoding="utf-8",
     )
 
@@ -763,10 +758,10 @@ async def test_leon_agent_agent_config_id_registers_repo_backed_skills(tmp_path)
 
 @pytest.mark.asyncio
 @_patch_env_api_key()
-async def test_leon_agent_agent_config_id_does_not_register_configured_file_skills(tmp_path):
+async def test_leon_agent_agent_config_id_does_not_register_host_file_skills(tmp_path):
     from core.runtime.agent import LeonAgent
 
-    _write_configured_file_skill(
+    _write_file_skill_dir(
         tmp_path,
         name="DiskOnly",
         body="Use host-local state.",
@@ -815,10 +810,10 @@ async def test_leon_agent_agent_config_id_does_not_register_configured_file_skil
 
 @pytest.mark.asyncio
 @_patch_env_api_key()
-async def test_leon_agent_empty_agent_config_skills_do_not_enable_configured_file_skills(tmp_path):
+async def test_leon_agent_empty_agent_config_skills_do_not_enable_host_file_skills(tmp_path):
     from core.runtime.agent import LeonAgent
 
-    _write_configured_file_skill(
+    _write_file_skill_dir(
         tmp_path,
         name="DiskOnly",
         body="Use host-local state.",
@@ -853,37 +848,29 @@ async def test_leon_agent_empty_agent_config_skills_do_not_enable_configured_fil
 
 @pytest.mark.asyncio
 @_patch_env_api_key()
-async def test_leon_agent_default_runtime_still_registers_configured_file_skills(tmp_path):
+async def test_leon_agent_default_runtime_rejects_runtime_skill_config(tmp_path):
     from core.runtime.agent import LeonAgent
 
-    _write_configured_file_skill(
+    _write_file_skill_dir(
         tmp_path,
         name="FileSkill",
         body="Use configured local guidance.",
         description="local runtime skill",
     )
+    (tmp_path / ".leon").mkdir()
+    (tmp_path / ".leon" / "runtime.json").write_text(
+        json.dumps({"skills": {"enabled": True, "paths": [str(tmp_path / "file-skills")], "skills": {}}}),
+        encoding="utf-8",
+    )
 
-    mock_model = _mock_model("File skill response")
-
-    with (
-        patch("core.runtime.agent.LeonAgent._create_model", return_value=mock_model),
-        patch("core.runtime.agent.LeonAgent._init_async_components", return_value=(None, [])),
-        patch("core.runtime.agent.LeonAgent._init_checkpointer", new_callable=AsyncMock, return_value=None),
-        patch("core.runtime.agent.LeonAgent._init_mcp_tools", new_callable=AsyncMock, return_value=[]),
-    ):
+    with pytest.raises(ValueError, match="runtime.json must not define top-level 'skills'"):
         agent = LeonAgent(workspace_root=str(tmp_path), api_key="sk-test-integration")
-        await agent.ainit()
-
-        skill_tool = agent._tool_registry.get("load_skill")
-        assert skill_tool is not None
-        assert skill_tool.handler("FileSkill") == "Loaded skill: FileSkill\n\nUse configured local guidance."
-
         agent.close()
 
 
 @pytest.mark.asyncio
 @_patch_env_api_key()
-async def test_leon_agent_default_runtime_ignores_missing_configured_file_skill_path(tmp_path):
+async def test_leon_agent_default_runtime_rejects_missing_runtime_skill_path(tmp_path):
     from core.runtime.agent import LeonAgent
 
     missing_skills = tmp_path / "missing-file-skills"
@@ -893,26 +880,15 @@ async def test_leon_agent_default_runtime_ignores_missing_configured_file_skill_
         encoding="utf-8",
     )
 
-    mock_model = _mock_model("No file skill response")
-
-    with (
-        patch("core.runtime.agent.LeonAgent._create_model", return_value=mock_model),
-        patch("core.runtime.agent.LeonAgent._init_async_components", return_value=(None, [])),
-        patch("core.runtime.agent.LeonAgent._init_checkpointer", new_callable=AsyncMock, return_value=None),
-        patch("core.runtime.agent.LeonAgent._init_mcp_tools", new_callable=AsyncMock, return_value=[]),
-    ):
+    with pytest.raises(ValueError, match="runtime.json must not define top-level 'skills'"):
         agent = LeonAgent(workspace_root=str(tmp_path), api_key="sk-test-integration")
-        await agent.ainit()
-
-        assert not missing_skills.exists()
-        assert agent._tool_registry.get("load_skill") is None
-
         agent.close()
+    assert not missing_skills.exists()
 
 
 @pytest.mark.asyncio
 @_patch_env_api_key()
-async def test_leon_agent_agent_config_skills_ignore_file_skill_toggle(tmp_path):
+async def test_leon_agent_agent_config_id_rejects_stale_runtime_skill_toggle(tmp_path):
     from core.runtime.agent import LeonAgent
 
     leon_dir = tmp_path / ".leon"
@@ -936,26 +912,13 @@ async def test_leon_agent_agent_config_skills_ignore_file_skill_toggle(tmp_path)
                 ],
             )
 
-    mock_model = _mock_model("Repo skill response")
-
-    with (
-        patch("core.runtime.agent.LeonAgent._create_model", return_value=mock_model),
-        patch("core.runtime.agent.LeonAgent._init_async_components", return_value=(None, [])),
-        patch("core.runtime.agent.LeonAgent._init_checkpointer", new_callable=AsyncMock, return_value=None),
-        patch("core.runtime.agent.LeonAgent._init_mcp_tools", new_callable=AsyncMock, return_value=[]),
-    ):
+    with pytest.raises(ValueError, match="runtime.json must not define top-level 'skills'"):
         agent = LeonAgent(
             workspace_root=str(tmp_path),
             agent_config_id="cfg-1",
             agent_config_repo=_Repo(),
             api_key="sk-test-integration",
         )
-        await agent.ainit()
-
-        skill_tool = agent._tool_registry.get("load_skill")
-        assert skill_tool is not None
-        assert skill_tool.handler("FastAPI") == "Loaded skill: FastAPI\n\nAlways use APIRouter."
-
         agent.close()
 
 
@@ -1345,7 +1308,6 @@ def test_leon_agent_chat_tool_wiring_does_not_pass_dead_repo_dependencies(monkey
             web=SimpleNamespace(enabled=False),
             command=SimpleNamespace(enabled=False),
         ),
-        skills=SimpleNamespace(enabled=False, paths=[], skills={}),
     )
 
     LeonAgent._init_services(agent)
@@ -1407,7 +1369,6 @@ def test_leon_agent_init_services_passes_child_thread_live_runner(monkeypatch: p
             web=SimpleNamespace(enabled=False),
             command=SimpleNamespace(enabled=False),
         ),
-        skills=SimpleNamespace(enabled=False, paths=[], skills={}),
     )
 
     LeonAgent._init_services(agent)
