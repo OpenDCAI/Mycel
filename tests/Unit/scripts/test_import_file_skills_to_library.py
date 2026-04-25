@@ -156,6 +156,20 @@ def test_import_file_skill_requires_description_frontmatter(monkeypatch: pytest.
     assert repo.saved == []
 
 
+def test_import_file_skill_requires_version_frontmatter(monkeypatch: pytest.MonkeyPatch, tmp_path):
+    library_dir = tmp_path / "library"
+    skill_dir = library_dir / "skills" / "new-skill"
+    skill_dir.mkdir(parents=True)
+    (skill_dir / "SKILL.md").write_text("---\nname: New Skill\ndescription: New\n---\nBody", encoding="utf-8")
+    repo = _MemorySkillRepo()
+    monkeypatch.setattr(import_file_skills_to_library, "build_storage_container", lambda: SimpleNamespace(skill_repo=lambda: repo))
+
+    with pytest.raises(ValueError, match="SKILL.md frontmatter must include version"):
+        import_file_skills_to_library.import_skills("owner-1", library_dir)
+
+    assert repo.saved == []
+
+
 def test_import_file_skill_rejects_adjacent_file_path_collision(monkeypatch: pytest.MonkeyPatch, tmp_path):
     library_dir = tmp_path / "library"
     skill_dir = library_dir / "skills" / "new-skill"
