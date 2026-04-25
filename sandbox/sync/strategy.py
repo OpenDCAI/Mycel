@@ -173,10 +173,7 @@ class IncrementalSyncStrategy(SyncStrategy):
         if not source_path.exists():
             return
 
-        if files:
-            to_upload = files
-        else:
-            to_upload = self.state.detect_changes(state_key, source_path)
+        to_upload = files or self.state.detect_changes(state_key, source_path)
 
         if not to_upload:
             return
