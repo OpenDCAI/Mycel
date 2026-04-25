@@ -260,9 +260,6 @@ def apply_item(
         skill_files = _skill_files_from_snapshot(snapshot)
         if skill_repo is None:
             raise RuntimeError("skill_repo is required to save a skill to Library")
-        slug = _required_text(item.get("slug"), label="Hub item slug")
-        if "/" in slug or "\\" in slug or slug in {"", ".", ".."}:
-            raise ValueError(f"Invalid slug: {slug}")
         skill_name = str(skill_metadata["name"]).strip()
         owner_skills = skill_repo.list_for_owner(owner_user_id)
         existing_skill = _hub_source_skill(owner_skills, item_id)
@@ -286,6 +283,9 @@ def apply_item(
             "source_at": now,
             "publisher": publisher,
         }
+        item_slug = item.get("slug")
+        if isinstance(item_slug, str) and item_slug.strip():
+            source["marketplace_slug"] = item_slug.strip()
         skill = skill_repo.upsert(
             Skill(
                 id=skill_id,
