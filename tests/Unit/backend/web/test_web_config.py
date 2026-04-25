@@ -40,3 +40,13 @@ def test_web_config_requires_explicit_local_workspace_root(monkeypatch, tmp_path
     finally:
         monkeypatch.setenv("LEON_LOCAL_WORKSPACE_ROOT", str(tmp_path))
         importlib.reload(config)
+
+
+def test_web_config_does_not_define_local_database_path(monkeypatch, tmp_path) -> None:
+    monkeypatch.setenv("LEON_LOCAL_WORKSPACE_ROOT", str(tmp_path))
+    from backend.web.core import config
+
+    importlib.reload(config)
+
+    assert not hasattr(config, "DB_PATH")
+    assert "user_home_path" not in config.__dict__
