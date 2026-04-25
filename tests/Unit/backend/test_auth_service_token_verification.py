@@ -254,6 +254,35 @@ def test_login_repairs_existing_user_sandbox_recipes(monkeypatch: pytest.MonkeyP
     assert sorted(recipe_id for (_owner, recipe_id) in recipe_rows) == ["daytona_selfhost:default"]
 
 
+def test_login_seeds_recipes_without_sandbox_control_plane_path(monkeypatch: pytest.MonkeyPatch, tmp_path):
+    auth_client = _FakeAuthClient()
+    monkeypatch.setenv("LEON_LOCAL_WORKSPACE_ROOT", str(tmp_path / "workspace"))
+    monkeypatch.setenv("LEON_STORAGE_STRATEGY", "supabase")
+    monkeypatch.delenv("LEON_SANDBOX_DB_PATH", raising=False)
+    monkeypatch.setattr("backend.sandboxes.inventory.SANDBOXES_DIR", None)
+    recipe_rows: dict[tuple[str, str], dict] = {}
+    recipe_repo = SimpleNamespace(
+        get=lambda owner_user_id, recipe_id: recipe_rows.get((owner_user_id, recipe_id)),
+        upsert=lambda **payload: recipe_rows.setdefault(
+            (payload["owner_user_id"], payload["recipe_id"]), {"data": payload["data"], **payload}
+        ),
+    )
+    user_repo = SimpleNamespace(
+        get_by_id=lambda _user_id: SimpleNamespace(display_name="codex", mycel_id=10001, email="codex@example.com", avatar=None),
+        list_by_owner_user_id=lambda _user_id: [],
+    )
+
+    result = _service(
+        supabase_client=SimpleNamespace(auth=None),
+        supabase_auth_client=auth_client,
+        user_repo=user_repo,
+        recipe_repo=recipe_repo,
+    ).login("codex@example.com", "pw-1")
+
+    assert result["token"] == "tok-1"
+    assert sorted(recipe_id for (_owner, recipe_id) in recipe_rows) == ["local:default"]
+
+
 def test_login_uses_fresh_auth_client_from_factory_per_call():
     created: list[_FactoryBackedAuthClient] = []
 

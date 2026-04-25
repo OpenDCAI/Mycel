@@ -4,19 +4,13 @@ from pathlib import Path
 from types import SimpleNamespace
 
 from backend.sandboxes import service as sandbox_service
-from sandbox.providers.local import LocalSessionProvider
 
 
 def test_available_sandbox_types_marks_configured_but_unavailable_provider(monkeypatch, tmp_path: Path) -> None:
-    local_provider = LocalSessionProvider(default_cwd=str(tmp_path))
     (tmp_path / "daytona.json").write_text("{}")
 
+    monkeypatch.setenv("LEON_LOCAL_WORKSPACE_ROOT", str(tmp_path / "workspace"))
     monkeypatch.setattr(sandbox_service, "SANDBOXES_DIR", tmp_path)
-    monkeypatch.setattr(
-        sandbox_service,
-        "init_providers_and_managers",
-        lambda: ({"local": local_provider}, {}),
-    )
     monkeypatch.setattr(
         sandbox_service.SandboxConfig,
         "load",
@@ -32,15 +26,10 @@ def test_available_sandbox_types_marks_configured_but_unavailable_provider(monke
 
 
 def test_available_sandbox_types_marks_e2b_unavailable_when_sdk_missing(monkeypatch, tmp_path: Path) -> None:
-    local_provider = LocalSessionProvider(default_cwd=str(tmp_path))
     (tmp_path / "e2b.json").write_text("{}")
 
+    monkeypatch.setenv("LEON_LOCAL_WORKSPACE_ROOT", str(tmp_path / "workspace"))
     monkeypatch.setattr(sandbox_service, "SANDBOXES_DIR", tmp_path)
-    monkeypatch.setattr(
-        sandbox_service,
-        "init_providers_and_managers",
-        lambda: ({"local": local_provider}, {}),
-    )
     monkeypatch.setattr(
         sandbox_service.SandboxConfig,
         "load",
@@ -76,6 +65,18 @@ def test_build_providers_and_managers_accepts_empty_sandbox_config_set(monkeypat
 
     assert list(providers) == ["local"]
     assert list(managers) == ["local"]
+
+
+def test_available_sandbox_types_does_not_require_sandbox_control_plane_path(monkeypatch, tmp_path: Path) -> None:
+    workspace_root = tmp_path / "workspace"
+    monkeypatch.setenv("LEON_LOCAL_WORKSPACE_ROOT", str(workspace_root))
+    monkeypatch.setenv("LEON_STORAGE_STRATEGY", "supabase")
+    monkeypatch.delenv("LEON_SANDBOX_DB_PATH", raising=False)
+    monkeypatch.setattr(sandbox_service, "SANDBOXES_DIR", None)
+
+    types = sandbox_service.available_sandbox_types()
+
+    assert [(item["name"], item["provider"], item["available"]) for item in types] == [("local", "local", True)]
 
 
 def test_build_providers_and_managers_passes_agentbay_pause_capability_overrides(monkeypatch, tmp_path: Path) -> None:
@@ -189,15 +190,10 @@ def test_available_sandbox_types_marks_daytona_unavailable_when_api_key_missing(
     monkeypatch,
     tmp_path: Path,
 ) -> None:
-    local_provider = LocalSessionProvider(default_cwd=str(tmp_path))
     (tmp_path / "daytona_selfhost.json").write_text("{}")
 
+    monkeypatch.setenv("LEON_LOCAL_WORKSPACE_ROOT", str(tmp_path / "workspace"))
     monkeypatch.setattr(sandbox_service, "SANDBOXES_DIR", tmp_path)
-    monkeypatch.setattr(
-        sandbox_service,
-        "init_providers_and_managers",
-        lambda: ({"local": local_provider}, {}),
-    )
     monkeypatch.setattr(
         sandbox_service.SandboxConfig,
         "load",

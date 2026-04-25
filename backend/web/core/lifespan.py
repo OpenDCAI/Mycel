@@ -111,8 +111,12 @@ async def lifespan(app: FastAPI):
     try:
         from backend.sandboxes.service import init_providers_and_managers
         from backend.web.core.config import IDLE_REAPER_INTERVAL_SEC
+        from sandbox.control_plane_repos import configured_sandbox_db_path
 
-        idle_reaper_owner.init_providers_and_managers = init_providers_and_managers
+        if configured_sandbox_db_path() is not None:
+            idle_reaper_owner.init_providers_and_managers = init_providers_and_managers
+        else:
+            idle_reaper_owner.init_providers_and_managers = None
         idle_reaper_owner.IDLE_REAPER_INTERVAL_SEC = IDLE_REAPER_INTERVAL_SEC
 
         app.state.idle_reaper_task = asyncio.create_task(idle_reaper_owner.idle_reaper_loop(app))

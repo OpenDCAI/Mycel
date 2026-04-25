@@ -81,7 +81,11 @@ def count_user_visible_sandboxes_by_provider(
 def available_sandbox_types() -> list[dict[str, Any]]:
     return _sandbox_provider_availability.available_sandbox_types(
         sandboxes_dir=SANDBOXES_DIR,
-        init_providers_and_managers_fn=init_providers_and_managers,
+        build_providers_fn=lambda: sandbox_inventory._build_providers(
+            sandboxes_dir=SANDBOXES_DIR,
+            sandbox_config_cls=SandboxConfig,
+            local_workspace_root_path=local_workspace_root(),
+        ),
         sandbox_config_cls=SandboxConfig,
     )
 

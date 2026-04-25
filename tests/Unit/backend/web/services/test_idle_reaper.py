@@ -40,3 +40,15 @@ def test_run_idle_reaper_once_snapshots_agent_pool_before_iteration(monkeypatch)
     monkeypatch.setattr(idle_reaper_module, "init_providers_and_managers", lambda: ({}, {}))
 
     assert idle_reaper_module.run_idle_reaper_once(app) == 2
+
+
+def test_run_idle_reaper_once_reaps_loaded_managers_without_global_inventory(monkeypatch) -> None:
+    manager = SimpleNamespace(
+        provider=SimpleNamespace(name="local"),
+        enforce_idle_timeouts=lambda: 1,
+    )
+    app = SimpleNamespace(state=SimpleNamespace(agent_pool={"agent-1": SimpleNamespace(_sandbox=SimpleNamespace(manager=manager))}))
+
+    monkeypatch.setattr(idle_reaper_module, "init_providers_and_managers", None)
+
+    assert idle_reaper_module.run_idle_reaper_once(app) == 1
