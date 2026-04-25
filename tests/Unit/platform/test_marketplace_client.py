@@ -159,7 +159,8 @@ class TestApplySkill:
         assert "id=slug" not in source
         assert "get_by_id(owner_user_id, slug)" not in source
 
-    def test_writes_hub_skill_files_as_posix_paths(self):
+    def test_writes_hub_skill_files_as_posix_paths(self, monkeypatch):
+        monkeypatch.setattr("backend.hub.client.generate_skill_id", lambda: "skill_posix123")
         saved: list[Skill] = []
         packages: list[SkillPackage] = []
         hub_resp = _make_hub_response("skill", "my-skill", content="---\nname: My Skill\n---\n# My Skill\nDo stuff")
@@ -177,7 +178,7 @@ class TestApplySkill:
 
             apply_item("item-123", owner_user_id="owner-1", skill_repo=skill_repo)
 
-        assert saved[0].id == "my-skill"
+        assert saved[0].id == "skill_posix123"
         assert packages[0].manifest["files"][0]["path"] == "references/usage.md"
 
     def test_apply_rejects_hub_skill_file_path_collision(self):
@@ -307,12 +308,14 @@ class TestApplySkill:
             id="same-slug",
             owner_user_id="owner-1",
             name="Original Skill",
+            source={"marketplace_item_id": "item-rename"},
             created_at=datetime(2026, 4, 24, tzinfo=UTC),
             updated_at=datetime(2026, 4, 24, tzinfo=UTC),
         )
         hub_resp = _make_hub_response("skill", "same-slug", content="---\nname: Renamed Skill\n---\nBody")
         skill_repo = SimpleNamespace(
-            get_by_id=lambda owner_user_id, skill_id: existing if (owner_user_id, skill_id) == ("owner-1", "same-slug") else None,
+            get_by_id=lambda _owner_user_id, _skill_id: None,
+            list_for_owner=lambda _owner_user_id: [existing],
             upsert=lambda _skill: (_ for _ in ()).throw(AssertionError("must not rename existing Skill")),
         )
 
@@ -406,7 +409,7 @@ class TestApplySkill:
             apply_item("item-meta", owner_user_id="owner-1", skill_repo=skill_repo)
 
         assert saved[0].description == "Frontmatter wins"
-        assert packages[0].skill_id == "meta-free-skill"
+        assert packages[0].skill_id == saved[0].id
 
     def test_slug_path_shape_does_not_affect_library_id(self, monkeypatch):
         monkeypatch.setattr("backend.hub.client.generate_skill_id", lambda: "skill_evilSafe1")
@@ -475,7 +478,7 @@ class TestApplySkill:
             )
 
         assert result == {
-            "resource_id": "fastapi",
+            "resource_id": saved_skills[0].id,
             "package_id": packages[0].id,
             "type": "skill",
             "version": "1.2.3",
@@ -484,7 +487,7 @@ class TestApplySkill:
         assert saved_skills[0].description == "Build FastAPI APIs"
         assert packages[0].skill_md == "---\nname: FastAPI\ndescription: Build FastAPI APIs\n---\nAlways use APIRouter."
         assert packages[0].manifest["files"][0]["path"] == "references/routing.md"
-        assert selected == [("owner-1", "fastapi", packages[0].id)]
+        assert selected == [("owner-1", saved_skills[0].id, packages[0].id)]
         assert saved == []
 
     def test_saves_skill_to_library_without_agent_config_repo(self):
@@ -526,10 +529,10 @@ class TestApplySkill:
                 skill_repo=skill_repo,
             )
 
-        assert saved_skills[0].id == "fastapi"
+        assert saved_skills[0].id.startswith("skill_")
         assert saved_skills[0].name == "FastAPI"
         assert result == {
-            "resource_id": "fastapi",
+            "resource_id": saved_skills[0].id,
             "package_id": packages[0].id,
             "type": "skill",
             "version": "1.2.3",
@@ -574,7 +577,7 @@ class TestApplySkill:
                 skill_repo=skill_repo,
             )
 
-        assert result["resource_id"] == "fastapi"
+        assert result["resource_id"] == saved_skills[0].id
         assert result["package_id"] == packages[0].id
         assert saved_skills[0].name == "FastAPI"
         assert saved == []
