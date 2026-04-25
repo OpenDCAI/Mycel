@@ -10,7 +10,7 @@ import yaml
 from backend.sandboxes import provider_availability as sandbox_provider_availability
 from backend.sandboxes.recipe_bootstrap import seed_default_recipes as seed_builtin_recipes
 from config.agent_config_types import Skill, SkillPackage
-from config.skill_document import parse_skill_document, skill_version
+from config.skill_document import SkillDocument, parse_skill_document
 from config.skill_package import build_skill_package
 from sandbox.recipes import FEATURE_CATALOG, default_recipe_snapshot, normalize_recipe_snapshot, provider_type_from_name
 from storage.contracts import RecipeRepo, SkillRepo
@@ -68,13 +68,9 @@ def _require_skill_repo(skill_repo: SkillRepo | None) -> SkillRepo:
     return skill_repo
 
 
-def _skill_name_from_content(content: str) -> str:
+def _skill_document_from_content(content: str, *, require_version: bool = False) -> SkillDocument:
     # @@@skill-name-single-truth - runtime indexes Skills by SKILL.md frontmatter name, so Library name must not drift.
-    return parse_skill_document(content, label="Skill content").name
-
-
-def _skill_version_from_content(content: str) -> str:
-    return skill_version(parse_skill_document(content, label="Skill content"))
+    return parse_skill_document(content, label="Skill content", require_version=require_version)
 
 
 def _now_dt() -> datetime:
@@ -248,10 +244,11 @@ def create_resource(
         skill_repo = _require_skill_repo(skill_repo)
         if not content or not content.strip():
             raise ValueError("Skill creation requires SKILL.md content")
-        frontmatter_name = _skill_name_from_content(content)
-        if frontmatter_name != name:
+        document = _skill_document_from_content(content, require_version=True)
+        if document.name != name:
             raise ValueError("Skill content frontmatter name must match Skill name")
-        version = _skill_version_from_content(content)
+        if document.version is None:
+            raise RuntimeError("Skill content version was not parsed")
         for skill in skill_repo.list_for_owner(owner_user_id):
             if skill.name == name:
                 raise ValueError("Skill name already exists")
@@ -270,7 +267,7 @@ def create_resource(
                 updated_at=timestamp,
             )
         )
-        _write_skill_package(owner_user_id, skill, content, {}, skill_repo, version=version)
+        _write_skill_package(owner_user_id, skill, content, {}, skill_repo, version=document.version)
         return _library_resource_item(
             "skill",
             skill.id,
@@ -482,13 +479,14 @@ def update_resource_content(
         current = skill_repo.get_by_id(owner_user_id, resource_id)
         if current is None:
             return False
-        frontmatter_name = _skill_name_from_content(content)
-        if frontmatter_name != current.name:
+        document = _skill_document_from_content(content, require_version=True)
+        if document.name != current.name:
             raise ValueError("Skill content frontmatter name must match Skill name")
-        version = _skill_version_from_content(content)
+        if document.version is None:
+            raise RuntimeError("Skill content version was not parsed")
         current_package = _selected_skill_package(owner_user_id, current, skill_repo)
         files = current_package.files if current_package is not None else {}
         updated = skill_repo.upsert(current.model_copy(update={"updated_at": _now_dt()}))
-        _write_skill_package(owner_user_id, updated, content, files, skill_repo, version=version)
+        _write_skill_package(owner_user_id, updated, content, files, skill_repo, version=document.version)
         return True
     return False
