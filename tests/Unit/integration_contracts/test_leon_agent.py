@@ -734,7 +734,6 @@ async def test_leon_agent_agent_config_id_registers_repo_backed_skills(tmp_path)
             return _agent_config(
                 name="Repo Toad",
                 system_prompt="You are Repo Toad.",
-                runtime_settings={"skills:FastAPI": {"enabled": True, "desc": "Use FastAPI conventions"}},
                 skills=[
                     AgentSkill(
                         skill_id="fastapi",

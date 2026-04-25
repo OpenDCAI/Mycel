@@ -346,7 +346,7 @@ def test_repo_backed_tools_star_keeps_panel_and_runtime_tool_state_aligned() -> 
     assert "LSP" not in agent._get_agent_blocked_tools()
 
 
-def test_agent_config_patch_pins_library_skill_content() -> None:
+def test_agent_config_patch_saves_library_skill_package_choice() -> None:
     saved_configs: list[AgentConfig] = []
     skill_repo = _MemorySkillRepo()
     library_skill = _put_skill(
@@ -385,18 +385,17 @@ def test_agent_config_patch_pins_library_skill_content() -> None:
     assert result is not None
     assert saved_configs[-1].skills == [
         AgentSkill(
-            id="",
+            id=None,
             skill_id="loadable-skill",
             package_id=library_skill.package_id,
             name="Loadable Skill",
             description="loadable",
             version="1.0.0",
-            content="---\nname: Loadable Skill\n---\nUse it.",
         )
     ]
 
 
-def test_agent_config_patch_rejects_inline_skill_without_library_id() -> None:
+def test_agent_config_patch_rejects_inline_skill_content() -> None:
     saved_configs: list[AgentConfig] = []
 
     class _AgentConfigRepo:
@@ -406,7 +405,7 @@ def test_agent_config_patch_rejects_inline_skill_without_library_id() -> None:
         def save_agent_config(self, config: AgentConfig) -> None:
             saved_configs.append(config)
 
-    with pytest.raises(RuntimeError, match="Library skill not found: Inline Skill"):
+    with pytest.raises(RuntimeError, match="Skill patch item must not include content or files"):
         agent_user_service.update_agent_user_config(
             "agent-1",
             {"skills": [{"name": "Inline Skill", "content": "---\nname: Inline Skill\n---\nUse it.", "enabled": True}]},
@@ -513,8 +512,8 @@ def test_agent_config_patch_rejects_duplicate_skill_names() -> None:
             "agent-1",
             {
                 "skills": [
-                    {"name": "Loadable Skill", "content": "---\nname: Loadable Skill\n---\nOne"},
-                    {"name": "Loadable Skill", "content": "---\nname: Loadable Skill\n---\nTwo"},
+                    {"name": "Loadable Skill"},
+                    {"name": "Loadable Skill"},
                 ]
             },
             user_repo=SimpleNamespace(
@@ -536,19 +535,18 @@ def test_agent_config_patch_rejects_duplicate_skill_names() -> None:
 
 def test_agent_config_patch_rejects_skill_after_library_delete() -> None:
     saved_configs: list[AgentConfig] = []
-    pinned = AgentSkill(
+    selected = AgentSkill(
         id="agent-skill-1",
         skill_id="loadable-skill",
+        package_id="loadable-package",
         name="Loadable Skill",
         description="loadable",
-        content="---\nname: Loadable Skill\n---\nPinned content.",
-        files={"references/usage.md": "Pinned file."},
         source={"source_version": "1.0.0"},
     )
 
     class _AgentConfigRepo:
         def get_agent_config(self, _agent_config_id: str):
-            return _agent_config(skills=[pinned])
+            return _agent_config(skills=[selected])
 
         def save_agent_config(self, config: AgentConfig) -> None:
             saved_configs.append(config)
@@ -592,7 +590,6 @@ def test_agent_config_patch_rejects_missing_explicit_library_skill_id() -> None:
                     {
                         "skill_id": "missing-skill",
                         "name": "Inline Skill",
-                        "content": "---\nname: Inline Skill\n---\nUse it.",
                     }
                 ]
             },
@@ -613,7 +610,7 @@ def test_agent_config_patch_rejects_missing_explicit_library_skill_id() -> None:
     assert saved_configs == []
 
 
-def test_agent_config_patch_explicit_library_id_uses_library_content() -> None:
+def test_agent_config_patch_explicit_library_id_uses_library_package_choice() -> None:
     saved_configs: list[AgentConfig] = []
     skill_repo = _MemorySkillRepo()
     library_skill = _put_skill(
@@ -639,7 +636,6 @@ def test_agent_config_patch_explicit_library_id_uses_library_content() -> None:
                 {
                     "skill_id": "loadable-skill",
                     "name": "Loadable Skill",
-                    "content": "---\nname: Loadable Skill\n---\nPatch content.",
                     "enabled": True,
                 }
             ]
@@ -1165,7 +1161,7 @@ def test_get_agent_user_uses_repo_skill_desc():
     assert result["config"]["skills"] == [{"name": "Search", "enabled": True, "desc": "repo desc"}]
 
 
-def test_get_agent_user_keeps_runtime_skill_desc_override_ahead_of_repo_meta():
+def test_get_agent_user_ignores_runtime_skill_desc_override():
     agent = UserRow(
         id="agent-1",
         type=UserType.AGENT,
@@ -1182,7 +1178,7 @@ def test_get_agent_user_keeps_runtime_skill_desc_override_ahead_of_repo_meta():
                 description="probe",
                 model="leon:large",
                 system_prompt="",
-                runtime_settings={"skills:Search": {"desc": "runtime desc"}},
+                runtime_settings={"skills:Search": {"desc": "runtime desc", "enabled": False}},
                 skills=[AgentSkill(skill_id="search", package_id="search-package", name="Search", description="repo desc")],
             )
 
@@ -1192,7 +1188,7 @@ def test_get_agent_user_keeps_runtime_skill_desc_override_ahead_of_repo_meta():
         agent_config_repo=_AgentConfigRepo(),
     )
 
-    assert result["config"]["skills"] == [{"name": "Search", "enabled": True, "desc": "runtime desc"}]
+    assert result["config"]["skills"] == [{"name": "Search", "enabled": True, "desc": "repo desc"}]
 
 
 @pytest.mark.asyncio
