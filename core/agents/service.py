@@ -873,14 +873,18 @@ class AgentService:
             prompt = _normalize_child_workspace_prompt(prompt, child_workspace_root)
 
             if parent_thread_id and parent_thread_id != thread_id:
+                from sandbox.control_plane_repos import configured_sandbox_db_path
                 from sandbox.manager import bind_thread_to_existing_thread_sandbox_runtime
 
-                parent_workspace_cwd = self._resolve_parent_workspace_path(parent_thread_id) or str(child_workspace_root)
-                bind_thread_to_existing_thread_sandbox_runtime(
-                    thread_id,
-                    parent_thread_id,
-                    cwd=parent_workspace_cwd,
-                )
+                control_plane_db_path = configured_sandbox_db_path()
+                if control_plane_db_path is not None:
+                    parent_workspace_cwd = self._resolve_parent_workspace_path(parent_thread_id) or str(child_workspace_root)
+                    bind_thread_to_existing_thread_sandbox_runtime(
+                        thread_id,
+                        parent_thread_id,
+                        cwd=parent_workspace_cwd,
+                        db_path=control_plane_db_path,
+                    )
 
             # Wire child agent events to the parent's EventBus subscription
             # so the parent SSE stream shows sub-agent activity.

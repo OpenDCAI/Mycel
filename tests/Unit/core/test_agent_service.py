@@ -1170,6 +1170,7 @@ async def test_run_agent_reuses_parent_sandbox_runtime_for_child_thread_terminal
 async def test_run_agent_passes_parent_workspace_path_into_thread_reuse_bind(monkeypatch, tmp_path):
     _patch_create_leon_agent(monkeypatch)
     live_child_thread_runner = AsyncMock(return_value="LIVE_CHILD_DONE")
+    monkeypatch.setenv("LEON_SANDBOX_DB_PATH", str(tmp_path / "sandbox.db"))
 
     thread_repo = _FakeThreadRepo(
         rows={
@@ -1237,6 +1238,7 @@ async def test_run_agent_passes_parent_workspace_path_into_thread_reuse_bind(mon
 async def test_run_agent_fails_loud_when_parent_workspace_repo_is_missing(monkeypatch, tmp_path):
     _patch_create_leon_agent(monkeypatch)
     live_child_thread_runner = AsyncMock(return_value="LIVE_CHILD_DONE")
+    monkeypatch.setenv("LEON_SANDBOX_DB_PATH", str(tmp_path / "sandbox.db"))
 
     thread_repo = _FakeThreadRepo(
         rows={
@@ -1279,9 +1281,10 @@ async def test_run_agent_fails_loud_when_parent_workspace_repo_is_missing(monkey
 
 
 @pytest.mark.asyncio
-async def test_run_agent_falls_back_to_child_workspace_root_when_parent_workspace_truth_is_absent(monkeypatch, tmp_path):
+async def test_run_agent_uses_child_workspace_root_when_parent_workspace_truth_is_absent(monkeypatch, tmp_path):
     _patch_create_leon_agent(monkeypatch)
     live_child_thread_runner = AsyncMock(return_value="LIVE_CHILD_DONE")
+    monkeypatch.setenv("LEON_SANDBOX_DB_PATH", str(tmp_path / "sandbox.db"))
 
     captured: dict[str, Any] = {}
 

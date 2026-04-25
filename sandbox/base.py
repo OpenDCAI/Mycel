@@ -226,12 +226,12 @@ class _LazyLocalExecutor:
 
 class LocalSandbox(Sandbox):
     def __init__(self, workspace_root: str, db_path: Path | None = None) -> None:
-        from sandbox.manager import SandboxManager
         from sandbox.providers.local import LocalSessionProvider
 
         self._workspace_root = workspace_root
+        self._db_path = db_path
         self._provider = LocalSessionProvider(default_cwd=workspace_root)
-        self._manager = SandboxManager(provider=self._provider, db_path=db_path or (Path.home() / ".leon" / "sandbox.db"))
+        self._manager: SandboxManager | None = None
         self._capability_cache: dict[str, SandboxCapability] = {}
         self._owned_thread_ids: set[str] = set()
 
@@ -249,6 +249,13 @@ class LocalSandbox(Sandbox):
 
     @property
     def manager(self) -> SandboxManager:
+        if self._manager is None:
+            from sandbox.manager import SandboxManager
+
+            # @@@lazy-local-control-plane - local Agent construction is allowed
+            # without sandbox storage; terminal/session use is the boundary that
+            # requires an explicit control-plane DB path.
+            self._manager = SandboxManager(provider=self._provider, db_path=self._db_path)
         return self._manager
 
     def _get_capability(self) -> SandboxCapability:
@@ -259,10 +266,11 @@ class LocalSandbox(Sandbox):
             raise RuntimeError("No thread_id set. Call set_current_thread_id first.")
         self._owned_thread_ids.add(thread_id)
         cached = self._capability_cache.get(thread_id)
-        if cached is not None and _cached_capability_is_stale(self._manager, thread_id, cached):
+        manager = self.manager
+        if cached is not None and _cached_capability_is_stale(manager, thread_id, cached):
             self._capability_cache.pop(thread_id, None)
         if thread_id not in self._capability_cache:
-            self._capability_cache[thread_id] = self._manager.get_sandbox(thread_id)
+            self._capability_cache[thread_id] = manager.get_sandbox(thread_id)
         return self._capability_cache[thread_id]
 
     def fs(self) -> FileSystemBackend | None:

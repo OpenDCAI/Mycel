@@ -38,6 +38,19 @@ def resolve_role_db_path(role: SQLiteDBRole, db_path: Path | str | None = None) 
     return main_path
 
 
+def resolve_explicit_role_db_path(role: SQLiteDBRole) -> Path:
+    env_by_role = {
+        SQLiteDBRole.MAIN: "LEON_DB_PATH",
+        SQLiteDBRole.SANDBOX: "LEON_SANDBOX_DB_PATH",
+        SQLiteDBRole.QUEUE: "LEON_QUEUE_DB_PATH",
+    }
+    env_var = env_by_role[role]
+    raw_path = os.getenv(env_var)
+    if not raw_path:
+        raise RuntimeError(f"{env_var} is required for sqlite {role.value} storage.")
+    return Path(raw_path)
+
+
 def apply_pragmas(conn: sqlite3.Connection) -> None:
     conn.execute(f"PRAGMA journal_mode={WAL_MODE}")
     conn.execute(f"PRAGMA busy_timeout={BUSY_TIMEOUT_MS}")

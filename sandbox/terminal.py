@@ -7,7 +7,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 
-from storage.providers.sqlite.kernel import SQLiteDBRole, connect_sqlite, resolve_role_db_path
+from storage.providers.sqlite.kernel import SQLiteDBRole, connect_sqlite, resolve_explicit_role_db_path
 
 REQUIRED_ABSTRACT_TERMINAL_COLUMNS = {
     "terminal_id",
@@ -92,7 +92,7 @@ class SQLiteTerminal(AbstractTerminal):
         db_path: Path | None = None,
     ):
         super().__init__(terminal_id, thread_id, sandbox_runtime_id, state)
-        self.db_path = db_path or resolve_role_db_path(SQLiteDBRole.SANDBOX)
+        self.db_path = Path(db_path) if db_path is not None else resolve_explicit_role_db_path(SQLiteDBRole.SANDBOX)
 
     def _persist_state(self) -> None:
         with _connect(self.db_path) as conn:

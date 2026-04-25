@@ -23,7 +23,7 @@ if TYPE_CHECKING:
 
 from sandbox.interfaces.executor import AsyncCommand, ExecuteResult
 from sandbox.shell_output import normalize_pty_result
-from storage.providers.sqlite.kernel import SQLiteDBRole, connect_sqlite, resolve_role_db_path
+from storage.providers.sqlite.kernel import connect_sqlite
 from storage.runtime import uses_supabase_runtime_defaults
 
 if platform.system() == "Windows":
@@ -37,7 +37,7 @@ ENV_NAME_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 
 
 def _uses_strategy_command_registry(db_path: Path | None) -> bool:
-    return db_path is not None and uses_supabase_runtime_defaults() and db_path == resolve_role_db_path(SQLiteDBRole.SANDBOX)
+    return db_path is None and uses_supabase_runtime_defaults()
 
 
 def _require_select_module():
