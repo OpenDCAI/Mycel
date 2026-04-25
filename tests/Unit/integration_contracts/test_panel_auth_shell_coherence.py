@@ -196,6 +196,15 @@ async def test_panel_agent_detail_keeps_full_config_for_owner_scope(monkeypatch:
 
 @pytest.mark.asyncio
 async def test_panel_agent_detail_exposes_library_skill_id_for_round_trip() -> None:
+    skill_repo = _MemorySkillRepo()
+    _put_skill(
+        skill_repo,
+        owner_user_id="user-1",
+        skill_id="loadable-skill",
+        name="Loadable Skill",
+        description="loadable",
+        content="---\nname: Loadable Skill\n---\nUse it.",
+    )
     agent = UserRow(
         id="agent-1",
         type=UserType.AGENT,
@@ -215,8 +224,6 @@ async def test_panel_agent_detail_exposes_library_skill_id_for_round_trip() -> N
                     id="agent-skill-1",
                     skill_id="loadable-skill",
                     package_id="loadable-skill-package",
-                    name="Loadable Skill",
-                    description="loadable",
                     enabled=True,
                 )
             ],
@@ -228,7 +235,9 @@ async def test_panel_agent_detail_exposes_library_skill_id_for_round_trip() -> N
         user_id="user-1",
         request=SimpleNamespace(
             app=SimpleNamespace(
-                state=SimpleNamespace(user_repo=fake_repo, runtime_storage_state=_runtime_storage_state(fake_agent_config_repo))
+                state=SimpleNamespace(
+                    user_repo=fake_repo, runtime_storage_state=_runtime_storage_state(fake_agent_config_repo, skill_repo=skill_repo)
+                )
             )
         ),
     )
@@ -468,8 +477,6 @@ def test_agent_config_patch_saves_library_skill_package_choice() -> None:
             id=None,
             skill_id="loadable-skill",
             package_id=library_skill.package_id,
-            name="Loadable Skill",
-            description="loadable",
         )
     ]
 
@@ -495,7 +502,6 @@ def test_agent_config_patch_keeps_package_source_out_of_agent_skill_binding() ->
                         id="agent-skill-1",
                         skill_id="loadable-skill",
                         package_id=library_skill.package_id,
-                        name="Loadable Skill",
                     )
                 ]
             )
@@ -818,8 +824,6 @@ def test_agent_config_patch_rejects_skill_after_library_delete() -> None:
         id="agent-skill-1",
         skill_id="loadable-skill",
         package_id="loadable-package",
-        name="Loadable Skill",
-        description="loadable",
     )
 
     class _AgentConfigRepo:
@@ -975,7 +979,7 @@ def test_select_agent_skill_uses_agent_config_skill_patch_boundary() -> None:
     assert result is not None
     assert saved_configs[-1].skills[0].skill_id == "loadable-skill"
     assert saved_configs[-1].skills[0].package_id == library_skill.package_id
-    assert saved_configs[-1].skills[0].description == "loadable"
+    assert "description" not in saved_configs[-1].skills[0].model_dump()
 
 
 def test_panel_library_skill_routes_use_skill_repo_without_recipe_repo() -> None:
@@ -1800,6 +1804,15 @@ def test_agent_config_patch_rejects_tool_enabled_string() -> None:
 
 
 def test_get_agent_user_uses_repo_skill_desc():
+    skill_repo = _MemorySkillRepo()
+    _put_skill(
+        skill_repo,
+        owner_user_id="user-1",
+        skill_id="search",
+        name="Search",
+        description="repo desc",
+        content="---\nname: Search\n---\nBody",
+    )
     agent = UserRow(
         id="agent-1",
         type=UserType.AGENT,
@@ -1816,19 +1829,29 @@ def test_get_agent_user_uses_repo_skill_desc():
                 description="probe",
                 model="leon:large",
                 system_prompt="",
-                skills=[AgentSkill(skill_id="search", package_id="search-package", name="Search", description="repo desc")],
+                skills=[AgentSkill(skill_id="search", package_id="search-package")],
             )
 
     result = agent_user_service.get_agent_user(
         "agent-1",
         user_repo=SimpleNamespace(get_by_id=lambda user_id: agent if user_id == "agent-1" else None),
         agent_config_repo=_AgentConfigRepo(),
+        skill_repo=skill_repo,
     )
 
     assert result["config"]["skills"] == [{"id": "search", "name": "Search", "enabled": True, "desc": "repo desc"}]
 
 
 def test_get_agent_user_ignores_runtime_skill_desc_override():
+    skill_repo = _MemorySkillRepo()
+    _put_skill(
+        skill_repo,
+        owner_user_id="user-1",
+        skill_id="search",
+        name="Search",
+        description="repo desc",
+        content="---\nname: Search\n---\nBody",
+    )
     agent = UserRow(
         id="agent-1",
         type=UserType.AGENT,
@@ -1846,13 +1869,14 @@ def test_get_agent_user_ignores_runtime_skill_desc_override():
                 model="leon:large",
                 system_prompt="",
                 runtime_settings={"skills:Search": {"desc": "runtime desc", "enabled": False}},
-                skills=[AgentSkill(skill_id="search", package_id="search-package", name="Search", description="repo desc")],
+                skills=[AgentSkill(skill_id="search", package_id="search-package")],
             )
 
     result = agent_user_service.get_agent_user(
         "agent-1",
         user_repo=SimpleNamespace(get_by_id=lambda user_id: agent if user_id == "agent-1" else None),
         agent_config_repo=_AgentConfigRepo(),
+        skill_repo=skill_repo,
     )
 
     assert result["config"]["skills"] == [{"id": "search", "name": "Search", "enabled": True, "desc": "repo desc"}]
@@ -1975,6 +1999,15 @@ def test_panel_agents_http_surface_does_not_expose_query_app_param(monkeypatch: 
 
 
 def test_get_agent_user_preserves_explicit_empty_repo_skill_desc():
+    skill_repo = _MemorySkillRepo()
+    _put_skill(
+        skill_repo,
+        owner_user_id="user-1",
+        skill_id="search",
+        name="Search",
+        description="",
+        content="---\nname: Search\n---\nBody",
+    )
     agent = UserRow(
         id="agent-1",
         type=UserType.AGENT,
@@ -1991,13 +2024,14 @@ def test_get_agent_user_preserves_explicit_empty_repo_skill_desc():
                 description="probe",
                 model="leon:large",
                 system_prompt="",
-                skills=[AgentSkill(skill_id="search", package_id="search-package", name="Search", description="")],
+                skills=[AgentSkill(skill_id="search", package_id="search-package")],
             )
 
     result = agent_user_service.get_agent_user(
         "agent-1",
         user_repo=SimpleNamespace(get_by_id=lambda user_id: agent if user_id == "agent-1" else None),
         agent_config_repo=_AgentConfigRepo(),
+        skill_repo=skill_repo,
     )
 
     assert result["config"]["skills"] == [{"id": "search", "name": "Search", "enabled": True, "desc": ""}]
@@ -2052,7 +2086,7 @@ def test_apply_snapshot_saves_one_agent_config_aggregate():
 
     assert user_id == created_users[0].id
     assert saved_configs[0].name == "Repo Agent"
-    assert saved_configs[0].skills[0].description == "skill desc"
+    assert "description" not in saved_configs[0].skills[0].model_dump()
     assert saved_configs[0].skills[0].skill_id.startswith("skill_")
     assert saved_configs[0].skills[0].skill_id != "search-core"
     assert saved_configs[0].skills[0].package_id
@@ -2489,7 +2523,6 @@ def test_library_used_by_reads_agent_configs_without_display_projection(monkeypa
                 AgentSkill(
                     skill_id="skill-1",
                     package_id="skill-1-package",
-                    name="api-design-reviewer",
                     enabled=True,
                 )
             ],
@@ -2498,7 +2531,7 @@ def test_library_used_by_reads_agent_configs_without_display_projection(monkeypa
 
     assert library_service.get_resource_used_by(
         "skill",
-        "api-design-reviewer",
+        "skill-1",
         "user-1",
         user_repo=fake_user_repo,
         agent_config_repo=fake_agent_config_repo,
@@ -2524,7 +2557,6 @@ async def test_delete_skill_route_rejects_skill_still_selected_by_agent(monkeypa
                 AgentSkill(
                     skill_id="skill-1",
                     package_id="skill-1-package",
-                    name="api-design-reviewer",
                     enabled=True,
                 )
             ],

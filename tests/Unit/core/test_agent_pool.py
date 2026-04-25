@@ -582,7 +582,7 @@ async def test_get_or_create_agent_resolves_skill_packages_before_runtime_startu
                 agent_user_id="agent-user-skill",
                 name="Skill Agent",
                 version="1.0.0",
-                skills=[AgentSkill(skill_id="fastapi", package_id="pkg-fastapi", name="FastAPI")],
+                skills=[AgentSkill(skill_id="fastapi", package_id="pkg-fastapi")],
             )
 
     class _SkillRepo:

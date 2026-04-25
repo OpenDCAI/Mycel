@@ -33,9 +33,15 @@ def _require_owned_agent_user(agent_id: str, user_id: str, user_repo: Any) -> An
     return user
 
 
-def _get_owned_agent_or_404_with_config(agent_id: str, user_id: str, user_repo: Any, agent_config_repo: Any) -> dict[str, Any]:
+def _get_owned_agent_or_404_with_config(
+    agent_id: str,
+    user_id: str,
+    user_repo: Any,
+    agent_config_repo: Any,
+    skill_repo: Any,
+) -> dict[str, Any]:
     _require_owned_agent_user(agent_id, user_id, user_repo)
-    item = agent_user_service.get_agent_user(agent_id, user_repo=user_repo, agent_config_repo=agent_config_repo)
+    item = agent_user_service.get_agent_user(agent_id, user_repo=user_repo, agent_config_repo=agent_config_repo, skill_repo=skill_repo)
     if not item:
         raise HTTPException(404, "Agent not found")
     return item
@@ -76,6 +82,13 @@ def _skill_repo(request: Request) -> Any:
     if repo is None:
         raise RuntimeError("skill_repo is required for panel library routes")
     return repo
+
+
+def _skill_repo_or_none(request: Request) -> Any | None:
+    runtime_storage = getattr(request.app.state, "runtime_storage_state", None)
+    storage_container = getattr(runtime_storage, "storage_container", None)
+    repo_factory = getattr(storage_container, "skill_repo", None)
+    return repo_factory() if callable(repo_factory) else None
 
 
 def _skill_repo_for(resource_type: str, request: Request) -> Any | None:
@@ -122,6 +135,7 @@ async def get_agent(
         user_id,
         request.app.state.user_repo,
         _agent_config_repo(request),
+        _skill_repo_or_none(request),
     )
 
 
@@ -164,6 +178,7 @@ async def update_agent(
         agent_id,
         user_repo=user_repo,
         agent_config_repo=agent_config_repo,
+        skill_repo=_skill_repo_or_none(request),
         name=req.name,
         description=req.description,
         status=req.status,
@@ -214,6 +229,7 @@ async def publish_agent(
         req.bump_type,
         user_repo=user_repo,
         agent_config_repo=agent_config_repo,
+        skill_repo=_skill_repo_or_none(request),
     )
     if not item:
         raise HTTPException(404, "Agent not found")
@@ -340,7 +356,7 @@ async def delete_resource(
             used_by = await asyncio.to_thread(
                 library_service.get_resource_used_by,
                 "skill",
-                skill.name,
+                resource_id,
                 user_id,
                 user_repo=request.app.state.user_repo,
                 agent_config_repo=_agent_config_repo(request),

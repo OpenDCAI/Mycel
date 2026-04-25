@@ -132,15 +132,13 @@ class SupabaseAgentConfigRepo:
         for row in binding_rows:
             skill_id = row["skill_id"]
             package_id = row["package_id"]
-            skill = self._get_library_skill(owner_user_id, skill_id)
+            self._get_library_skill(owner_user_id, skill_id)
             self._get_skill_package(owner_user_id, package_id)
             skills.append(
                 AgentSkill(
                     id=row.get("id"),
                     skill_id=skill_id,
                     package_id=package_id,
-                    name=skill["name"],
-                    description=_required_text(skill, "description", label="library.skills description"),
                     enabled=_enabled_from_row(row, label="skill_bindings"),
                 )
             )

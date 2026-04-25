@@ -33,15 +33,20 @@ def _tools_from_repo(config: AgentConfig) -> list[dict[str, Any]]:
     return tools_list
 
 
-def _skills_from_repo(config: AgentConfig) -> list[dict[str, Any]]:
+def _skills_from_repo(config: AgentConfig, skill_repo: Any = None) -> list[dict[str, Any]]:
+    if config.skills and skill_repo is None:
+        raise RuntimeError("skill_repo is required for Agent Skill display projection")
     skills_list = []
     for skill in config.skills:
+        library_skill = skill_repo.get_by_id(config.owner_user_id, skill.skill_id)
+        if library_skill is None:
+            raise RuntimeError(f"Library skill not found for Agent Skill display projection: {skill.skill_id}")
         skills_list.append(
             {
                 "id": skill.skill_id,
-                "name": skill.name,
+                "name": library_skill.name,
                 "enabled": skill.enabled,
-                "desc": skill.description,
+                "desc": library_skill.description,
             }
         )
     return skills_list
@@ -102,7 +107,7 @@ def _source_from_repo(config: AgentConfig) -> dict[str, Any] | None:
     return dict(source)
 
 
-def _agent_user_from_repos(user: Any, agent_config_repo: Any) -> dict[str, Any]:
+def _agent_user_from_repos(user: Any, agent_config_repo: Any, skill_repo: Any = None) -> dict[str, Any]:
     if user.agent_config_id is None:
         raise RuntimeError(f"Agent user {user.id} is missing agent_config_id")
     config = agent_config_repo.get_agent_config(user.agent_config_id)
@@ -121,7 +126,7 @@ def _agent_user_from_repos(user: Any, agent_config_repo: Any) -> dict[str, Any]:
             "rules": _rules_from_repo(config),
             "tools": _tools_from_repo(config),
             "mcpServers": _mcp_servers_from_repo(config),
-            "skills": _skills_from_repo(config),
+            "skills": _skills_from_repo(config, skill_repo),
             "subAgents": _sub_agents_from_repo(config),
             "compact": _compact_from_repo(config),
         },
@@ -206,7 +211,12 @@ def _load_builtin_agents(catalog: dict[str, ToolDef]) -> list[dict[str, Any]]:
 # ── CRUD operations ──
 
 
-def list_agent_users(owner_user_id: str | None = None, user_repo: Any = None, agent_config_repo: Any = None) -> list[dict[str, Any]]:
+def list_agent_users(
+    owner_user_id: str | None = None,
+    user_repo: Any = None,
+    agent_config_repo: Any = None,
+    skill_repo: Any = None,
+) -> list[dict[str, Any]]:
     """List agent users. If owner_user_id given, only that user's agents (no builtin Leon).
 
     Args:
@@ -218,7 +228,7 @@ def list_agent_users(owner_user_id: str | None = None, user_repo: Any = None, ag
         if user_repo is None or agent_config_repo is None:
             raise RuntimeError("user_repo and agent_config_repo are required when owner_user_id is provided")
         agents = user_repo.list_by_owner_user_id(owner_user_id)
-        return [_agent_user_from_repos(agent, agent_config_repo) for agent in agents]
+        return [_agent_user_from_repos(agent, agent_config_repo, skill_repo) for agent in agents]
 
     # Unscoped path is builtin-only. Owner-scoped callers must use repos.
     return [_leon_builtin()]
@@ -237,7 +247,13 @@ def list_agent_user_summaries(
     return [_leon_builtin()]
 
 
-def get_agent_user(agent_user_id: str, *, user_repo: Any = None, agent_config_repo: Any = None) -> dict[str, Any] | None:
+def get_agent_user(
+    agent_user_id: str,
+    *,
+    user_repo: Any = None,
+    agent_config_repo: Any = None,
+    skill_repo: Any = None,
+) -> dict[str, Any] | None:
     if agent_user_id == "__leon__":
         return _leon_builtin()
     if user_repo is None or agent_config_repo is None:
@@ -245,7 +261,7 @@ def get_agent_user(agent_user_id: str, *, user_repo: Any = None, agent_config_re
     user = user_repo.get_by_id(agent_user_id)
     if user is None:
         return None
-    return _agent_user_from_repos(user, agent_config_repo)
+    return _agent_user_from_repos(user, agent_config_repo, skill_repo)
 
 
 def create_agent_user(
@@ -312,6 +328,7 @@ def update_agent_user(
     agent_user_id: str,
     user_repo: Any = None,
     agent_config_repo: Any = None,
+    skill_repo: Any = None,
     *,
     name: str | None = None,
     description: str | None = None,
@@ -324,7 +341,7 @@ def update_agent_user(
         return None
     updates = {key: value for key, value in {"name": name, "description": description, "status": status}.items() if value is not None}
     if not updates:
-        return get_agent_user(agent_user_id, user_repo=user_repo, agent_config_repo=agent_config_repo)
+        return get_agent_user(agent_user_id, user_repo=user_repo, agent_config_repo=agent_config_repo, skill_repo=skill_repo)
     if "name" in updates:
         user_repo.update(agent_user_id, display_name=updates["name"])
     agent_config_repo.save_agent_config(
@@ -337,7 +354,7 @@ def update_agent_user(
         )
     )
 
-    return get_agent_user(agent_user_id, user_repo=user_repo, agent_config_repo=agent_config_repo)
+    return get_agent_user(agent_user_id, user_repo=user_repo, agent_config_repo=agent_config_repo, skill_repo=skill_repo)
 
 
 def update_agent_user_config(
@@ -643,14 +660,11 @@ def _skills_from_patch(current_config: AgentConfig, config_patch: dict[str, Any]
             raise RuntimeError(f"Duplicate Skill name in patch: {library_skill.name}")
         seen_names.add(library_skill.name)
         library_package = _selected_library_package(owner_user_id, library_skill, skill_repo)
-        description = library_skill.description
         skills.append(
             AgentSkill(
                 id=current_skill.id if current_skill is not None else None,
                 skill_id=library_skill.id,
                 package_id=library_package.id,
-                name=library_skill.name,
-                description=description,
                 enabled=enabled,
             )
         )
@@ -683,7 +697,7 @@ def _sync_agent_config_patch_to_repo(
         }
     )
     agent_config_repo.save_agent_config(updated_config)
-    return get_agent_user(agent_user_id, user_repo=user_repo, agent_config_repo=agent_config_repo)
+    return get_agent_user(agent_user_id, user_repo=user_repo, agent_config_repo=agent_config_repo, skill_repo=skill_repo)
 
 
 # ── Publish / Delete ──
@@ -694,6 +708,7 @@ def publish_agent_user(
     bump_type: BumpType = "patch",
     user_repo: Any = None,
     agent_config_repo: Any = None,
+    skill_repo: Any = None,
 ) -> dict[str, Any] | None:
     user, config = _resolve_repo_backed_agent(agent_user_id, user_repo, agent_config_repo)
     if user is None or config is None:
@@ -702,7 +717,7 @@ def publish_agent_user(
 
     agent_config_repo.save_agent_config(config.model_copy(update={"version": next_version, "status": "active"}))
 
-    return get_agent_user(agent_user_id, user_repo=user_repo, agent_config_repo=agent_config_repo)
+    return get_agent_user(agent_user_id, user_repo=user_repo, agent_config_repo=agent_config_repo, skill_repo=skill_repo)
 
 
 def _resolve_repo_backed_agent(

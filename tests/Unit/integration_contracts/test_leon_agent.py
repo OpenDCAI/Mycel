@@ -738,7 +738,6 @@ async def test_leon_agent_resolved_config_registers_skills(tmp_path):
             AgentSkill(
                 skill_id="fastapi",
                 package_id="fastapi-package",
-                name="FastAPI",
             )
         ],
     )
@@ -784,7 +783,6 @@ async def test_leon_agent_passes_resolved_skill_models_to_runtime_service(tmp_pa
             AgentSkill(
                 skill_id="fastapi",
                 package_id="fastapi-package",
-                name="FastAPI",
             )
         ],
     )
@@ -836,7 +834,6 @@ async def test_leon_agent_resolved_config_does_not_register_host_file_skills(tmp
             AgentSkill(
                 skill_id="fastapi",
                 package_id="fastapi-package",
-                name="FastAPI",
             )
         ],
     )
@@ -978,7 +975,6 @@ async def test_leon_agent_resolved_config_does_not_read_stale_runtime_skill_togg
             AgentSkill(
                 skill_id="fastapi",
                 package_id="fastapi-package",
-                name="FastAPI",
             )
         ],
     )

@@ -16,10 +16,11 @@ def resolve_agent_config(config: AgentConfig, *, skill_repo: Any = None) -> Reso
     for skill in config.skills:
         if not skill.enabled:
             continue
-        if skill.name in seen_skill_names:
-            raise ValueError(f"Duplicate Skill name in AgentConfig: {skill.name}")
-        seen_skill_names.add(skill.name)
-        resolved_skills.append(_resolve_skill(config.owner_user_id, skill, skill_repo))
+        resolved_skill = _resolve_skill(config.owner_user_id, skill, skill_repo)
+        if resolved_skill.name in seen_skill_names:
+            raise ValueError(f"Duplicate Skill name in AgentConfig: {resolved_skill.name}")
+        seen_skill_names.add(resolved_skill.name)
+        resolved_skills.append(resolved_skill)
     enabled_mcp_servers = []
     seen_mcp_server_names: set[str] = set()
     for server in config.mcp_servers:
@@ -55,10 +56,15 @@ def _resolve_skill(owner_user_id: str, skill: AgentSkill, skill_repo: Any) -> Re
         raise RuntimeError(f"Skill package not found while resolving AgentConfig: {skill.package_id}")
     if package.skill_id != skill.skill_id:
         raise RuntimeError(f"Skill package {skill.package_id} does not belong to Skill {skill.skill_id}")
+    frontmatter = _skill_frontmatter(package.skill_md, skill_label=skill.skill_id)
+    name = frontmatter["name"].strip()
+    description = frontmatter.get("description", "")
+    if not isinstance(description, str):
+        description = ""
     resolved = ResolvedSkill(
         id=skill.skill_id,
-        name=skill.name,
-        description=skill.description,
+        name=name,
+        description=description,
         version=package.version,
         content=package.skill_md,
         files=dict(package.files),
@@ -67,18 +73,24 @@ def _resolve_skill(owner_user_id: str, skill: AgentSkill, skill_repo: Any) -> Re
     return validate_resolved_skill_content(resolved)
 
 
-def validate_resolved_skill_content(skill: ResolvedSkill) -> ResolvedSkill:
-    if not skill.content.strip():
-        raise ValueError(f"Skill {skill.name!r} on Agent config has blank content")
-    frontmatter_result = _FRONTMATTER_RE.search(skill.content)
+def _skill_frontmatter(content: str, *, skill_label: str) -> dict[str, Any]:
+    if not content.strip():
+        raise ValueError(f"Skill {skill_label!r} on Agent config has blank content")
+    frontmatter_result = _FRONTMATTER_RE.search(content)
     if frontmatter_result is None:
-        raise ValueError(f"Skill {skill.name!r} on Agent config is missing SKILL.md frontmatter")
+        raise ValueError(f"Skill {skill_label!r} on Agent config is missing SKILL.md frontmatter")
     frontmatter = yaml.safe_load(frontmatter_result.group(1)) or {}
     if not isinstance(frontmatter, dict):
-        raise ValueError(f"Skill {skill.name!r} on Agent config frontmatter must be a mapping")
+        raise ValueError(f"Skill {skill_label!r} on Agent config frontmatter must be a mapping")
     frontmatter_name = frontmatter.get("name")
     if not isinstance(frontmatter_name, str) or not frontmatter_name.strip():
-        raise ValueError(f"Skill {skill.name!r} on Agent config frontmatter is missing name")
+        raise ValueError(f"Skill {skill_label!r} on Agent config frontmatter is missing name")
+    return frontmatter
+
+
+def validate_resolved_skill_content(skill: ResolvedSkill) -> ResolvedSkill:
+    frontmatter = _skill_frontmatter(skill.content, skill_label=skill.name)
+    frontmatter_name = frontmatter["name"]
     if frontmatter_name.strip() != skill.name:
-        raise ValueError(f"Skill {skill.name!r} on Agent config frontmatter name must match AgentSkill.name")
+        raise ValueError(f"Skill {skill.name!r} on Agent config frontmatter name must match ResolvedSkill.name")
     return skill

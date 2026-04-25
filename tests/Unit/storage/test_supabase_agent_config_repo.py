@@ -178,8 +178,6 @@ def test_get_agent_config_reads_full_aggregate_from_final_tables() -> None:
                 id="agent-skill-1",
                 skill_id="skill-1",
                 package_id="package-1",
-                name="github",
-                description="GitHub guidance",
             )
         ],
         rules=[AgentRule(id="rule-1", name="Cite", content="Always cite.")],
@@ -368,13 +366,15 @@ def test_get_agent_config_does_not_read_skill_package_version() -> None:
     assert "version" not in config.skills[0].model_dump()
 
 
-def test_get_agent_config_fails_loudly_when_skill_description_is_null() -> None:
+def test_get_agent_config_does_not_read_skill_description() -> None:
     tables = _tables()
     tables["library.skills"][0]["description"] = None
     repo = SupabaseAgentConfigRepo(_FakeClient(tables))
 
-    with pytest.raises(RuntimeError, match="library.skills description must be text"):
-        repo.get_agent_config("cfg-1")
+    config = repo.get_agent_config("cfg-1")
+
+    assert config is not None
+    assert "description" not in config.skills[0].model_dump()
 
 
 def test_get_agent_config_fails_loudly_when_sub_agent_tools_json_is_not_an_array() -> None:
@@ -531,7 +531,6 @@ def test_save_agent_config_calls_single_rpc_with_full_payload() -> None:
                     id="agent-skill-1",
                     skill_id="skill-1",
                     package_id="package-1",
-                    name="github",
                 )
             ],
             rules=[AgentRule(id="rule-1", name="Cite", content="Always cite.")],
@@ -564,8 +563,8 @@ def test_save_agent_config_rejects_duplicate_skill_ids_before_rpc() -> None:
         name="Researcher",
         version="1.0.0",
         skills=[
-            AgentSkill(skill_id="github", package_id="package-1", name="github"),
-            AgentSkill(skill_id="github", package_id="package-2", name="github"),
+            AgentSkill(skill_id="github", package_id="package-1"),
+            AgentSkill(skill_id="github", package_id="package-2"),
         ],
     )
 
@@ -606,8 +605,8 @@ def test_save_agent_config_rejects_duplicate_inactive_child_names_before_rpc() -
         name="Researcher",
         version="1.0.0",
         skills=[
-            AgentSkill(skill_id="github", package_id="package-1", name="github", enabled=False),
-            AgentSkill(skill_id="github", package_id="package-2", name="github", enabled=False),
+            AgentSkill(skill_id="github", package_id="package-1", enabled=False),
+            AgentSkill(skill_id="github", package_id="package-2", enabled=False),
         ],
         mcp_servers=[
             McpServerConfig(name="filesystem", transport="stdio", command="fs-one", enabled=False),
