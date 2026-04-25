@@ -42,12 +42,24 @@ def _json_array(value: Any, *, label: str, default: list[Any] | None = None) -> 
     return list(value)
 
 
+def _required_json_array(value: Any, *, label: str) -> list[Any]:
+    if value is None:
+        raise RuntimeError(f"{label} must be a JSON array")
+    return _json_array(value, label=label)
+
+
 def _json_object(value: Any, *, label: str, default: dict[str, Any] | None = None) -> dict[str, Any]:
     if value is None:
         return dict(default or {})
     if not isinstance(value, dict):
         raise RuntimeError(f"{label} must be a JSON object")
     return dict(value)
+
+
+def _required_json_object(value: Any, *, label: str) -> dict[str, Any]:
+    if value is None:
+        raise RuntimeError(f"{label} must be a JSON object")
+    return _json_object(value, label=label)
 
 
 class SupabaseAgentConfigRepo:
@@ -79,13 +91,13 @@ class SupabaseAgentConfigRepo:
             name=root["name"],
             description=root.get("description") or "",
             model=root.get("model"),
-            tools=_json_array(root.get("tools_json"), label="tools_json", default=["*"]),
+            tools=_required_json_array(root.get("tools_json"), label="tools_json"),
             system_prompt=root.get("system_prompt") or "",
             status=root.get("status") or "draft",
             version=root.get("version") or "0.1.0",
-            runtime_settings=_json_object(root.get("runtime_json"), label="runtime_json"),
-            compact=_json_object(root.get("compact_json"), label="compact_json"),
-            meta=_json_object(root.get("meta_json"), label="meta_json"),
+            runtime_settings=_required_json_object(root.get("runtime_json"), label="runtime_json"),
+            compact=_required_json_object(root.get("compact_json"), label="compact_json"),
+            meta=_required_json_object(root.get("meta_json"), label="meta_json"),
             skills=self._list_skill_rows(agent_config_id, root["owner_user_id"]),
             rules=self._list_rule_rows(agent_config_id),
             sub_agents=self._list_sub_agent_rows(agent_config_id),
@@ -115,9 +127,6 @@ class SupabaseAgentConfigRepo:
             package_id = row["package_id"]
             skill = self._get_library_skill(owner_user_id, skill_id)
             package = self._get_skill_package(owner_user_id, package_id)
-            source_json = package.get("source_json")
-            if source_json is None or source_json == {}:
-                source_json = skill.get("source_json")
             skills.append(
                 AgentSkill(
                     id=row.get("id"),
@@ -125,9 +134,9 @@ class SupabaseAgentConfigRepo:
                     package_id=package_id,
                     name=skill["name"],
                     description=skill.get("description") or "",
-                    version=package.get("version") or "0.1.0",
+                    version=package["version"],
                     enabled=_enabled_from_row(row, label="skill_bindings"),
-                    source=_json_object(source_json, label="skill source_json"),
+                    source=_required_json_object(package.get("source_json"), label="skill package source_json"),
                 )
             )
         return skills
@@ -191,11 +200,7 @@ class SupabaseAgentConfigRepo:
         rows = q.rows(self._table("agent_configs").select("mcp_json").eq("id", agent_config_id).execute(), _REPO, "_list_mcp_rows")
         if not rows:
             raise RuntimeError(f"Agent config {agent_config_id} disappeared while reading mcp_json")
-        mcp_rows = rows[0].get("mcp_json")
-        if mcp_rows is None:
-            mcp_rows = []
-        if not isinstance(mcp_rows, list):
-            raise RuntimeError(f"Agent config {agent_config_id} mcp_json must be a JSON array")
+        mcp_rows = _required_json_array(rows[0].get("mcp_json"), label=f"Agent config {agent_config_id} mcp_json")
         servers: list[McpServerConfig] = []
         for row in mcp_rows:
             if not isinstance(row, dict):
