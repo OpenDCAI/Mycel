@@ -4,12 +4,11 @@ export const HUB_AGENT_USER_ITEM_TYPE = "member";
 
 export function marketplaceTypeLabel(type: string): string {
   if (type === HUB_AGENT_USER_ITEM_TYPE) return "Agent";
-  if (type === "agent") return "Subagent";
   if (type === "skill") return "Skill";
   if (type === "env") return "Env";
   return type;
 }
 
 export function canApplyMarketplaceType(type: string): boolean {
-  return type === "skill" || type === "agent" || type === HUB_AGENT_USER_ITEM_TYPE;
+  return type === "skill" || type === HUB_AGENT_USER_ITEM_TYPE;
 }

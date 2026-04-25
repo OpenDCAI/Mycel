@@ -41,7 +41,7 @@ export default function MarketplaceDetailPage() {
   }, [id, fetchDetail, fetchLineage, clearDetail]);
 
   useEffect(() => {
-    if (detailId && previewVersion && (detailType === "skill" || detailType === "agent")) {
+    if (detailId && previewVersion && detailType === "skill") {
       fetchVersionSnapshot(detailId, previewVersion);
     }
     return () => clearSnapshot();
@@ -146,12 +146,12 @@ export default function MarketplaceDetailPage() {
             </div>
           )}
 
-          {/* File content for skill / agent */}
-          {(detail.type === "skill" || detail.type === "agent") && (
+          {/* File content for skill */}
+          {detail.type === "skill" && (
             <div className="surface-card p-4">
               <div className="flex items-center gap-2 mb-3">
                 <span className="text-xs font-mono text-muted-foreground px-2 py-0.5 rounded bg-muted">
-                  {detail.type === "skill" ? "SKILL.md" : "agent.md"}
+                  SKILL.md
                 </span>
               </div>
               {snapshotLoading ? (

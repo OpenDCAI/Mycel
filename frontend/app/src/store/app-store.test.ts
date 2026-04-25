@@ -246,9 +246,8 @@ describe("app store agent panel contract", () => {
 
     const urls = fetchMock.mock.calls.map(([url]) => String(url));
     expect(urls).toContain("/api/panel/library/skill");
-    expect(urls).toContain("/api/panel/library/agent");
     expect(urls).toContain("/api/panel/library/sandbox-template");
-    expect(urls.filter((url) => url.startsWith("/api/panel/library/"))).toHaveLength(3);
+    expect(urls.filter((url) => url.startsWith("/api/panel/library/"))).toHaveLength(2);
   });
 
   it("surfaces backend detail text from panel API errors", async () => {

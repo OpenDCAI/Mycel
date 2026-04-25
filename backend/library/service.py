@@ -1,16 +1,13 @@
-"""Library CRUD for Skills, Agent templates, and sandbox templates."""
+"""Library CRUD for Skills and sandbox templates."""
 
-import json
 import re
 import time
 import uuid
 from datetime import UTC, datetime
-from pathlib import Path
 from typing import Any
 
 import yaml
 
-from backend.library.paths import LIBRARY_DIR
 from backend.sandboxes import provider_availability as sandbox_provider_availability
 from backend.sandboxes.recipe_bootstrap import seed_default_recipes as seed_builtin_recipes
 from config.agent_config_types import Skill, SkillPackage
@@ -19,28 +16,12 @@ from sandbox.recipes import FEATURE_CATALOG, default_recipe_snapshot, normalize_
 from storage.contracts import RecipeRepo, SkillRepo
 
 _SKILL_FRONTMATTER_RE = re.compile(r"^---\s*\n(.*?)\n---\s*\n", re.DOTALL)
-_RESOURCE_TYPES = {"skill", "agent", "sandbox-template"}
+_RESOURCE_TYPES = {"skill", "sandbox-template"}
 
 
 def _require_resource_type(resource_type: str) -> None:
     if resource_type not in _RESOURCE_TYPES:
         raise ValueError(f"Unknown resource type: {resource_type}")
-
-
-def _read_json(path: Path, default: Any = None) -> Any:
-    if not path.exists():
-        return default if default is not None else {}
-    try:
-        return json.loads(path.read_text(encoding="utf-8"))
-    except json.JSONDecodeError as exc:
-        raise ValueError(f"Library JSON file must be valid JSON: {path}") from exc
-    except OSError as exc:
-        raise RuntimeError(f"Library JSON file could not be read: {path}") from exc
-
-
-def _write_json(path: Path, data: Any) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
 def _require_recipe_owner(owner_user_id: str | None) -> str:
@@ -148,18 +129,6 @@ def _write_skill_package(
     return package
 
 
-def _file_resource_content_path(resource_type: str, resource_id: str) -> Path | None:
-    if resource_type == "agent":
-        return LIBRARY_DIR / "agents" / f"{resource_id}.md"
-    return None
-
-
-def _file_resource_meta_path(resource_type: str, resource_id: str) -> Path | None:
-    if resource_type == "agent":
-        return LIBRARY_DIR / "agents" / f"{resource_id}.json"
-    return None
-
-
 def _library_resource_item(
     resource_type: str,
     resource_id: str,
@@ -209,12 +178,6 @@ def list_library(
             )
             for skill in sorted(skill_repo.list_for_owner(owner_user_id), key=lambda item: item.name.lower())
         ]
-    if resource_type == "agent":
-        agents_dir = LIBRARY_DIR / "agents"
-        if agents_dir.exists():
-            for f in sorted(agents_dir.glob("*.md")):
-                meta = _read_json(f.with_suffix(".json"), {})
-                results.append(_library_resource_item("agent", f.stem, meta))
     return results
 
 
@@ -259,7 +222,6 @@ def create_resource(
     skill_repo: SkillRepo | None = None,
 ) -> dict[str, Any]:
     now = int(time.time() * 1000)
-    cat = category or "未分类"
     if resource_type == "sandbox-template":
         owner_user_id = _require_recipe_owner(owner_user_id)
         recipe_repo = _require_recipe_repo(recipe_repo)
@@ -319,17 +281,6 @@ def create_resource(
                 "updated_at": _dt_millis(skill.updated_at),
             },
         )
-    if resource_type == "agent":
-        rid = name.lower().replace(" ", "-")
-        content_path = _file_resource_content_path(resource_type, rid)
-        meta_path = _file_resource_meta_path(resource_type, rid)
-        if content_path is None or meta_path is None:
-            raise ValueError(f"Unknown resource type: {resource_type}")
-        content_path.parent.mkdir(parents=True, exist_ok=True)
-        meta = {"name": name, "desc": desc, "category": cat, "created_at": now, "updated_at": now}
-        _write_json(meta_path, meta)
-        content_path.write_text(f"---\nname: {rid}\ndescription: {desc}\n---\n\n# {name}\n", encoding="utf-8")
-        return _library_resource_item(resource_type, rid, meta)
     raise ValueError(f"Unknown resource type: {resource_type}")
 
 
@@ -393,15 +344,6 @@ def update_resource(
             },
             updated_at=_dt_millis(updated.updated_at),
         )
-    if resource_type == "agent":
-        meta_path = _file_resource_meta_path(resource_type, resource_id)
-        if meta_path is None or not meta_path.exists():
-            return None
-        meta = _read_json(meta_path, {})
-        meta.update(updates)
-        meta["updated_at"] = now
-        _write_json(meta_path, meta)
-        return _library_resource_item(resource_type, resource_id, meta, updated_at=now)
     return None
 
 
@@ -451,17 +393,6 @@ def delete_resource(
             return False
         skill_repo.delete(owner_user_id, resource_id)
         return True
-    if resource_type == "agent":
-        md_path = LIBRARY_DIR / "agents" / f"{resource_id}.md"
-        json_path = LIBRARY_DIR / "agents" / f"{resource_id}.json"
-        found = False
-        if md_path.exists():
-            md_path.unlink()
-            found = True
-        if json_path.exists():
-            json_path.unlink()
-            found = True
-        return found
     return False
 
 
@@ -490,7 +421,7 @@ def get_resource_used_by(
     _require_resource_type(resource_type)
     if user_repo is None or agent_config_repo is None:
         raise RuntimeError("user_repo and agent_config_repo are required for resource usage reads")
-    config_attr = {"skill": "skills", "agent": "sub_agents"}.get(resource_type, "")
+    config_attr = {"skill": "skills"}.get(resource_type, "")
     if not config_attr:
         return []
     names: list[str] = []
@@ -513,13 +444,13 @@ def get_resource_content(
     recipe_repo: RecipeRepo | None = None,
     skill_repo: SkillRepo | None = None,
 ) -> str | None:
-    """Read the .md content file for a skill or agent resource."""
+    """Read Library resource content."""
     _require_resource_type(resource_type)
     if resource_type == "sandbox-template":
         owner_user_id = _require_recipe_owner(owner_user_id)
         for item in list_library("sandbox-template", owner_user_id=owner_user_id, recipe_repo=recipe_repo):
             if item["id"] == resource_id:
-                return json.dumps(item, ensure_ascii=False, indent=2)
+                return yaml.safe_dump(item, allow_unicode=True, sort_keys=True)
         return None
     if resource_type == "skill":
         owner_user_id = _require_skill_owner(owner_user_id)
@@ -531,11 +462,6 @@ def get_resource_content(
         if package is None:
             raise RuntimeError(f"Skill {resource_id} has no selected package")
         return package.skill_md
-    content_path = _file_resource_content_path(resource_type, resource_id)
-    if content_path is not None:
-        if content_path.exists():
-            return content_path.read_text(encoding="utf-8")
-        return ""
     return None
 
 
@@ -546,9 +472,8 @@ def update_resource_content(
     owner_user_id: str | None = None,
     skill_repo: SkillRepo | None = None,
 ) -> bool:
-    """Write the .md content file for a skill or agent resource."""
+    """Write editable Library resource content."""
     _require_resource_type(resource_type)
-    now = int(time.time() * 1000)
     if resource_type == "sandbox-template":
         return False
     if resource_type == "skill":
@@ -564,17 +489,5 @@ def update_resource_content(
         files = current_package.files if current_package is not None else {}
         updated = skill_repo.upsert(current.model_copy(update={"updated_at": _now_dt()}))
         _write_skill_package(owner_user_id, updated, content, files, skill_repo)
-        return True
-    content_path = _file_resource_content_path(resource_type, resource_id)
-    meta_path = _file_resource_meta_path(resource_type, resource_id)
-    if content_path is not None and meta_path is not None:
-        if resource_type == "skill" and not content_path.parent.is_dir():
-            return False
-        if resource_type == "agent" and not meta_path.exists():
-            return False
-        content_path.write_text(content, encoding="utf-8")
-        meta = _read_json(meta_path, {})
-        meta["updated_at"] = now
-        _write_json(meta_path, meta)
         return True
     return False

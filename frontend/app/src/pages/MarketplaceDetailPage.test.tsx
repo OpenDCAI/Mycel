@@ -5,6 +5,7 @@ import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import MarketplaceDetailPage from "./MarketplaceDetailPage";
+import type { MarketplaceItemDetail } from "@/store/marketplace-store";
 
 const { navigateMock } = vi.hoisted(() => ({
   navigateMock: vi.fn(),
@@ -26,7 +27,19 @@ vi.mock("@/components/marketplace/MarketplaceActionDialog", () => ({
   default: () => null,
 }));
 
-const marketplaceState = {
+const marketplaceState: {
+  detail: MarketplaceItemDetail;
+  detailLoading: boolean;
+  fetchDetail: ReturnType<typeof vi.fn>;
+  lineage: { ancestors: []; children: [] };
+  fetchLineage: ReturnType<typeof vi.fn>;
+  clearDetail: ReturnType<typeof vi.fn>;
+  error: string | null;
+  versionSnapshot: null;
+  snapshotLoading: boolean;
+  fetchVersionSnapshot: ReturnType<typeof vi.fn>;
+  clearSnapshot: ReturnType<typeof vi.fn>;
+} = {
   detail: {
     id: "item-1",
     slug: "item-one",
@@ -69,10 +82,12 @@ afterEach(() => {
 describe("MarketplaceDetailPage", () => {
   beforeEach(() => {
     navigateMock.mockReset();
+    marketplaceState.fetchVersionSnapshot.mockReset();
     marketplaceState.detail = {
       ...marketplaceState.detail,
       type: "skill",
       name: "Skill One",
+      versions: [],
     };
   });
 
@@ -149,5 +164,27 @@ describe("MarketplaceDetailPage", () => {
     const button = screen.getByRole("button", { name: "暂不支持保存" }) as HTMLButtonElement;
     expect(button.disabled).toBe(true);
     expect(screen.queryByRole("button", { name: "保存到 Library" })).toBeNull();
+  });
+
+  it("does not render Hub agent items as Library files", async () => {
+    marketplaceState.detail = {
+      ...marketplaceState.detail,
+      type: "agent",
+      name: "Old Agent Item",
+      versions: [{ id: "v1", version: "1.0.0", created_at: "2026-04-01T00:00:00Z", release_notes: "" }],
+    };
+
+    render(
+      <MemoryRouter initialEntries={["/marketplace/item-1"]}>
+        <Routes>
+          <Route path="/marketplace/:id" element={<MarketplaceDetailPage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByRole("heading", { name: "Old Agent Item" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "暂不支持保存" })).toHaveProperty("disabled", true);
+    expect(screen.queryByText("agent.md")).toBeNull();
+    expect(marketplaceState.fetchVersionSnapshot).not.toHaveBeenCalled();
   });
 });

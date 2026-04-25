@@ -1,20 +1,19 @@
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { ArrowLeft, Zap, Users, RefreshCw } from "lucide-react";
+import { ArrowLeft, Zap, RefreshCw } from "lucide-react";
 import SandboxTemplateEditor from "@/components/SandboxTemplateEditor";
 import { marketplaceTypeLabel } from "@/lib/marketplace-types";
 import { useAppStore } from "@/store/app-store";
 import type { ResourceItem } from "@/store/types";
 
-type DetailLibraryType = "skill" | "agent" | "sandbox-template";
+type DetailLibraryType = "skill" | "sandbox-template";
 
 function detailLibraryType(value: string | undefined): DetailLibraryType | null {
-  return value === "skill" || value === "agent" || value === "sandbox-template" ? value : null;
+  return value === "skill" || value === "sandbox-template" ? value : null;
 }
 
 function libraryDetailReturnTarget(type: DetailLibraryType | null): string {
   if (type === "skill") return "/marketplace?tab=library&sub=skill";
-  if (type === "agent") return "/marketplace?tab=library&sub=agent";
   return "/marketplace?tab=library&sub=sandbox-template";
 }
 
@@ -22,7 +21,6 @@ export default function LibraryItemDetailPage() {
   const { type, id } = useParams<{ type: string; id: string }>();
   const navigate = useNavigate();
   const librarySkills = useAppStore((s) => s.librarySkills);
-  const libraryAgents = useAppStore((s) => s.libraryAgents);
   const librarySandboxTemplates = useAppStore((s) => s.librarySandboxTemplates);
   const librariesLoaded = useAppStore((s) => s.librariesLoaded);
   const ensureLibrary = useAppStore((s) => s.ensureLibrary);
@@ -39,9 +37,9 @@ export default function LibraryItemDetailPage() {
 
   const item = useMemo<ResourceItem | null>(() => {
     if (!type || !id) return null;
-    const list = type === "skill" ? librarySkills : type === "agent" ? libraryAgents : type === "sandbox-template" ? librarySandboxTemplates : [];
+    const list = type === "skill" ? librarySkills : type === "sandbox-template" ? librarySandboxTemplates : [];
     return list.find((i) => i.id === id) ?? null;
-  }, [librarySkills, libraryAgents, librarySandboxTemplates, type, id]);
+  }, [librarySkills, librarySandboxTemplates, type, id]);
 
   useEffect(() => {
     if (!libraryType || librariesLoaded[libraryType]) return;
@@ -82,7 +80,7 @@ export default function LibraryItemDetailPage() {
 
   const isSkill = type === "skill";
   const isSandboxTemplate = type === "sandbox-template";
-  const filename = isSkill ? "SKILL.md" : "agent.md";
+  const filename = "SKILL.md";
   const typeLabel = type ? marketplaceTypeLabel(type) : "";
   const loadingLibrary = !!libraryType && !librariesLoaded[libraryType] && !libraryError;
   const loading = loadingLibrary || (!isSandboxTemplate && !!contentKey && contentState.key !== contentKey);
@@ -114,9 +112,7 @@ export default function LibraryItemDetailPage() {
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 mb-1">
                 <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 bg-warning/10">
-                  {isSkill
-                    ? <Zap className="w-4 h-4 text-warning" />
-                    : <Users className="w-4 h-4 text-info" />}
+                  {isSkill && <Zap className="w-4 h-4 text-warning" />}
                 </div>
                 <h1 className="text-xl font-semibold text-foreground">{item?.name ?? id}</h1>
                 <span className="text-xs px-2 py-0.5 rounded-full bg-muted text-muted-foreground font-medium">

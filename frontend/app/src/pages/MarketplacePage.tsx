@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { Box, Search, Store, Package, TrendingUp, Clock, RefreshCw, Zap, Users, Trash2, Plus, X } from "lucide-react";
+import { Box, Search, Store, Package, TrendingUp, Clock, RefreshCw, Zap, Trash2, Plus, X } from "lucide-react";
 import { useMarketplaceStore } from "@/store/marketplace-store";
 import { useAppStore } from "@/store/app-store";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -13,22 +13,21 @@ import { HUB_AGENT_USER_ITEM_TYPE } from "@/lib/marketplace-types";
 import { toast } from "sonner";
 
 type Tab = "explore" | "library";
-type LibrarySubTab = "agent-user" | "skill" | "agent" | "sandbox-template";
-type TypeFilter = "all" | typeof HUB_AGENT_USER_ITEM_TYPE | "agent" | "skill" | "env";
+type LibrarySubTab = "agent-user" | "skill" | "sandbox-template";
+type TypeFilter = "all" | typeof HUB_AGENT_USER_ITEM_TYPE | "skill" | "env";
 
 function isTab(value: string | null): value is Tab {
   return value === "explore" || value === "library";
 }
 
 function normalizeLibrarySubTab(value: string | null): LibrarySubTab | null {
-  if (value === "agent-user" || value === "skill" || value === "agent" || value === "sandbox-template") return value;
+  if (value === "agent-user" || value === "skill" || value === "sandbox-template") return value;
   return null;
 }
 
 const typeFilters: { id: TypeFilter; label: string }[] = [
   { id: "all", label: "All" },
   { id: HUB_AGENT_USER_ITEM_TYPE, label: "Agent" },
-  { id: "agent", label: "Subagent" },
   { id: "skill", label: "Skill" },
   { id: "env", label: "Env" },
 ];
@@ -63,7 +62,6 @@ export default function MarketplacePage() {
   // Library state
   const agentList = useAppStore((s) => s.agentList);
   const librarySkills = useAppStore((s) => s.librarySkills);
-  const libraryAgents = useAppStore((s) => s.libraryAgents);
   const librarySandboxTemplates = useAppStore((s) => s.librarySandboxTemplates);
   const agentsLoaded = useAppStore((s) => s.agentsLoaded);
   const librariesLoaded = useAppStore((s) => s.librariesLoaded);
@@ -111,13 +109,10 @@ export default function MarketplacePage() {
   const filteredSkills = librarySkills.filter((s) =>
     !librarySearch || s.name.toLowerCase().includes(librarySearch.toLowerCase())
   );
-  const filteredAgents = libraryAgents.filter((a) =>
-    !librarySearch || a.name.toLowerCase().includes(librarySearch.toLowerCase())
-  );
   const filteredSandboxTemplates = librarySandboxTemplates.filter((sandboxTemplate) =>
     !librarySearch || sandboxTemplate.name.toLowerCase().includes(librarySearch.toLowerCase())
   );
-  const handleDeleteResource = async (type: "skill" | "agent" | "sandbox-template", id: string) => {
+  const handleDeleteResource = async (type: "skill" | "sandbox-template", id: string) => {
     try {
       await deleteResource(type, id);
     } catch (err) {
@@ -137,7 +132,6 @@ export default function MarketplacePage() {
   const librarySubTabs: { id: LibrarySubTab; label: string; icon: React.ElementType; count: number }[] = [
     { id: "agent-user", label: "Agent", icon: Package, count: libraryAgentUsers.length },
     { id: "skill", label: "Skill", icon: Zap, count: librarySkills.length },
-    { id: "agent", label: "Subagent", icon: Users, count: libraryAgents.length },
     { id: "sandbox-template", label: "Sandbox", icon: Box, count: librarySandboxTemplates.length },
   ];
   const librarySubTabLoaded = librarySubTab === "agent-user" ? agentsLoaded : librariesLoaded[librarySubTab];
@@ -474,41 +468,6 @@ export default function MarketplacePage() {
                     </div>
                     {filteredSkills.length === 0 && (
                       <div className="text-center py-12 text-sm text-muted-foreground">暂无 Skill</div>
-                    )}
-                  </>
-                )}
-
-                {/* Subagent list */}
-                {librarySubTabLoaded && librarySubTab === "agent" && (
-                  <>
-                    <div className={`grid ${isMobile ? "grid-cols-1" : "grid-cols-2"} gap-3`}>
-                      {filteredAgents.map((agent) => (
-                        <div
-                          key={agent.id}
-                          onClick={() => navigate(`/library/agent/${agent.id}`)}
-                          className="surface-interactive p-4 cursor-pointer group relative"
-                        >
-                          <div className="flex items-start gap-3">
-                            <div className="w-9 h-9 rounded-lg bg-info/10 flex items-center justify-center shrink-0">
-                              <Users className="w-4 h-4 text-info" />
-                            </div>
-                            <div className="min-w-0 flex-1 pr-8">
-                              <h4 className="text-sm font-medium text-foreground group-hover:text-primary transition-colors duration-fast">{agent.name}</h4>
-                              <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{agent.desc || "暂无描述"}</p>
-                            </div>
-                          </div>
-                          <button
-                            onClick={(e) => { e.stopPropagation(); void handleDeleteResource("agent", agent.id); }}
-                            className="absolute top-3 right-3 p-1 rounded hover:bg-destructive/10 opacity-0 group-hover:opacity-100 transition-all duration-fast"
-                            title="删除"
-                          >
-                            <Trash2 className="w-3.5 h-3.5 text-muted-foreground hover:text-destructive" />
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                    {filteredAgents.length === 0 && (
-                      <div className="text-center py-12 text-sm text-muted-foreground">暂无 Subagent</div>
                     )}
                   </>
                 )}
