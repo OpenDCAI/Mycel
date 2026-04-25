@@ -208,7 +208,7 @@ class SkillsConfig(BaseModel):
     """Skills configuration."""
 
     enabled: bool = True
-    paths: list[str] = Field(default_factory=lambda: ["./skills"], description="Skill search paths")
+    paths: list[str] = Field(default_factory=lambda: ["./skills"], description="Declared Skill search paths")
     skills: dict[str, bool] = Field(default_factory=dict, description="Skill enable/disable map")
 
 
