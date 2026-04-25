@@ -255,6 +255,15 @@ def test_get_agent_config_fails_loudly_when_runtime_json_is_not_an_object() -> N
         repo.get_agent_config("cfg-1")
 
 
+def test_get_agent_config_fails_loudly_when_runtime_json_is_null() -> None:
+    tables = _tables()
+    tables["agent.agent_configs"][0]["runtime_json"] = None
+    repo = SupabaseAgentConfigRepo(_FakeClient(tables))
+
+    with pytest.raises(RuntimeError, match="runtime_json must be a JSON object"):
+        repo.get_agent_config("cfg-1")
+
+
 def test_get_agent_config_fails_loudly_when_compact_json_is_not_an_object() -> None:
     tables = _tables()
     tables["agent.agent_configs"][0]["compact_json"] = []
@@ -264,9 +273,27 @@ def test_get_agent_config_fails_loudly_when_compact_json_is_not_an_object() -> N
         repo.get_agent_config("cfg-1")
 
 
+def test_get_agent_config_fails_loudly_when_compact_json_is_null() -> None:
+    tables = _tables()
+    tables["agent.agent_configs"][0]["compact_json"] = None
+    repo = SupabaseAgentConfigRepo(_FakeClient(tables))
+
+    with pytest.raises(RuntimeError, match="compact_json must be a JSON object"):
+        repo.get_agent_config("cfg-1")
+
+
 def test_get_agent_config_fails_loudly_when_meta_json_is_not_an_object() -> None:
     tables = _tables()
     tables["agent.agent_configs"][0]["meta_json"] = []
+    repo = SupabaseAgentConfigRepo(_FakeClient(tables))
+
+    with pytest.raises(RuntimeError, match="meta_json must be a JSON object"):
+        repo.get_agent_config("cfg-1")
+
+
+def test_get_agent_config_fails_loudly_when_meta_json_is_null() -> None:
+    tables = _tables()
+    tables["agent.agent_configs"][0]["meta_json"] = None
     repo = SupabaseAgentConfigRepo(_FakeClient(tables))
 
     with pytest.raises(RuntimeError, match="meta_json must be a JSON object"):

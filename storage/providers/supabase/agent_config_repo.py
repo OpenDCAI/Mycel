@@ -56,6 +56,12 @@ def _json_object(value: Any, *, label: str, default: dict[str, Any] | None = Non
     return dict(value)
 
 
+def _required_json_object(value: Any, *, label: str) -> dict[str, Any]:
+    if value is None:
+        raise RuntimeError(f"{label} must be a JSON object")
+    return _json_object(value, label=label)
+
+
 class SupabaseAgentConfigRepo:
     def __init__(self, client: Any) -> None:
         self._client = q.validate_client(client, _REPO)
@@ -89,9 +95,9 @@ class SupabaseAgentConfigRepo:
             system_prompt=root.get("system_prompt") or "",
             status=root.get("status") or "draft",
             version=root.get("version") or "0.1.0",
-            runtime_settings=_json_object(root.get("runtime_json"), label="runtime_json"),
-            compact=_json_object(root.get("compact_json"), label="compact_json"),
-            meta=_json_object(root.get("meta_json"), label="meta_json"),
+            runtime_settings=_required_json_object(root.get("runtime_json"), label="runtime_json"),
+            compact=_required_json_object(root.get("compact_json"), label="compact_json"),
+            meta=_required_json_object(root.get("meta_json"), label="meta_json"),
             skills=self._list_skill_rows(agent_config_id, root["owner_user_id"]),
             rules=self._list_rule_rows(agent_config_id),
             sub_agents=self._list_sub_agent_rows(agent_config_id),
