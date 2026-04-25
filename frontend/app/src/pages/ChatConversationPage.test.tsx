@@ -89,6 +89,7 @@ describe("ChatConversationPage SSE teardown", () => {
           ok: true,
           json: async () => ({
             id: "chat-1",
+            type: "group",
             title: "chat title",
             created_by_user_id: "user-1",
             members: [{ id: "user-1", name: "tester", type: "human" }],
@@ -164,6 +165,7 @@ describe("ChatConversationPage SSE teardown", () => {
           ok: true,
           json: async () => ({
             id: "chat-1",
+            type: "group",
             title: "join room",
             created_by_user_id: "user-1",
             status: "active",
@@ -246,6 +248,7 @@ describe("ChatConversationPage SSE teardown", () => {
           ok: true,
           json: async () => ({
             id: "chat-1",
+            type: "group",
             title: "member room",
             created_by_user_id: "owner-1",
             status: "active",
@@ -276,6 +279,51 @@ describe("ChatConversationPage SSE teardown", () => {
 
     await waitFor(() => {
       expect(screen.getByText("member room")).toBeTruthy();
+    });
+    expect(screen.queryByText("入群申请")).toBeNull();
+  });
+
+  it("does not fetch group join requests for a direct chat owner", async () => {
+    authFetchMocks.authFetch.mockImplementation(async (url: string) => {
+      if (url === "/api/chats/chat-1") {
+        return {
+          ok: true,
+          json: async () => ({
+            id: "chat-1",
+            type: "direct",
+            title: "direct room",
+            created_by_user_id: "user-1",
+            status: "active",
+            created_at: 1,
+            members: [
+              { id: "user-1", name: "tester", type: "human" },
+              { id: "other-1", name: "other", type: "external" },
+            ],
+          }),
+        };
+      }
+      if (url === "/api/chats/chat-1/messages?limit=100") {
+        return { ok: true, json: async () => [] };
+      }
+      if (url === "/api/chats/chat-1/read") {
+        return { ok: true, json: async () => ({}) };
+      }
+      if (url === "/api/chats/chat-1/join-requests") {
+        throw new Error("direct chats should not request group join approvals");
+      }
+      throw new Error(`Unexpected authFetch url: ${url}`);
+    });
+
+    render(
+      <MemoryRouter initialEntries={["/chat/visit/chat-1"]}>
+        <Routes>
+          <Route path="/chat/visit/:chatId" element={<ChatConversationPage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText("direct room")).toBeTruthy();
     });
     expect(screen.queryByText("入群申请")).toBeNull();
   });
