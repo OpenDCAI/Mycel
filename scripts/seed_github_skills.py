@@ -3,8 +3,8 @@
 from pathlib import Path
 
 import httpx
-import yaml
 
+from config.skill_document import parse_skill_document
 from config.skill_files import normalize_skill_file_entries
 
 HUB_URL = "http://localhost:8090"
@@ -65,40 +65,30 @@ def parse_skill_md(skill_md: Path) -> dict | None:
     if len(content.strip()) < 50:
         return None
 
-    name = skill_md.parent.name
+    document = parse_skill_document(content, label="SKILL.md")
+    name = document.name
     description = ""
     tags = []
-
-    if content.startswith("---"):
-        parts = content.split("---", 2)
-        if len(parts) >= 3:
-            fm = yaml.safe_load(parts[1]) or {}
-            if not isinstance(fm, dict):
-                raise ValueError("SKILL.md frontmatter must be a mapping")
-            raw_name = fm.get("name", name)
-            if not isinstance(raw_name, str) or not raw_name.strip():
-                raise ValueError("SKILL.md frontmatter name must be a string")
-            name = raw_name.strip()
-            raw_description = fm.get("description", "")
-            if raw_description is None:
-                description = ""
-            elif isinstance(raw_description, str):
-                description = raw_description.strip()
-            else:
-                raise ValueError("SKILL.md frontmatter description must be a string")
-            meta = fm.get("metadata", {})
-            if isinstance(meta, dict):
-                for key in ("domain", "role", "category"):
-                    if meta.get(key):
-                        tags.append(str(meta[key]))
-                triggers = meta.get("triggers", "")
-                if isinstance(triggers, str):
-                    tags.extend([t.strip() for t in triggers.split(",")[:5] if t.strip()])
+    raw_description = document.frontmatter.get("description", "")
+    if raw_description is None:
+        description = ""
+    elif isinstance(raw_description, str):
+        description = raw_description.strip()
+    else:
+        raise ValueError("SKILL.md frontmatter description must be a string")
+    meta = document.frontmatter.get("metadata", {})
+    if isinstance(meta, dict):
+        for key in ("domain", "role", "category"):
+            if meta.get(key):
+                tags.append(str(meta[key]))
+        triggers = meta.get("triggers", "")
+        if isinstance(triggers, str):
+            tags.extend([t.strip() for t in triggers.split(",")[:5] if t.strip()])
 
     if not description:
-        for line in content.split("\n"):
+        for line in document.body.split("\n"):
             stripped = line.strip()
-            if stripped and not stripped.startswith("#") and not stripped.startswith("---"):
+            if stripped and not stripped.startswith("#"):
                 description = stripped[:200]
                 break
 

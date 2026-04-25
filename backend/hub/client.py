@@ -7,7 +7,6 @@ from datetime import UTC, datetime
 from typing import Any
 
 import httpx
-import yaml
 from fastapi import HTTPException
 
 import backend.hub.snapshot_apply as _snapshot_apply
@@ -15,6 +14,7 @@ from backend.hub.versioning import BumpType, bump_semver
 from config.agent_config_resolver import resolve_agent_config
 from config.agent_config_types import Skill, SkillPackage
 from config.agent_snapshot import snapshot_from_resolved_config
+from config.skill_document import SkillDocument, parse_skill_document
 from config.skill_files import normalize_skill_file_map
 from config.skill_package import build_skill_package_hash, build_skill_package_manifest
 from storage.utils import generate_skill_id
@@ -77,28 +77,8 @@ def _optional_text(value: Any, *, label: str) -> str:
     return value.strip()
 
 
-def _skill_metadata_from_content(content: str) -> dict[str, Any]:
-    if not content.startswith("---\n"):
-        raise ValueError("Skill snapshot must be a SKILL.md document with frontmatter")
-    try:
-        _, frontmatter, _body = content.split("---", 2)
-    except ValueError as exc:
-        raise ValueError("Skill snapshot must be a SKILL.md document with frontmatter") from exc
-    try:
-        metadata = yaml.safe_load(frontmatter) or {}
-    except yaml.YAMLError as exc:
-        raise ValueError("Skill snapshot frontmatter must be valid YAML") from exc
-    if not isinstance(metadata, dict):
-        raise ValueError("Skill snapshot frontmatter must include name")
-    name = metadata.get("name")
-    if not isinstance(name, str) or not name.strip():
-        raise ValueError("Skill snapshot frontmatter must include name")
-    metadata["name"] = name.strip()
-    return metadata
-
-
-def _skill_description_from_metadata(metadata: dict[str, Any]) -> str:
-    return _optional_text(metadata.get("description"), label="Skill snapshot frontmatter description")
+def _skill_document_from_content(content: str) -> SkillDocument:
+    return parse_skill_document(content, label="Skill snapshot")
 
 
 def _skill_files_from_snapshot(snapshot: dict[str, Any]) -> dict[str, str]:
@@ -256,11 +236,11 @@ def apply_item(
 
     if item_type == "skill":
         content = _required_text(snapshot.get("content"), label="Skill snapshot content")
-        skill_metadata = _skill_metadata_from_content(content)
+        skill_document = _skill_document_from_content(content)
         skill_files = _skill_files_from_snapshot(snapshot)
         if skill_repo is None:
             raise RuntimeError("skill_repo is required to save a skill to Library")
-        skill_name = str(skill_metadata["name"]).strip()
+        skill_name = skill_document.name
         owner_skills = skill_repo.list_for_owner(owner_user_id)
         existing_skill = _hub_source_skill(owner_skills, item_id)
         if existing_skill is not None and existing_skill.name != skill_name:
@@ -274,7 +254,7 @@ def apply_item(
                     raise ValueError("Skill name already exists under a different Library id")
         else:
             skill_id = existing_skill.id
-        skill_description = _skill_description_from_metadata(skill_metadata)
+        skill_description = _optional_text(skill_document.frontmatter.get("description"), label="Skill snapshot frontmatter description")
         publisher = _required_text(item.get("publisher_username"), label="Hub item publisher_username")
         timestamp = datetime.now(UTC)
         source = {

@@ -1,6 +1,5 @@
 """Library CRUD for Skills and sandbox templates."""
 
-import re
 import time
 import uuid
 from datetime import UTC, datetime
@@ -11,12 +10,12 @@ import yaml
 from backend.sandboxes import provider_availability as sandbox_provider_availability
 from backend.sandboxes.recipe_bootstrap import seed_default_recipes as seed_builtin_recipes
 from config.agent_config_types import Skill, SkillPackage
+from config.skill_document import parse_skill_document, skill_version
 from config.skill_package import build_skill_package_hash, build_skill_package_manifest
 from sandbox.recipes import FEATURE_CATALOG, default_recipe_snapshot, normalize_recipe_snapshot, provider_type_from_name
 from storage.contracts import RecipeRepo, SkillRepo
 from storage.utils import generate_skill_id
 
-_SKILL_FRONTMATTER_RE = re.compile(r"^---\s*\n(.*?)\n---\s*\n", re.DOTALL)
 _RESOURCE_TYPES = {"skill", "sandbox-template"}
 
 
@@ -69,31 +68,13 @@ def _require_skill_repo(skill_repo: SkillRepo | None) -> SkillRepo:
     return skill_repo
 
 
-def _skill_frontmatter_metadata(content: str) -> dict[str, Any]:
+def _skill_name_from_content(content: str) -> str:
     # @@@skill-name-single-truth - runtime indexes Skills by SKILL.md frontmatter name, so Library name must not drift.
-    match = _SKILL_FRONTMATTER_RE.search(content)
-    if match is None:
-        raise ValueError("Skill content must be a SKILL.md document with frontmatter")
-    metadata = yaml.safe_load(match.group(1)) or {}
-    if not isinstance(metadata, dict):
-        raise ValueError("Skill content frontmatter must be a mapping")
-    return metadata
+    return parse_skill_document(content, label="Skill content").name
 
 
-def _skill_frontmatter_name(content: str) -> str:
-    metadata = _skill_frontmatter_metadata(content)
-    name = metadata.get("name")
-    if not isinstance(name, str) or not name.strip():
-        raise ValueError("Skill content frontmatter name is required")
-    return name.strip()
-
-
-def _skill_frontmatter_version(content: str) -> str:
-    metadata = _skill_frontmatter_metadata(content)
-    version = metadata.get("version")
-    if not isinstance(version, str) or not version.strip():
-        raise ValueError("Skill content frontmatter version is required")
-    return version.strip()
+def _skill_version_from_content(content: str) -> str:
+    return skill_version(parse_skill_document(content, label="Skill content"))
 
 
 def _now_dt() -> datetime:
@@ -275,10 +256,10 @@ def create_resource(
         skill_repo = _require_skill_repo(skill_repo)
         if not content or not content.strip():
             raise ValueError("Skill creation requires SKILL.md content")
-        frontmatter_name = _skill_frontmatter_name(content)
+        frontmatter_name = _skill_name_from_content(content)
         if frontmatter_name != name:
             raise ValueError("Skill content frontmatter name must match Skill name")
-        version = _skill_frontmatter_version(content)
+        version = _skill_version_from_content(content)
         for skill in skill_repo.list_for_owner(owner_user_id):
             if skill.name == name:
                 raise ValueError("Skill name already exists")
@@ -509,10 +490,10 @@ def update_resource_content(
         current = skill_repo.get_by_id(owner_user_id, resource_id)
         if current is None:
             return False
-        frontmatter_name = _skill_frontmatter_name(content)
+        frontmatter_name = _skill_name_from_content(content)
         if frontmatter_name != current.name:
             raise ValueError("Skill content frontmatter name must match Skill name")
-        version = _skill_frontmatter_version(content)
+        version = _skill_version_from_content(content)
         current_package = _selected_skill_package(owner_user_id, current, skill_repo)
         files = current_package.files if current_package is not None else {}
         updated = skill_repo.upsert(current.model_copy(update={"updated_at": _now_dt()}))

@@ -5,7 +5,6 @@ from pathlib import Path, PureWindowsPath
 from types import SimpleNamespace
 
 import pytest
-import yaml
 
 from scripts import seed_github_skills
 
@@ -58,7 +57,7 @@ def test_seed_skill_parse_fails_loudly_on_invalid_frontmatter(tmp_path: Path) ->
     skill_dir = tmp_path / "repo" / "skills" / "broken"
     _write_skill(skill_dir, "---\nname: [broken\n---\nBody long enough to avoid the tiny file skip path.")
 
-    with pytest.raises(yaml.YAMLError):
+    with pytest.raises(ValueError, match="SKILL.md frontmatter must be valid YAML"):
         seed_github_skills.read_skill_package(skill_dir)
 
 
@@ -66,8 +65,26 @@ def test_seed_skill_parse_rejects_non_text_frontmatter_name(tmp_path: Path) -> N
     skill_dir = tmp_path / "repo" / "skills" / "broken"
     _write_skill(skill_dir, "---\nname: 123\ndescription: Broken\n---\nBody long enough to parse.")
 
-    with pytest.raises(ValueError, match="SKILL.md frontmatter name must be a string"):
+    with pytest.raises(ValueError, match="SKILL.md frontmatter must include name"):
         seed_github_skills.read_skill_package(skill_dir)
+
+
+def test_seed_skill_parse_requires_skill_frontmatter(tmp_path: Path) -> None:
+    skill_dir = tmp_path / "repo" / "skills" / "broken"
+    _write_skill(skill_dir, "Body long enough to avoid the tiny file skip path.")
+
+    with pytest.raises(ValueError, match="must be a SKILL.md document with frontmatter"):
+        seed_github_skills.read_skill_package(skill_dir)
+
+
+def test_seed_skill_description_fallback_reads_body_not_frontmatter(tmp_path: Path) -> None:
+    skill_dir = tmp_path / "repo" / "skills" / "api-design"
+    _write_skill(skill_dir, "---\nname: API Design\nmetadata:\n  domain: backend\n---\nUse REST carefully.")
+
+    package = seed_github_skills.read_skill_package(skill_dir)
+
+    assert package is not None
+    assert package["description"] == "Use REST carefully."
 
 
 def test_seed_skill_parse_rejects_unreadable_skill_md(tmp_path: Path) -> None:

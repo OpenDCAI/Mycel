@@ -199,7 +199,7 @@ def test_resolver_rejects_skill_without_frontmatter():
             ),
         )
 
-    assert "missing SKILL.md frontmatter" in str(excinfo.value)
+    assert "must be a SKILL.md document with frontmatter" in str(excinfo.value)
 
 
 def test_resolver_rejects_skill_frontmatter_without_name():
@@ -230,7 +230,7 @@ def test_resolver_rejects_skill_frontmatter_without_name():
             ),
         )
 
-    assert "frontmatter is missing name" in str(excinfo.value)
+    assert "frontmatter must include name" in str(excinfo.value)
 
 
 def test_resolver_rejects_display_name_without_name():
@@ -261,7 +261,7 @@ def test_resolver_rejects_display_name_without_name():
             ),
         )
 
-    assert "frontmatter is missing name" in str(excinfo.value)
+    assert "frontmatter must include name" in str(excinfo.value)
 
 
 def test_resolver_rejects_package_that_does_not_belong_to_selected_skill():
