@@ -6,8 +6,8 @@ import time
 from datetime import UTC, datetime
 from typing import Any
 
-from config.agent_config_resolver import validate_agent_skill_content
-from config.agent_config_types import AgentConfig, AgentSkill, AgentSnapshot, Skill, SkillPackage
+from config.agent_config_resolver import validate_resolved_skill_content
+from config.agent_config_types import AgentConfig, AgentSkill, AgentSnapshot, ResolvedSkill, Skill, SkillPackage
 from config.skill_package import build_skill_package_hash, build_skill_package_manifest
 
 
@@ -20,7 +20,7 @@ def _skill_id_from_name(name: str) -> str:
 
 def _materialize_snapshot_skills(
     *,
-    skills: list[AgentSkill],
+    skills: list[ResolvedSkill],
     owner_user_id: str,
     marketplace_item_id: str,
     source_version: str,
@@ -34,7 +34,7 @@ def _materialize_snapshot_skills(
 
     seen_names: set[str] = set()
     for snapshot_skill in skills:
-        validate_agent_skill_content(snapshot_skill)
+        validate_resolved_skill_content(snapshot_skill)
         if snapshot_skill.name in seen_names:
             raise ValueError(f"Duplicate Skill name in snapshot: {snapshot_skill.name}")
         seen_names.add(snapshot_skill.name)
@@ -43,7 +43,7 @@ def _materialize_snapshot_skills(
     timestamp = datetime.now(UTC)
     library_skills = skill_repo.list_for_owner(owner_user_id)
     for snapshot_skill in skills:
-        skill_id = snapshot_skill.skill_id or _skill_id_from_name(snapshot_skill.name)
+        skill_id = _skill_id_from_name(snapshot_skill.name)
         existing = skill_repo.get_by_id(owner_user_id, skill_id)
         if existing is not None and existing.name != snapshot_skill.name:
             raise ValueError("Snapshot Skill frontmatter name must match existing Skill name")
@@ -88,13 +88,13 @@ def _materialize_snapshot_skills(
         )
         skill_repo.select_package(owner_user_id, skill.id, package.id)
         result.append(
-            snapshot_skill.model_copy(
-                update={
-                    "skill_id": skill.id,
-                    "package_id": package.id,
-                    "version": package.version,
-                    "source": source,
-                }
+            AgentSkill(
+                skill_id=skill.id,
+                package_id=package.id,
+                name=snapshot_skill.name,
+                description=snapshot_skill.description,
+                version=package.version,
+                source=source,
             )
         )
     return result

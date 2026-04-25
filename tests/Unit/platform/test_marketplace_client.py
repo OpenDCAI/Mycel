@@ -340,7 +340,7 @@ class TestApplySkill:
         class _AgentConfigRepo:
             def get_agent_config(self, agent_config_id: str) -> AgentConfig | None:
                 assert agent_config_id == "cfg-1"
-                return _agent_config(skills=[AgentSkill(name="Existing", content="---\nname: Existing\n---\nBody")])
+                return _agent_config(skills=[AgentSkill(skill_id="existing", package_id="existing-package", name="Existing")])
 
             def save_agent_config(self, config: AgentConfig) -> None:
                 saved.append(config)
@@ -661,8 +661,9 @@ def test_publish_uses_repo_material_when_member_dir_is_absent(tmp_path, monkeypa
                 sub_agents=[AgentSubAgent(name="Scout", description="helper", tools=["search"], system_prompt="look around")],
                 skills=[
                     AgentSkill(
+                        skill_id="search",
+                        package_id="search-package",
                         name="Search",
-                        content="---\nname: Search\n---\nskill content",
                         source={"name": "Search", "desc": "Repo Search"},
                     )
                 ],
@@ -688,6 +689,18 @@ def test_publish_uses_repo_material_when_member_dir_is_absent(tmp_path, monkeypa
         publisher_username="owner-name",
         user_repo=user_repo,
         agent_config_repo=_AgentConfigRepo(),
+        skill_repo=SimpleNamespace(
+            get_package=lambda _owner_user_id, package_id: SkillPackage(
+                id=package_id,
+                owner_user_id="owner-1",
+                skill_id="search",
+                version="1.0.0",
+                hash="sha256:search",
+                skill_md="---\nname: Search\n---\nskill content",
+                source={"name": "Search", "desc": "Repo Search"},
+                created_at="2026-04-25T00:00:00+00:00",
+            )
+        ),
     )
 
     assert result == {"item_id": "item-123"}
@@ -756,6 +769,7 @@ def test_publish_prefers_repo_lineage_even_when_stale_member_dir_exists(tmp_path
         publisher_username="owner-name",
         user_repo=user_repo,
         agent_config_repo=_AgentConfigRepo(),
+        skill_repo=SimpleNamespace(),
     )
 
     assert result == {"item_id": "item-123"}
