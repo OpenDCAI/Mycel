@@ -20,7 +20,6 @@ All paths must be absolute. Full security mechanisms and audit logging.
 import asyncio
 import concurrent.futures
 import inspect
-import logging
 import os
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -84,8 +83,6 @@ from core.tools.tool_search.service import ToolSearchService  # noqa: E402
 from core.tools.web.service import WebService  # noqa: E402
 from protocols.event_bus import EventBusFactory  # noqa: E402
 from storage.container import StorageContainer  # noqa: E402
-
-logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from sandbox import Sandbox
@@ -1237,8 +1234,8 @@ class LeonAgent:
                 registry=self._tool_registry,
                 workspace_root=self.workspace_root,
             )
-        except Exception as e:
-            logger.debug("[LeonAgent] LSPService init skipped: %s", e)
+        except Exception:
+            pass
 
     async def _init_mcp_tools(self) -> list:
         client, tools = await mcp_gateway.init_client_tools(
