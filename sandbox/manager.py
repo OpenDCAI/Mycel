@@ -320,7 +320,6 @@ class SandboxManager:
         except Exception as e:
             if "already exists" in str(e):
                 volume_name = f"leon-volume-{sandbox_runtime_id}"
-                logger.info("Daytona volume already exists: %s, reusing", volume_name)
                 self.provider.wait_managed_volume_ready(volume_name)
             else:
                 raise

@@ -127,7 +127,6 @@ class DaytonaProvider(SandboxProvider):
 
     def create_managed_volume(self, managed_ref: str, mount_path: str) -> str:
         volume_name = f"leon-volume-{managed_ref}"
-        logger.info("Creating managed volume: %s", volume_name)
         # @@@volume-ready - volume transitions pending_create → ready (~6s)
         self.client.volume.create(volume_name)
         self.wait_managed_volume_ready(volume_name)
@@ -137,7 +136,6 @@ class DaytonaProvider(SandboxProvider):
         for _ in range(30):
             vol = self.client.volume.get(backend_ref)
             if vol.state == "ready":
-                logger.info("Managed volume ready: %s (id=%s)", backend_ref, vol.id)
                 return
             time.sleep(1)
         raise RuntimeError(f"Volume {backend_ref} did not become ready within 30s")
@@ -146,13 +144,11 @@ class DaytonaProvider(SandboxProvider):
         self._managed_mounts[thread_id] = (backend_ref, mount_path)
 
     def delete_managed_volume(self, backend_ref: str) -> None:
-        logger.info("Deleting managed volume: %s", backend_ref)
         try:
             vol = self.client.volume.get(backend_ref)
         except Exception as exc:
             # @@@daytona-volume-delete-idempotent - thread cleanup may retry after provider volume was already removed.
             if _is_daytona_not_found_error(exc):
-                logger.info("Managed volume already absent: %s", backend_ref)
                 return
             raise
         self.client.volume.delete(vol)
@@ -213,7 +209,6 @@ class DaytonaProvider(SandboxProvider):
             logger.warning("[DaytonaProvider] destroy_session error for %s, verifying actual state", session_id)
             actual = self.get_session_status(session_id)
             if actual == "unknown":
-                logger.info("[DaytonaProvider] sandbox %s no longer exists — destroy succeeded", session_id)
                 self._sandboxes.pop(session_id, None)
                 return True
             logger.error("[DaytonaProvider] destroy_session truly failed for %s (state=%s)", session_id, actual)
@@ -230,7 +225,6 @@ class DaytonaProvider(SandboxProvider):
             logger.warning("[DaytonaProvider] pause_session error for %s, verifying actual state", session_id)
             actual = self.get_session_status(session_id)
             if actual == "paused":
-                logger.info("[DaytonaProvider] sandbox %s is actually stopped despite error — pause succeeded", session_id)
                 return True
             logger.error("[DaytonaProvider] pause_session truly failed for %s (state=%s)", session_id, actual)
             return False
@@ -245,7 +239,6 @@ class DaytonaProvider(SandboxProvider):
             logger.warning("[DaytonaProvider] resume_session error for %s, verifying actual state", session_id)
             actual = self.get_session_status(session_id)
             if actual == "running":
-                logger.info("[DaytonaProvider] sandbox %s is actually running despite error — resume succeeded", session_id)
                 return True
             logger.error("[DaytonaProvider] resume_session truly failed for %s (state=%s)", session_id, actual)
             return False
