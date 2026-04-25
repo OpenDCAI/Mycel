@@ -1237,6 +1237,15 @@ class LeonAgent:
                         relationship_identity_id=chat_identity_id,
                         relationship_service=relationship_service,
                     )
+                chat_join_request_service = repos.get("chat_join_request_service")
+                if chat_join_request_service is not None:
+                    from messaging.tools.chat_join_request_tool_service import ChatJoinRequestToolService
+
+                    self._chat_join_request_tool_service = ChatJoinRequestToolService(
+                        registry=self._tool_registry,
+                        chat_join_identity_id=chat_identity_id,
+                        chat_join_request_service=chat_join_request_service,
+                    )
 
         # LSP tools — DEFERRED, always registered, multilspy checked at call time
         self._lsp_service = None

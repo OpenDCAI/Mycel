@@ -68,8 +68,8 @@ class ChatDeliveryDispatcher:
             if not recipient:
                 raise RuntimeError(f"Chat delivery recipient identity not found: {uid}")
             member_raw_type = getattr(recipient, "type", None)
-            member_type = member_raw_type.value if isinstance(member_raw_type, Enum) else member_raw_type
-            if member_type == "human":
+            member_type = member_raw_type.value if isinstance(member_raw_type, Enum) else str(member_raw_type)
+            if member_type != "agent":
                 continue
 
             # @@@same-owner-group-delivery - explicit group membership among the same owner

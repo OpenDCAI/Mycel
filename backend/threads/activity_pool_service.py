@@ -25,4 +25,9 @@ async def get_or_create_agent(*args, **kwargs):
         relationship_service = getattr(runtime_state, "relationship_service", None)
         if relationship_service is not None:
             kwargs["relationship_service"] = relationship_service
+    if "chat_join_request_service" not in kwargs and app is not None:
+        runtime_state = getattr(app.state, "threads_runtime_state", None)
+        chat_join_request_service = getattr(runtime_state, "chat_join_request_service", None)
+        if chat_join_request_service is not None:
+            kwargs["chat_join_request_service"] = chat_join_request_service
     return await _registry.get_or_create_agent(*args, **kwargs)

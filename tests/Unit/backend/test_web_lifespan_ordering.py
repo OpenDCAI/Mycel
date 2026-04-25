@@ -85,6 +85,7 @@ async def test_web_lifespan_attaches_chat_runtime_before_threads_runtime(monkeyp
     returned_typing_tracker = object()
     returned_messaging_service = SimpleNamespace(set_delivery_fn=lambda _fn: None)
     returned_relationship_service = object()
+    returned_chat_join_request_service = object()
 
     def _attach_chat_runtime(app, _storage_container, *, user_repo, thread_repo):
         contact_repo = object()
@@ -93,12 +94,22 @@ async def test_web_lifespan_attaches_chat_runtime_before_threads_runtime(monkeyp
             typing_tracker=returned_typing_tracker,
             messaging_service=returned_messaging_service,
             relationship_service=returned_relationship_service,
+            chat_join_request_service=returned_chat_join_request_service,
         )
 
-    def _attach_threads_runtime(app, _storage_container, *, typing_tracker, messaging_service, relationship_service):
+    def _attach_threads_runtime(
+        app,
+        _storage_container,
+        *,
+        typing_tracker,
+        messaging_service,
+        relationship_service,
+        chat_join_request_service,
+    ):
         assert typing_tracker is returned_typing_tracker
         assert messaging_service is returned_messaging_service
         assert relationship_service is returned_relationship_service
+        assert chat_join_request_service is returned_chat_join_request_service
         app.state.agent_pool = {}
         return SimpleNamespace(activity_reader=object())
 
@@ -123,6 +134,7 @@ async def test_web_lifespan_wires_chat_delivery_after_threads_runtime(monkeypatc
     returned_typing_tracker = object()
     returned_messaging_service = SimpleNamespace(set_delivery_fn=lambda _fn: None)
     returned_relationship_service = object()
+    returned_chat_join_request_service = object()
     returned_contact_repo = object()
     returned_activity_reader = object()
 
@@ -133,6 +145,7 @@ async def test_web_lifespan_wires_chat_delivery_after_threads_runtime(monkeypatc
             typing_tracker=returned_typing_tracker,
             messaging_service=returned_messaging_service,
             relationship_service=returned_relationship_service,
+            chat_join_request_service=returned_chat_join_request_service,
         )
 
     def _attach_auth_runtime(_app, *, storage_state, contact_repo):
@@ -140,11 +153,20 @@ async def test_web_lifespan_wires_chat_delivery_after_threads_runtime(monkeypatc
         assert contact_repo is returned_contact_repo
         return object()
 
-    def _attach_threads_runtime(app, _storage_container, *, typing_tracker, messaging_service, relationship_service):
+    def _attach_threads_runtime(
+        app,
+        _storage_container,
+        *,
+        typing_tracker,
+        messaging_service,
+        relationship_service,
+        chat_join_request_service,
+    ):
         call_log.append("threads")
         assert typing_tracker is returned_typing_tracker
         assert messaging_service is returned_messaging_service
         assert relationship_service is returned_relationship_service
+        assert chat_join_request_service is returned_chat_join_request_service
         app.state.agent_pool = {}
         return SimpleNamespace(activity_reader=returned_activity_reader)
 
@@ -227,6 +249,7 @@ async def test_web_lifespan_passes_borrowed_contact_repo_into_auth_runtime(monke
             typing_tracker=object(),
             messaging_service=SimpleNamespace(set_delivery_fn=lambda _fn: None),
             relationship_service=object(),
+            chat_join_request_service=object(),
         ),
     )
     monkeypatch.setattr(

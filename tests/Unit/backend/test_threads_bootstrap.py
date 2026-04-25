@@ -14,6 +14,7 @@ def test_attach_threads_runtime_wires_runtime_dependencies(monkeypatch):
     typing_tracker = object()
     messaging_service = object()
     relationship_service = object()
+    chat_join_request_service = object()
     seen: list[tuple[str, object]] = []
 
     storage_container = SimpleNamespace(queue_repo=lambda: queue_repo)
@@ -40,6 +41,7 @@ def test_attach_threads_runtime_wires_runtime_dependencies(monkeypatch):
         typing_tracker=typing_tracker,
         messaging_service=messaging_service,
         relationship_service=relationship_service,
+        chat_join_request_service=chat_join_request_service,
     )
 
     assert app.state.queue_manager is queue_manager
@@ -56,6 +58,7 @@ def test_attach_threads_runtime_wires_runtime_dependencies(monkeypatch):
     assert state.activity_reader is activity_reader
     assert state.messaging_service is messaging_service
     assert state.relationship_service is relationship_service
+    assert state.chat_join_request_service is chat_join_request_service
     assert state.typing_tracker is typing_tracker
     assert state.display_builder is None
     assert state.event_loop is None

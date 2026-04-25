@@ -15,6 +15,7 @@ class ThreadsRuntimeState:
     activity_reader: Any
     messaging_service: Any | None = None
     relationship_service: Any | None = None
+    chat_join_request_service: Any | None = None
     typing_tracker: Any | None = None
     display_builder: Any | None = None
     event_loop: Any | None = None
@@ -28,6 +29,7 @@ def attach_threads_runtime(
     typing_tracker: Any,
     messaging_service: Any,
     relationship_service: Any,
+    chat_join_request_service: Any,
 ) -> ThreadsRuntimeState:
     app.state.queue_manager = MessageQueueManager(repo=storage_container.queue_repo())
     app.state.agent_pool = {}
@@ -53,6 +55,7 @@ def attach_threads_runtime(
         activity_reader=runtime_state.activity_reader,
         messaging_service=messaging_service,
         relationship_service=relationship_service,
+        chat_join_request_service=chat_join_request_service,
         typing_tracker=typing_tracker,
     )
     app.state.threads_runtime_state = state
