@@ -23,7 +23,7 @@ create table if not exists library.skill_packages (
     id text primary key,
     owner_user_id text not null,
     skill_id text not null,
-    version text not null default '0.1.0',
+    version text not null,
     hash text not null,
     manifest_json jsonb not null default '{}'::jsonb,
     skill_md text not null,
@@ -41,6 +41,9 @@ alter table library.skills
     add constraint skills_package_fk
         foreign key (package_id)
         references library.skill_packages(id);
+
+alter table if exists library.skill_packages
+    alter column version drop default;
 
 create table if not exists agent.skill_bindings (
     id uuid primary key default gen_random_uuid(),
@@ -161,6 +164,20 @@ begin
     ) then
         raise exception 'library.skills.source_json must be a JSON object before hard cut';
     end if;
+    if exists (
+        select 1
+        from library.skill_packages
+        where version is null
+           or btrim(version) = ''
+    ) then
+        raise exception 'library.skill_packages.version must be present before hard cut';
+    end if;
+
+    alter table library.skill_packages
+        drop constraint if exists skill_packages_version_required_ck,
+        add constraint skill_packages_version_required_ck
+            check (version is not null and btrim(version) <> '');
+
     if exists (
         select 1
         from library.skill_packages
