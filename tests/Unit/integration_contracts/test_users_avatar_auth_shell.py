@@ -6,6 +6,7 @@ from types import SimpleNamespace
 import pytest
 
 from backend.identity.avatar import urls as avatar_urls
+from backend.identity.avatar.paths import avatars_dir
 from backend.web.routers import users as users_router
 
 
@@ -26,14 +27,17 @@ def _user(user_id: str, *, owner_user_id: str | None = None, avatar: str | None 
     )
 
 
-def test_avatar_url_uses_local_file_truth_when_db_avatar_is_null(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
-    avatar_dir = tmp_path / "avatars"
-    avatar_dir.mkdir()
-    (avatar_dir / "agent-1.png").write_bytes(b"png")
-    monkeypatch.setattr(avatar_urls, "avatars_dir", lambda: avatar_dir)
+def test_avatar_url_uses_db_avatar_truth() -> None:
+    assert avatar_urls.avatar_url("agent-1", True) == "/api/users/agent-1/avatar"
+    assert avatar_urls.avatar_url("agent-1", False) is None
+    assert avatar_urls.avatar_url(None, True) is None
 
-    assert avatar_urls.avatar_url("agent-1", False) == "/api/users/agent-1/avatar"
-    assert avatar_urls.avatar_url("agent-2", False) is None
+
+def test_avatar_dir_requires_explicit_root(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.delenv("LEON_AVATAR_ROOT", raising=False)
+
+    with pytest.raises(RuntimeError, match="LEON_AVATAR_ROOT is required"):
+        avatars_dir()
 
 
 @pytest.mark.asyncio
@@ -43,7 +47,7 @@ async def test_delete_avatar_route_uses_auth_shell(monkeypatch: pytest.MonkeyPat
     avatar_dir.mkdir()
     avatar_path = avatar_dir / "agent-1.png"
     avatar_path.write_bytes(b"png")
-    monkeypatch.setattr(users_router, "AVATARS_DIR", avatar_dir)
+    monkeypatch.setattr(users_router, "avatars_dir", lambda: avatar_dir)
 
     def fake_helper(user_id: str, current_user_id: str, user_repo):
         seen.append(("helper", (user_id, current_user_id)))
@@ -102,5 +106,5 @@ async def test_upload_avatar_route_uses_auth_shell(monkeypatch: pytest.MonkeyPat
     assert seen[1] == ("save", (b"png-bytes", "agent-1"))
     assert seen[2][0] == "update"
     assert seen[2][1][0] == "agent-1"
-    assert "avatar" not in seen[2][1][1]
+    assert seen[2][1][1]["avatar"] == "avatars/agent-1.png"
     assert seen[2][1][1]["updated_at"] == pytest.approx(seen[2][1][1]["updated_at"], rel=0, abs=5)

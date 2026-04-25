@@ -10,7 +10,6 @@ from typing import Any
 
 import yaml
 
-from backend.library.paths import LIBRARY_DIR
 from config.agent_config_types import Skill, SkillPackage
 from config.skill_files import normalize_skill_file_entries
 from config.skill_package import build_skill_package_hash, build_skill_package_manifest
@@ -96,7 +95,7 @@ def import_skills(owner_user_id: str, library_dir: Path) -> int:
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--owner-user-id", required=True)
-    parser.add_argument("--library-dir", type=Path, default=LIBRARY_DIR)
+    parser.add_argument("--library-dir", type=Path, required=True)
     args = parser.parse_args()
 
     count = import_skills(args.owner_user_id, args.library_dir.expanduser().resolve())

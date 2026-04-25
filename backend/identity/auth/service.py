@@ -268,6 +268,10 @@ class AuthService:
         for i, agent_def in enumerate(initial_agents):
             agent_id = generate_agent_user_id()
             agent_config_id = generate_agent_config_id()
+            src_avatar = assets_dir / agent_def["avatar"]
+            if not src_avatar.exists():
+                raise RuntimeError(f"Default agent avatar missing: {src_avatar}")
+            avatar_path = process_and_save_avatar(src_avatar, agent_id)
             self._users.create(
                 UserRow(
                     id=agent_id,
@@ -275,6 +279,7 @@ class AuthService:
                     display_name=agent_def["name"],
                     owner_user_id=owner_user_id,
                     agent_config_id=agent_config_id,
+                    avatar=avatar_path,
                     created_at=now,
                 )
             )
@@ -289,12 +294,6 @@ class AuthService:
                     version="1.0.0",
                 )
             )
-            src_avatar = assets_dir / agent_def["avatar"]
-            if not src_avatar.exists():
-                raise RuntimeError(f"Default agent avatar missing: {src_avatar}")
-            avatar_path = process_and_save_avatar(src_avatar, agent_id)
-            # @@@file-backed-avatar-shell - current web avatar truth is the served
-            # file surface, not a path string stored in users.avatar.
             ensure_owner_agent_contact(self._contact_repo, owner_user_id, agent_id, now=now)
             if i == 0:
                 first_agent_info = {"id": agent_id, "name": agent_def["name"], "type": "agent", "avatar": avatar_path}

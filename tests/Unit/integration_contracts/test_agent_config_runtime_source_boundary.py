@@ -3,13 +3,18 @@ import json
 from pathlib import Path
 
 from backend.identity import profile as identity_profile
+from backend.identity.avatar import files as avatar_files
+from backend.identity.avatar import paths as avatar_paths
+from backend.identity.avatar import urls as avatar_urls
 from backend.threads import file_channel
+from backend.web.routers import users as users_router
 from config.loader import AgentLoader
 from config.models_loader import ModelsLoader
 from config.observation_loader import ObservationLoader
 from core.runtime.agent import LeonAgent
 from core.runtime.middleware.monitor import cost as cost_monitor
 from sandbox import manager as sandbox_manager
+from scripts import import_file_skills_to_library
 
 
 def test_runtime_api_has_no_process_local_agent_config_source() -> None:
@@ -84,3 +89,26 @@ def test_file_channel_paths_have_no_user_home_source() -> None:
     assert "config.user_paths" not in source
     assert "user_home_path" not in source
     assert "file_channels" not in source
+
+
+def test_avatar_storage_has_no_user_home_source() -> None:
+    source = "\n".join(
+        [
+            inspect.getsource(avatar_paths),
+            inspect.getsource(avatar_files),
+            inspect.getsource(avatar_urls),
+            inspect.getsource(users_router),
+        ]
+    )
+
+    assert "config.user_paths" not in source
+    assert "preferred_user_home_dir" not in source
+    assert "AVATARS_DIR" not in source
+
+
+def test_file_skill_import_has_no_default_host_library_path() -> None:
+    source = inspect.getsource(import_file_skills_to_library)
+
+    assert "backend.library.paths" not in source
+    assert "LIBRARY_DIR" not in source
+    assert "default=" not in source
