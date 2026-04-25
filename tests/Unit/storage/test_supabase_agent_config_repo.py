@@ -327,6 +327,15 @@ def test_get_agent_config_fails_loudly_when_mcp_json_is_not_an_array() -> None:
         repo.get_agent_config("cfg-1")
 
 
+def test_get_agent_config_fails_loudly_when_mcp_json_is_null() -> None:
+    tables = _tables()
+    tables["agent.agent_configs"][0]["mcp_json"] = None
+    repo = SupabaseAgentConfigRepo(_FakeClient(tables))
+
+    with pytest.raises(RuntimeError, match="mcp_json must be a JSON array"):
+        repo.get_agent_config("cfg-1")
+
+
 def test_get_agent_config_fails_loudly_when_mcp_json_is_empty_object() -> None:
     tables = _tables()
     tables["agent.agent_configs"][0]["mcp_json"] = {}

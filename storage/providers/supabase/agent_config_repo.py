@@ -203,11 +203,7 @@ class SupabaseAgentConfigRepo:
         rows = q.rows(self._table("agent_configs").select("mcp_json").eq("id", agent_config_id).execute(), _REPO, "_list_mcp_rows")
         if not rows:
             raise RuntimeError(f"Agent config {agent_config_id} disappeared while reading mcp_json")
-        mcp_rows = rows[0].get("mcp_json")
-        if mcp_rows is None:
-            mcp_rows = []
-        if not isinstance(mcp_rows, list):
-            raise RuntimeError(f"Agent config {agent_config_id} mcp_json must be a JSON array")
+        mcp_rows = _required_json_array(rows[0].get("mcp_json"), label=f"Agent config {agent_config_id} mcp_json")
         servers: list[McpServerConfig] = []
         for row in mcp_rows:
             if not isinstance(row, dict):
