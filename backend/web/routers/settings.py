@@ -407,12 +407,10 @@ async def toggle_model(
     pool = data.setdefault("pool", {"enabled": [], "custom": []})
     enabled = pool.setdefault("enabled", [])
 
-    if request.enabled:
-        if request.model_id not in enabled:
-            enabled.append(request.model_id)
-    else:
-        if request.model_id in enabled:
-            enabled.remove(request.model_id)
+    if request.enabled and request.model_id not in enabled:
+        enabled.append(request.model_id)
+    elif not request.enabled and request.model_id in enabled:
+        enabled.remove(request.model_id)
 
     repo.set_models_config(user_id, data)
     return {"success": True, "enabled_models": enabled}

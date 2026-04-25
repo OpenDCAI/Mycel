@@ -52,7 +52,4 @@ async def observe_sse_buffer(
                 continue
 
             seq_id = str(parsed_data["_seq"]) if isinstance(parsed_data, dict) and "_seq" in parsed_data else None
-            if seq_id:
-                yield {**event, "id": seq_id}
-            else:
-                yield event
+            yield {**event, "id": seq_id} if seq_id else event

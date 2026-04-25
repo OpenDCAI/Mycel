@@ -140,10 +140,7 @@ async def get_thread_history_payload(
     truncate: int = 300,
 ) -> dict[str, Any]:
     live_messages = await load_live_messages(thread_id)
-    if live_messages is None:
-        all_messages = await load_checkpoint_messages(thread_id)
-    else:
-        all_messages = live_messages
+    all_messages = live_messages if live_messages is not None else await load_checkpoint_messages(thread_id)
     all_messages = repair_interrupted_tool_call_messages(list(all_messages))
     total = len(all_messages)
     messages = all_messages[-limit:] if limit > 0 else all_messages

@@ -27,14 +27,12 @@ async def _call_channel_file_service(
     missing_status: int | None = None,
 ) -> Any:
     try:
-        if callable(method_name):
-            method = method_name
-        else:
+        if not callable(method_name):
             source = file_channel_service.get_file_channel_source(thread_id)
-            method = getattr(source, method_name)
+            method_name = getattr(source, method_name)
         if relative_path is None:
-            return await asyncio.to_thread(method)
-        return await asyncio.to_thread(method, relative_path)
+            return await asyncio.to_thread(method_name)
+        return await asyncio.to_thread(method_name, relative_path)
     except ValueError as e:
         raise HTTPException(400, str(e)) from e
     except FileNotFoundError as e:

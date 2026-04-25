@@ -1391,10 +1391,9 @@ def _background_run_type(run: Any) -> str:
 def _serialize_background_run(task_id: str, run: Any, *, include_result: bool) -> dict[str, Any]:
     run_type = _background_run_type(run)
     result_text = _background_run_result(run) if include_result and run.is_done else None
+    status = "completed" if run.is_done else "running"
     if _background_run_cancelled(run):
         status = "cancelled"
-    else:
-        status = "completed" if run.is_done else "running"
     payload = {
         "task_id": task_id,
         "task_type": run_type,
