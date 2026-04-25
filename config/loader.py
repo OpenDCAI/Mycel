@@ -28,8 +28,7 @@ logger = logging.getLogger(__name__)
 class AgentLoader:
     """Unified loader for runtime config and runtime agent definitions."""
 
-    def __init__(self, workspace_root: str | Path | None = None):
-        self.workspace_root = Path(workspace_root).resolve() if workspace_root else None
+    def __init__(self):
         self._system_defaults_dir = Path(__file__).parent / "defaults"
         self._agents: dict[str, RuntimeAgentDefinition] = {}
 
@@ -192,9 +191,6 @@ class AgentLoader:
         return obj
 
 
-def load_config(
-    workspace_root: str | None = None,
-    cli_overrides: dict[str, Any] | None = None,
-) -> LeonSettings:
+def load_config(cli_overrides: dict[str, Any] | None = None) -> LeonSettings:
     """Convenience function to load runtime configuration."""
-    return AgentLoader(workspace_root=workspace_root).load(cli_overrides=cli_overrides)
+    return AgentLoader().load(cli_overrides=cli_overrides)

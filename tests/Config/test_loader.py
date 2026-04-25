@@ -1,5 +1,6 @@
 import os
 import sys
+import inspect
 from pathlib import Path
 
 import pytest
@@ -9,13 +10,12 @@ from config.schema import LeonSettings
 
 
 class TestAgentLoader:
-    def test_init(self, tmp_path):
-        loader = AgentLoader(workspace_root=str(tmp_path))
-        assert loader.workspace_root == tmp_path
-
-    def test_init_no_workspace(self):
+    def test_init(self):
         loader = AgentLoader()
-        assert loader.workspace_root is None
+        assert "_agents" in vars(loader)
+
+    def test_init_has_no_workspace_root_input(self):
+        assert "workspace_root" not in inspect.signature(AgentLoader).parameters
 
     def test_load_system_defaults_missing(self, tmp_path):
         loader = AgentLoader()
@@ -29,7 +29,7 @@ class TestAgentLoader:
         (project_dir / ".leon").mkdir(parents=True)
         (project_dir / ".leon" / "runtime.json").write_text("{bad json", encoding="utf-8")
 
-        loader = AgentLoader(workspace_root=str(project_dir))
+        loader = AgentLoader()
 
         assert isinstance(loader.load(), LeonSettings)
 
@@ -155,13 +155,13 @@ class TestAgentLoader:
 
 
 class TestLoadConfigFunction:
-    def test_load_config_with_workspace(self, tmp_path, monkeypatch):
+    def test_load_config(self, tmp_path, monkeypatch):
         monkeypatch.setenv("HOME", str(tmp_path))
 
         project_dir = tmp_path / "project"
         project_dir.mkdir()
 
-        settings = load_config(workspace_root=str(project_dir))
+        settings = load_config()
         assert isinstance(settings, LeonSettings)
 
 
@@ -173,7 +173,7 @@ def test_project_agent_file_does_not_override_builtin_runtime_agent(tmp_path: Pa
         encoding="utf-8",
     )
 
-    agent = AgentLoader(workspace_root=tmp_path).load_runtime_agents()["explore"]
+    agent = AgentLoader().load_runtime_agents()["explore"]
 
     assert agent.model is None
     assert agent.system_prompt != "project prompt"
@@ -188,7 +188,7 @@ def test_user_agent_file_does_not_enter_runtime_agent_discovery(tmp_path: Path):
         encoding="utf-8",
     )
 
-    assert "custom" not in AgentLoader(workspace_root=tmp_path).load_runtime_agents()
+    assert "custom" not in AgentLoader().load_runtime_agents()
 
 
 def test_runtime_agent_discovery_excludes_member_dirs(tmp_path: Path):
@@ -200,4 +200,4 @@ def test_runtime_agent_discovery_excludes_member_dirs(tmp_path: Path):
         encoding="utf-8",
     )
 
-    assert "alice" not in AgentLoader(workspace_root=tmp_path).load_runtime_agents()
+    assert "alice" not in AgentLoader().load_runtime_agents()

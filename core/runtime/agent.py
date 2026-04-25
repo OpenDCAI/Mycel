@@ -524,7 +524,7 @@ class LeonAgent:
             cli_overrides.setdefault("tools", {}).setdefault("web", {})["enabled"] = enable_web_tools
 
         # Load runtime config
-        loader = AgentLoader(workspace_root=workspace_root)
+        loader = AgentLoader()
         config = loader.load(cli_overrides=cli_overrides or None)
         if memory_config_override is not None:
             config = self._with_memory_config_override(config, memory_config_override)
@@ -771,7 +771,7 @@ class LeonAgent:
         # Reload runtime config if tool overrides provided
         if tool_overrides:
             cli_overrides = {"tools": tool_overrides}
-            loader = AgentLoader(workspace_root=self.workspace_root)
+            loader = AgentLoader()
             self.config = loader.load(cli_overrides=cli_overrides)
 
         # Reload models config (picks up new API keys + model changes from disk)
