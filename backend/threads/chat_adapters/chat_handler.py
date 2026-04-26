@@ -28,5 +28,6 @@ class NativeAgentChatDeliveryHandler:
             sender_id=envelope.sender.user_id,
             sender_name=envelope.sender.display_name,
             sender_avatar_url=envelope.sender.avatar_url,
+            wake=envelope.wake,
         )
         return agent_runtime_protocol.AgentChatDeliveryResult(status="accepted", thread_id=thread_id)
