@@ -16,15 +16,10 @@ calls, or backend-only shortcuts as proof for these cards.
 
 ## Where Results Go
 
-Do not write run results into these cards. Put artifacts under `~/share/yatu`
-with a timestamped folder, and write a short result note outside the repo if a
-run needs explanation.
-
-Good artifact examples:
-
-- `~/share/yatu/mention-wake-postmerge-20260426T031323Z`
-- `~/share/yatu/managed-agent-relationship-cli-20260426T011838`
-- `~/share/yatu/frontend-relationship-join-currentdev-20260426T`
+Do not write run results into these cards. Put artifacts in an out-of-repo
+timestamped folder, and write any result notes outside the repo. Repo cards may
+describe the artifact naming convention, but must not record local artifact
+paths from a specific machine.
 
 ## How To Read A Card
 
@@ -39,4 +34,3 @@ Each card has:
 
 If a card is painful to run, do not add private glue to the test. Treat that as
 product/API feedback and improve the underlying surface.
-

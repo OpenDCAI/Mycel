@@ -48,10 +48,3 @@ message sending, subagent work, and background command execution.
 - Do not accept prompt echo as proof that a tool ran.
 - If the agent cannot find the right tool, treat that as product/tooling
   feedback.
-
-## Historical Seeds
-
-- `~/share/yatu/managed-agent-relationship-cli-20260426T011838`
-- `~/share/yatu/latest-dev-smoke-20260425T224428Z`
-- `~/share/yatu/codex-run-two-mycel-agents-20260425T223206Z`
-
