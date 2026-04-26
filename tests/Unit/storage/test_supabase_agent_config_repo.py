@@ -380,93 +380,80 @@ def test_save_agent_config_calls_single_rpc_with_full_payload() -> None:
     assert "runtime_" + "settings_json" not in payload
 
 
-def test_save_agent_config_rejects_duplicate_skill_ids_before_rpc() -> None:
+@pytest.mark.parametrize(
+    ("config", "message"),
+    [
+        (
+            AgentConfig(
+                id="cfg-1",
+                owner_user_id="owner-1",
+                agent_user_id="agent-1",
+                name="Researcher",
+                version="1.0.0",
+                skills=[
+                    AgentSkill(skill_id="github", package_id="package-1"),
+                    AgentSkill(skill_id="github", package_id="package-2"),
+                ],
+            ),
+            "Duplicate Skill id in AgentConfig: github",
+        ),
+        (
+            AgentConfig(
+                id="cfg-1",
+                owner_user_id="owner-1",
+                agent_user_id="agent-1",
+                name="Researcher",
+                version="1.0.0",
+                mcp_servers=[
+                    McpServerConfig(name="filesystem", transport="stdio", command="fs-one"),
+                    McpServerConfig(name="filesystem", transport="stdio", command="fs-two"),
+                ],
+            ),
+            "Duplicate MCP server name in AgentConfig: filesystem",
+        ),
+        (
+            AgentConfig(
+                id="cfg-1",
+                owner_user_id="owner-1",
+                agent_user_id="agent-1",
+                name="Researcher",
+                version="1.0.0",
+                skills=[
+                    AgentSkill(skill_id="github", package_id="package-1", enabled=False),
+                    AgentSkill(skill_id="github", package_id="package-2", enabled=False),
+                ],
+                mcp_servers=[
+                    McpServerConfig(name="filesystem", transport="stdio", command="fs-one", enabled=False),
+                    McpServerConfig(name="filesystem", transport="stdio", command="fs-two", enabled=False),
+                ],
+            ),
+            "Duplicate Skill id in AgentConfig: github",
+        ),
+        (
+            AgentConfig(
+                id="cfg-1",
+                owner_user_id="owner-1",
+                agent_user_id="agent-1",
+                name="Researcher",
+                version="1.0.0",
+                rules=[
+                    AgentRule(name="coding", content="one"),
+                    AgentRule(name="coding", content="two"),
+                ],
+                sub_agents=[
+                    AgentSubAgent(name="Scout"),
+                    AgentSubAgent(name="Scout"),
+                ],
+            ),
+            "Duplicate Rule name in AgentConfig: coding",
+        ),
+    ],
+)
+def test_save_agent_config_rejects_duplicate_child_names_before_rpc(config: AgentConfig, message: str) -> None:
     client = _FakeClient()
     repo = SupabaseAgentConfigRepo(client)
-    config = AgentConfig(
-        id="cfg-1",
-        owner_user_id="owner-1",
-        agent_user_id="agent-1",
-        name="Researcher",
-        version="1.0.0",
-        skills=[
-            AgentSkill(skill_id="github", package_id="package-1"),
-            AgentSkill(skill_id="github", package_id="package-2"),
-        ],
-    )
 
-    with pytest.raises(ValueError, match="Duplicate Skill id in AgentConfig: github"):
-        repo.save_agent_config(config)
-
-    assert client.rpc_calls == []
-
-
-def test_save_agent_config_rejects_duplicate_mcp_server_names_before_rpc() -> None:
-    client = _FakeClient()
-    repo = SupabaseAgentConfigRepo(client)
-    config = AgentConfig(
-        id="cfg-1",
-        owner_user_id="owner-1",
-        agent_user_id="agent-1",
-        name="Researcher",
-        version="1.0.0",
-        mcp_servers=[
-            McpServerConfig(name="filesystem", transport="stdio", command="fs-one"),
-            McpServerConfig(name="filesystem", transport="stdio", command="fs-two"),
-        ],
-    )
-
-    with pytest.raises(ValueError, match="Duplicate MCP server name in AgentConfig: filesystem"):
-        repo.save_agent_config(config)
-
-    assert client.rpc_calls == []
-
-
-def test_save_agent_config_rejects_duplicate_inactive_child_names_before_rpc() -> None:
-    client = _FakeClient()
-    repo = SupabaseAgentConfigRepo(client)
-    config = AgentConfig(
-        id="cfg-1",
-        owner_user_id="owner-1",
-        agent_user_id="agent-1",
-        name="Researcher",
-        version="1.0.0",
-        skills=[
-            AgentSkill(skill_id="github", package_id="package-1", enabled=False),
-            AgentSkill(skill_id="github", package_id="package-2", enabled=False),
-        ],
-        mcp_servers=[
-            McpServerConfig(name="filesystem", transport="stdio", command="fs-one", enabled=False),
-            McpServerConfig(name="filesystem", transport="stdio", command="fs-two", enabled=False),
-        ],
-    )
-
-    with pytest.raises(ValueError, match="Duplicate Skill id in AgentConfig: github"):
-        repo.save_agent_config(config)
-
-    assert client.rpc_calls == []
-
-
-def test_save_agent_config_rejects_duplicate_rule_and_sub_agent_names_before_rpc() -> None:
-    client = _FakeClient()
-    repo = SupabaseAgentConfigRepo(client)
-    config = AgentConfig(
-        id="cfg-1",
-        owner_user_id="owner-1",
-        agent_user_id="agent-1",
-        name="Researcher",
-        version="1.0.0",
-        rules=[
-            AgentRule(name="coding", content="one"),
-            AgentRule(name="coding", content="two"),
-        ],
-        sub_agents=[
-            AgentSubAgent(name="Scout"),
-            AgentSubAgent(name="Scout"),
-        ],
-    )
-
-    with pytest.raises(ValueError, match="Duplicate Rule name in AgentConfig: coding"):
+    with pytest.raises(ValueError, match=message):
         repo.save_agent_config(config)
 
     assert client.rpc_calls == []
