@@ -224,111 +224,64 @@ def test_get_agent_config_preserves_empty_tool_list() -> None:
     assert config.tools == []
 
 
-def test_get_agent_config_fails_loudly_when_description_is_null() -> None:
+@pytest.mark.parametrize(
+    ("table_name", "field", "value", "message"),
+    [
+        ("agent.agent_configs", "description", None, "agent_configs description must be text"),
+        ("agent.agent_configs", "system_prompt", None, "agent_configs system_prompt must be text"),
+        ("agent.agent_configs", "status", None, "agent_configs status must be text"),
+        ("agent.agent_configs", "version", None, "agent_configs version must be text"),
+        ("agent.agent_configs", "tools_json", {"Read": True}, "tools_json must be a JSON array"),
+        ("agent.agent_configs", "tools_json", None, "tools_json must be a JSON array"),
+        ("agent.agent_configs", "runtime_json", [], "runtime_json must be a JSON object"),
+        ("agent.agent_configs", "runtime_json", None, "runtime_json must be a JSON object"),
+        ("agent.agent_configs", "compact_json", [], "compact_json must be a JSON object"),
+        ("agent.agent_configs", "compact_json", None, "compact_json must be a JSON object"),
+        ("agent.agent_configs", "meta_json", [], "meta_json must be a JSON object"),
+        ("agent.agent_configs", "meta_json", None, "meta_json must be a JSON object"),
+        ("agent.agent_configs", "mcp_json", {"filesystem": {"command": "fs"}}, "mcp_json must be a JSON array"),
+        ("agent.agent_configs", "mcp_json", None, "mcp_json must be a JSON array"),
+        ("agent.agent_configs", "mcp_json", {}, "mcp_json must be a JSON array"),
+        (
+            "agent.agent_configs",
+            "mcp_json",
+            [{"name": "filesystem", "transport": "stdio", "command": "fs", "disabled": False}],
+            "mcp_json items must use enabled",
+        ),
+        (
+            "agent.agent_configs",
+            "mcp_json",
+            [{"name": "filesystem", "transport": "stdio", "command": "fs", "enabled": "false"}],
+            "mcp_json item enabled must be a boolean",
+        ),
+        (
+            "agent.agent_configs",
+            "mcp_json",
+            [{"name": "filesystem", "transport": "stdio", "command": "fs", "args": {"root": "."}}],
+            "mcp_json item args must be a JSON array",
+        ),
+        (
+            "agent.agent_configs",
+            "mcp_json",
+            [{"name": "filesystem", "transport": "stdio", "command": "fs", "env": ["A=B"]}],
+            "mcp_json item env must be a JSON object",
+        ),
+        ("agent.skill_bindings", "enabled", "false", "skill_bindings enabled must be a boolean"),
+        ("agent.agent_rules", "name", None, "agent_rules name must be text"),
+        ("agent.agent_rules", "content", None, "agent_rules content must be text"),
+        ("agent.agent_rules", "enabled", "false", "agent_rules enabled must be a boolean"),
+        ("agent.agent_sub_agents", "tools_json", {"Read": True}, "agent_sub_agents tools_json must be a JSON array"),
+        ("agent.agent_sub_agents", "description", None, "agent_sub_agents description must be text"),
+        ("agent.agent_sub_agents", "system_prompt", None, "agent_sub_agents system_prompt must be text"),
+        ("agent.agent_sub_agents", "enabled", "false", "agent_sub_agents enabled must be a boolean"),
+    ],
+)
+def test_get_agent_config_fails_loudly_for_invalid_table_values(table_name: str, field: str, value: object, message: str) -> None:
     tables = _tables()
-    tables["agent.agent_configs"][0]["description"] = None
+    tables[table_name][0][field] = value
     repo = SupabaseAgentConfigRepo(_FakeClient(tables))
 
-    with pytest.raises(RuntimeError, match="agent_configs description must be text"):
-        repo.get_agent_config("cfg-1")
-
-
-def test_get_agent_config_fails_loudly_when_system_prompt_is_null() -> None:
-    tables = _tables()
-    tables["agent.agent_configs"][0]["system_prompt"] = None
-    repo = SupabaseAgentConfigRepo(_FakeClient(tables))
-
-    with pytest.raises(RuntimeError, match="agent_configs system_prompt must be text"):
-        repo.get_agent_config("cfg-1")
-
-
-def test_get_agent_config_fails_loudly_when_status_is_null() -> None:
-    tables = _tables()
-    tables["agent.agent_configs"][0]["status"] = None
-    repo = SupabaseAgentConfigRepo(_FakeClient(tables))
-
-    with pytest.raises(RuntimeError, match="agent_configs status must be text"):
-        repo.get_agent_config("cfg-1")
-
-
-def test_get_agent_config_fails_loudly_when_version_is_null() -> None:
-    tables = _tables()
-    tables["agent.agent_configs"][0]["version"] = None
-    repo = SupabaseAgentConfigRepo(_FakeClient(tables))
-
-    with pytest.raises(RuntimeError, match="agent_configs version must be text"):
-        repo.get_agent_config("cfg-1")
-
-
-def test_get_agent_config_fails_loudly_when_tools_json_is_not_an_array() -> None:
-    tables = _tables()
-    tables["agent.agent_configs"][0]["tools_json"] = {"Read": True}
-    repo = SupabaseAgentConfigRepo(_FakeClient(tables))
-
-    with pytest.raises(RuntimeError, match="tools_json must be a JSON array"):
-        repo.get_agent_config("cfg-1")
-
-
-def test_get_agent_config_fails_loudly_when_tools_json_is_null() -> None:
-    tables = _tables()
-    tables["agent.agent_configs"][0]["tools_json"] = None
-    repo = SupabaseAgentConfigRepo(_FakeClient(tables))
-
-    with pytest.raises(RuntimeError, match="tools_json must be a JSON array"):
-        repo.get_agent_config("cfg-1")
-
-
-def test_get_agent_config_fails_loudly_when_runtime_json_is_not_an_object() -> None:
-    tables = _tables()
-    tables["agent.agent_configs"][0]["runtime_json"] = []
-    repo = SupabaseAgentConfigRepo(_FakeClient(tables))
-
-    with pytest.raises(RuntimeError, match="runtime_json must be a JSON object"):
-        repo.get_agent_config("cfg-1")
-
-
-def test_get_agent_config_fails_loudly_when_runtime_json_is_null() -> None:
-    tables = _tables()
-    tables["agent.agent_configs"][0]["runtime_json"] = None
-    repo = SupabaseAgentConfigRepo(_FakeClient(tables))
-
-    with pytest.raises(RuntimeError, match="runtime_json must be a JSON object"):
-        repo.get_agent_config("cfg-1")
-
-
-def test_get_agent_config_fails_loudly_when_compact_json_is_not_an_object() -> None:
-    tables = _tables()
-    tables["agent.agent_configs"][0]["compact_json"] = []
-    repo = SupabaseAgentConfigRepo(_FakeClient(tables))
-
-    with pytest.raises(RuntimeError, match="compact_json must be a JSON object"):
-        repo.get_agent_config("cfg-1")
-
-
-def test_get_agent_config_fails_loudly_when_compact_json_is_null() -> None:
-    tables = _tables()
-    tables["agent.agent_configs"][0]["compact_json"] = None
-    repo = SupabaseAgentConfigRepo(_FakeClient(tables))
-
-    with pytest.raises(RuntimeError, match="compact_json must be a JSON object"):
-        repo.get_agent_config("cfg-1")
-
-
-def test_get_agent_config_fails_loudly_when_meta_json_is_not_an_object() -> None:
-    tables = _tables()
-    tables["agent.agent_configs"][0]["meta_json"] = []
-    repo = SupabaseAgentConfigRepo(_FakeClient(tables))
-
-    with pytest.raises(RuntimeError, match="meta_json must be a JSON object"):
-        repo.get_agent_config("cfg-1")
-
-
-def test_get_agent_config_fails_loudly_when_meta_json_is_null() -> None:
-    tables = _tables()
-    tables["agent.agent_configs"][0]["meta_json"] = None
-    repo = SupabaseAgentConfigRepo(_FakeClient(tables))
-
-    with pytest.raises(RuntimeError, match="meta_json must be a JSON object"):
+    with pytest.raises(RuntimeError, match=message):
         repo.get_agent_config("cfg-1")
 
 
@@ -384,141 +337,6 @@ def test_get_agent_config_does_not_read_skill_description() -> None:
 
     assert config is not None
     assert "description" not in config.skills[0].model_dump()
-
-
-def test_get_agent_config_fails_loudly_when_sub_agent_tools_json_is_not_an_array() -> None:
-    tables = _tables()
-    tables["agent.agent_sub_agents"][0]["tools_json"] = {"Read": True}
-    repo = SupabaseAgentConfigRepo(_FakeClient(tables))
-
-    with pytest.raises(RuntimeError, match="agent_sub_agents tools_json must be a JSON array"):
-        repo.get_agent_config("cfg-1")
-
-
-def test_get_agent_config_fails_loudly_when_sub_agent_description_is_null() -> None:
-    tables = _tables()
-    tables["agent.agent_sub_agents"][0]["description"] = None
-    repo = SupabaseAgentConfigRepo(_FakeClient(tables))
-
-    with pytest.raises(RuntimeError, match="agent_sub_agents description must be text"):
-        repo.get_agent_config("cfg-1")
-
-
-def test_get_agent_config_fails_loudly_when_sub_agent_system_prompt_is_null() -> None:
-    tables = _tables()
-    tables["agent.agent_sub_agents"][0]["system_prompt"] = None
-    repo = SupabaseAgentConfigRepo(_FakeClient(tables))
-
-    with pytest.raises(RuntimeError, match="agent_sub_agents system_prompt must be text"):
-        repo.get_agent_config("cfg-1")
-
-
-def test_get_agent_config_fails_loudly_when_rule_name_is_null() -> None:
-    tables = _tables()
-    tables["agent.agent_rules"][0]["name"] = None
-    repo = SupabaseAgentConfigRepo(_FakeClient(tables))
-
-    with pytest.raises(RuntimeError, match="agent_rules name must be text"):
-        repo.get_agent_config("cfg-1")
-
-
-def test_get_agent_config_fails_loudly_when_rule_content_is_null() -> None:
-    tables = _tables()
-    tables["agent.agent_rules"][0]["content"] = None
-    repo = SupabaseAgentConfigRepo(_FakeClient(tables))
-
-    with pytest.raises(RuntimeError, match="agent_rules content must be text"):
-        repo.get_agent_config("cfg-1")
-
-
-def test_get_agent_config_fails_loudly_when_mcp_json_is_not_an_array() -> None:
-    tables = _tables()
-    tables["agent.agent_configs"][0]["mcp_json"] = {"filesystem": {"command": "fs"}}
-    repo = SupabaseAgentConfigRepo(_FakeClient(tables))
-
-    with pytest.raises(RuntimeError, match="mcp_json must be a JSON array"):
-        repo.get_agent_config("cfg-1")
-
-
-def test_get_agent_config_fails_loudly_when_mcp_json_is_null() -> None:
-    tables = _tables()
-    tables["agent.agent_configs"][0]["mcp_json"] = None
-    repo = SupabaseAgentConfigRepo(_FakeClient(tables))
-
-    with pytest.raises(RuntimeError, match="mcp_json must be a JSON array"):
-        repo.get_agent_config("cfg-1")
-
-
-def test_get_agent_config_fails_loudly_when_mcp_json_is_empty_object() -> None:
-    tables = _tables()
-    tables["agent.agent_configs"][0]["mcp_json"] = {}
-    repo = SupabaseAgentConfigRepo(_FakeClient(tables))
-
-    with pytest.raises(RuntimeError, match="mcp_json must be a JSON array"):
-        repo.get_agent_config("cfg-1")
-
-
-def test_get_agent_config_fails_loudly_when_mcp_json_uses_reverse_state() -> None:
-    tables = _tables()
-    tables["agent.agent_configs"][0]["mcp_json"] = [{"name": "filesystem", "transport": "stdio", "command": "fs", "disabled": False}]
-    repo = SupabaseAgentConfigRepo(_FakeClient(tables))
-
-    with pytest.raises(RuntimeError, match="mcp_json items must use enabled"):
-        repo.get_agent_config("cfg-1")
-
-
-def test_get_agent_config_fails_loudly_when_mcp_json_enabled_is_not_boolean() -> None:
-    tables = _tables()
-    tables["agent.agent_configs"][0]["mcp_json"] = [{"name": "filesystem", "transport": "stdio", "command": "fs", "enabled": "false"}]
-    repo = SupabaseAgentConfigRepo(_FakeClient(tables))
-
-    with pytest.raises(RuntimeError, match="mcp_json item enabled must be a boolean"):
-        repo.get_agent_config("cfg-1")
-
-
-def test_get_agent_config_fails_loudly_when_mcp_args_is_not_an_array() -> None:
-    tables = _tables()
-    tables["agent.agent_configs"][0]["mcp_json"] = [{"name": "filesystem", "transport": "stdio", "command": "fs", "args": {"root": "."}}]
-    repo = SupabaseAgentConfigRepo(_FakeClient(tables))
-
-    with pytest.raises(RuntimeError, match="mcp_json item args must be a JSON array"):
-        repo.get_agent_config("cfg-1")
-
-
-def test_get_agent_config_fails_loudly_when_mcp_env_is_not_an_object() -> None:
-    tables = _tables()
-    tables["agent.agent_configs"][0]["mcp_json"] = [{"name": "filesystem", "transport": "stdio", "command": "fs", "env": ["A=B"]}]
-    repo = SupabaseAgentConfigRepo(_FakeClient(tables))
-
-    with pytest.raises(RuntimeError, match="mcp_json item env must be a JSON object"):
-        repo.get_agent_config("cfg-1")
-
-
-def test_get_agent_config_fails_loudly_when_skill_binding_enabled_is_not_boolean() -> None:
-    tables = _tables()
-    tables["agent.skill_bindings"][0]["enabled"] = "false"
-    repo = SupabaseAgentConfigRepo(_FakeClient(tables))
-
-    with pytest.raises(RuntimeError, match="skill_bindings enabled must be a boolean"):
-        repo.get_agent_config("cfg-1")
-
-
-def test_get_agent_config_fails_loudly_when_rule_enabled_is_not_boolean() -> None:
-    tables = _tables()
-    tables["agent.agent_rules"][0]["enabled"] = "false"
-    repo = SupabaseAgentConfigRepo(_FakeClient(tables))
-
-    with pytest.raises(RuntimeError, match="agent_rules enabled must be a boolean"):
-        repo.get_agent_config("cfg-1")
-
-
-def test_get_agent_config_fails_loudly_when_sub_agent_enabled_is_not_boolean() -> None:
-    tables = _tables()
-    tables["agent.agent_sub_agents"][0]["enabled"] = "false"
-    repo = SupabaseAgentConfigRepo(_FakeClient(tables))
-
-    with pytest.raises(RuntimeError, match="agent_sub_agents enabled must be a boolean"):
-        repo.get_agent_config("cfg-1")
 
 
 def test_save_agent_config_calls_single_rpc_with_full_payload() -> None:
