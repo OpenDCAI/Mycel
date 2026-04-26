@@ -3,7 +3,7 @@ from pathlib import Path
 
 
 def test_agent_config_schema_uses_library_package_storage() -> None:
-    sql = Path("storage/schema/2026_04_24_agent_config_resolved_config_hardcut.sql").read_text(encoding="utf-8")
+    sql = Path("storage/schema/agent_config_resolved_config_hardcut.sql").read_text(encoding="utf-8")
 
     assert "create schema if not exists library" in sql
     assert "create table if not exists library.skills" in sql
@@ -32,7 +32,7 @@ def test_agent_config_schema_uses_library_package_storage() -> None:
 
 
 def test_skill_package_schema_separates_row_id_from_content_hash() -> None:
-    sql = Path("storage/schema/2026_04_24_agent_config_resolved_config_hardcut.sql").read_text(encoding="utf-8")
+    sql = Path("storage/schema/agent_config_resolved_config_hardcut.sql").read_text(encoding="utf-8")
 
     assert "skill_packages_hash_format_ck" in sql
     assert "hash like 'sha256:%'" in sql
@@ -43,7 +43,7 @@ def test_skill_package_schema_separates_row_id_from_content_hash() -> None:
 
 
 def test_skill_package_unique_constraints_are_added_without_breaking_dependents() -> None:
-    sql = Path("storage/schema/2026_04_24_agent_config_resolved_config_hardcut.sql").read_text(encoding="utf-8")
+    sql = Path("storage/schema/agent_config_resolved_config_hardcut.sql").read_text(encoding="utf-8")
 
     package_backfill = re.search(
         r"if not exists \(.*?skill_packages_owner_user_id_skill_id_id_key.*?end if;.*?"
@@ -57,7 +57,7 @@ def test_skill_package_unique_constraints_are_added_without_breaking_dependents(
 
 
 def test_agent_skill_binding_package_fk_does_not_silently_delete_agent_selection() -> None:
-    sql = Path("storage/schema/2026_04_24_agent_config_resolved_config_hardcut.sql").read_text(encoding="utf-8")
+    sql = Path("storage/schema/agent_config_resolved_config_hardcut.sql").read_text(encoding="utf-8")
 
     binding_table = re.search(
         r"create table if not exists agent\.skill_bindings \((?P<body>.*?)\);",
@@ -74,7 +74,7 @@ def test_agent_skill_binding_package_fk_does_not_silently_delete_agent_selection
 
 
 def test_agent_config_schema_rejects_duplicate_child_names_inside_rpc() -> None:
-    sql = Path("storage/schema/2026_04_24_agent_config_resolved_config_hardcut.sql").read_text(encoding="utf-8")
+    sql = Path("storage/schema/agent_config_resolved_config_hardcut.sql").read_text(encoding="utf-8")
 
     assert "agent_config.name is required" in sql
     assert "agent_config.version is required" in sql
@@ -104,7 +104,7 @@ def test_agent_config_schema_rejects_duplicate_child_names_inside_rpc() -> None:
 
 
 def test_agent_config_schema_requires_enabled_direction_for_skill_and_mcp_state() -> None:
-    sql = Path("storage/schema/2026_04_24_agent_config_resolved_config_hardcut.sql").read_text(encoding="utf-8")
+    sql = Path("storage/schema/agent_config_resolved_config_hardcut.sql").read_text(encoding="utf-8")
 
     assert "agent_config.skills child state must use enabled" in sql
     assert "agent_config.mcp_servers child state must use enabled" in sql
@@ -117,7 +117,7 @@ def test_agent_config_schema_requires_enabled_direction_for_skill_and_mcp_state(
 
 
 def test_agent_config_schema_does_not_convert_object_mcp_json() -> None:
-    sql = Path("storage/schema/2026_04_24_agent_config_resolved_config_hardcut.sql").read_text(encoding="utf-8")
+    sql = Path("storage/schema/agent_config_resolved_config_hardcut.sql").read_text(encoding="utf-8")
 
     assert "agent.agent_configs.mcp_json must be a JSON array before hard cut" in sql
     assert "alter column mcp_json set default '[]'::jsonb" in sql
@@ -129,7 +129,7 @@ def test_agent_config_schema_does_not_convert_object_mcp_json() -> None:
 
 
 def test_agent_config_schema_constrains_named_child_tables() -> None:
-    sql = Path("storage/schema/2026_04_24_agent_config_resolved_config_hardcut.sql").read_text(encoding="utf-8")
+    sql = Path("storage/schema/agent_config_resolved_config_hardcut.sql").read_text(encoding="utf-8")
 
     assert "agent_rules_config_name_uq" in sql
     assert "agent_sub_agents_config_name_uq" in sql
@@ -138,7 +138,7 @@ def test_agent_config_schema_constrains_named_child_tables() -> None:
 
 
 def test_agent_config_schema_constrains_root_identity_fields() -> None:
-    sql = Path("storage/schema/2026_04_24_agent_config_resolved_config_hardcut.sql").read_text(encoding="utf-8")
+    sql = Path("storage/schema/agent_config_resolved_config_hardcut.sql").read_text(encoding="utf-8")
 
     assert "library.skills.source_json must be a JSON object before hard cut" in sql
     assert "library.skills.description must be present before hard cut" in sql

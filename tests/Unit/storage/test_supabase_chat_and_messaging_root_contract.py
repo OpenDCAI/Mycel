@@ -89,7 +89,7 @@ def test_supabase_contact_and_relationship_repos_use_chat_schema() -> None:
 
 
 def test_relationship_schema_constraint_does_not_depend_on_database_collation() -> None:
-    sql = Path("storage/schema/2026_04_25_relationship_pair_constraint.sql").read_text()
+    sql = Path("storage/schema/relationship_pair_constraint.sql").read_text()
 
     assert "drop constraint if exists relationships_check" in sql.lower()
     assert "user_low <> user_high" in sql.lower()
