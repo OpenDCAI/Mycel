@@ -1129,6 +1129,23 @@ def test_library_skill_create_requires_version_frontmatter() -> None:
     assert skill_repo.packages == {}
 
 
+def test_library_skill_create_requires_description_frontmatter() -> None:
+    skill_repo = _MemorySkillRepo()
+
+    with pytest.raises(ValueError, match="frontmatter must include description"):
+        library_service.create_resource(
+            "skill",
+            "Loadable Skill",
+            "Use this skill",
+            owner_user_id="owner-1",
+            skill_repo=skill_repo,
+            content="---\nname: Loadable Skill\nversion: 1.0.0\n---\n\nUse this skill.",
+        )
+
+    assert skill_repo.skills == {}
+    assert skill_repo.packages == {}
+
+
 def test_library_skill_content_update_requires_version_frontmatter() -> None:
     skill_repo = _MemorySkillRepo()
     created = library_service.create_resource(
@@ -1145,6 +1162,31 @@ def test_library_skill_content_update_requires_version_frontmatter() -> None:
             "skill",
             created["id"],
             "---\nname: Loadable Skill\ndescription: Use this skill\n---\n\nUse it.",
+            owner_user_id="owner-1",
+            skill_repo=skill_repo,
+        )
+
+    stored = skill_repo.get_by_id("owner-1", created["id"])
+    assert stored is not None and stored.package_id is not None
+    assert skill_repo.get_package("owner-1", stored.package_id).version == "1.0.0"
+
+
+def test_library_skill_content_update_requires_description_frontmatter() -> None:
+    skill_repo = _MemorySkillRepo()
+    created = library_service.create_resource(
+        "skill",
+        "Loadable Skill",
+        "Use this skill",
+        owner_user_id="owner-1",
+        skill_repo=skill_repo,
+        content=_editable_skill_md(),
+    )
+
+    with pytest.raises(ValueError, match="frontmatter must include description"):
+        library_service.update_resource_content(
+            "skill",
+            created["id"],
+            "---\nname: Loadable Skill\nversion: 1.0.1\n---\n\nUse it.",
             owner_user_id="owner-1",
             skill_repo=skill_repo,
         )

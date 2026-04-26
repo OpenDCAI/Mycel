@@ -70,7 +70,7 @@ def _require_skill_repo(skill_repo: SkillRepo | None) -> SkillRepo:
 
 def _skill_document_from_content(content: str, *, require_version: bool = False) -> SkillDocument:
     # @@@skill-name-single-truth - runtime indexes Skills by SKILL.md frontmatter name, so Library name must not drift.
-    return parse_skill_document(content, label="Skill content", require_version=require_version)
+    return parse_skill_document(content, label="Skill content", require_description=True, require_version=require_version)
 
 
 def _now_dt() -> datetime:
