@@ -55,7 +55,9 @@ Pass bar:
 
 ## Historical Seeds
 
+- `~/share/yatu/debate-tournament-cli-20260426T-fanout-race-fix-v4/summary.md`
 - `$MYCEL_WORKSPACE/notes/2026-04-25-sdk-yatu-16-agent-debate-tournament-plan.html`
 - `$MYCEL_WORKSPACE/notes/2026-04-26-16-agent-debate-yatu-findings.html`
-- `~/share/yatu/sdk-guess-average-workflow-20260425T230405Z`
-- `~/share/yatu/debate-tournament-cli-20260426T200308-mute-control`
+- `~/share/yatu/sdk-guess-average-workflow-20260425T230405Z/summary.md`
+- `~/share/yatu/debate-tournament-cli-20260426T0333/summary.md`
+- `~/share/yatu/debate-tournament-cli-20260426T200308-mute-control/summary.md`
