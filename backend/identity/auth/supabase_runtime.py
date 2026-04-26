@@ -6,6 +6,8 @@ import httpx
 from supabase import ClientOptions, create_client
 from supabase_auth._sync.gotrue_client import SyncGoTrueClient
 
+from backend.identity.auth.http_policy import supabase_http_client
+
 
 def _resolve_supabase_url() -> str:
     url = os.getenv("SUPABASE_INTERNAL_URL") or os.getenv("SUPABASE_PUBLIC_URL")
@@ -24,7 +26,7 @@ def _create_storage_client(*, schema: str):
     if not key:
         raise RuntimeError("LEON_SUPABASE_SERVICE_ROLE_KEY is required for Supabase storage runtime.")
     timeout = httpx.Timeout(30.0, connect=10.0)
-    http_client = httpx.Client(timeout=timeout, trust_env=False)
+    http_client = supabase_http_client(timeout=timeout)
     return create_client(url, key, options=ClientOptions(httpx_client=http_client, schema=schema))
 
 
@@ -45,7 +47,7 @@ def create_supabase_auth_client():
     if not key:
         raise RuntimeError("SUPABASE_ANON_KEY is required for Supabase auth runtime.")
     timeout = httpx.Timeout(30.0, connect=10.0)
-    http_client = httpx.Client(timeout=timeout, trust_env=False)
+    http_client = supabase_http_client(timeout=timeout)
     auth_url = os.getenv("SUPABASE_AUTH_URL")
     if auth_url:
         # @@@direct-gotrue - local auth may bypass Kong and hit GoTrue directly at /token.
