@@ -10,16 +10,18 @@ from backend.chat.api.http.runtime_inbox_router import drain_runtime_inbox_items
 def test_drain_runtime_inbox_items_returns_metadata_and_clears_external_queue() -> None:
     drained_keys: list[str] = []
     queue_manager = SimpleNamespace(
-        drain_all=lambda key: drained_keys.append(key)
-        or [
-            SimpleNamespace(
-                content='{"event_type":"chat.message","chat_id":"chat-1","sender_name":"Human","summary":"New message"}',
-                notification_type="chat",
-                source="external",
-                sender_id="human-user-1",
-                sender_name="Human",
-            )
-        ]
+        drain_all=lambda key: (
+            drained_keys.append(key)
+            or [
+                SimpleNamespace(
+                    content='{"event_type":"chat.message","chat_id":"chat-1","sender_name":"Human","summary":"New message"}',
+                    notification_type="chat",
+                    source="external",
+                    sender_id="human-user-1",
+                    sender_name="Human",
+                )
+            ]
+        )
     )
 
     result = drain_runtime_inbox_items("external-user-1", queue_manager)
