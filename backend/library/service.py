@@ -73,6 +73,11 @@ def _skill_document_from_content(content: str, *, require_version: bool = False)
     return parse_skill_document(content, label="Skill content", require_description=True, require_version=require_version)
 
 
+def _reject_skill_description_argument(desc: str) -> None:
+    if desc != "":
+        raise ValueError("Skill description must be declared in SKILL.md frontmatter")
+
+
 def _now_dt() -> datetime:
     return datetime.now(UTC)
 
@@ -242,6 +247,7 @@ def create_resource(
     if resource_type == "skill":
         owner_user_id = _require_skill_owner(owner_user_id)
         skill_repo = _require_skill_repo(skill_repo)
+        _reject_skill_description_argument(desc)
         if not content or not content.strip():
             raise ValueError("Skill creation requires SKILL.md content")
         document = _skill_document_from_content(content, require_version=True)

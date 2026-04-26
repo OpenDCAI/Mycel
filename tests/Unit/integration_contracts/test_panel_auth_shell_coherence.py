@@ -1139,7 +1139,7 @@ def test_library_skill_content_update_rejects_frontmatter_name_drift() -> None:
     created = library_service.create_resource(
         "skill",
         "Loadable Skill",
-        "Use this skill",
+        "",
         owner_user_id="owner-1",
         skill_repo=skill_repo,
         content=_editable_skill_md(),
@@ -1166,7 +1166,7 @@ def test_library_skill_create_requires_version_frontmatter() -> None:
         library_service.create_resource(
             "skill",
             "Loadable Skill",
-            "Use this skill",
+            "",
             owner_user_id="owner-1",
             skill_repo=skill_repo,
             content="---\nname: Loadable Skill\ndescription: Use this skill\n---\n\nUse this skill.",
@@ -1183,7 +1183,7 @@ def test_library_skill_create_requires_description_frontmatter() -> None:
         library_service.create_resource(
             "skill",
             "Loadable Skill",
-            "Use this skill",
+            "",
             owner_user_id="owner-1",
             skill_repo=skill_repo,
             content="---\nname: Loadable Skill\nversion: 1.0.0\n---\n\nUse this skill.",
@@ -1198,7 +1198,7 @@ def test_library_skill_content_update_requires_version_frontmatter() -> None:
     created = library_service.create_resource(
         "skill",
         "Loadable Skill",
-        "Use this skill",
+        "",
         owner_user_id="owner-1",
         skill_repo=skill_repo,
         content=_editable_skill_md(),
@@ -1223,7 +1223,7 @@ def test_library_skill_content_update_requires_description_frontmatter() -> None
     created = library_service.create_resource(
         "skill",
         "Loadable Skill",
-        "Use this skill",
+        "",
         owner_user_id="owner-1",
         skill_repo=skill_repo,
         content=_editable_skill_md(),
@@ -1248,7 +1248,7 @@ def test_library_skill_name_is_immutable_after_creation() -> None:
     created = library_service.create_resource(
         "skill",
         "Loadable Skill",
-        "Use this skill",
+        "",
         owner_user_id="owner-1",
         skill_repo=skill_repo,
         content=_editable_skill_md(),
@@ -1272,7 +1272,7 @@ def test_library_skill_description_comes_from_skill_md_frontmatter() -> None:
     created = library_service.create_resource(
         "skill",
         "Loadable Skill",
-        "Caller desc",
+        "",
         owner_user_id="owner-1",
         skill_repo=skill_repo,
         content=_editable_skill_md(description="Frontmatter desc"),
@@ -1284,12 +1284,80 @@ def test_library_skill_description_comes_from_skill_md_frontmatter() -> None:
     assert stored.description == "Frontmatter desc"
 
 
+def test_library_skill_create_rejects_separate_description() -> None:
+    skill_repo = _MemorySkillRepo()
+
+    with pytest.raises(ValueError, match="Skill description must be declared in SKILL.md frontmatter"):
+        library_service.create_resource(
+            "skill",
+            "Loadable Skill",
+            "Caller desc",
+            owner_user_id="owner-1",
+            skill_repo=skill_repo,
+            content=_editable_skill_md(description="Frontmatter desc"),
+        )
+
+    assert skill_repo.skills == {}
+    assert skill_repo.packages == {}
+
+
+def test_library_skill_create_rejects_blank_separate_description() -> None:
+    skill_repo = _MemorySkillRepo()
+
+    with pytest.raises(ValueError, match="Skill description must be declared in SKILL.md frontmatter"):
+        library_service.create_resource(
+            "skill",
+            "Loadable Skill",
+            "   ",
+            owner_user_id="owner-1",
+            skill_repo=skill_repo,
+            content=_editable_skill_md(description="Frontmatter desc"),
+        )
+
+    assert skill_repo.skills == {}
+    assert skill_repo.packages == {}
+
+
+def test_library_skill_create_rejects_newline_separate_description() -> None:
+    skill_repo = _MemorySkillRepo()
+
+    with pytest.raises(ValueError, match="Skill description must be declared in SKILL.md frontmatter"):
+        library_service.create_resource(
+            "skill",
+            "Loadable Skill",
+            "\n",
+            owner_user_id="owner-1",
+            skill_repo=skill_repo,
+            content=_editable_skill_md(description="Frontmatter desc"),
+        )
+
+    assert skill_repo.skills == {}
+    assert skill_repo.packages == {}
+
+
+def test_library_skill_create_rejects_matching_separate_description() -> None:
+    skill_repo = _MemorySkillRepo()
+
+    with pytest.raises(ValueError, match="Skill description must be declared in SKILL.md frontmatter"):
+        library_service.create_resource(
+            "skill",
+            "Loadable Skill",
+            "Frontmatter desc",
+            owner_user_id="owner-1",
+            skill_repo=skill_repo,
+            content=_editable_skill_md(description="Frontmatter desc"),
+        )
+
+    assert skill_repo.skills == {}
+    assert skill_repo.packages == {}
+
+
 def test_library_skill_content_update_refreshes_description_from_skill_md() -> None:
     skill_repo = _MemorySkillRepo()
     created = library_service.create_resource(
         "skill",
         "Loadable Skill",
-        "Caller desc",
+        "",
         owner_user_id="owner-1",
         skill_repo=skill_repo,
         content=_editable_skill_md(description="Original desc"),
@@ -1313,7 +1381,7 @@ def test_library_skill_description_cannot_be_updated_without_skill_md() -> None:
     created = library_service.create_resource(
         "skill",
         "Loadable Skill",
-        "Caller desc",
+        "",
         owner_user_id="owner-1",
         skill_repo=skill_repo,
         content=_editable_skill_md(description="Frontmatter desc"),
@@ -1336,7 +1404,7 @@ def test_library_skill_create_rejects_duplicate_name_before_write() -> None:
     created = library_service.create_resource(
         "skill",
         "Loadable Skill",
-        "Use this skill",
+        "",
         owner_user_id="owner-1",
         skill_repo=skill_repo,
         content=_editable_skill_md(),
@@ -1346,7 +1414,7 @@ def test_library_skill_create_rejects_duplicate_name_before_write() -> None:
         library_service.create_resource(
             "skill",
             "Loadable Skill",
-            "Duplicate name",
+            "",
             owner_user_id="owner-1",
             skill_repo=skill_repo,
             content=_editable_skill_md("Loadable Skill", "Duplicate name"),
@@ -1364,7 +1432,7 @@ def test_library_skill_create_does_not_derive_id_from_name() -> None:
     first = library_service.create_resource(
         "skill",
         "Loadable Skill",
-        "Use this skill",
+        "",
         owner_user_id="owner-1",
         skill_repo=skill_repo,
         content=_editable_skill_md(),
@@ -1372,7 +1440,7 @@ def test_library_skill_create_does_not_derive_id_from_name() -> None:
     second = library_service.create_resource(
         "skill",
         "Loadable-Skill",
-        "Different name",
+        "",
         owner_user_id="owner-1",
         skill_repo=skill_repo,
         content=_editable_skill_md("Loadable-Skill", "Different name"),
@@ -1410,7 +1478,7 @@ def test_library_skill_create_fails_when_generated_id_exists(monkeypatch: pytest
         library_service.create_resource(
             "skill",
             "Loadable Skill",
-            "Use this skill",
+            "",
             owner_user_id="owner-1",
             skill_repo=skill_repo,
             content=_editable_skill_md(),
