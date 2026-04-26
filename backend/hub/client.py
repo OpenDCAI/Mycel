@@ -70,7 +70,7 @@ def _required_text(value: Any, *, label: str) -> str:
 
 
 def _skill_document_from_content(content: str) -> SkillDocument:
-    return parse_skill_document(content, label="Skill snapshot")
+    return parse_skill_document(content, label="Skill snapshot", require_description=True)
 
 
 def _skill_files_from_snapshot(snapshot: dict[str, Any]) -> dict[str, str]:

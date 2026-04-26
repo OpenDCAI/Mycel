@@ -52,7 +52,11 @@ def _resolve_skill(owner_user_id: str, skill: AgentSkill, skill_repo: Any) -> Re
         raise RuntimeError(f"Skill package not found while resolving AgentConfig: {skill.package_id}")
     if package.skill_id != skill.skill_id:
         raise RuntimeError(f"Skill package {skill.package_id} does not belong to Skill {skill.skill_id}")
-    document = parse_skill_document(package.skill_md, label=f"Skill {skill.skill_id!r} on Agent config")
+    document = parse_skill_document(
+        package.skill_md,
+        label=f"Skill {skill.skill_id!r} on Agent config",
+        require_description=True,
+    )
     resolved = ResolvedSkill(
         id=skill.skill_id,
         name=document.name,
@@ -66,7 +70,7 @@ def _resolve_skill(owner_user_id: str, skill: AgentSkill, skill_repo: Any) -> Re
 
 
 def validate_resolved_skill_content(skill: ResolvedSkill) -> ResolvedSkill:
-    document = parse_skill_document(skill.content, label=f"Skill {skill.name!r} on Agent config")
+    document = parse_skill_document(skill.content, label=f"Skill {skill.name!r} on Agent config", require_description=True)
     if document.name != skill.name:
         raise ValueError(f"Skill {skill.name!r} on Agent config frontmatter name must match ResolvedSkill.name")
-    return skill
+    return skill.model_copy(update={"description": document.description})

@@ -10,10 +10,17 @@ from core.tools.skills.service import SkillsService
 
 def _skill(
     name: str = "query-helper",
-    content: str = "---\nname: query-helper\n---\nUse exact terms.",
+    content: str = "---\nname: query-helper\ndescription: Build precise search queries\n---\nUse exact terms.",
     files: dict[str, str] | None = None,
 ) -> ResolvedSkill:
-    return ResolvedSkill(id=name, name=name, version="1.0.0", content=content, files=files or {})
+    return ResolvedSkill(
+        id=name,
+        name=name,
+        description="Build precise search queries",
+        version="1.0.0",
+        content=content,
+        files=files or {},
+    )
 
 
 def test_skills_service_has_no_filesystem_skill_index() -> None:
@@ -39,7 +46,7 @@ def test_skill_frontmatter_uses_yaml_parser() -> None:
     SkillsService(
         registry=registry,
         skills=[
-            _skill(content='---\nname: "query-helper"\n---\nUse exact terms.'),
+            _skill(content='---\nname: "query-helper"\ndescription: Build precise search queries\n---\nUse exact terms.'),
         ],
     )
 
@@ -75,6 +82,35 @@ def test_skill_without_frontmatter_name_fails_loudly() -> None:
         )
 
 
+def test_skill_without_frontmatter_description_fails_loudly() -> None:
+    registry = ToolRegistry()
+
+    with pytest.raises(ValueError, match="Skill content frontmatter must include description"):
+        SkillsService(
+            registry=registry,
+            skills=[
+                _skill(content="---\nname: query-helper\n---\nUse exact terms."),
+            ],
+        )
+
+
+def test_load_skill_schema_lists_skill_descriptions() -> None:
+    registry = ToolRegistry()
+    SkillsService(
+        registry=registry,
+        skills=[
+            _skill(),
+        ],
+    )
+
+    entry = registry.get("load_skill")
+    assert entry is not None
+    schema = entry.get_schema()
+
+    assert "- query-helper: Build precise search queries" in schema["description"]
+    assert "query-helper - Build precise search queries" in schema["parameters"]["properties"]["skill_name"]["description"]
+
+
 def test_skills_service_requires_resolved_skill_items() -> None:
     registry = ToolRegistry()
 
@@ -86,7 +122,7 @@ def test_skills_service_requires_resolved_skill_items() -> None:
                     Any,
                     {
                         "name": "query-helper",
-                        "content": "---\nname: query-helper\n---\nUse exact terms.",
+                        "content": "---\nname: query-helper\ndescription: Build precise search queries\n---\nUse exact terms.",
                     },
                 )
             ],
@@ -100,7 +136,9 @@ def test_skill_frontmatter_name_must_match_resolved_skill_name() -> None:
         SkillsService(
             registry=registry,
             skills=[
-                _skill(name="query-helper", content="---\nname: other-helper\n---\nUse exact terms."),
+                _skill(
+                    name="query-helper", content="---\nname: other-helper\ndescription: Build precise search queries\n---\nUse exact terms."
+                ),
             ],
         )
 

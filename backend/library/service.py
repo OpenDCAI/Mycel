@@ -262,7 +262,7 @@ def create_resource(
                 id=rid,
                 owner_user_id=owner_user_id,
                 name=name,
-                description=desc,
+                description=document.description,
                 created_at=timestamp,
                 updated_at=timestamp,
             )
@@ -321,11 +321,13 @@ def update_resource(
             return None
         if name is not None and name != current.name:
             raise ValueError("Skill name is immutable; create a new Skill for a new name")
+        if desc is not None and desc != current.description:
+            raise ValueError("Skill description comes from SKILL.md content")
         updated = skill_repo.upsert(
             current.model_copy(
                 update={
                     "name": current.name,
-                    "description": desc if desc is not None else current.description,
+                    "description": current.description,
                     "updated_at": _now_dt(),
                 }
             )
@@ -486,7 +488,7 @@ def update_resource_content(
             raise RuntimeError("Skill content version was not parsed")
         current_package = _selected_skill_package(owner_user_id, current, skill_repo)
         files = current_package.files if current_package is not None else {}
-        updated = skill_repo.upsert(current.model_copy(update={"updated_at": _now_dt()}))
+        updated = skill_repo.upsert(current.model_copy(update={"description": document.description, "updated_at": _now_dt()}))
         _write_skill_package(owner_user_id, updated, content, files, skill_repo, version=document.version)
         return True
     return False

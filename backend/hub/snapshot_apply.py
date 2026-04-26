@@ -46,8 +46,10 @@ def _materialize_snapshot_skills(
 
     seen_ids: set[str] = set()
     seen_names: set[str] = set()
+    validated_skills: list[ResolvedSkill] = []
     for snapshot_skill in skills:
-        validate_resolved_skill_content(snapshot_skill)
+        snapshot_skill = validate_resolved_skill_content(snapshot_skill)
+        validated_skills.append(snapshot_skill)
         if snapshot_skill.id in seen_ids:
             raise ValueError(f"Duplicate Skill id in snapshot: {snapshot_skill.id}")
         seen_ids.add(snapshot_skill.id)
@@ -58,7 +60,7 @@ def _materialize_snapshot_skills(
     result: list[AgentSkill] = []
     timestamp = datetime.now(UTC)
     library_skills = skill_repo.list_for_owner(owner_user_id)
-    for snapshot_skill in skills:
+    for snapshot_skill in validated_skills:
         snapshot_skill_id = _required_text(snapshot_skill.id, label="Snapshot Skill id")
         existing = _snapshot_source_skill(library_skills, marketplace_item_id, snapshot_skill_id)
         if existing is not None and existing.name != snapshot_skill.name:
