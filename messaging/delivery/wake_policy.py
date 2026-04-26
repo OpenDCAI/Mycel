@@ -26,7 +26,7 @@ class ReceiverWakePreference(StrEnum):
 
 class WakeAction(StrEnum):
     WAKE_NOW = "wake_now"
-    QUEUE_ONLY = "queue_only"
+    NO_WAKE = "no_wake"
     DROP_RUNTIME = "drop_runtime"
 
 
@@ -40,13 +40,13 @@ def compose_wake_action(
     if safety is WakeSafety.BLOCKED:
         return WakeAction.DROP_RUNTIME
     if receiver_preference is ReceiverWakePreference.QUIET:
-        return WakeAction.QUEUE_ONLY
+        return WakeAction.NO_WAKE
     if receiver_preference is ReceiverWakePreference.ALWAYS_WAKE:
         return WakeAction.WAKE_NOW
     if sender_scope is SenderWakeScope.QUIET:
-        return WakeAction.QUEUE_ONLY
+        return WakeAction.NO_WAKE
     if sender_scope is SenderWakeScope.OPEN:
         return WakeAction.WAKE_NOW
     if recipient_is_mentioned:
         return WakeAction.WAKE_NOW
-    return WakeAction.QUEUE_ONLY
+    return WakeAction.NO_WAKE
