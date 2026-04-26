@@ -329,6 +329,7 @@ async def update_resource(
     request: Request,
     user_id: CurrentUserId,
 ) -> dict[str, Any]:
+    _reject_skill_request_fields(resource_type, req, {"desc", "features"})
     try:
         item = await asyncio.to_thread(
             library_service.update_resource,
