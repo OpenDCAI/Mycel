@@ -32,15 +32,36 @@ create table if not exists library.skill_packages (
     created_at timestamptz not null default now(),
     unique (owner_user_id, skill_id, hash),
     unique (owner_user_id, skill_id, id),
+    unique (skill_id, id),
     foreign key (owner_user_id, skill_id)
         references library.skills(owner_user_id, id)
         on delete cascade
 );
 
-alter table library.skill_packages
-    drop constraint if exists skill_packages_owner_user_id_skill_id_id_key,
-    add constraint skill_packages_owner_user_id_skill_id_id_key
-        unique (owner_user_id, skill_id, id);
+do $$
+begin
+    if not exists (
+        select 1
+        from pg_constraint
+        where conname = 'skill_packages_owner_user_id_skill_id_id_key'
+          and conrelid = 'library.skill_packages'::regclass
+    ) then
+        alter table library.skill_packages
+            add constraint skill_packages_owner_user_id_skill_id_id_key
+                unique (owner_user_id, skill_id, id);
+    end if;
+
+    if not exists (
+        select 1
+        from pg_constraint
+        where conname = 'skill_packages_skill_id_id_key'
+          and conrelid = 'library.skill_packages'::regclass
+    ) then
+        alter table library.skill_packages
+            add constraint skill_packages_skill_id_id_key
+                unique (skill_id, id);
+    end if;
+end $$;
 
 alter table library.skills
     drop constraint if exists skills_package_fk,
@@ -61,8 +82,7 @@ create table if not exists agent.skill_bindings (
     id uuid primary key default gen_random_uuid(),
     agent_config_id text not null,
     skill_id text not null,
-    package_id text not null
-        references library.skill_packages(id),
+    package_id text not null,
     enabled boolean not null default true,
     created_at timestamptz not null default now(),
     unique (agent_config_id, skill_id)
@@ -100,7 +120,11 @@ alter table if exists agent.agent_sub_agents
 alter table if exists agent.skill_bindings
     drop constraint if exists skill_bindings_agent_config_id_fkey,
     add constraint skill_bindings_agent_config_id_fkey
-        foreign key (agent_config_id) references agent.agent_configs(id) on delete cascade;
+        foreign key (agent_config_id) references agent.agent_configs(id) on delete cascade,
+    drop constraint if exists skill_bindings_package_id_fkey,
+    drop constraint if exists skill_bindings_package_skill_fk,
+    add constraint skill_bindings_package_skill_fk
+        foreign key (skill_id, package_id) references library.skill_packages(skill_id, id);
 
 do $$
 begin

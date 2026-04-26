@@ -18,7 +18,6 @@ def test_agent_config_schema_uses_library_package_storage() -> None:
     assert "files_json jsonb not null default '{}'::jsonb" in sql
     assert "manifest_json jsonb not null default '{}'::jsonb" in sql
     assert "artifact_uri" not in sql
-    assert "references library.skill_packages(id)" in sql
     assert "skills_package_fk" in sql
     assert "foreign key (owner_user_id, id, package_id)" in sql
     assert "references library.skill_packages(owner_user_id, skill_id, id)" in sql
@@ -40,6 +39,7 @@ def test_skill_package_schema_separates_row_id_from_content_hash() -> None:
     assert "skill_packages_id_not_hash_ck" in sql
     assert "id <> substring(hash from 8)" in sql
     assert "unique (owner_user_id, skill_id, id)" in sql
+    assert "unique (skill_id, id)" in sql
 
 
 def test_agent_skill_binding_package_fk_does_not_silently_delete_agent_selection() -> None:
@@ -52,7 +52,10 @@ def test_agent_skill_binding_package_fk_does_not_silently_delete_agent_selection
     )
     assert binding_table is not None
     body = binding_table.group("body")
-    assert "references library.skill_packages(id)" in body
+    assert "references library.skill_packages(id)" not in body
+    assert "skill_bindings_package_skill_fk" in sql
+    assert "foreign key (skill_id, package_id)" in sql
+    assert "references library.skill_packages(skill_id, id)" in sql
     assert "on delete cascade" not in body.lower()
 
 
