@@ -9,6 +9,13 @@ from typing import Any
 from messaging.avatars import AvatarUrlBuilder
 from messaging.delivery.actions import DeliveryAction
 from messaging.delivery.contracts import ChatDeliveryFn, ChatDeliveryRequest
+from messaging.delivery.wake_policy import (
+    ReceiverWakePreference,
+    SenderWakeScope,
+    WakeAction,
+    WakeSafety,
+    compose_wake_action,
+)
 from messaging.display_user import resolve_messaging_display_user
 
 logger = logging.getLogger(__name__)
@@ -46,6 +53,7 @@ class ChatDeliveryDispatcher:
         signal: str | None = None,
     ) -> None:
         mention_set = set(mentions)
+        sender_scope = SenderWakeScope.from_mentions(mentions)
         members = self._chat_members_repo.list_members(chat_id)
         sender_user = self._resolve_display_user(sender_id)
         if sender_user is None:
@@ -72,32 +80,23 @@ class ChatDeliveryDispatcher:
             if member_type != "agent":
                 continue
 
+            action = DeliveryAction.DELIVER
             # @@@same-owner-group-delivery - explicit group membership among the same owner
-            # must reach sibling actors even when no relationship row exists yet.
-            if sender_owner_id and getattr(recipient, "owner_user_id", None) == sender_owner_id:
-                if self._same_owner_delivery_is_muted(member, uid in mention_set):
-                    logger.info("[messaging] POLICY %s for %s", DeliveryAction.NOTIFY.value, uid[:15])
-                    continue
-                self._deliver(
-                    uid,
-                    recipient,
-                    content,
-                    sender_name,
-                    sender_type,
-                    chat_id,
-                    sender_id,
-                    sender_avatar_url,
-                    unread_count=self._count_unread(chat_id, uid),
-                    signal=signal,
-                )
-                continue
-
-            if self._delivery_resolver:
+            # is already enough access for runtime delivery; resolver policy is only needed
+            # across ownership boundaries.
+            if self._needs_access_resolver(sender_owner_id, recipient) and self._delivery_resolver:
                 is_mentioned = uid in mention_set
                 action = self._delivery_resolver.resolve(uid, chat_id, sender_id, is_mentioned=is_mentioned)
-                if action != DeliveryAction.DELIVER:
-                    logger.info("[messaging] POLICY %s for %s", action.value, uid[:15])
-                    continue
+
+            wake_action = compose_wake_action(
+                safety=self._wake_safety(action),
+                sender_scope=sender_scope,
+                receiver_preference=self._receiver_preference(member, action),
+                recipient_is_mentioned=uid in mention_set,
+            )
+            if wake_action is WakeAction.DROP_RUNTIME:
+                logger.info("[messaging] POLICY %s for %s", action.value, uid[:15])
+                continue
 
             self._deliver(
                 uid,
@@ -110,6 +109,7 @@ class ChatDeliveryDispatcher:
                 sender_avatar_url,
                 unread_count=self._count_unread(chat_id, uid),
                 signal=signal,
+                wake=wake_action is WakeAction.WAKE_NOW,
             )
 
     def _resolve_display_user(self, social_user_id: str) -> Any | None:
@@ -131,6 +131,9 @@ class ChatDeliveryDispatcher:
             raise RuntimeError("Chat delivery avatar URL builder is not configured")
         return self._avatar_url_builder(user_id, has_avatar)
 
+    def _needs_access_resolver(self, sender_owner_id: str | None, recipient: Any) -> bool:
+        return not (sender_owner_id and getattr(recipient, "owner_user_id", None) == sender_owner_id)
+
     def _deliver(
         self,
         recipient_id: str,
@@ -144,6 +147,7 @@ class ChatDeliveryDispatcher:
         unread_count: int,
         *,
         signal: str | None,
+        wake: bool,
     ) -> None:
         if not self._delivery_fn:
             raise RuntimeError("Chat delivery function is not configured")
@@ -159,13 +163,16 @@ class ChatDeliveryDispatcher:
                 sender_avatar_url=sender_avatar_url,
                 unread_count=unread_count,
                 signal=signal,
+                wake=wake,
             )
         )
 
-    def _same_owner_delivery_is_muted(self, member: dict[str, Any], is_mentioned: bool) -> bool:
-        # @@@same-owner-attention-control - same-owner group delivery skips
-        # relationship checks, but chat-level mute is still the owner-controlled
-        # attention switch; explicit mentions wake muted agents.
-        if is_mentioned:
-            return False
-        return bool(member.get("muted", False))
+    def _wake_safety(self, action: DeliveryAction) -> WakeSafety:
+        if action is DeliveryAction.DROP:
+            return WakeSafety.BLOCKED
+        return WakeSafety.ALLOWED
+
+    def _receiver_preference(self, member: dict[str, Any], action: DeliveryAction) -> ReceiverWakePreference:
+        if bool(member.get("muted", False)) or action is DeliveryAction.NOTIFY:
+            return ReceiverWakePreference.QUIET
+        return ReceiverWakePreference.DEFAULT
