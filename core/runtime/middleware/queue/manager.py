@@ -37,6 +37,7 @@ class MessageQueueManager:
         sender_name: str | None = None,
         sender_avatar_url: str | None = None,
         is_steer: bool = False,
+        wake: bool = True,
     ) -> None:
         self._repo.enqueue(
             thread_id,
@@ -46,6 +47,8 @@ class MessageQueueManager:
             sender_id=sender_id,
             sender_name=sender_name,
         )
+        if not wake:
+            return
         with self._wake_lock:
             handler = self._wake_handlers.get(thread_id)
         if handler:
