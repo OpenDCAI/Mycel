@@ -14,7 +14,10 @@ notification inbox while durable chat messages remain in the normal chat store.
 
 ## Setup
 
-1. Start the backend from the current app branch.
+1. Start the backend from the current app branch with the normal auth/runtime
+   contract satisfied. If registration is part of the proof, `LEON_AVATAR_ROOT`
+   must point to a writable avatar directory. If the host reaches Supabase
+   through `http_proxy`/`https_proxy`, set `LEON_SUPABASE_HTTP_TRUST_ENV=1`.
 2. Create or reuse a human owner profile.
 3. Create an external user from that owner profile.
 4. Save the external token into a CLI profile.
@@ -23,7 +26,7 @@ notification inbox while durable chat messages remain in the normal chat store.
 ## Flow
 
 1. As another chat member, send a normal chat message to the chat.
-2. As the external profile, run `mycel notify drain --format claude-context`.
+2. As the external profile, run `mycel notify drain --format agent-context`.
 3. Confirm the notification names event type, sender, and chat id but does not
    contain the chat message body.
 4. Use `mycel chat messages list <chat-id>` to inspect bodies.
