@@ -2,8 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from backend.identity.auth.supabase_runtime import create_supabase_client
-from storage.runtime import build_storage_container
+from storage.runtime import build_storage_container, build_supabase_client
 
 
 @dataclass(frozen=True)
@@ -14,7 +13,7 @@ class RuntimeStorageState:
 
 
 def build_runtime_storage_state() -> RuntimeStorageState:
-    supabase_client = create_supabase_client()
+    supabase_client = build_supabase_client()
     storage_container = build_storage_container(supabase_client=supabase_client)
     recipe_repo = storage_container.recipe_repo()
     return RuntimeStorageState(

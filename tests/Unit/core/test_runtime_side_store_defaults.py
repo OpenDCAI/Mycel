@@ -9,6 +9,22 @@ from storage.providers.sqlite.queue_repo import SQLiteQueueRepo
 from storage.providers.sqlite.summary_repo import SQLiteSummaryRepo
 
 
+def test_build_supabase_client_uses_runtime_factory_ref(monkeypatch) -> None:
+    from storage import runtime as storage_runtime
+
+    fake_client = object()
+    calls: list[str | None] = []
+
+    def _resolve(*, factory_ref=None):
+        calls.append(factory_ref)
+        return fake_client
+
+    monkeypatch.setattr(storage_runtime, "_resolve_supabase_client", _resolve)
+
+    assert storage_runtime.build_supabase_client(supabase_client_factory="tests.fake:create_client") is fake_client
+    assert calls == ["tests.fake:create_client"]
+
+
 class _FakeQueueRepo:
     def close(self) -> None:
         return None

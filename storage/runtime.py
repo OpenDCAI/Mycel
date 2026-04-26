@@ -30,6 +30,10 @@ def build_storage_container(
     return StorageContainer(supabase_client=client)
 
 
+def build_supabase_client(*, supabase_client_factory: str | None = None) -> Any:
+    return _resolve_supabase_client(factory_ref=supabase_client_factory)
+
+
 def _build_storage_repo(
     repo_method: str,
     *,
