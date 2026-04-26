@@ -31,16 +31,43 @@ create table if not exists library.skill_packages (
     source_json jsonb not null default '{}'::jsonb,
     created_at timestamptz not null default now(),
     unique (owner_user_id, skill_id, hash),
+    unique (owner_user_id, skill_id, id),
+    unique (skill_id, id),
     foreign key (owner_user_id, skill_id)
         references library.skills(owner_user_id, id)
         on delete cascade
 );
 
+do $$
+begin
+    if not exists (
+        select 1
+        from pg_constraint
+        where conname = 'skill_packages_owner_user_id_skill_id_id_key'
+          and conrelid = 'library.skill_packages'::regclass
+    ) then
+        alter table library.skill_packages
+            add constraint skill_packages_owner_user_id_skill_id_id_key
+                unique (owner_user_id, skill_id, id);
+    end if;
+
+    if not exists (
+        select 1
+        from pg_constraint
+        where conname = 'skill_packages_skill_id_id_key'
+          and conrelid = 'library.skill_packages'::regclass
+    ) then
+        alter table library.skill_packages
+            add constraint skill_packages_skill_id_id_key
+                unique (skill_id, id);
+    end if;
+end $$;
+
 alter table library.skills
     drop constraint if exists skills_package_fk,
     add constraint skills_package_fk
-        foreign key (package_id)
-        references library.skill_packages(id);
+        foreign key (owner_user_id, id, package_id)
+        references library.skill_packages(owner_user_id, skill_id, id);
 
 alter table if exists library.skills
     alter column description drop default;
@@ -48,12 +75,14 @@ alter table if exists library.skills
 alter table if exists library.skill_packages
     alter column version drop default;
 
+alter table if exists agent.agent_configs
+    alter column mcp_json set default '[]'::jsonb;
+
 create table if not exists agent.skill_bindings (
     id uuid primary key default gen_random_uuid(),
     agent_config_id text not null,
     skill_id text not null,
-    package_id text not null
-        references library.skill_packages(id),
+    package_id text not null,
     enabled boolean not null default true,
     created_at timestamptz not null default now(),
     unique (agent_config_id, skill_id)
@@ -91,7 +120,11 @@ alter table if exists agent.agent_sub_agents
 alter table if exists agent.skill_bindings
     drop constraint if exists skill_bindings_agent_config_id_fkey,
     add constraint skill_bindings_agent_config_id_fkey
-        foreign key (agent_config_id) references agent.agent_configs(id) on delete cascade;
+        foreign key (agent_config_id) references agent.agent_configs(id) on delete cascade,
+    drop constraint if exists skill_bindings_package_id_fkey,
+    drop constraint if exists skill_bindings_package_skill_fk,
+    add constraint skill_bindings_package_skill_fk
+        foreign key (skill_id, package_id) references library.skill_packages(skill_id, id);
 
 do $$
 begin
@@ -177,7 +210,10 @@ begin
     alter table library.skills
         drop constraint if exists skills_description_required_ck,
         add constraint skills_description_required_ck
-            check (description is not null and btrim(description) <> '');
+            check (description is not null and btrim(description) <> ''),
+        drop constraint if exists skills_source_json_object_ck,
+        add constraint skills_source_json_object_ck
+            check (jsonb_typeof(source_json) = 'object');
 
     if exists (
         select 1
@@ -198,7 +234,22 @@ begin
     alter table library.skill_packages
         drop constraint if exists skill_packages_version_required_ck,
         add constraint skill_packages_version_required_ck
-            check (version is not null and btrim(version) <> '');
+            check (version is not null and btrim(version) <> ''),
+        drop constraint if exists skill_packages_hash_format_ck,
+        add constraint skill_packages_hash_format_ck
+            check (hash like 'sha256:%'),
+        drop constraint if exists skill_packages_id_not_hash_ck,
+        add constraint skill_packages_id_not_hash_ck
+            check (id <> substring(hash from 8)),
+        drop constraint if exists skill_packages_manifest_json_object_ck,
+        add constraint skill_packages_manifest_json_object_ck
+            check (jsonb_typeof(manifest_json) = 'object'),
+        drop constraint if exists skill_packages_files_json_object_ck,
+        add constraint skill_packages_files_json_object_ck
+            check (jsonb_typeof(files_json) = 'object'),
+        drop constraint if exists skill_packages_source_json_object_ck,
+        add constraint skill_packages_source_json_object_ck
+            check (jsonb_typeof(source_json) = 'object');
 
     if exists (
         select 1
@@ -279,6 +330,23 @@ begin
     ) then
         raise exception 'agent.agent_configs.mcp_json must be a JSON array before hard cut';
     end if;
+
+    alter table agent.agent_configs
+        drop constraint if exists agent_configs_tools_json_array_ck,
+        add constraint agent_configs_tools_json_array_ck
+            check (jsonb_typeof(tools_json) = 'array'),
+        drop constraint if exists agent_configs_runtime_json_object_ck,
+        add constraint agent_configs_runtime_json_object_ck
+            check (jsonb_typeof(runtime_json) = 'object'),
+        drop constraint if exists agent_configs_compact_json_object_ck,
+        add constraint agent_configs_compact_json_object_ck
+            check (jsonb_typeof(compact_json) = 'object'),
+        drop constraint if exists agent_configs_meta_json_object_ck,
+        add constraint agent_configs_meta_json_object_ck
+            check (jsonb_typeof(meta_json) = 'object'),
+        drop constraint if exists agent_configs_mcp_json_array_ck,
+        add constraint agent_configs_mcp_json_array_ck
+            check (jsonb_typeof(mcp_json) = 'array');
 end $$;
 
 create or replace function agent.save_agent_config(payload jsonb)

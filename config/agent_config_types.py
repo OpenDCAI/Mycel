@@ -66,6 +66,8 @@ class SkillPackage(AgentConfigSchemaModel):
         document = parse_skill_document(self.skill_md, label="skill_package.skill_md", require_description=True, require_version=True)
         if document.version != self.version:
             raise ValueError("skill_package.version must match SKILL.md frontmatter version")
+        if self.id == self.hash.removeprefix("sha256:"):
+            raise ValueError("skill_package.id must not be the content hash")
         return self
 
 

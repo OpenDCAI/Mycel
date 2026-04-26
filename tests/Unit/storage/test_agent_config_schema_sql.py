@@ -18,7 +18,9 @@ def test_agent_config_schema_uses_library_package_storage() -> None:
     assert "files_json jsonb not null default '{}'::jsonb" in sql
     assert "manifest_json jsonb not null default '{}'::jsonb" in sql
     assert "artifact_uri" not in sql
-    assert "references library.skill_packages(id)" in sql
+    assert "skills_package_fk" in sql
+    assert "foreign key (owner_user_id, id, package_id)" in sql
+    assert "references library.skill_packages(owner_user_id, skill_id, id)" in sql
     assert "agent_config.skills child.skill_id is required" in sql
     assert "agent_config.skills child.package_id is required" in sql
     assert "agent_skill.package_id does not belong to owner" in sql
@@ -27,6 +29,31 @@ def test_agent_config_schema_uses_library_package_storage() -> None:
     assert "insert into agent.agent_skills" not in sql
     assert "agent.agent_skills.content" not in sql
     assert "agent.agent_skills.files_json" not in sql
+
+
+def test_skill_package_schema_separates_row_id_from_content_hash() -> None:
+    sql = Path("storage/schema/2026_04_24_agent_config_resolved_config_hardcut.sql").read_text(encoding="utf-8")
+
+    assert "skill_packages_hash_format_ck" in sql
+    assert "hash like 'sha256:%'" in sql
+    assert "skill_packages_id_not_hash_ck" in sql
+    assert "id <> substring(hash from 8)" in sql
+    assert "unique (owner_user_id, skill_id, id)" in sql
+    assert "unique (skill_id, id)" in sql
+
+
+def test_skill_package_unique_constraints_are_added_without_breaking_dependents() -> None:
+    sql = Path("storage/schema/2026_04_24_agent_config_resolved_config_hardcut.sql").read_text(encoding="utf-8")
+
+    package_backfill = re.search(
+        r"if not exists \(.*?skill_packages_owner_user_id_skill_id_id_key.*?end if;.*?"
+        r"if not exists \(.*?skill_packages_skill_id_id_key.*?end if;",
+        sql,
+        flags=re.DOTALL,
+    )
+    assert package_backfill is not None
+    assert "drop constraint if exists skill_packages_owner_user_id_skill_id_id_key" not in sql
+    assert "drop constraint if exists skill_packages_skill_id_id_key" not in sql
 
 
 def test_agent_skill_binding_package_fk_does_not_silently_delete_agent_selection() -> None:
@@ -39,7 +66,10 @@ def test_agent_skill_binding_package_fk_does_not_silently_delete_agent_selection
     )
     assert binding_table is not None
     body = binding_table.group("body")
-    assert "references library.skill_packages(id)" in body
+    assert "references library.skill_packages(id)" not in body
+    assert "skill_bindings_package_skill_fk" in sql
+    assert "foreign key (skill_id, package_id)" in sql
+    assert "references library.skill_packages(skill_id, id)" in sql
     assert "on delete cascade" not in body.lower()
 
 
@@ -90,6 +120,9 @@ def test_agent_config_schema_does_not_convert_object_mcp_json() -> None:
     sql = Path("storage/schema/2026_04_24_agent_config_resolved_config_hardcut.sql").read_text(encoding="utf-8")
 
     assert "agent.agent_configs.mcp_json must be a JSON array before hard cut" in sql
+    assert "alter column mcp_json set default '[]'::jsonb" in sql
+    assert "agent_configs_mcp_json_array_ck" in sql
+    assert "check (jsonb_typeof(mcp_json) = 'array')" in sql
     assert "jsonb_typeof(mcp_json) not in ('array', 'object')" not in sql
     assert "jsonb_each(c.mcp_json)" not in sql
     assert "(item.value - 'disabled')" not in sql
@@ -115,10 +148,18 @@ def test_agent_config_schema_constrains_root_identity_fields() -> None:
     assert "library.skill_packages.files_json values must be strings before hard cut" in sql
     assert "library.skill_packages.files_json keys must be package-relative paths before hard cut" in sql
     assert "library.skill_packages.source_json must be a JSON object before hard cut" in sql
+    assert "skills_source_json_object_ck" in sql
+    assert "skill_packages_manifest_json_object_ck" in sql
+    assert "skill_packages_files_json_object_ck" in sql
+    assert "skill_packages_source_json_object_ck" in sql
     assert "agent.agent_configs.tools_json must be a JSON array before hard cut" in sql
     assert "agent.agent_configs.runtime_json must be a JSON object before hard cut" in sql
     assert "agent.agent_configs.compact_json must be a JSON object before hard cut" in sql
     assert "agent.agent_configs.meta_json must be a JSON object before hard cut" in sql
+    assert "agent_configs_tools_json_array_ck" in sql
+    assert "agent_configs_runtime_json_object_ck" in sql
+    assert "agent_configs_compact_json_object_ck" in sql
+    assert "agent_configs_meta_json_object_ck" in sql
     assert "agent_configs_owner_user_id_required_ck" in sql
     assert "agent_configs_agent_user_id_required_ck" in sql
     assert "agent_configs_name_required_ck" in sql

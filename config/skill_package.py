@@ -21,7 +21,7 @@ def build_skill_package(
     document = parse_skill_document(skill_md, label="SKILL.md", require_description=True, require_version=True)
     package_hash = build_skill_package_hash(skill_md, files)
     return SkillPackage(
-        id=package_hash.removeprefix("sha256:"),
+        id=build_skill_package_id(owner_user_id, skill_id, package_hash),
         owner_user_id=owner_user_id,
         skill_id=skill_id,
         version=cast(str, document.version),
@@ -55,6 +55,16 @@ def build_skill_package_hash(skill_md: str, files: dict[str, str]) -> str:
     }
     encoded = json.dumps(package_payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
     return f"sha256:{hashlib.sha256(encoded).hexdigest()}"
+
+
+def build_skill_package_id(owner_user_id: str, skill_id: str, package_hash: str) -> str:
+    row_payload = {
+        "owner_user_id": owner_user_id,
+        "skill_id": skill_id,
+        "hash": package_hash,
+    }
+    encoded = json.dumps(row_payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    return f"pkg_{hashlib.sha256(encoded).hexdigest()}"
 
 
 def _sha256_text(value: str) -> str:
