@@ -2387,6 +2387,7 @@ def test_apply_snapshot_with_skills_requires_skill_repo():
                         {
                             "id": "search",
                             "name": "Search",
+                            "description": "Search repos",
                             "version": "1.0.0",
                             "content": "---\nname: Search\ndescription: Search repos\nversion: 1.0.0\n---\nbody",
                         }
@@ -2404,7 +2405,7 @@ def test_apply_snapshot_with_skills_requires_skill_repo():
 def test_apply_snapshot_skill_requires_frontmatter_description() -> None:
     from backend.hub.snapshot_apply import apply_snapshot
 
-    with pytest.raises(ValueError, match="Skill 'Search' on Agent config frontmatter must include description"):
+    with pytest.raises(ValueError, match="resolved_skill.content frontmatter must include description"):
         apply_snapshot(
             snapshot={
                 "schema_version": "agent-snapshot/v1",
@@ -2453,6 +2454,7 @@ def test_apply_snapshot_requires_source_identity(field: str, value: object, mess
                     {
                         "id": "search",
                         "name": "Search",
+                        "description": "Search repos",
                         "version": "1.0.0",
                         "content": "---\nname: Search\ndescription: Search repos\nversion: 1.0.0\n---\nbody",
                     }
@@ -2524,12 +2526,14 @@ def test_apply_snapshot_rejects_duplicate_skill_ids_before_library_write():
                         {
                             "id": "search",
                             "name": "Search One",
+                            "description": "Search one",
                             "version": "1.0.0",
                             "content": "---\nname: Search One\ndescription: Search one\nversion: 1.0.0\n---\none",
                         },
                         {
                             "id": "search",
                             "name": "Search Two",
+                            "description": "Search two",
                             "version": "1.0.0",
                             "content": "---\nname: Search Two\ndescription: Search two\nversion: 1.0.0\n---\ntwo",
                         },
@@ -2564,6 +2568,7 @@ def test_apply_snapshot_treats_snapshot_skill_id_as_source_metadata(monkeypatch:
                     {
                         "id": "nested/search",
                         "name": "Search",
+                        "description": "Search repos",
                         "version": "1.0.0",
                         "content": "---\nname: Search\ndescription: Search repos\nversion: 1.0.0\n---\nbody",
                     }
@@ -2618,6 +2623,7 @@ def test_apply_snapshot_reuses_existing_skill_by_snapshot_source(monkeypatch: py
                     {
                         "id": "search-core",
                         "name": "Search",
+                        "description": "Search repos",
                         "version": "1.0.1",
                         "content": "---\nname: Search\ndescription: Search repos\nversion: 1.0.1\n---\nnew",
                     }
@@ -2664,6 +2670,7 @@ def test_apply_snapshot_fails_when_generated_skill_id_exists(monkeypatch: pytest
                         {
                             "id": "search-core",
                             "name": "Search",
+                            "description": "Search repos",
                             "version": "1.0.0",
                             "content": "---\nname: Search\ndescription: Search repos\nversion: 1.0.0\n---\nbody",
                         }
@@ -2704,6 +2711,7 @@ def test_apply_snapshot_rejects_existing_same_name_without_snapshot_source(monke
                         {
                             "id": "search-core",
                             "name": "Search",
+                            "description": "Search repos",
                             "version": "1.0.0",
                             "content": "---\nname: Search\ndescription: Search repos\nversion: 1.0.0\n---\nbody",
                         }
@@ -2735,12 +2743,14 @@ def test_apply_snapshot_rejects_duplicate_skill_names_before_library_write():
                         {
                             "id": "search-one",
                             "name": "Search",
+                            "description": "Search repos",
                             "version": "1.0.0",
                             "content": "---\nname: Search\ndescription: Search repos\nversion: 1.0.0\n---\none",
                         },
                         {
                             "id": "search-two",
                             "name": "Search",
+                            "description": "Search repos",
                             "version": "1.0.0",
                             "content": "---\nname: Search\ndescription: Search repos\nversion: 1.0.0\n---\ntwo",
                         },
