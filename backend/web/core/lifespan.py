@@ -57,7 +57,12 @@ async def lifespan(app: FastAPI):
     app.state.sandbox_runtime_repo = storage_container.sandbox_runtime_repo()
     app.state.workspace_repo = storage_container.workspace_repo()
     app.state.sandbox_repo = storage_container.sandbox_repo()
-    from backend.chat.bootstrap import attach_chat_runtime, wire_chat_delivery, wire_relationship_request_notifications
+    from backend.chat.bootstrap import (
+        attach_chat_runtime,
+        wire_chat_delivery,
+        wire_chat_join_request_notifications,
+        wire_relationship_request_notifications,
+    )
     from backend.threads.bootstrap import attach_threads_runtime
 
     # @@@web-chat-before-threads - threads bootstrap now constructs the agent
@@ -90,6 +95,13 @@ async def lifespan(app: FastAPI):
     wire_relationship_request_notifications(
         app,
         relationship_service=chat_runtime.relationship_service,
+        activity_reader=threads_runtime.activity_reader,
+        thread_repo=app.state.thread_repo,
+        user_repo=app.state.user_repo,
+    )
+    wire_chat_join_request_notifications(
+        app,
+        chat_join_request_service=chat_runtime.chat_join_request_service,
         activity_reader=threads_runtime.activity_reader,
         thread_repo=app.state.thread_repo,
         user_repo=app.state.user_repo,

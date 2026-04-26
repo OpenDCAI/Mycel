@@ -5,6 +5,7 @@ from typing import Any
 
 from backend.identity.avatar.urls import avatar_url
 from backend.threads.chat_adapters.chat_inlet import make_chat_delivery_fn
+from backend.threads.chat_adapters.chat_join_inlet import make_chat_join_rejection_notification_fn
 from backend.threads.chat_adapters.relationship_inlet import make_relationship_request_notification_fn
 from messaging.delivery.resolver import HireVisitDeliveryResolver
 from messaging.join_requests import ChatJoinRequestService
@@ -107,6 +108,24 @@ def wire_relationship_request_notifications(
 ) -> None:
     relationship_service.set_relationship_request_notification_fn(
         make_relationship_request_notification_fn(
+            app,
+            activity_reader=activity_reader,
+            thread_repo=thread_repo,
+            user_repo=user_repo,
+        )
+    )
+
+
+def wire_chat_join_request_notifications(
+    app: Any,
+    *,
+    chat_join_request_service: Any,
+    activity_reader: Any,
+    thread_repo: Any,
+    user_repo: Any,
+) -> None:
+    chat_join_request_service.set_join_request_rejected_notification_fn(
+        make_chat_join_rejection_notification_fn(
             app,
             activity_reader=activity_reader,
             thread_repo=thread_repo,
