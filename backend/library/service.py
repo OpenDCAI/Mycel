@@ -78,6 +78,11 @@ def _reject_skill_description_argument(desc: str) -> None:
         raise ValueError("Skill description must be declared in SKILL.md frontmatter")
 
 
+def _reject_skill_name_argument(name: str) -> None:
+    if name != "":
+        raise ValueError("Skill name must be declared in SKILL.md frontmatter")
+
+
 def _now_dt() -> datetime:
     return datetime.now(UTC)
 
@@ -245,14 +250,13 @@ def create_resource(
     if resource_type == "skill":
         owner_user_id = _require_skill_owner(owner_user_id)
         skill_repo = _require_skill_repo(skill_repo)
+        _reject_skill_name_argument(name)
         _reject_skill_description_argument(desc)
         if not content or not content.strip():
             raise ValueError("Skill creation requires SKILL.md content")
         document = _skill_document_from_content(content, require_version=True)
-        if document.name != name:
-            raise ValueError("Skill content frontmatter name must match Skill name")
         for skill in skill_repo.list_for_owner(owner_user_id):
-            if skill.name == name:
+            if skill.name == document.name:
                 raise ValueError("Skill name already exists")
         rid = generate_skill_id()
         existing = skill_repo.get_by_id(owner_user_id, rid)
@@ -263,7 +267,7 @@ def create_resource(
             Skill(
                 id=rid,
                 owner_user_id=owner_user_id,
-                name=name,
+                name=document.name,
                 description=document.description,
                 created_at=timestamp,
                 updated_at=timestamp,
@@ -321,8 +325,8 @@ def update_resource(
         current = skill_repo.get_by_id(owner_user_id, resource_id)
         if current is None:
             return None
-        if name is not None and name != current.name:
-            raise ValueError("Skill name is immutable; create a new Skill for a new name")
+        if name is not None:
+            raise ValueError("Skill name must be declared in SKILL.md frontmatter")
         if desc is not None and desc != current.description:
             raise ValueError("Skill description comes from SKILL.md content")
         updated = skill_repo.upsert(

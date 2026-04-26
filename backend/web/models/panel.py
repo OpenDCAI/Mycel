@@ -34,7 +34,7 @@ class PublishAgentRequest(BaseModel):
 
 
 class CreateResourceRequest(BaseModel):
-    name: str
+    name: str = ""
     desc: str = ""
     content: str | None = None
     provider_name: str | None = None
