@@ -73,6 +73,11 @@ def _skill_document_from_content(content: str, *, require_version: bool = False)
     return parse_skill_document(content, label="Skill content", require_description=True, require_version=require_version)
 
 
+def _reject_skill_description_argument(desc: str) -> None:
+    if desc != "":
+        raise ValueError("Skill description must be declared in SKILL.md frontmatter")
+
+
 def _now_dt() -> datetime:
     return datetime.now(UTC)
 
