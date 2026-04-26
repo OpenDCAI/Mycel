@@ -9,6 +9,7 @@ maintained prompts.
 - `chat-wake-policy.md`
 - `chat-managed-agent-word-chain.md`
 - `external-managed-agent-chat.md`
+- `external-runtime-inbox.md`
 
 ## Relationship And Join
 

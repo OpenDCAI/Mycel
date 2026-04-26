@@ -39,13 +39,20 @@ def make_chat_delivery_fn(app: Any, *, activity_reader: Any, thread_repo: Any):
             request.unread_count,
             signal=request.signal,
         )
-        thread_id = select_runtime_thread_for_recipient(
-            request.recipient_id,
-            thread_repo=thread_repo,
-            activity_reader=activity_reader,
-        )
-        if thread_id is None:
-            raise RuntimeError(f"Agent chat recipient has no runtime thread: {request.recipient_id}")
+        if recipient_type == "external":
+            runtime_source = "external"
+            thread_id = None
+        elif recipient_type == "agent":
+            runtime_source = "mycel"
+            thread_id = select_runtime_thread_for_recipient(
+                request.recipient_id,
+                thread_repo=thread_repo,
+                activity_reader=activity_reader,
+            )
+            if thread_id is None:
+                raise RuntimeError(f"Agent chat recipient has no runtime thread: {request.recipient_id}")
+        else:
+            raise RuntimeError(f"Chat delivery recipient type is not runtime-addressable: {recipient_type}")
         envelope = AgentChatDeliveryEnvelope(
             chat=AgentChatContext(chat_id=request.chat_id),
             sender=AgentRuntimeActor(
@@ -55,7 +62,7 @@ def make_chat_delivery_fn(app: Any, *, activity_reader: Any, thread_repo: Any):
                 avatar_url=request.sender_avatar_url,
                 source="chat",
             ),
-            recipient=AgentChatRecipient(agent_user_id=request.recipient_id, runtime_source="mycel", thread_id=thread_id),
+            recipient=AgentChatRecipient(agent_user_id=request.recipient_id, runtime_source=runtime_source, thread_id=thread_id),
             message=AgentRuntimeMessage(content=rendered_content, signal=request.signal),
             extensions={
                 "mycel": {

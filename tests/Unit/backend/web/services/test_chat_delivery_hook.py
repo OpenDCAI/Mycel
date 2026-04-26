@@ -93,6 +93,44 @@ async def test_chat_delivery_hook_uses_request_sender_type() -> None:
 
 
 @pytest.mark.asyncio
+async def test_chat_delivery_hook_routes_external_user_to_external_runtime_without_thread() -> None:
+    class RecordingGateway:
+        envelope = None
+
+        async def dispatch_chat(self, envelope):
+            self.envelope = envelope
+
+    gateway = RecordingGateway()
+    app = _hook_app(gateway)
+    deliver = owner_chat_inlet.make_chat_delivery_fn(
+        app,
+        activity_reader=app.state.threads_runtime_state.activity_reader,
+        thread_repo=app.state.thread_repo,
+    )
+    request = ChatDeliveryRequest(
+        recipient_id="external-user-1",
+        recipient_user=SimpleNamespace(id="external-user-1", type="external"),
+        content="hello",
+        sender_name="Human",
+        sender_type="human",
+        chat_id="chat-1",
+        sender_id="human-user-1",
+        sender_avatar_url=None,
+        unread_count=4,
+        signal=None,
+    )
+
+    await asyncio.to_thread(deliver, request)
+
+    assert gateway.envelope is not None
+    assert gateway.envelope.recipient.agent_user_id == "external-user-1"
+    assert gateway.envelope.recipient.runtime_source == "external"
+    assert gateway.envelope.recipient.thread_id is None
+    assert "New message from Human in chat chat-1 (4 unread)." in gateway.envelope.message.content
+    assert gateway.envelope.extensions["mycel"]["raw_content"] == "hello"
+
+
+@pytest.mark.asyncio
 async def test_chat_delivery_hook_requires_recipient_user_type() -> None:
     class RecordingGateway:
         called = False

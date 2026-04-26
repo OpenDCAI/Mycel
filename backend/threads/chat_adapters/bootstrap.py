@@ -8,6 +8,7 @@ from backend.threads.activity_pool_service import get_or_create_agent
 from backend.threads.chat_adapters.activity_reader import AppRuntimeThreadActivityReader
 from backend.threads.chat_adapters.chat_handler import NativeAgentChatDeliveryHandler
 from backend.threads.chat_adapters.chat_runtime_services import AppAgentChatRuntimeServices
+from backend.threads.chat_adapters.external_inbox_handler import ExternalRuntimeInboxHandler
 from backend.threads.chat_adapters.gateway import NativeAgentRuntimeGateway
 from backend.threads.chat_adapters.thread_handler import NativeAgentThreadInputHandler
 from backend.threads.sandbox_resolution import resolve_thread_sandbox
@@ -40,7 +41,8 @@ def build_agent_runtime_state(app: Any, *, typing_tracker: Any) -> AgentRuntimeG
                     resolve_thread_sandbox=resolve_thread_sandbox,
                     ensure_thread_handlers=_ensure_thread_handlers,
                 ),
-            )
+            ),
+            "external": ExternalRuntimeInboxHandler(queue_manager=app.state.queue_manager),
         },
         thread_input_handler=NativeAgentThreadInputHandler(
             app,
