@@ -349,6 +349,20 @@ def test_skill_package_requires_skill_md_description() -> None:
         )
 
 
+def test_skill_package_id_must_not_be_content_hash_identity() -> None:
+    with pytest.raises(ValueError, match="skill_package.id must not be the content hash"):
+        SkillPackage(
+            id="abc",
+            owner_user_id="owner-1",
+            skill_id="skill-1",
+            version="1.0.0",
+            hash="sha256:abc",
+            manifest={},
+            skill_md="---\nname: query-helper\ndescription: Build precise queries\nversion: 1.0.0\n---\nUse exact terms.",
+            created_at=datetime(2026, 4, 25, tzinfo=UTC),
+        )
+
+
 @pytest.mark.parametrize(
     ("model_cls", "payload"),
     [
