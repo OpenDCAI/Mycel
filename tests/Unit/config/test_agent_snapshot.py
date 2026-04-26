@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from config.agent_config_resolver import resolve_agent_config
 from config.agent_config_types import AgentConfig, AgentSkill, SkillPackage
 from config.agent_snapshot import snapshot_from_resolved_config
@@ -28,9 +30,9 @@ def test_snapshot_contains_resolved_agent_config_only():
                     skill_id="github",
                     version="1.0.0",
                     hash="sha256:github",
-                    skill_md="---\nname: github\n---\n\n# GitHub\n",
+                    skill_md="---\nname: github\ndescription: Query GitHub precisely\n---\n\n# GitHub\n",
                     files={"references/query.md": "Prefer precise queries."},
-                    created_at="2026-04-25T00:00:00+00:00",
+                    created_at=datetime.fromisoformat("2026-04-25T00:00:00+00:00"),
                 )
             },
         )(),
@@ -73,8 +75,8 @@ def test_snapshot_preserves_skill_id_when_name_changes():
                     skill_id="github-core",
                     version="1.0.0",
                     hash="sha256:github-core",
-                    skill_md="---\nname: GitHub\n---\n\n# GitHub\n",
-                    created_at="2026-04-25T00:00:00+00:00",
+                    skill_md="---\nname: GitHub\ndescription: Query GitHub precisely\n---\n\n# GitHub\n",
+                    created_at=datetime.fromisoformat("2026-04-25T00:00:00+00:00"),
                 )
             },
         )(),
