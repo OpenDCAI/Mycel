@@ -1056,6 +1056,53 @@ def test_panel_library_skill_routes_use_skill_repo_without_recipe_repo() -> None
         assert content.json()["content"] == _editable_skill_md()
 
 
+def test_panel_library_skill_create_rejects_non_skill_fields() -> None:
+    app = FastAPI()
+    app.include_router(panel_router.router)
+    app.dependency_overrides[panel_router.get_current_user_id] = lambda: "owner-1"
+    app.state.runtime_storage_state = _runtime_storage_state(SimpleNamespace(), skill_repo=_MemorySkillRepo())
+
+    with TestClient(app) as client:
+        created = client.post(
+            "/api/panel/library/skill",
+            json={
+                "name": "Loadable Skill",
+                "desc": "Use this skill",
+                "provider_name": "daytona",
+                "features": {"lark_cli": True},
+                "content": _editable_skill_md(),
+            },
+        )
+
+    assert created.status_code == 400
+    assert created.json()["detail"] == "Skill Library requests must not include desc, features, provider_name"
+
+
+def test_panel_library_skill_update_rejects_non_skill_fields() -> None:
+    app = FastAPI()
+    app.include_router(panel_router.router)
+    app.dependency_overrides[panel_router.get_current_user_id] = lambda: "owner-1"
+    skill_repo = _MemorySkillRepo()
+    skill = _put_skill(
+        skill_repo,
+        owner_user_id="owner-1",
+        skill_id="skill-1",
+        name="Loadable Skill",
+        description="Loadable",
+        content=_editable_skill_md(),
+    )
+    app.state.runtime_storage_state = _runtime_storage_state(SimpleNamespace(), skill_repo=skill_repo)
+
+    with TestClient(app) as client:
+        updated = client.put(
+            f"/api/panel/library/skill/{skill.id}",
+            json={"desc": "Separate desc", "features": {"lark_cli": True}},
+        )
+
+    assert updated.status_code == 400
+    assert updated.json()["detail"] == "Skill Library requests must not include desc, features"
+
+
 def test_library_skill_content_rejects_selected_package_for_another_skill() -> None:
     skill_repo = _MemorySkillRepo()
     skill = _put_skill(
