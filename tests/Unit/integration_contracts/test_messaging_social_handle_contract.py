@@ -186,6 +186,31 @@ def test_relationship_request_notifies_after_persisting_pending_row() -> None:
     assert notifications[0].initiator_user_id == "human-user-1"
 
 
+def test_relationship_approve_notifies_original_requester_after_persisting_decision() -> None:
+    repo = _FakeRelationshipRepo()
+    repo._existing[("agent-user-1", "human-user-1")]["state"] = "pending"
+    notifications = []
+    service = RelationshipService(repo, on_relationship_decided=lambda row, event: notifications.append((row, event)))
+
+    row = service.approve("agent-user-1", "human-user-1")
+
+    assert row.state == "visit"
+    assert notifications == [(row, "approve")]
+
+
+def test_relationship_reject_notifies_original_requester_after_persisting_decision() -> None:
+    repo = _FakeRelationshipRepo()
+    repo._existing[("agent-user-1", "human-user-1")]["state"] = "pending"
+    notifications = []
+    service = RelationshipService(repo, on_relationship_decided=lambda row, event: notifications.append((row, event)))
+
+    row = service.reject("agent-user-1", "human-user-1")
+
+    assert row.state == "none"
+    assert row.initiator_user_id == "human-user-1"
+    assert notifications == [(row, "reject")]
+
+
 def test_relationship_list_for_user_fails_on_invalid_row() -> None:
     service = RelationshipService(
         SimpleNamespace(
