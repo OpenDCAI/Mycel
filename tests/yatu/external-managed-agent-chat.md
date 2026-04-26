@@ -19,7 +19,9 @@ chat surface a user sees.
 1. Start the backend from the current app branch.
 2. Install or use the current `mycel` executable.
 3. Use an owner profile to create or reuse a managed agent.
-4. Use `mycel skill external-dev-chat` as the guide for the external profile.
+4. Use `mycel skill show external-dev-chat` or
+   `mycel skill prompt external-dev-chat` as the guide for the external
+   profile.
 5. Establish the required relationship or group membership through public
    product commands.
 
