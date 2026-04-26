@@ -407,7 +407,10 @@ def test_complete_register_seeds_user_sandbox_recipes(monkeypatch: pytest.Monkey
         list_by_owner_user_id=lambda _user_id: [],
     )
     agent_configs = SimpleNamespace(save_agent_config=lambda _config: None)
-    invite_codes = SimpleNamespace(is_valid=lambda code: code == "invite-1", use=lambda _code, _user_id: None)
+    invite_codes = SimpleNamespace(
+        is_usable_by=lambda code, user_id: code == "invite-1" and user_id == "owner-1",
+        use=lambda code, user_id: {"code": code, "used_by": user_id},
+    )
     contact_repo = SimpleNamespace(upsert=lambda _row: None)
     recipe_rows: dict[str, dict] = {}
     recipe_repo = SimpleNamespace(
@@ -430,6 +433,54 @@ def test_complete_register_seeds_user_sandbox_recipes(monkeypatch: pytest.Monkey
 
     assert supabase_client.rpc_calls == [("identity.next_mycel_id", {})]
     assert sorted(recipe_id for (_owner, recipe_id) in recipe_rows) == ["daytona_selfhost:default", "local:default"]
+
+
+def test_complete_register_recovers_existing_user_without_initial_agents(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setenv("SUPABASE_JWT_SECRET", "secret-1")
+    monkeypatch.setattr("backend.identity.auth.service.process_and_save_avatar", lambda _source, user_id: f"avatars/{user_id}.png")
+    monkeypatch.setattr("backend.sandboxes.recipe_bootstrap.available_sandbox_types", lambda: [])
+    user_ids = iter(["agent-toad", "agent-morel"])
+    config_ids = iter(["cfg-toad", "cfg-morel"])
+    monkeypatch.setattr("storage.utils.generate_agent_user_id", lambda: next(user_ids))
+    monkeypatch.setattr("storage.utils.generate_agent_config_id", lambda: next(config_ids))
+
+    existing_user = SimpleNamespace(
+        id="owner-1",
+        display_name="fresh",
+        mycel_id=10001,
+        email="fresh@example.com",
+        avatar=None,
+    )
+    created_users: list[object] = []
+    saved_configs: list[object] = []
+    used_invites: list[tuple[str, str]] = []
+    user_repo = SimpleNamespace(
+        get_by_id=lambda user_id: existing_user if user_id == "owner-1" else None,
+        create=lambda row: created_users.append(row),
+        list_by_owner_user_id=lambda _user_id: [],
+    )
+    agent_configs = SimpleNamespace(save_agent_config=lambda config: saved_configs.append(config))
+    invite_codes = SimpleNamespace(
+        is_usable_by=lambda code, user_id: code == "invite-1" and user_id == "owner-1",
+        use=lambda code, user_id: used_invites.append((code, user_id)) or {"code": code, "used_by": user_id},
+    )
+    contact_repo = SimpleNamespace(upsert=lambda _row: None)
+    recipe_repo = SimpleNamespace(get=lambda _owner_user_id, _recipe_id: None, upsert=lambda **_payload: None)
+    token = jwt.encode({"sub": "owner-1", "email": "fresh@example.com"}, "secret-1", algorithm="HS256")
+
+    result = _service(
+        supabase_client=_SchemaRpcSupabaseClient(),
+        user_repo=user_repo,
+        agent_configs=agent_configs,
+        invite_codes=invite_codes,
+        contact_repo=contact_repo,
+        recipe_repo=recipe_repo,
+    ).complete_register(token, "invite-1")
+
+    assert result["agent"] == {"id": "agent-toad", "name": "Toad", "type": "agent", "avatar": "avatars/agent-toad.png"}
+    assert [row.id for row in created_users] == ["agent-toad", "agent-morel"]
+    assert [config.id for config in saved_configs] == ["cfg-toad", "cfg-morel"]
+    assert used_invites == [("invite-1", "owner-1")]
 
 
 def test_create_initial_agents_persist_avatar_storage_key(monkeypatch: pytest.MonkeyPatch):

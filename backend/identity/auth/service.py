@@ -87,14 +87,14 @@ class AuthService:
             raise ValueError("会话已过期，请重新验证邮箱") from e
         auth_user_id = payload["sub"]
 
-        if self._invite_codes is None or not self._invite_codes.is_valid(invite_code):
+        if self._invite_codes is None or not self._invite_codes.is_usable_by(invite_code, auth_user_id):
             raise ValueError("邀请码无效或已过期")
 
         email_from_payload = payload.get("email", "")
         existing = self._users.get_by_id(auth_user_id)
+        now = time.time()
         if existing is None:
             mycel_id = q.schema_rpc(self._sb, "identity", "next_mycel_id", {}, "auth service").execute().data
-            now = time.time()
             display_name = email_from_payload.split("@")[0]
 
             self._users.create(
@@ -107,21 +107,15 @@ class AuthService:
                     created_at=now,
                 )
             )
-
-            first_agent_info = self._create_initial_agents(auth_user_id, now)
-            self._seed_default_recipes(auth_user_id)
         else:
             display_name = existing.display_name
             mycel_id = existing.mycel_id
-            self._seed_default_recipes(auth_user_id)
-            owned_agents = self._users.list_by_owner_user_id(auth_user_id)
-            first_agent_info = None
-            if owned_agents:
-                agent = owned_agents[0]
-                first_agent_info = {"id": agent.id, "name": agent.display_name, "type": agent.type.value, "avatar": agent.avatar}
 
-        if self._invite_codes is not None:
-            self._invite_codes.use(invite_code, auth_user_id)
+        first_agent_info = self._ensure_initial_agents(auth_user_id, now)
+        self._seed_default_recipes(auth_user_id)
+
+        if self._invite_codes is not None and self._invite_codes.use(invite_code, auth_user_id) is None:
+            raise ValueError("邀请码无效或已过期")
 
         logger.info("Registered user %s (mycel_id=%s)", email_from_payload, mycel_id)
         return {
@@ -256,6 +250,14 @@ class AuthService:
         if self._recipe_repo is None:
             raise RuntimeError("Recipe repo required for initial sandbox recipe creation during schema cutover.")
         seed_default_recipes(owner_user_id, recipe_repo=self._recipe_repo)
+
+    def _ensure_initial_agents(self, owner_user_id: str, now: float) -> dict | None:
+        # @@@recoverable-registration - complete-register may be retried after user-row creation but before agent bootstrap.
+        owned_agents = self._users.list_by_owner_user_id(owner_user_id)
+        if owned_agents:
+            agent = owned_agents[0]
+            return {"id": agent.id, "name": agent.display_name, "type": agent.type.value, "avatar": agent.avatar}
+        return self._create_initial_agents(owner_user_id, now)
 
     def _create_initial_agents(self, owner_user_id: str, now: float) -> dict | None:
         if self._agent_configs is None:
