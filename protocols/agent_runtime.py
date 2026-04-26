@@ -52,6 +52,7 @@ class AgentChatDeliveryEnvelope:
     sender: AgentRuntimeActor
     recipient: AgentChatRecipient
     message: AgentRuntimeMessage
+    wake: bool = True
     transport: AgentRuntimeTransport = AgentRuntimeTransport()
     protocol_version: Literal["agent.chat.delivery.v1"] = "agent.chat.delivery.v1"
     event_type: Literal["chat.message"] = "chat.message"

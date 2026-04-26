@@ -6,12 +6,12 @@ from backend.threads.chat_adapters.chat_runtime_services import AppAgentChatRunt
 
 def test_chat_runtime_services_use_injected_typing_tracker_and_queue_manager():
     started: list[tuple[str, str, str]] = []
-    enqueued: list[tuple[str, str, str | None, str | None]] = []
+    enqueued: list[tuple[str, str, str | None, str | None, bool | None]] = []
 
     injected_typing_tracker = SimpleNamespace(start_chat=lambda thread_id, chat_id, user_id: started.append((thread_id, chat_id, user_id)))
     injected_queue_manager = SimpleNamespace(
         enqueue=lambda content, thread_id, notification_type, **meta: enqueued.append(
-            (content, thread_id, meta.get("sender_id"), meta.get("sender_name"))
+            (content, thread_id, meta.get("sender_id"), meta.get("sender_name"), meta.get("wake"))
         )
     )
 
@@ -45,7 +45,33 @@ def test_chat_runtime_services_use_injected_typing_tracker_and_queue_manager():
     )
 
     assert started == [("thread-1", "chat-1", "agent-user-1")]
-    assert enqueued == [("hello", "thread-1", "human-user-1", "Human")]
+    assert enqueued == [("hello", "thread-1", "human-user-1", "Human", True)]
+
+
+def test_chat_runtime_services_can_queue_without_waking():
+    enqueued: list[tuple[str, bool | None]] = []
+    injected_queue_manager = SimpleNamespace(
+        enqueue=lambda content, _thread_id, _notification_type, **meta: enqueued.append((content, meta.get("wake")))
+    )
+    services = AppAgentChatRuntimeServices(
+        SimpleNamespace(state=SimpleNamespace()),
+        typing_tracker=SimpleNamespace(start_chat=lambda *_args, **_kwargs: None),
+        queue_manager=injected_queue_manager,
+        get_or_create_agent=lambda *_args, **_kwargs: None,
+        resolve_thread_sandbox=lambda *_args, **_kwargs: "local",
+        ensure_thread_handlers=lambda *_args, **_kwargs: None,
+    )
+
+    services.enqueue_chat_message(
+        content="quiet chat notification",
+        thread_id="thread-1",
+        sender_id="human-user-1",
+        sender_name="Human",
+        sender_avatar_url=None,
+        wake=False,
+    )
+
+    assert enqueued == [("quiet chat notification", False)]
 
 
 def test_chat_runtime_services_use_injected_runtime_callables():

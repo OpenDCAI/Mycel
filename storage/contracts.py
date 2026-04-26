@@ -350,9 +350,9 @@ class RelationshipRow(BaseModel):
 
 
 class DeliveryAction(StrEnum):
-    DELIVER = "deliver"  # full delivery: inject into agent context, wake agent
-    NOTIFY = "notify"  # red dot only: message stored, unread counted, no delivery
-    DROP = "drop"  # silent: message stored but invisible to this user
+    DELIVER = "deliver"  # runtime delivery is allowed
+    NOTIFY = "notify"  # runtime delivery is allowed without waking
+    DROP = "drop"  # runtime delivery is blocked
 
 
 ContactRelation = Literal["normal", "blocked", "muted"]

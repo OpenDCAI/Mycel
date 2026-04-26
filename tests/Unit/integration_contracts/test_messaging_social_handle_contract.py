@@ -2865,6 +2865,69 @@ def test_delivery_resolver_reads_contact_edge_row_objects() -> None:
     assert action is DeliveryAction.DELIVER
 
 
+def test_delivery_resolver_delivers_default_visit_relationship_without_mention() -> None:
+    resolver = HireVisitDeliveryResolver(
+        contact_repo=SimpleNamespace(get=lambda _owner_id, _target_id: None),
+        chat_member_repo=SimpleNamespace(
+            list_members=lambda _chat_id: [
+                {"user_id": "agent-user-1", "muted": False},
+                {"user_id": "human-user-1", "muted": False},
+            ]
+        ),
+        relationship_repo=SimpleNamespace(
+            get=lambda _recipient_id, _sender_id: {
+                "id": "hire_visit:agent-user-1:human-user-1",
+                "user_low": "agent-user-1",
+                "user_high": "human-user-1",
+                "kind": "hire_visit",
+                "state": "visit",
+                "initiator_user_id": "human-user-1",
+                "message": None,
+                "created_at": "2026-04-07T00:00:00Z",
+                "updated_at": "2026-04-07T00:00:01Z",
+            }
+        ),
+    )
+
+    action = resolver.resolve("agent-user-1", "chat-1", "human-user-1")
+
+    assert action is DeliveryAction.DELIVER
+
+
+def test_delivery_resolver_delivers_default_group_member_without_relationship() -> None:
+    resolver = HireVisitDeliveryResolver(
+        contact_repo=SimpleNamespace(get=lambda _owner_id, _target_id: None),
+        chat_member_repo=SimpleNamespace(
+            list_members=lambda _chat_id: [
+                {"user_id": "agent-user-1", "muted": False},
+                {"user_id": "human-user-1", "muted": False},
+            ]
+        ),
+        relationship_repo=SimpleNamespace(get=lambda _recipient_id, _sender_id: None),
+    )
+
+    action = resolver.resolve("agent-user-1", "chat-1", "human-user-1")
+
+    assert action is DeliveryAction.DELIVER
+
+
+def test_delivery_resolver_receiver_mute_wins_over_explicit_mention() -> None:
+    resolver = HireVisitDeliveryResolver(
+        contact_repo=SimpleNamespace(get=lambda _owner_id, _target_id: None),
+        chat_member_repo=SimpleNamespace(
+            list_members=lambda _chat_id: [
+                {"user_id": "agent-user-1", "muted": True},
+                {"user_id": "human-user-1", "muted": False},
+            ]
+        ),
+        relationship_repo=None,
+    )
+
+    action = resolver.resolve("agent-user-1", "chat-1", "human-user-1", is_mentioned=True)
+
+    assert action is DeliveryAction.NOTIFY
+
+
 def test_delivery_resolver_propagates_contact_repo_failures() -> None:
     def _raise_get(_owner_id: str, _target_id: str) -> None:
         raise RuntimeError("contact repo unavailable")
@@ -2995,8 +3058,8 @@ def test_same_owner_agent_turn_delivers_to_sibling_user_without_relationship() -
     assert delivered == [("agent-user-2", "agent-user-2")]
 
 
-def test_same_owner_group_delivery_honors_chat_mute_until_mentioned() -> None:
-    delivered: list[tuple[str, str]] = []
+def test_same_owner_group_delivery_queues_muted_recipients_even_when_mentioned() -> None:
+    delivered: list[tuple[str, bool]] = []
     dispatcher = ChatDeliveryDispatcher(
         chat_member_repo=SimpleNamespace(
             list_members=lambda _chat_id: [
@@ -3018,13 +3081,18 @@ def test_same_owner_group_delivery_honors_chat_mute_until_mentioned() -> None:
         ),
         unread_counter=lambda _chat_id, _user_id: 0,
         delivery_resolver=SimpleNamespace(resolve=lambda *_args, **_kwargs: DeliveryAction.DELIVER),
-        delivery_fn=lambda request: delivered.append((request.recipient_id, request.recipient_user.id)),
+        delivery_fn=lambda request: delivered.append((request.recipient_id, request.wake)),
     )
 
     dispatcher.dispatch("chat-1", "human-user-1", "plain update", [])
     dispatcher.dispatch("chat-1", "human-user-1", "explicit mention", ["agent-user-2"])
 
-    assert delivered == [("agent-user-1", "agent-user-1"), ("agent-user-1", "agent-user-1"), ("agent-user-2", "agent-user-2")]
+    assert delivered == [
+        ("agent-user-1", True),
+        ("agent-user-2", False),
+        ("agent-user-1", False),
+        ("agent-user-2", False),
+    ]
 
 
 @pytest.mark.asyncio

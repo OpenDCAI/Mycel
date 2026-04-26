@@ -57,6 +57,7 @@ def make_chat_delivery_fn(app: Any, *, activity_reader: Any, thread_repo: Any):
             ),
             recipient=AgentChatRecipient(agent_user_id=request.recipient_id, runtime_source="mycel", thread_id=thread_id),
             message=AgentRuntimeMessage(content=rendered_content, signal=request.signal),
+            wake=request.wake,
             extensions={
                 "mycel": {
                     "recipient_user_id": recipient_user_id,

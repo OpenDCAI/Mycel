@@ -16,6 +16,7 @@ class AgentChatRuntimeServices(Protocol):
         sender_id: str,
         sender_name: str,
         sender_avatar_url: str | None,
+        wake: bool = True,
     ) -> None: ...
 
 
@@ -54,6 +55,7 @@ class AppAgentChatRuntimeServices:
         sender_id: str,
         sender_name: str,
         sender_avatar_url: str | None,
+        wake: bool = True,
     ) -> None:
         self._queue_manager.enqueue(
             content,
@@ -63,4 +65,5 @@ class AppAgentChatRuntimeServices:
             sender_id=sender_id,
             sender_name=sender_name,
             sender_avatar_url=sender_avatar_url,
+            wake=wake,
         )
