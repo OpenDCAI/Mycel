@@ -7,6 +7,8 @@ maintained prompts.
 ## Chat And Delivery
 
 - `chat-wake-policy.md`
+- `chat-managed-agent-word-chain.md`
+- `external-managed-agent-chat.md`
 
 ## Relationship And Join
 
