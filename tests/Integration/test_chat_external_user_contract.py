@@ -13,7 +13,13 @@ def _user_directory(rows: dict[str, UserRow]):
 def test_validate_chat_participant_ids_accepts_external_user() -> None:
     rows = {
         "human-1": UserRow(id="human-1", display_name="Owner", type=UserType.HUMAN, created_at=1.0),
-        "external-1": UserRow(id="external-1", display_name="Codex External", type=UserType.EXTERNAL, created_at=1.0),
+        "external-1": UserRow(
+            id="external-1",
+            display_name="Codex External",
+            type=UserType.EXTERNAL,
+            created_by_user_id="human-1",
+            created_at=1.0,
+        ),
     }
 
     result = chats_router._chat_participant_ids_for_request(

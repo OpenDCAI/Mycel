@@ -210,6 +210,7 @@ class AuthService:
                 id=external_user_id,
                 type=UserType.EXTERNAL,
                 display_name=external_display_name,
+                created_by_user_id=created_by_user_id,
                 created_at=now,
             )
         )
@@ -225,7 +226,12 @@ class AuthService:
         )
         return {
             "token": token,
-            "user": {"id": external_user_id, "name": external_display_name, "type": "external"},
+            "user": {
+                "id": external_user_id,
+                "name": external_display_name,
+                "type": "external",
+                "created_by_user_id": created_by_user_id,
+            },
         }
 
     def _resolve_email(self, identifier: str) -> str:

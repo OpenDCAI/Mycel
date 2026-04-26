@@ -16,7 +16,7 @@ class SupabaseSummaryRepo:
         return None
 
     def ensure_tables(self) -> None:
-        """Supabase schema is managed via migrations, not runtime DDL."""
+        """Supabase schema is managed outside request-time DDL."""
 
     def save_summary(
         self,

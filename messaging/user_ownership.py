@@ -7,7 +7,9 @@ from typing import Any
 
 def is_owned_by_viewer(viewer_user_id: str, candidate_user: Any | None) -> bool:
     return candidate_user is not None and (
-        getattr(candidate_user, "id", None) == viewer_user_id or getattr(candidate_user, "owner_user_id", None) == viewer_user_id
+        getattr(candidate_user, "id", None) == viewer_user_id
+        or getattr(candidate_user, "owner_user_id", None) == viewer_user_id
+        or getattr(candidate_user, "created_by_user_id", None) == viewer_user_id
     )
 
 

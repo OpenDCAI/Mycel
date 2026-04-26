@@ -447,8 +447,14 @@ def test_chat_candidates_route_fails_loud_when_contact_repo_missing() -> None:
 @pytest.mark.asyncio
 async def test_list_chat_candidates_projects_external_user_like_unowned_participant() -> None:
     current_user = _human("u1", "owner")
-    external_user = UserRow(id="ext-1", display_name="Codex External", type=UserType.EXTERNAL, created_at=NOW)
-    app = _users_app([current_user, external_user], relationships={"ext-1": "visit"})
+    external_user = UserRow(
+        id="ext-1",
+        display_name="Codex External",
+        type=UserType.EXTERNAL,
+        created_by_user_id="u1",
+        created_at=NOW,
+    )
+    app = _users_app([current_user, external_user])
 
     result = await _list_chat_candidates(app)
 
@@ -460,9 +466,9 @@ async def test_list_chat_candidates_projects_external_user_like_unowned_particip
             "avatar_url": None,
             "owner_name": None,
             "agent_name": "Codex External",
-            "is_owned": False,
-            "relationship_state": "visit",
-            "relationship_id": "hire_visit:ext-1:u1",
+            "is_owned": True,
+            "relationship_state": "none",
+            "relationship_id": None,
             "relationship_is_requester": False,
             "relationship_message": None,
             "can_chat": True,

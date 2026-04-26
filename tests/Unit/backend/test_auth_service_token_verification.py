@@ -173,12 +173,19 @@ def test_create_external_user_token_creates_external_user_and_signed_token(monke
     assert created_rows[0].id == "external-codex-1"
     assert created_rows[0].type is UserType.EXTERNAL
     assert created_rows[0].display_name == "Codex Local"
+    assert created_rows[0].owner_user_id is None
+    assert created_rows[0].created_by_user_id == "owner-1"
     decoded = jwt.decode(result["token"], "secret-1", algorithms=["HS256"], options={"verify_aud": False})
     assert decoded["sub"] == "external-codex-1"
     assert decoded["mycel_user_type"] == "external"
     assert decoded["created_by_user_id"] == "owner-1"
     assert _service(user_repo=user_repo).verify_token(result["token"]) == {"user_id": "external-codex-1"}
-    assert result["user"] == {"id": "external-codex-1", "name": "Codex Local", "type": "external"}
+    assert result["user"] == {
+        "id": "external-codex-1",
+        "name": "Codex Local",
+        "type": "external",
+        "created_by_user_id": "owner-1",
+    }
 
 
 def test_create_external_user_token_rejects_existing_user(monkeypatch: pytest.MonkeyPatch):
