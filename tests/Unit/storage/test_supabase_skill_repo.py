@@ -81,7 +81,7 @@ def _row(skill_id: str = "skill-1") -> dict:
         "name": "github",
         "description": "GitHub guidance",
         "version": "1.0.0",
-        "content": "---\nname: github\n---\n",
+        "content": "---\nname: github\ndescription: GitHub guidance\n---\n",
         "files_json": {"references/query.md": "Prefer precise queries."},
         "source_json": {"source_version": "1.0.0"},
         "created_at": "2026-04-24T00:00:00+00:00",
@@ -97,7 +97,7 @@ def _package_row(package_id: str = "package-1") -> dict:
         "version": "1.0.0",
         "hash": "sha256:abc",
         "manifest_json": {"files": [{"path": "references/query.md", "sha256": "def"}]},
-        "skill_md": "---\nname: github\n---\n",
+        "skill_md": "---\nname: github\ndescription: GitHub guidance\n---\n",
         "files_json": {"references/query.md": "Prefer precise queries."},
         "source_json": {"source_version": "1.0.0"},
         "created_at": "2026-04-24T00:00:00+00:00",
@@ -147,6 +147,16 @@ def test_get_by_id_rejects_null_skill_description() -> None:
         repo.get_by_id("owner-1", "skill-1")
 
 
+def test_get_by_id_rejects_blank_skill_description() -> None:
+    row = _row()
+    row["description"] = " "
+    client = _FakeClient({"library.skills": [row]})
+    repo = SupabaseSkillRepo(client)
+
+    with pytest.raises(RuntimeError, match="library.skills.description must not be blank"):
+        repo.get_by_id("owner-1", "skill-1")
+
+
 def test_upsert_writes_library_skill_metadata_only() -> None:
     client = _FakeClient()
     repo = SupabaseSkillRepo(client)
@@ -157,6 +167,7 @@ def test_upsert_writes_library_skill_metadata_only() -> None:
             id="skill-1",
             owner_user_id="owner-1",
             name="github",
+            description="GitHub helper",
             package_id="package-1",
             source={"source_version": "1.0.0"},
             created_at=timestamp,
@@ -188,7 +199,7 @@ def test_create_package_writes_immutable_skill_package() -> None:
             version="1.0.0",
             hash="sha256:abc",
             manifest={"files": [{"path": "references/query.md", "sha256": "def"}]},
-            skill_md="---\nname: github\n---\n",
+            skill_md="---\nname: github\ndescription: GitHub guidance\n---\n",
             files={"references/query.md": "Prefer precise queries."},
             source={"source_version": "1.0.0"},
             created_at=timestamp,
@@ -197,7 +208,7 @@ def test_create_package_writes_immutable_skill_package() -> None:
 
     payload = client.table_queries["library.skill_packages"][0].upsert_payload
     assert payload is not None
-    assert payload["skill_md"] == "---\nname: github\n---\n"
+    assert payload["skill_md"] == "---\nname: github\ndescription: GitHub guidance\n---\n"
     assert payload["files_json"] == {"references/query.md": "Prefer precise queries."}
     assert payload["manifest_json"] == {"files": [{"path": "references/query.md", "sha256": "def"}]}
     assert payload["source_json"] == {"source_version": "1.0.0"}

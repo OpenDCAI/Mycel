@@ -332,6 +332,7 @@ class TestApplySkill:
             id="same-slug",
             owner_user_id="owner-1",
             name="Original Skill",
+            description="Original desc",
             source={"marketplace_item_id": "item-rename"},
             created_at=datetime(2026, 4, 24, tzinfo=UTC),
             updated_at=datetime(2026, 4, 24, tzinfo=UTC),
@@ -354,6 +355,7 @@ class TestApplySkill:
             id="original-slug",
             owner_user_id="owner-1",
             name="Shared Name",
+            description="Shared desc",
             created_at=datetime(2026, 4, 24, tzinfo=UTC),
             updated_at=datetime(2026, 4, 24, tzinfo=UTC),
         )

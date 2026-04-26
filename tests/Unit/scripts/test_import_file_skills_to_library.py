@@ -67,6 +67,7 @@ def test_import_file_skill_reuses_existing_skill_by_name(monkeypatch: pytest.Mon
             id="original-skill",
             owner_user_id="owner-1",
             name="Shared Skill",
+            description="Shared",
             created_at=datetime(2026, 4, 24, tzinfo=UTC),
             updated_at=datetime(2026, 4, 24, tzinfo=UTC),
         )
