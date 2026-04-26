@@ -147,6 +147,16 @@ def test_get_by_id_rejects_null_skill_description() -> None:
         repo.get_by_id("owner-1", "skill-1")
 
 
+def test_get_by_id_rejects_blank_skill_description() -> None:
+    row = _row()
+    row["description"] = " "
+    client = _FakeClient({"library.skills": [row]})
+    repo = SupabaseSkillRepo(client)
+
+    with pytest.raises(RuntimeError, match="library.skills.description must not be blank"):
+        repo.get_by_id("owner-1", "skill-1")
+
+
 def test_upsert_writes_library_skill_metadata_only() -> None:
     client = _FakeClient()
     repo = SupabaseSkillRepo(client)
@@ -157,6 +167,7 @@ def test_upsert_writes_library_skill_metadata_only() -> None:
             id="skill-1",
             owner_user_id="owner-1",
             name="github",
+            description="GitHub helper",
             package_id="package-1",
             source={"source_version": "1.0.0"},
             created_at=timestamp,
