@@ -64,7 +64,7 @@ class ChatDeliveryDispatcher:
         if sender_raw_type is None:
             raise RuntimeError(f"Chat delivery sender type is missing: {sender_id}")
         sender_type = sender_raw_type.value if isinstance(sender_raw_type, Enum) else str(sender_raw_type)
-        sender_owner_id = sender_user.id if sender_type == "human" else getattr(sender_user, "owner_user_id", None)
+        sender_owner_id = self._runtime_owner_id(sender_user)
 
         for member in members:
             uid = member.get("user_id")
@@ -77,7 +77,7 @@ class ChatDeliveryDispatcher:
                 raise RuntimeError(f"Chat delivery recipient identity not found: {uid}")
             member_raw_type = getattr(recipient, "type", None)
             member_type = member_raw_type.value if isinstance(member_raw_type, Enum) else str(member_raw_type)
-            if member_type != "agent":
+            if member_type not in {"agent", "external"}:
                 continue
 
             action = DeliveryAction.DELIVER
@@ -132,8 +132,17 @@ class ChatDeliveryDispatcher:
             raise RuntimeError("Chat delivery avatar URL builder is not configured")
         return self._avatar_url_builder(user_id, has_avatar)
 
+    def _runtime_owner_id(self, user: Any) -> str | None:
+        raw_type = getattr(user, "type", None)
+        user_type = raw_type.value if isinstance(raw_type, Enum) else str(raw_type)
+        if user_type == "human":
+            return getattr(user, "id", None)
+        if user_type == "external":
+            return getattr(user, "created_by_user_id", None)
+        return getattr(user, "owner_user_id", None)
+
     def _needs_access_resolver(self, sender_owner_id: str | None, recipient: Any) -> bool:
-        return not (sender_owner_id and getattr(recipient, "owner_user_id", None) == sender_owner_id)
+        return not (sender_owner_id and self._runtime_owner_id(recipient) == sender_owner_id)
 
     def _deliver(
         self,
