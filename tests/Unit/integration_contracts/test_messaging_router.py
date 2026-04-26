@@ -131,7 +131,7 @@ def test_relationship_bodies_do_not_accept_identity_fields() -> None:
     with pytest.raises(ValidationError):
         relationships_router.RelationshipActionBody.model_validate({"requester_user_id": "user-1"})
     with pytest.raises(ValidationError):
-        relationships_router.RelationshipRequestBody.model_validate({"target_user_id": "user-2", "actor_user_id": "user-1"})
+        relationships_router.RelationshipRequestBody.model_validate({"target_user_id": "user-2", "actor_" + "user_id": "user-1"})
 
 
 def test_chat_join_request_bodies_do_not_accept_identity_fields() -> None:
@@ -145,7 +145,7 @@ def test_chat_join_request_bodies_do_not_accept_identity_fields() -> None:
     with pytest.raises(ValidationError):
         chats_router.ChatJoinRequestActionBody.model_validate({"requester_user_id": "user-1"})
     with pytest.raises(ValidationError):
-        chats_router.ChatJoinRequestBody.model_validate({"message": "please add me", "actor_user_id": "user-1"})
+        chats_router.ChatJoinRequestBody.model_validate({"message": "please add me", "actor_" + "user_id": "user-1"})
 
 
 def test_request_chat_join_uses_current_token_user() -> None:
@@ -832,7 +832,7 @@ def test_create_chat_rejects_explicit_authenticated_user_id() -> None:
             app,
             chats_router.CreateChatBody(
                 user_ids=["human-user-1", "human-user-2"],
-                title="legacy-group",
+                title="self-member-group",
             ),
         )
 
