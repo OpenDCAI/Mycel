@@ -42,7 +42,7 @@ class ModelSpec(BaseModel):
 class ActiveModel(BaseModel):
     """Currently active model selection."""
 
-    model: str = "claude-sonnet-4-5-20250929"
+    model: str = "gpt-5.5"
     provider: str | None = None
     based_on: str | None = None
     context_limit: int | None = Field(None, gt=0)
