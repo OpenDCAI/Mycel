@@ -45,6 +45,16 @@ const agentFixture = {
   },
 };
 
+function renderAgentDetail() {
+  return render(
+    <MemoryRouter initialEntries={["/contacts/agents/agent-1"]}>
+      <Routes>
+        <Route path="/contacts/agents/:id" element={<AgentDetailPage />} />
+      </Routes>
+    </MemoryRouter>,
+  );
+}
+
 vi.mock("@/store/app-store", () => ({
   useAppStore: (selector: (state: Record<string, unknown>) => unknown) =>
     selector({
@@ -84,13 +94,7 @@ describe("AgentDetailPage wording contract", () => {
   });
 
   it("uses the contacts page as the back target for direct-open agent detail", async () => {
-    render(
-      <MemoryRouter initialEntries={["/contacts/agents/agent-1"]}>
-        <Routes>
-          <Route path="/contacts/agents/:id" element={<AgentDetailPage />} />
-        </Routes>
-      </MemoryRouter>,
-    );
+    renderAgentDetail();
 
     expect(await screen.findByText("Agent One")).toBeTruthy();
     fireEvent.click(screen.getAllByRole("button")[0]);
@@ -99,37 +103,19 @@ describe("AgentDetailPage wording contract", () => {
   });
 
   it("uses Agent wording for the subagent module label", () => {
-    render(
-      <MemoryRouter initialEntries={["/contacts/agents/agent-1"]}>
-        <Routes>
-          <Route path="/contacts/agents/:id" element={<AgentDetailPage />} />
-        </Routes>
-      </MemoryRouter>,
-    );
+    renderAgentDetail();
 
     expect(screen.getByRole("button", { name: /子 Agent/ })).toBeTruthy();
   });
 
   it("does not expose the old fake local test panel", () => {
-    render(
-      <MemoryRouter initialEntries={["/contacts/agents/agent-1"]}>
-        <Routes>
-          <Route path="/contacts/agents/:id" element={<AgentDetailPage />} />
-        </Routes>
-      </MemoryRouter>,
-    );
+    renderAgentDetail();
 
     expect(screen.queryByRole("button", { name: /^测试$/ })).toBeNull();
   });
 
   it("keeps MCP out of the primary agent config modules", () => {
-    render(
-      <MemoryRouter initialEntries={["/contacts/agents/agent-1"]}>
-        <Routes>
-          <Route path="/contacts/agents/:id" element={<AgentDetailPage />} />
-        </Routes>
-      </MemoryRouter>,
-    );
+    renderAgentDetail();
 
     expect(screen.getByRole("button", { name: /^技能/ })).toBeTruthy();
     expect(screen.getByRole("button", { name: /^子 Agent/ })).toBeTruthy();
@@ -147,13 +133,7 @@ describe("AgentDetailPage wording contract", () => {
       config: { prompt: "", rules: [], tools: [], mcpServers: [], skills: [], subAgents: [] },
     });
 
-    render(
-      <MemoryRouter initialEntries={["/contacts/agents/agent-1"]}>
-        <Routes>
-          <Route path="/contacts/agents/:id" element={<AgentDetailPage />} />
-        </Routes>
-      </MemoryRouter>,
-    );
+    renderAgentDetail();
 
     await waitFor(() => {
       expect(fetchAgent).toHaveBeenCalledWith("agent-1");
@@ -163,13 +143,7 @@ describe("AgentDetailPage wording contract", () => {
   it("shows the concrete rename failure", async () => {
     updateAgent.mockRejectedValue(new Error("name already exists"));
 
-    render(
-      <MemoryRouter initialEntries={["/contacts/agents/agent-1"]}>
-        <Routes>
-          <Route path="/contacts/agents/:id" element={<AgentDetailPage />} />
-        </Routes>
-      </MemoryRouter>,
-    );
+    renderAgentDetail();
 
     fireEvent.doubleClick(screen.getByText("Agent One"));
     fireEvent.change(screen.getByDisplayValue("Agent One"), { target: { value: "Morel" } });
@@ -189,13 +163,7 @@ describe("AgentDetailPage wording contract", () => {
       },
     });
 
-    render(
-      <MemoryRouter initialEntries={["/contacts/agents/agent-1"]}>
-        <Routes>
-          <Route path="/contacts/agents/:id" element={<AgentDetailPage />} />
-        </Routes>
-      </MemoryRouter>,
-    );
+    renderAgentDetail();
 
     const input = screen.getByLabelText("压缩触发 Token");
     expect((input as HTMLInputElement).value).toBe("80000");
@@ -211,13 +179,7 @@ describe("AgentDetailPage wording contract", () => {
   });
 
   it("keeps MCP advanced config outside the Library picker path", async () => {
-    render(
-      <MemoryRouter initialEntries={["/contacts/agents/agent-1"]}>
-        <Routes>
-          <Route path="/contacts/agents/:id" element={<AgentDetailPage />} />
-        </Routes>
-      </MemoryRouter>,
-    );
+    renderAgentDetail();
 
     expect(ensureLibrary).not.toHaveBeenCalled();
 
@@ -237,13 +199,7 @@ describe("AgentDetailPage wording contract", () => {
       updated_at: 0,
     });
 
-    render(
-      <MemoryRouter initialEntries={["/contacts/agents/agent-1"]}>
-        <Routes>
-          <Route path="/contacts/agents/:id" element={<AgentDetailPage />} />
-        </Routes>
-      </MemoryRouter>,
-    );
+    renderAgentDetail();
 
     fireEvent.click(screen.getByRole("button", { name: /^技能/ }));
     fireEvent.click(screen.getByText("点击 + 从 Library 添加 技能"));
@@ -279,13 +235,7 @@ describe("AgentDetailPage wording contract", () => {
       },
     });
 
-    render(
-      <MemoryRouter initialEntries={["/contacts/agents/agent-1"]}>
-        <Routes>
-          <Route path="/contacts/agents/:id" element={<AgentDetailPage />} />
-        </Routes>
-      </MemoryRouter>,
-    );
+    renderAgentDetail();
 
     fireEvent.click(screen.getByRole("button", { name: /^MCP 高级/ }));
     fireEvent.click(screen.getByRole("switch"));
@@ -306,13 +256,7 @@ describe("AgentDetailPage wording contract", () => {
   });
 
   it("does not expose a Library picker for subagents", async () => {
-    render(
-      <MemoryRouter initialEntries={["/contacts/agents/agent-1"]}>
-        <Routes>
-          <Route path="/contacts/agents/:id" element={<AgentDetailPage />} />
-        </Routes>
-      </MemoryRouter>,
-    );
+    renderAgentDetail();
 
     fireEvent.click(screen.getByRole("button", { name: /^子 Agent/ }));
 
@@ -330,13 +274,7 @@ describe("AgentDetailPage wording contract", () => {
       },
     });
 
-    render(
-      <MemoryRouter initialEntries={["/contacts/agents/agent-1"]}>
-        <Routes>
-          <Route path="/contacts/agents/:id" element={<AgentDetailPage />} />
-        </Routes>
-      </MemoryRouter>,
-    );
+    renderAgentDetail();
 
     fireEvent.click(screen.getByRole("button", { name: /^子 Agent/ }));
 
@@ -345,13 +283,7 @@ describe("AgentDetailPage wording contract", () => {
   });
 
   it("uses subagent wording for the empty subagent detail prompt", () => {
-    render(
-      <MemoryRouter initialEntries={["/contacts/agents/agent-1"]}>
-        <Routes>
-          <Route path="/contacts/agents/:id" element={<AgentDetailPage />} />
-        </Routes>
-      </MemoryRouter>,
-    );
+    renderAgentDetail();
 
     fireEvent.click(screen.getByRole("button", { name: /^子 Agent/ }));
 
@@ -367,13 +299,7 @@ describe("AgentDetailPage wording contract", () => {
       },
     });
 
-    render(
-      <MemoryRouter initialEntries={["/contacts/agents/agent-1"]}>
-        <Routes>
-          <Route path="/contacts/agents/:id" element={<AgentDetailPage />} />
-        </Routes>
-      </MemoryRouter>,
-    );
+    renderAgentDetail();
 
     fireEvent.click(screen.getByRole("button", { name: /^子 Agent/ }));
 
