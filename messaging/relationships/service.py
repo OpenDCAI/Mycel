@@ -32,6 +32,8 @@ class RelationshipService:
         requester_id: str,
         target_id: str,
         event: RelationshipEvent,
+        *,
+        message: str | None = None,
     ) -> RelationshipRow:
         """Apply an event to the relationship between requester and target.
 
@@ -62,11 +64,17 @@ class RelationshipService:
             event,
         )
 
-        row = self._repo.upsert(requester_id, target_id, state=new_state, initiator_user_id=initiator_user_id)
+        row = self._repo.upsert(
+            requester_id,
+            target_id,
+            state=new_state,
+            initiator_user_id=initiator_user_id,
+            message=message,
+        )
         return RelationshipRow.model_validate(row)
 
-    def request(self, requester_id: str, target_id: str) -> RelationshipRow:
-        row = self.apply_event(requester_id, target_id, "request")
+    def request(self, requester_id: str, target_id: str, message: str | None = None) -> RelationshipRow:
+        row = self.apply_event(requester_id, target_id, "request", message=message)
         if self._on_relationship_requested is not None:
             self._on_relationship_requested(row)
         return row

@@ -142,6 +142,7 @@ class RelationshipRow(BaseModel):
     kind: str = "hire_visit"
     state: RelationshipState = "none"
     initiator_user_id: str | None = None
+    message: str | None = None
     created_at: datetime
     updated_at: datetime
 

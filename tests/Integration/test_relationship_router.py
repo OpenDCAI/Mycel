@@ -18,6 +18,7 @@ def _row(
     initiator_user_id: str = "requester-user-1",
     user_low: str = "agent-user-1",
     user_high: str = "requester-user-1",
+    message: str | None = None,
 ) -> RelationshipRow:
     now = datetime(2026, 4, 8, tzinfo=UTC)
     return RelationshipRow(
@@ -27,6 +28,7 @@ def _row(
         kind="hire_visit",
         state=state,
         initiator_user_id=initiator_user_id,
+        message=message,
         created_at=now,
         updated_at=now,
     )
@@ -40,7 +42,7 @@ def test_relationship_public_openapi_uses_token_identity_only() -> None:
     request_properties = schemas["RelationshipRequestBody"]["properties"]
     action_properties = schemas["RelationshipActionBody"]["properties"]
 
-    assert list(request_properties) == ["target_user_id"]
+    assert list(request_properties) == ["target_user_id", "message"]
     assert action_properties == {}
 
 
@@ -48,28 +50,33 @@ def test_relationship_request_route_is_sync_for_runtime_notification_delivery() 
     assert inspect.iscoroutinefunction(owner_relationship_router.request_relationship) is False
 
 
-def test_request_relationship_uses_current_token_user() -> None:
-    seen: list[tuple[str, str]] = []
+def test_request_relationship_uses_current_token_user_and_message() -> None:
+    seen: list[tuple[str, str, str | None]] = []
     relationship_service = SimpleNamespace(
-        request=lambda requester_id, target_id: (
-            seen.append((requester_id, target_id))
+        request=lambda requester_id, target_id, message=None: (
+            seen.append((requester_id, target_id, message))
             or _row(
                 initiator_user_id=requester_id,
                 user_low=requester_id,
                 user_high=target_id,
+                message=message,
             )
         )
     )
 
     result = owner_relationship_router.request_relationship(
-        owner_relationship_router.RelationshipRequestBody(target_user_id="requester-user-1"),
+        owner_relationship_router.RelationshipRequestBody(
+            target_user_id="requester-user-1",
+            message="I want to coordinate on the YATU group.",
+        ),
         user_id="owner-user-1",
         relationship_service=relationship_service,
     )
 
-    assert seen == [("owner-user-1", "requester-user-1")]
+    assert seen == [("owner-user-1", "requester-user-1", "I want to coordinate on the YATU group.")]
     assert result["other_user_id"] == "requester-user-1"
     assert result["is_requester"] is True
+    assert result["message"] == "I want to coordinate on the YATU group."
 
 
 def test_approve_relationship_uses_current_token_user() -> None:

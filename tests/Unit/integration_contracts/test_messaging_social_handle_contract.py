@@ -47,6 +47,7 @@ class _FakeRelationshipRepo:
                 "kind": "hire_visit",
                 "state": "hire",
                 "initiator_user_id": "human-user-1",
+                "message": None,
                 "created_at": "2026-04-07T00:00:00Z",
                 "updated_at": "2026-04-07T00:00:00Z",
             }
@@ -56,10 +57,20 @@ class _FakeRelationshipRepo:
         key = cast(tuple[str, str], tuple(sorted((requester_id, target_id))))
         return self._existing.get(key)
 
-    def upsert(self, requester_id: str, target_id: str, *, state: str, initiator_user_id: str | None):
+    def upsert(
+        self,
+        requester_id: str,
+        target_id: str,
+        *,
+        state: str,
+        initiator_user_id: str | None,
+        message: str | None = None,
+    ):
         key = cast(tuple[str, str], tuple(sorted((requester_id, target_id))))
         row = dict(self._existing[key])
         row.update({"state": state, "initiator_user_id": initiator_user_id})
+        if message is not None:
+            row["message"] = message
         row["updated_at"] = "2026-04-07T00:01:00Z"
         self._existing[key] = row
         return row

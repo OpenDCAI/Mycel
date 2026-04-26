@@ -22,6 +22,7 @@ class RelationshipRequestBody(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     target_user_id: str
+    message: str | None = None
 
 
 class RelationshipActionBody(BaseModel):
@@ -52,6 +53,7 @@ def _row_to_dict(row: RelationshipRow, viewer_id: str) -> dict:
         "other_user_id": other_id,
         "state": row.state,
         "is_requester": is_requester,
+        "message": row.message,
         "created_at": row.created_at.isoformat(),
         "updated_at": row.updated_at.isoformat(),
     }
@@ -75,7 +77,7 @@ def request_relationship(
     if user_id == body.target_user_id:
         raise HTTPException(400, "Cannot request relationship with yourself")
     try:
-        row = relationship_service.request(user_id, body.target_user_id)
+        row = relationship_service.request(user_id, body.target_user_id, body.message)
         return _row_to_dict(row, user_id)
     except TransitionError as e:
         raise HTTPException(409, str(e))

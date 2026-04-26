@@ -43,9 +43,9 @@ def make_relationship_request_notification_fn(app: Any, *, activity_reader: Any,
                     source="relationship",
                 ),
                 message=AgentRuntimeMessage(
-                    content=(
-                        f"{_display_name(requester, requester_id)} requested a relationship with you. "
-                        "Review the pending relationship request in Mycel, then approve or reject it."
+                    content=_notification_content(
+                        _display_name(requester, requester_id),
+                        row.message,
                     ),
                     metadata={"relationship_id": row.id},
                 ),
@@ -92,3 +92,10 @@ def _display_name(user: Any, user_id: str) -> str:
     if display_name is None:
         raise RuntimeError(f"Relationship request user is missing display name: {user_id}")
     return str(display_name)
+
+
+def _notification_content(requester_name: str, message: str | None) -> str:
+    base = f"{requester_name} requested a relationship with you."
+    if message and message.strip():
+        base = f"{base} Message: {message.strip()}"
+    return f"{base} Review the pending relationship request in Mycel, then approve or reject it."

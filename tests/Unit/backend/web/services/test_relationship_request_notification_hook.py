@@ -16,6 +16,7 @@ def _relationship_row(
     user_low: str = "agent-user-1",
     user_high: str = "human-user-1",
     initiator_user_id: str = "human-user-1",
+    message: str | None = None,
 ) -> RelationshipRow:
     now = datetime(2026, 4, 26, tzinfo=UTC)
     return RelationshipRow(
@@ -25,6 +26,7 @@ def _relationship_row(
         kind="hire_visit",
         state="pending",
         initiator_user_id=initiator_user_id,
+        message=message,
         created_at=now,
         updated_at=now,
     )
@@ -75,7 +77,7 @@ async def test_relationship_request_notification_dispatches_thread_input_to_agen
         user_repo=user_repo,
     )
 
-    await asyncio.to_thread(notify, _relationship_row())
+    await asyncio.to_thread(notify, _relationship_row(message="Please add me to the planning chat."))
 
     assert gateway.envelope is not None
     assert gateway.envelope.thread_id == "thread-main"
@@ -84,6 +86,7 @@ async def test_relationship_request_notification_dispatches_thread_input_to_agen
     assert gateway.envelope.sender.display_name == "Human"
     assert gateway.envelope.sender.source == "relationship"
     assert "Human requested a relationship with you." in gateway.envelope.message.content
+    assert "Please add me to the planning chat." in gateway.envelope.message.content
     assert gateway.envelope.message.metadata == {"relationship_id": "hire_visit:agent-user-1:human-user-1"}
 
 
