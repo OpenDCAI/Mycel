@@ -20,12 +20,17 @@ class RelationshipService:
         relationship_repo: Any,
         *,
         on_relationship_requested: Callable[[RelationshipRow], None] | None = None,
+        on_relationship_decided: Callable[[RelationshipRow, RelationshipEvent], None] | None = None,
     ) -> None:
         self._repo = relationship_repo
         self._on_relationship_requested = on_relationship_requested
+        self._on_relationship_decided = on_relationship_decided
 
     def set_relationship_request_notification_fn(self, fn: Callable[[RelationshipRow], None]) -> None:
         self._on_relationship_requested = fn
+
+    def set_relationship_decision_notification_fn(self, fn: Callable[[RelationshipRow, RelationshipEvent], None]) -> None:
+        self._on_relationship_decided = fn
 
     def apply_event(
         self,
@@ -80,10 +85,16 @@ class RelationshipService:
         return row
 
     def approve(self, approver_id: str, requester_id: str) -> RelationshipRow:
-        return self.apply_event(approver_id, requester_id, "approve")
+        row = self.apply_event(approver_id, requester_id, "approve")
+        if self._on_relationship_decided is not None:
+            self._on_relationship_decided(row, "approve")
+        return row
 
     def reject(self, approver_id: str, requester_id: str) -> RelationshipRow:
-        return self.apply_event(approver_id, requester_id, "reject")
+        row = self.apply_event(approver_id, requester_id, "reject")
+        if self._on_relationship_decided is not None:
+            self._on_relationship_decided(row, "reject")
+        return row
 
     def upgrade(self, owner_id: str, agent_id: str) -> RelationshipRow:
         return self.apply_event(owner_id, agent_id, "upgrade")

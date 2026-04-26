@@ -24,6 +24,7 @@ def _patch_lifespan_runtime_contract(
     attach_threads_runtime,
     wire_chat_delivery,
     wire_relationship_request_notifications,
+    wire_relationship_decision_notifications=lambda *_args, **_kwargs: None,
     wire_chat_join_request_notifications=lambda *_args, **_kwargs: None,
 ):
     monkeypatch.setattr(web_lifespan, "_require_web_runtime_contract", lambda: None)
@@ -74,6 +75,7 @@ def _patch_lifespan_runtime_contract(
     monkeypatch.setattr("backend.chat.bootstrap.attach_chat_runtime", attach_chat_runtime)
     monkeypatch.setattr("backend.chat.bootstrap.wire_chat_delivery", wire_chat_delivery)
     monkeypatch.setattr("backend.chat.bootstrap.wire_relationship_request_notifications", wire_relationship_request_notifications)
+    monkeypatch.setattr("backend.chat.bootstrap.wire_relationship_decision_notifications", wire_relationship_decision_notifications)
     monkeypatch.setattr("backend.chat.bootstrap.wire_chat_join_request_notifications", wire_chat_join_request_notifications)
     monkeypatch.setattr("backend.threads.bootstrap.attach_threads_runtime", attach_threads_runtime)
     monkeypatch.setattr("backend.threads.display.builder.DisplayBuilder", lambda: object())
@@ -182,6 +184,11 @@ async def test_web_lifespan_wires_chat_delivery_after_threads_runtime(monkeypatc
         assert relationship_service is returned_relationship_service
         assert activity_reader is returned_activity_reader
 
+    def _wire_relationship_decision_notifications(_app, *, relationship_service, activity_reader, thread_repo, user_repo):
+        call_log.append("wire-relationship-decision")
+        assert relationship_service is returned_relationship_service
+        assert activity_reader is returned_activity_reader
+
     def _wire_chat_join_request_notifications(_app, *, chat_join_request_service, activity_reader, thread_repo, user_repo):
         call_log.append("wire-chat-join")
         assert chat_join_request_service is returned_chat_join_request_service
@@ -194,13 +201,22 @@ async def test_web_lifespan_wires_chat_delivery_after_threads_runtime(monkeypatc
         attach_threads_runtime=_attach_threads_runtime,
         wire_chat_delivery=_wire_chat_delivery,
         wire_relationship_request_notifications=_wire_relationship_request_notifications,
+        wire_relationship_decision_notifications=_wire_relationship_decision_notifications,
         wire_chat_join_request_notifications=_wire_chat_join_request_notifications,
     )
 
     app = SimpleNamespace(state=SimpleNamespace())
 
     async with web_lifespan.lifespan(app):
-        assert call_log == ["chat", "auth", "threads", "wire-chat", "wire-relationship", "wire-chat-join"]
+        assert call_log == [
+            "chat",
+            "auth",
+            "threads",
+            "wire-chat",
+            "wire-relationship",
+            "wire-relationship-decision",
+            "wire-chat-join",
+        ]
 
 
 @pytest.mark.asyncio
@@ -266,6 +282,7 @@ async def test_web_lifespan_passes_borrowed_contact_repo_into_auth_runtime(monke
     )
     monkeypatch.setattr("backend.chat.bootstrap.wire_chat_delivery", lambda *_args, **_kwargs: None)
     monkeypatch.setattr("backend.chat.bootstrap.wire_relationship_request_notifications", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr("backend.chat.bootstrap.wire_relationship_decision_notifications", lambda *_args, **_kwargs: None)
     monkeypatch.setattr("backend.chat.bootstrap.wire_chat_join_request_notifications", lambda *_args, **_kwargs: None)
     monkeypatch.setattr("backend.threads.display.builder.DisplayBuilder", lambda: object())
     monkeypatch.setattr("backend.sandboxes.service.init_providers_and_managers", lambda: None)

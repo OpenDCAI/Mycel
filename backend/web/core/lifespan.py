@@ -61,6 +61,7 @@ async def lifespan(app: FastAPI):
         attach_chat_runtime,
         wire_chat_delivery,
         wire_chat_join_request_notifications,
+        wire_relationship_decision_notifications,
         wire_relationship_request_notifications,
     )
     from backend.threads.bootstrap import attach_threads_runtime
@@ -93,6 +94,13 @@ async def lifespan(app: FastAPI):
         thread_repo=app.state.thread_repo,
     )
     wire_relationship_request_notifications(
+        app,
+        relationship_service=chat_runtime.relationship_service,
+        activity_reader=threads_runtime.activity_reader,
+        thread_repo=app.state.thread_repo,
+        user_repo=app.state.user_repo,
+    )
+    wire_relationship_decision_notifications(
         app,
         relationship_service=chat_runtime.relationship_service,
         activity_reader=threads_runtime.activity_reader,
