@@ -864,6 +864,7 @@ def test_messaging_service_list_message_responses_projects_sender_name_from_agen
                     "sender_user_id": "agent-user-1",
                     "content": "hello",
                     "message_type": "human",
+                    "seq": 42,
                     "created_at": "2026-04-07T00:00:00Z",
                 }
             ]
@@ -884,6 +885,7 @@ def test_messaging_service_list_message_responses_projects_sender_name_from_agen
             "content": "hello",
             "message_type": "human",
             "mentioned_ids": [],
+            "seq": 42,
             "signal": None,
             "retracted_at": None,
             "created_at": "2026-04-07T00:00:00Z",

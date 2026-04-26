@@ -96,6 +96,7 @@ class MessagingService:
             "content": message["content"],
             "message_type": message.get("message_type", "human"),
             "mentioned_ids": message.get("mentioned_ids") or [],
+            "seq": message.get("seq"),
             "signal": message.get("signal"),
             "retracted_at": message.get("retracted_at"),
             "created_at": message.get("created_at"),
