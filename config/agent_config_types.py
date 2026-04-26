@@ -22,13 +22,13 @@ class Skill(AgentConfigSchemaModel):
     id: str
     owner_user_id: str
     name: str
-    description: str = ""
+    description: str
     package_id: str | None = None
     source: dict[str, Any] = Field(default_factory=dict)
     created_at: datetime
     updated_at: datetime
 
-    @field_validator("id", "owner_user_id", "name")
+    @field_validator("id", "owner_user_id", "name", "description")
     @classmethod
     def _non_blank(cls, value: str, info: ValidationInfo) -> str:
         if not value.strip():

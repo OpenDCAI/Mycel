@@ -2,7 +2,7 @@ from datetime import UTC, datetime
 
 import pytest
 
-from config.agent_config_types import AgentConfig, AgentRule, AgentSkill, AgentSubAgent, McpServerConfig, ResolvedSkill, SkillPackage
+from config.agent_config_types import AgentConfig, AgentRule, AgentSkill, AgentSubAgent, McpServerConfig, ResolvedSkill, Skill, SkillPackage
 
 
 def test_resolved_skill_model_normalizes_file_paths() -> None:
@@ -58,8 +58,36 @@ def test_resolved_skill_model_rejects_blank_id() -> None:
         ResolvedSkill(
             id=" ",
             name="query-helper",
+            description="Build precise queries",
             version="1.0.0",
             content="---\nname: query-helper\n---\nUse exact terms.",
+        )
+
+
+def test_skill_model_requires_description() -> None:
+    with pytest.raises(ValueError) as excinfo:
+        Skill.model_validate(
+            {
+                "id": "skill-1",
+                "owner_user_id": "owner-1",
+                "name": "query-helper",
+                "created_at": datetime(2026, 4, 25, tzinfo=UTC),
+                "updated_at": datetime(2026, 4, 25, tzinfo=UTC),
+            }
+        )
+
+    assert "description" in str(excinfo.value)
+
+
+def test_skill_model_rejects_blank_description() -> None:
+    with pytest.raises(ValueError, match="skill.description must not be blank"):
+        Skill(
+            id="skill-1",
+            owner_user_id="owner-1",
+            name="query-helper",
+            description=" ",
+            created_at=datetime(2026, 4, 25, tzinfo=UTC),
+            updated_at=datetime(2026, 4, 25, tzinfo=UTC),
         )
 
 
@@ -207,7 +235,7 @@ def test_skill_package_requires_package_identity_and_skill_md() -> None:
         version="1.0.0",
         hash="sha256:abc",
         manifest={"files": [{"path": "references/query.md", "sha256": "def"}]},
-        skill_md="---\nname: query-helper\n---\nUse exact terms.",
+        skill_md="---\nname: query-helper\ndescription: Build precise queries\n---\nUse exact terms.",
         files={"references\\query.md": "Prefer precise queries."},
         created_at=datetime(2026, 4, 25, tzinfo=UTC),
     )
