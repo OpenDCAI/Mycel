@@ -1,14 +1,10 @@
-"""HireVisitDeliveryResolver — delivery action based on relationship state.
+"""HireVisitDeliveryResolver — receiver access and quiet policy.
 
 Priority chain (highest wins):
-1. blocked (contact relation) → DROP
-2. HIRE relationship → DELIVER (direct access)
-3. @mention override → DELIVER
-4. muted contact → NOTIFY
-5. muted chat → NOTIFY
-6. VISIT relationship → NOTIFY (queue, not direct)
-7. stranger (no relationship) → NOTIFY (anti-spam default)
-8. Default → DELIVER (same-owner users, known contacts)
+1. blocked contact → DROP
+2. muted contact → NOTIFY
+3. muted chat → NOTIFY
+4. otherwise → DELIVER
 """
 
 from __future__ import annotations
@@ -50,46 +46,23 @@ class HireVisitDeliveryResolver:
         *,
         is_mentioned: bool = False,
     ) -> DeliveryAction:
-        # 1. Contact-level block — always DROP
         contact = self._get_contact(recipient_id, sender_id)
         if self._is_blocked(contact):
             logger.debug("[resolver] DROP: %s blocked %s", recipient_id[:15], sender_id[:15])
             return DeliveryAction.DROP
 
-        # Fetch relationship once for checks 2, 6, 7
         rel = self._relationships.get(recipient_id, sender_id) if self._relationships else None
-        rel_state = self._relationship_state(rel) if rel else "none"
+        if rel:
+            self._relationship_state(rel)
 
-        # 2. HIRE → DELIVER
-        if rel_state == "hire":
-            logger.debug("[resolver] DELIVER: HIRE relationship %s←%s", recipient_id[:15], sender_id[:15])
-            return DeliveryAction.DELIVER
-
-        # 3. @mention override — skip mute checks (not block)
-        if is_mentioned:
-            return DeliveryAction.DELIVER
-
-        # 4. Contact-level mute
         if self._is_muted(contact):
             logger.debug("[resolver] NOTIFY: %s muted %s", recipient_id[:15], sender_id[:15])
             return DeliveryAction.NOTIFY
 
-        # 5. Chat-level mute
         if self._is_chat_muted(recipient_id, chat_id):
             logger.debug("[resolver] NOTIFY: %s muted chat %s", recipient_id[:15], chat_id[:8])
             return DeliveryAction.NOTIFY
 
-        # 6. VISIT → NOTIFY
-        if rel_state == "visit":
-            logger.debug("[resolver] NOTIFY: VISIT relationship %s←%s", recipient_id[:15], sender_id[:15])
-            return DeliveryAction.NOTIFY
-
-        # 7. Stranger (none or no relationship) → NOTIFY (anti-spam)
-        if self._relationships and rel_state == "none":
-            logger.debug("[resolver] NOTIFY: stranger %s←%s", recipient_id[:15], sender_id[:15])
-            return DeliveryAction.NOTIFY
-
-        # 8. Default → DELIVER
         return DeliveryAction.DELIVER
 
     def _relationship_state(self, relationship: dict[str, Any]) -> str:
