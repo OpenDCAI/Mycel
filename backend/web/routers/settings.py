@@ -1,6 +1,7 @@
 import asyncio
 import copy
 import json
+import re
 from pathlib import Path
 from typing import Annotated, Any, Literal
 
@@ -95,18 +96,50 @@ def _build_model_http_client_kwargs(
     }, (async_client, sync_client)
 
 
+def _is_current_openai_gpt5_streaming_model(model_id: str) -> bool:
+    name = model_id.removeprefix("openai/").removeprefix("openai:")
+    return re.match(r"^gpt-5\.5(?:-.+)?$", name) is not None
+
+
 def _is_visible_settings_pool_model(provider_name: str, model_id: str) -> bool:
     if provider_name != "openai":
         return True
-    return model_id.startswith("gpt-5.4")
+    return _is_current_openai_gpt5_streaming_model(model_id)
+
+
+def _append_available_model(
+    models_list: list[dict[str, Any]],
+    seen: set[str],
+    *,
+    model_id: str,
+    name: str,
+    provider: str | None,
+    context_length: int | None = None,
+    custom: bool = False,
+) -> None:
+    if provider and not custom and not _is_visible_settings_pool_model(provider, model_id):
+        return
+    if model_id in seen:
+        return
+    seen.add(model_id)
+    item: dict[str, Any] = {
+        "id": model_id,
+        "name": name,
+        "provider": provider,
+    }
+    if context_length is not None:
+        item["context_length"] = context_length
+    if custom:
+        item["custom"] = True
+    models_list.append(item)
 
 
 def _validate_openai_settings_probe_or_400(resolved_model: str, provider_name: str | None) -> None:
     if provider_name != "openai":
         return
-    if resolved_model.startswith("gpt-5.4"):
+    if _is_current_openai_gpt5_streaming_model(resolved_model):
         return
-    raise RuntimeError("settings model probe only supports openai gpt-5.4 streaming path; choose gpt-5.4")
+    raise RuntimeError("settings model probe only supports current OpenAI GPT-5 streaming models")
 
 
 async def _run_streaming_model_probe(model: Any) -> str:
@@ -320,41 +353,46 @@ async def get_available_models(req: Request, user_id: CurrentUserId) -> dict[str
         bundled_providers: dict[str, str] = {}
         models_list = []
         seen: set[str] = set()
+        repo = _get_settings_repo(req)
+        mc = _load_merged_models_for_storage(repo, user_id)
         for m in raw_data.get("data", []):
             model_id = m.get("id", "")
             if "/" not in model_id:
                 continue
             provider, short_name = model_id.split("/", 1)
-            if not _is_visible_settings_pool_model(provider, short_name):
-                continue
-            if short_name in seen:
-                continue
-            seen.add(short_name)
             bundled_providers[short_name] = provider
-            models_list.append(
-                {
-                    "id": short_name,
-                    "name": m.get("name", short_name),
-                    "provider": provider,
-                    "context_length": m.get("context_length"),
-                }
+            _append_available_model(
+                models_list,
+                seen,
+                model_id=short_name,
+                name=m.get("name", short_name),
+                provider=provider,
+                context_length=m.get("context_length"),
             )
-        pricing_ids = seen
+
+        for catalog_item in getattr(mc, "catalog", []):
+            _append_available_model(
+                models_list,
+                seen,
+                model_id=catalog_item.id,
+                name=catalog_item.name,
+                provider=catalog_item.provider,
+                context_length=getattr(catalog_item, "context_length", None),
+            )
+        known_model_ids = set(seen)
 
         # Merge custom + orphaned enabled models
-        repo = _get_settings_repo(req)
-        mc = _load_merged_models_for_storage(repo, user_id)
         data = repo.get_models_config(user_id) or {}
         custom_providers = data.get("pool", {}).get("custom_providers", {})
-        extra_ids = set(mc.pool.custom) | (set(mc.pool.enabled) - pricing_ids)
+        extra_ids = set(mc.pool.custom) | (set(mc.pool.enabled) - known_model_ids)
         for mid in sorted(extra_ids):
-            models_list.append(
-                {
-                    "id": mid,
-                    "name": mid,
-                    "custom": True,
-                    "provider": custom_providers.get(mid) or bundled_providers.get(mid),
-                }
+            _append_available_model(
+                models_list,
+                seen,
+                model_id=mid,
+                name=mid,
+                provider=custom_providers.get(mid) or bundled_providers.get(mid),
+                custom=True,
             )
 
         # Virtual models from system defaults

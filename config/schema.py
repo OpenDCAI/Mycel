@@ -16,7 +16,7 @@ from typing import Annotated, Any
 from pydantic import BaseModel, ConfigDict, Field, StrictBool, field_validator
 
 # Default model used across the codebase — single source of truth
-DEFAULT_MODEL = "claude-sonnet-4-5-20250929"
+DEFAULT_MODEL = "gpt-5.5"
 
 # ============================================================================
 # Runtime Configuration (non-model behavior parameters)
