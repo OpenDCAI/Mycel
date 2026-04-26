@@ -2211,8 +2211,8 @@ def test_apply_snapshot_saves_one_agent_config_aggregate():
                         "id": "search-core",
                         "name": "Search",
                         "version": "1.0.0",
-                        "content": "---\nname: Search\n---\nbody",
-                        "description": "skill desc",
+                        "content": "---\nname: Search\ndescription: Search repos\n---\nbody",
+                        "description": "Search repos",
                         "source": {"source_version": "snapshot-stale", "extra": "drop"},
                     }
                 ],
@@ -2237,7 +2237,7 @@ def test_apply_snapshot_saves_one_agent_config_aggregate():
     assert skill_repo.get_by_id("user-1", "search-core") is None
     package = skill_repo.get_package("user-1", saved_configs[0].skills[0].package_id or "")
     assert package is not None
-    assert package.skill_md == "---\nname: Search\n---\nbody"
+    assert package.skill_md == "---\nname: Search\ndescription: Search repos\n---\nbody"
     assert package.source == {
         "marketplace_item_id": "item-1",
         "snapshot_skill_id": "search-core",
@@ -2263,7 +2263,14 @@ def test_apply_snapshot_with_skills_requires_skill_repo():
                 "agent": {
                     "id": "cfg-source",
                     "name": "Repo Agent",
-                    "skills": [{"id": "search", "name": "Search", "version": "1.0.0", "content": "---\nname: Search\n---\nbody"}],
+                    "skills": [
+                        {
+                            "id": "search",
+                            "name": "Search",
+                            "version": "1.0.0",
+                            "content": "---\nname: Search\ndescription: Search repos\n---\nbody",
+                        }
+                    ],
                 },
             },
             marketplace_item_id="item-1",
@@ -2271,6 +2278,36 @@ def test_apply_snapshot_with_skills_requires_skill_repo():
             owner_user_id="user-1",
             user_repo=SimpleNamespace(create=lambda _row: None),
             agent_config_repo=SimpleNamespace(save_agent_config=lambda _config: None),
+        )
+
+
+def test_apply_snapshot_skill_requires_frontmatter_description() -> None:
+    from backend.hub.snapshot_apply import apply_snapshot
+
+    with pytest.raises(ValueError, match="Skill 'Search' on Agent config frontmatter must include description"):
+        apply_snapshot(
+            snapshot={
+                "schema_version": "agent-snapshot/v1",
+                "agent": {
+                    "id": "cfg-source",
+                    "name": "Repo Agent",
+                    "skills": [
+                        {
+                            "id": "search",
+                            "name": "Search",
+                            "version": "1.0.0",
+                            "description": "Snapshot desc",
+                            "content": "---\nname: Search\n---\nbody",
+                        }
+                    ],
+                },
+            },
+            marketplace_item_id="item-1",
+            source_version="1.0.0",
+            owner_user_id="user-1",
+            user_repo=SimpleNamespace(create=lambda _row: None),
+            agent_config_repo=SimpleNamespace(save_agent_config=lambda _config: None),
+            skill_repo=_MemorySkillRepo(),
         )
 
 
@@ -2292,7 +2329,14 @@ def test_apply_snapshot_requires_source_identity(field: str, value: object, mess
             "agent": {
                 "id": "cfg-source",
                 "name": "Repo Agent",
-                "skills": [{"id": "search", "name": "Search", "version": "1.0.0", "content": "---\nname: Search\n---\nbody"}],
+                "skills": [
+                    {
+                        "id": "search",
+                        "name": "Search",
+                        "version": "1.0.0",
+                        "content": "---\nname: Search\ndescription: Search repos\n---\nbody",
+                    }
+                ],
             },
         },
         "marketplace_item_id": "item-1",
@@ -2357,8 +2401,18 @@ def test_apply_snapshot_rejects_duplicate_skill_ids_before_library_write():
                     "id": "cfg-source",
                     "name": "Repo Agent",
                     "skills": [
-                        {"id": "search", "name": "Search One", "version": "1.0.0", "content": "---\nname: Search One\n---\none"},
-                        {"id": "search", "name": "Search Two", "version": "1.0.0", "content": "---\nname: Search Two\n---\ntwo"},
+                        {
+                            "id": "search",
+                            "name": "Search One",
+                            "version": "1.0.0",
+                            "content": "---\nname: Search One\ndescription: Search one\n---\none",
+                        },
+                        {
+                            "id": "search",
+                            "name": "Search Two",
+                            "version": "1.0.0",
+                            "content": "---\nname: Search Two\ndescription: Search two\n---\ntwo",
+                        },
                     ],
                 },
             },
@@ -2391,7 +2445,7 @@ def test_apply_snapshot_treats_snapshot_skill_id_as_source_metadata(monkeypatch:
                         "id": "nested/search",
                         "name": "Search",
                         "version": "1.0.0",
-                        "content": "---\nname: Search\n---\nbody",
+                        "content": "---\nname: Search\ndescription: Search repos\n---\nbody",
                     }
                 ],
             },
@@ -2440,7 +2494,14 @@ def test_apply_snapshot_reuses_existing_skill_by_snapshot_source(monkeypatch: py
             "agent": {
                 "id": "cfg-source",
                 "name": "Repo Agent",
-                "skills": [{"id": "search-core", "name": "Search", "version": "1.0.1", "content": "---\nname: Search\n---\nnew"}],
+                "skills": [
+                    {
+                        "id": "search-core",
+                        "name": "Search",
+                        "version": "1.0.1",
+                        "content": "---\nname: Search\ndescription: Search repos\n---\nnew",
+                    }
+                ],
             },
         },
         marketplace_item_id="item-1",
@@ -2452,7 +2513,7 @@ def test_apply_snapshot_reuses_existing_skill_by_snapshot_source(monkeypatch: py
     )
 
     assert saved_configs[0].skills[0].skill_id == "skill_existing123"
-    assert skill_repo.get_by_id("user-1", "skill_existing123").description == ""
+    assert skill_repo.get_by_id("user-1", "skill_existing123").description == "Search repos"
     package = skill_repo.get_package("user-1", saved_configs[0].skills[0].package_id)
     assert package is not None
     assert package.source["snapshot_skill_id"] == "search-core"
@@ -2468,7 +2529,7 @@ def test_apply_snapshot_fails_when_generated_skill_id_exists(monkeypatch: pytest
         skill_id="skill_existing123",
         name="Existing",
         description="existing",
-        content="---\nname: Existing\n---\nbody",
+        content="---\nname: Existing\ndescription: Existing desc\n---\nbody",
     )
     monkeypatch.setattr("backend.hub.snapshot_apply.generate_skill_id", lambda: "skill_existing123")
 
@@ -2479,7 +2540,14 @@ def test_apply_snapshot_fails_when_generated_skill_id_exists(monkeypatch: pytest
                 "agent": {
                     "id": "cfg-source",
                     "name": "Repo Agent",
-                    "skills": [{"id": "search-core", "name": "Search", "version": "1.0.0", "content": "---\nname: Search\n---\nbody"}],
+                    "skills": [
+                        {
+                            "id": "search-core",
+                            "name": "Search",
+                            "version": "1.0.0",
+                            "content": "---\nname: Search\ndescription: Search repos\n---\nbody",
+                        }
+                    ],
                 },
             },
             marketplace_item_id="item-1",
@@ -2501,7 +2569,7 @@ def test_apply_snapshot_rejects_existing_same_name_without_snapshot_source(monke
         skill_id="skill_existing123",
         name="Search",
         description="existing",
-        content="---\nname: Search\n---\nbody",
+        content="---\nname: Search\ndescription: Search repos\n---\nbody",
     )
     monkeypatch.setattr("backend.hub.snapshot_apply.generate_skill_id", lambda: "skill_generated123")
 
@@ -2512,7 +2580,14 @@ def test_apply_snapshot_rejects_existing_same_name_without_snapshot_source(monke
                 "agent": {
                     "id": "cfg-source",
                     "name": "Repo Agent",
-                    "skills": [{"id": "search-core", "name": "Search", "version": "1.0.0", "content": "---\nname: Search\n---\nbody"}],
+                    "skills": [
+                        {
+                            "id": "search-core",
+                            "name": "Search",
+                            "version": "1.0.0",
+                            "content": "---\nname: Search\ndescription: Search repos\n---\nbody",
+                        }
+                    ],
                 },
             },
             marketplace_item_id="item-1",
@@ -2537,8 +2612,18 @@ def test_apply_snapshot_rejects_duplicate_skill_names_before_library_write():
                     "id": "cfg-source",
                     "name": "Repo Agent",
                     "skills": [
-                        {"id": "search-one", "name": "Search", "version": "1.0.0", "content": "---\nname: Search\n---\none"},
-                        {"id": "search-two", "name": "Search", "version": "1.0.0", "content": "---\nname: Search\n---\ntwo"},
+                        {
+                            "id": "search-one",
+                            "name": "Search",
+                            "version": "1.0.0",
+                            "content": "---\nname: Search\ndescription: Search repos\n---\none",
+                        },
+                        {
+                            "id": "search-two",
+                            "name": "Search",
+                            "version": "1.0.0",
+                            "content": "---\nname: Search\ndescription: Search repos\n---\ntwo",
+                        },
                     ],
                 },
             },

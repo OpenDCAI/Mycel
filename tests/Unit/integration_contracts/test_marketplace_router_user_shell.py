@@ -148,7 +148,7 @@ def test_skill_marketplace_to_agent_library_delete_backend_api_yatu(monkeypatch:
             },
             "version": "1.0.0",
             "snapshot": {
-                "content": f"---\nname: {row['name']}\n---\n{row['body']}",
+                "content": f"---\nname: {row['name']}\ndescription: {row['description']}\n---\n{row['body']}",
                 "meta": {"desc": row["description"]},
                 "files": {"references/routing.md": row["body"]},
             },
@@ -393,7 +393,7 @@ async def test_apply_member_snapshot_materializes_skill_through_router(monkeypat
                             "name": "Snapshot Skill",
                             "description": "skill desc",
                             "version": "1.2.3",
-                            "content": "---\nname: Snapshot Skill\n---\nbody",
+                            "content": "---\nname: Snapshot Skill\ndescription: skill desc\n---\nbody",
                             "files": {"references/routing.md": "route narrowly"},
                         }
                     ],
