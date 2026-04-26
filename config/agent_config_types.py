@@ -91,13 +91,13 @@ class AgentSkill(AgentConfigSchemaModel):
 class ResolvedSkill(AgentConfigSchemaModel):
     id: str
     name: str
-    description: str = ""
+    description: str
     version: str
     content: str
     files: dict[str, str] = Field(default_factory=dict)
     source: dict[str, Any] = Field(default_factory=dict)
 
-    @field_validator("id", "name", "version", "content")
+    @field_validator("id", "name", "description", "version", "content")
     @classmethod
     def _non_blank(cls, value: str, info: ValidationInfo) -> str:
         if not value.strip():
@@ -108,6 +108,18 @@ class ResolvedSkill(AgentConfigSchemaModel):
     @classmethod
     def _normalize_files(cls, value: Any) -> Any:
         return normalize_skill_file_map(value, context="Skill files") if isinstance(value, dict) else value
+
+    @model_validator(mode="after")
+    def _content_frontmatter_matches_fields(self) -> ResolvedSkill:
+        # @@@resolved-skill-boundary - runtime Skill fields are derived from and pinned to SKILL.md.
+        document = parse_skill_document(self.content, label="resolved_skill.content", require_description=True, require_version=True)
+        if document.name != self.name:
+            raise ValueError("resolved_skill.content frontmatter name must match resolved_skill.name")
+        if document.description != self.description:
+            raise ValueError("resolved_skill.content frontmatter description must match resolved_skill.description")
+        if document.version != self.version:
+            raise ValueError("resolved_skill.content frontmatter version must match resolved_skill.version")
+        return self
 
 
 class AgentRule(AgentConfigSchemaModel):

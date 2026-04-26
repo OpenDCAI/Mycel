@@ -58,7 +58,7 @@ def _resolve_skill(owner_user_id: str, skill: AgentSkill, skill_repo: Any) -> Re
         require_description=True,
         require_version=True,
     )
-    resolved = ResolvedSkill(
+    return ResolvedSkill(
         id=skill.skill_id,
         name=document.name,
         description=document.description,
@@ -67,18 +67,3 @@ def _resolve_skill(owner_user_id: str, skill: AgentSkill, skill_repo: Any) -> Re
         files=dict(package.files),
         source=dict(package.source),
     )
-    return validate_resolved_skill_content(resolved)
-
-
-def validate_resolved_skill_content(skill: ResolvedSkill) -> ResolvedSkill:
-    document = parse_skill_document(
-        skill.content,
-        label=f"Skill {skill.name!r} on Agent config",
-        require_description=True,
-        require_version=True,
-    )
-    if document.name != skill.name:
-        raise ValueError(f"Skill {skill.name!r} on Agent config frontmatter name must match ResolvedSkill.name")
-    if document.version != skill.version:
-        raise ValueError("ResolvedSkill.version must match SKILL.md frontmatter version")
-    return skill.model_copy(update={"description": document.description})
