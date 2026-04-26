@@ -352,12 +352,14 @@ class SupabaseRelationshipRepo:
         *,
         state: RelationshipState,
         initiator_user_id: str | None,
+        message: str | None = None,
     ) -> dict[str, Any]:
         user_low, user_high = self._ordered(user_a, user_b)
         existing = self.get(user_a, user_b)
         now = time.time()
+        message_update = {"message": message} if message is not None else {}
         if existing:
-            relationship_updates = {"state": state, "initiator_user_id": initiator_user_id}
+            relationship_updates = {"state": state, "initiator_user_id": initiator_user_id, **message_update}
             if state == "none":
                 (self._t().delete().eq("user_low", user_low).eq("user_high", user_high).eq("kind", "hire_visit").execute())
                 return self._normalize({**existing, "updated_at": now, **relationship_updates})
@@ -379,6 +381,7 @@ class SupabaseRelationshipRepo:
             "updated_at": now,
             "state": state,
             "initiator_user_id": initiator_user_id,
+            "message": message,
         }
         res = self._t().insert(row).execute()
         return self._normalize(res.data[0] if res.data else row)

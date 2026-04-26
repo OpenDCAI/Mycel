@@ -77,11 +77,13 @@ def test_supabase_contact_and_relationship_repos_use_chat_schema() -> None:
         "user-2",
         state="pending",
         initiator_user_id="user-1",
+        message="Please connect for the YATU run.",
     )
 
     assert tables["chat.contacts"][0]["source_user_id"] == "user-1"
     assert relationship["id"] == "hire_visit:user-1:user-2"
     assert tables["chat.relationships"][0]["initiator_user_id"] == "user-1"
+    assert tables["chat.relationships"][0]["message"] == "Please connect for the YATU run."
     assert "contacts" not in tables
     assert "relationships" not in tables
 
