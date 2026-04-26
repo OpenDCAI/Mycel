@@ -18,6 +18,7 @@ _COLS = (
     "avatar",
     "email",
     "mycel_id",
+    "created_by_user_id",
     "created_at",
     "updated_at",
 )
@@ -42,6 +43,7 @@ class SupabaseUserRepo:
                 "avatar": row.avatar,
                 "email": row.email,
                 "mycel_id": row.mycel_id,
+                "created_by_user_id": row.created_by_user_id,
                 "created_at": row.created_at,
                 "updated_at": row.updated_at,
             }

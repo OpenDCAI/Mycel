@@ -107,6 +107,7 @@ class UserRow(BaseModel):
     avatar: str | None = None
     email: str | None = None
     mycel_id: int | None = None
+    created_by_user_id: str | None = None
     created_at: float
     updated_at: float | None = None
 
@@ -115,18 +116,28 @@ class UserRow(BaseModel):
         # @@@user-row-shape - users are the unified social identity surface, so
         # human/external/agent optional fields must fail loudly instead of drifting
         # into mixed half-valid rows.
-        if self.type in {UserType.HUMAN, UserType.EXTERNAL}:
+        if self.type is UserType.HUMAN:
             if self.owner_user_id is not None:
-                kind = "human" if self.type is UserType.HUMAN else "external"
-                raise ValueError(f"{kind} users must not carry owner_user_id")
+                raise ValueError("human users must not carry owner_user_id")
             if self.agent_config_id is not None:
-                kind = "human" if self.type is UserType.HUMAN else "external"
-                raise ValueError(f"{kind} users must not carry agent_config_id")
+                raise ValueError("human users must not carry agent_config_id")
+            if self.created_by_user_id is not None:
+                raise ValueError("human users must not carry created_by_user_id")
+            return self
+        if self.type is UserType.EXTERNAL:
+            if self.owner_user_id is not None:
+                raise ValueError("external users must not carry owner_user_id")
+            if self.agent_config_id is not None:
+                raise ValueError("external users must not carry agent_config_id")
+            if self.created_by_user_id is None:
+                raise ValueError("external users require created_by_user_id")
             return self
         if self.owner_user_id is None:
             raise ValueError("agent users require owner_user_id")
         if self.agent_config_id is None:
             raise ValueError("agent users require agent_config_id")
+        if self.created_by_user_id is not None:
+            raise ValueError("agent users must not carry created_by_user_id")
         return self
 
 

@@ -17,8 +17,14 @@ def test_is_owned_by_viewer_accepts_owned_agent_user() -> None:
     assert is_owned_by_viewer("viewer-1", user) is True
 
 
+def test_is_owned_by_viewer_accepts_created_external_user() -> None:
+    user = SimpleNamespace(id="external-user-1", owner_user_id=None, created_by_user_id="viewer-1")
+
+    assert is_owned_by_viewer("viewer-1", user) is True
+
+
 def test_is_owned_by_viewer_rejects_stranger() -> None:
-    user = SimpleNamespace(id="agent-user-1", owner_user_id="someone-else")
+    user = SimpleNamespace(id="agent-user-1", owner_user_id="someone-else", created_by_user_id=None)
 
     assert is_owned_by_viewer("viewer-1", user) is False
 

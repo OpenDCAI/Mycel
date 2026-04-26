@@ -12,6 +12,7 @@ from backend.identity.avatar.paths import avatars_dir
 from backend.identity.avatar.urls import avatar_url
 from backend.web.core.dependencies import get_app, get_current_user_id
 from messaging.social_access import active_contact_target_ids, can_chat_with_owner_scope
+from messaging.user_ownership import is_owned_by_viewer
 from storage.contracts import UserType
 
 logger = logging.getLogger(__name__)
@@ -68,7 +69,7 @@ def _get_owned_avatar_user_or_404(user_id: str, current_user_id: str, user_repo:
     user = user_repo.get_by_id(user_id)
     if not user:
         raise HTTPException(404, "User not found")
-    if user_id == current_user_id or user.owner_user_id == current_user_id:
+    if is_owned_by_viewer(current_user_id, user):
         return user
     raise HTTPException(403, "Not authorized")
 
@@ -172,8 +173,9 @@ async def list_chat_candidates(
     for user in users:
         if user.id == user_id:
             continue
-        is_owned = user.type is UserType.AGENT and user.owner_user_id == user_id
-        if is_owned and thread_repo is None:
+        is_owned = is_owned_by_viewer(user_id, user)
+        is_owned_agent = user.type is UserType.AGENT and user.owner_user_id == user_id
+        if is_owned_agent and thread_repo is None:
             # @@@owned-agent-thread-truth - owned agent candidates expose
             # default_thread_id when available, so this consumer must fail loud
             # when thread_repo is absent instead of silently pretending the
@@ -216,7 +218,7 @@ async def list_chat_candidates(
             )
         else:
             owner = user_map.get(user.owner_user_id) if user.owner_user_id else None
-            default_thread = thread_repo.get_default_thread(user.id) if is_owned and thread_repo is not None else None
+            default_thread = thread_repo.get_default_thread(user.id) if is_owned_agent and thread_repo is not None else None
             item = {
                 "user_id": user.id,
                 "name": user.display_name,
@@ -229,7 +231,7 @@ async def list_chat_candidates(
                 **relationship_fields,
                 "can_chat": can_chat,
             }
-            if is_owned:
+            if is_owned_agent:
                 item["default_thread_id"] = default_thread["id"] if default_thread else None
             items.append(item)
     return items

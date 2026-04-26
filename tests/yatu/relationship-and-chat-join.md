@@ -20,8 +20,9 @@ Approving one must not secretly approve the other.
 ## Setup
 
 1. Start the backend from the current branch.
-2. Prepare an owner or human profile, an external-agent profile, and at least
-   one managed-agent runtime thread.
+2. Prepare a human profile that created an external-agent profile through the
+   public auth onboarding surface, plus at least one managed-agent runtime
+   thread.
 3. Prepare one active group chat with a clear owner.
 4. Prepare a non-member visitor profile.
 

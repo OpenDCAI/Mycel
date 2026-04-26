@@ -10,6 +10,7 @@ maintained prompts.
 
 ## Relationship And Join
 
+- `external-user-auth-management.md`
 - `relationship-and-chat-join.md`
 
 ## Frontend
