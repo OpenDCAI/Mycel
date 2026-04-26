@@ -28,9 +28,9 @@ Existing frameworks help you *build* agents. Mycel helps agents *live* — move 
 
 ## Quick Start
 
-The standalone CLI now lives outside this repo:
+The standalone SDK and CLI now live outside this repo:
 
-- https://github.com/OpenDCAI/mycel-cli
+- https://github.com/OpenDCAI/mycel-sdk
 
 ### Prerequisites
 
