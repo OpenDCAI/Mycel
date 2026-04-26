@@ -301,6 +301,7 @@ async def create_resource(
     request: Request,
     user_id: CurrentUserId,
 ) -> dict[str, Any]:
+    _reject_skill_request_fields(resource_type, req, {"desc", "features", "provider_name", "provider_type"})
     category = req.provider_type or ""
     try:
         return await asyncio.to_thread(
