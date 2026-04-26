@@ -173,7 +173,7 @@ def test_dispatcher_agent_turn_delivers_only_to_sibling_agent() -> None:
     assert delivered == ["agent-user-2"]
 
 
-def test_dispatcher_does_not_runtime_deliver_to_external_users() -> None:
+def test_dispatcher_delivers_to_external_users_as_runtime_recipients() -> None:
     delivered: list[str] = []
     dispatcher = ChatDeliveryDispatcher(
         chat_member_repo=_member_repo(["agent-user-1", "external-user-1"]),
@@ -186,7 +186,7 @@ def test_dispatcher_does_not_runtime_deliver_to_external_users() -> None:
 
     dispatcher.dispatch("chat-1", "agent-user-1", "hello", [])
 
-    assert delivered == []
+    assert delivered == ["external-user-1"]
 
 
 def test_dispatcher_keeps_notify_policy_out_of_runtime_queue() -> None:
