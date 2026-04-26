@@ -53,8 +53,6 @@ def import_skills(owner_user_id: str, library_dir: Path) -> int:
         skill_id = existing.id if existing is not None else generate_skill_id()
         if existing is None and repo.get_by_id(owner_user_id, skill_id) is not None:
             raise RuntimeError("Generated Skill id already exists")
-        if document.version is None:
-            raise RuntimeError("SKILL.md version was not parsed")
         files = _read_files(skill_dir)
         skill = repo.upsert(
             Skill(
@@ -71,7 +69,6 @@ def import_skills(owner_user_id: str, library_dir: Path) -> int:
             build_skill_package(
                 owner_user_id=owner_user_id,
                 skill_id=skill.id,
-                version=document.version,
                 skill_md=content,
                 files=files,
                 source=dict(FILE_IMPORT_SOURCE),

@@ -238,7 +238,7 @@ def test_skill_package_requires_package_identity_and_skill_md() -> None:
         version="1.0.0",
         hash="sha256:abc",
         manifest={"files": [{"path": "references/query.md", "sha256": "def"}]},
-        skill_md="---\nname: query-helper\ndescription: Build precise queries\n---\nUse exact terms.",
+        skill_md="---\nname: query-helper\ndescription: Build precise queries\nversion: 1.0.0\n---\nUse exact terms.",
         files={"references\\query.md": "Prefer precise queries."},
         created_at=datetime(2026, 4, 25, tzinfo=UTC),
     )
@@ -271,7 +271,7 @@ def test_skill_package_requires_skill_md_description() -> None:
             version="1.0.0",
             hash="sha256:abc",
             manifest={},
-            skill_md="---\nname: query-helper\n---\nUse exact terms.",
+            skill_md="---\nname: query-helper\nversion: 1.0.0\n---\nUse exact terms.",
             created_at=datetime(2026, 4, 25, tzinfo=UTC),
         )
 

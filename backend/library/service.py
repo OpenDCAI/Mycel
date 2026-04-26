@@ -102,14 +102,12 @@ def _write_skill_package(
     files: dict[str, str],
     skill_repo: SkillRepo,
     *,
-    version: str,
     source: dict[str, Any] | None = None,
 ) -> SkillPackage:
     package = skill_repo.create_package(
         build_skill_package(
             owner_user_id=owner_user_id,
             skill_id=skill.id,
-            version=version,
             skill_md=content,
             files=files,
             source=source or {},
@@ -253,8 +251,6 @@ def create_resource(
         document = _skill_document_from_content(content, require_version=True)
         if document.name != name:
             raise ValueError("Skill content frontmatter name must match Skill name")
-        if document.version is None:
-            raise RuntimeError("Skill content version was not parsed")
         for skill in skill_repo.list_for_owner(owner_user_id):
             if skill.name == name:
                 raise ValueError("Skill name already exists")
@@ -273,7 +269,7 @@ def create_resource(
                 updated_at=timestamp,
             )
         )
-        _write_skill_package(owner_user_id, skill, content, {}, skill_repo, version=document.version)
+        _write_skill_package(owner_user_id, skill, content, {}, skill_repo)
         return _library_resource_item(
             "skill",
             skill.id,
@@ -490,11 +486,9 @@ def update_resource_content(
         document = _skill_document_from_content(content, require_version=True)
         if document.name != current.name:
             raise ValueError("Skill content frontmatter name must match Skill name")
-        if document.version is None:
-            raise RuntimeError("Skill content version was not parsed")
         current_package = _selected_skill_package(owner_user_id, current, skill_repo)
         files = current_package.files if current_package is not None else {}
         updated = skill_repo.upsert(current.model_copy(update={"description": document.description, "updated_at": _now_dt()}))
-        _write_skill_package(owner_user_id, updated, content, files, skill_repo, version=document.version)
+        _write_skill_package(owner_user_id, updated, content, files, skill_repo)
         return True
     return False

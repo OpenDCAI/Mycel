@@ -10,7 +10,7 @@ from core.tools.skills.service import SkillsService
 
 def _skill(
     name: str = "query-helper",
-    content: str = "---\nname: query-helper\ndescription: Build precise search queries\n---\nUse exact terms.",
+    content: str = "---\nname: query-helper\ndescription: Build precise search queries\nversion: 1.0.0\n---\nUse exact terms.",
     files: dict[str, str] | None = None,
 ) -> ResolvedSkill:
     return ResolvedSkill(
@@ -46,7 +46,7 @@ def test_skill_frontmatter_uses_yaml_parser() -> None:
     SkillsService(
         registry=registry,
         skills=[
-            _skill(content='---\nname: "query-helper"\ndescription: Build precise search queries\n---\nUse exact terms.'),
+            _skill(content='---\nname: "query-helper"\ndescription: Build precise search queries\nversion: 1.0.0\n---\nUse exact terms.'),
         ],
     )
 
@@ -94,6 +94,18 @@ def test_skill_without_frontmatter_description_fails_loudly() -> None:
         )
 
 
+def test_skill_version_must_match_resolved_skill_version() -> None:
+    registry = ToolRegistry()
+
+    with pytest.raises(ValueError, match="Skill frontmatter version must match ResolvedSkill.version"):
+        SkillsService(
+            registry=registry,
+            skills=[
+                _skill(content="---\nname: query-helper\ndescription: Build precise search queries\nversion: 2.0.0\n---\nUse exact terms."),
+            ],
+        )
+
+
 def test_load_skill_schema_lists_skill_descriptions() -> None:
     registry = ToolRegistry()
     SkillsService(
@@ -122,7 +134,7 @@ def test_skills_service_requires_resolved_skill_items() -> None:
                     Any,
                     {
                         "name": "query-helper",
-                        "content": "---\nname: query-helper\ndescription: Build precise search queries\n---\nUse exact terms.",
+                        "content": "---\nname: query-helper\ndescription: Build precise search queries\nversion: 1.0.0\n---\nUse exact terms.",
                     },
                 )
             ],
@@ -137,7 +149,8 @@ def test_skill_frontmatter_name_must_match_resolved_skill_name() -> None:
             registry=registry,
             skills=[
                 _skill(
-                    name="query-helper", content="---\nname: other-helper\ndescription: Build precise search queries\n---\nUse exact terms."
+                    name="query-helper",
+                    content="---\nname: other-helper\ndescription: Build precise search queries\nversion: 1.0.0\n---\nUse exact terms.",
                 ),
             ],
         )

@@ -3,27 +3,28 @@ from __future__ import annotations
 import hashlib
 import json
 from datetime import datetime
-from typing import Any
+from typing import Any, cast
 
 from config.agent_config_types import SkillPackage
+from config.skill_document import parse_skill_document
 
 
 def build_skill_package(
     *,
     owner_user_id: str,
     skill_id: str,
-    version: str,
     skill_md: str,
     files: dict[str, str],
     source: dict[str, Any],
     created_at: datetime,
 ) -> SkillPackage:
+    document = parse_skill_document(skill_md, label="SKILL.md", require_description=True, require_version=True)
     package_hash = build_skill_package_hash(skill_md, files)
     return SkillPackage(
         id=package_hash.removeprefix("sha256:"),
         owner_user_id=owner_user_id,
         skill_id=skill_id,
-        version=version,
+        version=cast(str, document.version),
         hash=package_hash,
         manifest=build_skill_package_manifest(skill_md, files),
         skill_md=skill_md,
