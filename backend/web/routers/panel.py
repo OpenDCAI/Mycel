@@ -97,6 +97,14 @@ def _skill_repo_for(resource_type: str, request: Request) -> Any | None:
     return _skill_repo(request)
 
 
+def _reject_skill_request_fields(resource_type: str, req: Any, fields: set[str]) -> None:
+    if resource_type != "skill":
+        return
+    sent = sorted(fields.intersection(req.model_fields_set))
+    if sent:
+        raise HTTPException(400, f"Skill Library requests must not include {', '.join(sent)}")
+
+
 def _panel_contact_repo(request: Request) -> Any:
     try:
         return get_contact_repo(request.app)
@@ -293,6 +301,7 @@ async def create_resource(
     request: Request,
     user_id: CurrentUserId,
 ) -> dict[str, Any]:
+    _reject_skill_request_fields(resource_type, req, {"desc", "features", "provider_name", "provider_type"})
     category = req.provider_type or ""
     try:
         return await asyncio.to_thread(
@@ -320,6 +329,7 @@ async def update_resource(
     request: Request,
     user_id: CurrentUserId,
 ) -> dict[str, Any]:
+    _reject_skill_request_fields(resource_type, req, {"desc", "features"})
     try:
         item = await asyncio.to_thread(
             library_service.update_resource,
