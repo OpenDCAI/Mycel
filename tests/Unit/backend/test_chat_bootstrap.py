@@ -160,3 +160,34 @@ def test_wire_relationship_request_notifications_binds_notification_fn(monkeypat
     )
 
     assert relationship_service.notification_fn is notification_fn
+
+
+def test_wire_chat_join_request_notifications_binds_rejection_notification_fn(monkeypatch):
+    notification_fn = object()
+    chat_join_request_service = SimpleNamespace(notification_fn=None)
+    activity_reader = object()
+    thread_repo = object()
+    user_repo = object()
+
+    def _set_notification_fn(value):
+        chat_join_request_service.notification_fn = value
+
+    chat_join_request_service.set_join_request_rejected_notification_fn = _set_notification_fn
+
+    app = SimpleNamespace(state=SimpleNamespace())
+
+    monkeypatch.setattr(
+        chat_bootstrap,
+        "make_chat_join_rejection_notification_fn",
+        lambda target_app, *, activity_reader, thread_repo, user_repo: notification_fn,
+    )
+
+    chat_bootstrap.wire_chat_join_request_notifications(
+        app,
+        chat_join_request_service=chat_join_request_service,
+        activity_reader=activity_reader,
+        thread_repo=thread_repo,
+        user_repo=user_repo,
+    )
+
+    assert chat_join_request_service.notification_fn is notification_fn

@@ -63,7 +63,10 @@ class _Messaging:
         return None
 
 
-def _service() -> tuple[ChatJoinRequestService, _Members, _Requests, _Messaging]:
+def _service(
+    *,
+    on_join_request_rejected=None,
+) -> tuple[ChatJoinRequestService, _Members, _Requests, _Messaging]:
     members = _Members()
     requests = _Requests()
     messaging = _Messaging()
@@ -86,6 +89,7 @@ def _service() -> tuple[ChatJoinRequestService, _Members, _Requests, _Messaging]
             chat_member_repo=members,
             chat_join_request_repo=requests,
             messaging_service=messaging,
+            on_join_request_rejected=on_join_request_rejected,
         ),
         members,
         requests,
@@ -190,6 +194,45 @@ def test_chat_join_approve_requires_owner_and_adds_member_before_notification() 
         "notification",
         ["visitor-1"],
     )
+
+
+def test_chat_join_reject_mentions_requester_in_notification() -> None:
+    service, _members, _requests, messaging = _service()
+    pending = service.request("chat-1", "visitor-1", "please add me")
+
+    row = service.reject("chat-1", pending["id"], "owner-1")
+
+    assert row["state"] == "rejected"
+    assert messaging.sent[-1] == (
+        "chat-1",
+        "owner-1",
+        "Rejected chat join request for visitor-1.",
+        "notification",
+        ["visitor-1"],
+    )
+
+
+def test_chat_join_reject_notifies_requester_outside_chat_membership() -> None:
+    notified: list[dict] = []
+    service, members, _requests, _messaging = _service(on_join_request_rejected=notified.append)
+    pending = service.request("chat-1", "visitor-1", "please add me")
+
+    row = service.reject("chat-1", pending["id"], "owner-1")
+
+    assert row["state"] == "rejected"
+    assert ("chat-1", "visitor-1") not in members.members
+    assert notified == [
+        {
+            "id": "chat_join:chat-1:visitor-1",
+            "chat_id": "chat-1",
+            "requester_user_id": "visitor-1",
+            "state": "rejected",
+            "message": "please add me",
+            "created_at": 1.0,
+            "updated_at": 2.0,
+            "decided_by_user_id": "owner-1",
+        }
+    ]
 
 
 def test_chat_join_approve_rejects_non_owner() -> None:

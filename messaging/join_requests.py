@@ -11,11 +11,16 @@ class ChatJoinRequestService:
         chat_member_repo: Any,
         chat_join_request_repo: Any,
         messaging_service: Any,
+        on_join_request_rejected: Any | None = None,
     ) -> None:
         self._chats = chat_repo
         self._members = chat_member_repo
         self._requests = chat_join_request_repo
         self._messaging = messaging_service
+        self._on_join_request_rejected = on_join_request_rejected
+
+    def set_join_request_rejected_notification_fn(self, fn: Any) -> None:
+        self._on_join_request_rejected = fn
 
     def request(self, chat_id: str, requester_user_id: str, message: str | None = None) -> dict[str, Any]:
         chat = self._require_joinable_chat(chat_id)
@@ -77,7 +82,10 @@ class ChatJoinRequestService:
             rejecter_user_id,
             f"Rejected chat join request for {requester_user_id}.",
             message_type="notification",
+            mentions=[requester_user_id],
         )
+        if self._on_join_request_rejected is not None:
+            self._on_join_request_rejected(row)
         return self._project_request(row)
 
     def _require_joinable_chat(self, chat_id: str) -> Any:
