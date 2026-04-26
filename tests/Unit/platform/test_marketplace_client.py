@@ -122,7 +122,9 @@ class TestApplySkill:
         saved: list[Skill] = []
         packages: list[SkillPackage] = []
         selected: list[tuple[str, str, str]] = []
-        hub_resp = _make_hub_response("skill", "my-skill", content="---\nname: My Skill\n---\n# My Skill\nDo stuff")
+        hub_resp = _make_hub_response(
+            "skill", "my-skill", content="---\nname: My Skill\ndescription: My Skill desc\n---\n# My Skill\nDo stuff"
+        )
         hub_resp["snapshot"]["files"] = {"references/usage.md": "Use carefully"}
         skill_repo = SimpleNamespace(
             get_by_id=lambda _owner_user_id, _skill_id: None,
@@ -144,7 +146,7 @@ class TestApplySkill:
         assert saved[0].name == "My Skill"
         assert not hasattr(saved[0], "content")
         assert packages[0].skill_id == "skill_generated123"
-        assert packages[0].skill_md == "---\nname: My Skill\n---\n# My Skill\nDo stuff"
+        assert packages[0].skill_md == "---\nname: My Skill\ndescription: My Skill desc\n---\n# My Skill\nDo stuff"
         assert packages[0].manifest["files"][0]["path"] == "references/usage.md"
         assert selected == [("owner-1", "skill_generated123", packages[0].id)]
         assert result["package_id"] == packages[0].id
@@ -163,7 +165,9 @@ class TestApplySkill:
         monkeypatch.setattr("backend.hub.client.generate_skill_id", lambda: "skill_posix123")
         saved: list[Skill] = []
         packages: list[SkillPackage] = []
-        hub_resp = _make_hub_response("skill", "my-skill", content="---\nname: My Skill\n---\n# My Skill\nDo stuff")
+        hub_resp = _make_hub_response(
+            "skill", "my-skill", content="---\nname: My Skill\ndescription: My Skill desc\n---\n# My Skill\nDo stuff"
+        )
         hub_resp["snapshot"]["files"] = {"references\\usage.md": "Use carefully"}
         skill_repo = SimpleNamespace(
             get_by_id=lambda _owner_user_id, _skill_id: None,
@@ -183,7 +187,9 @@ class TestApplySkill:
 
     def test_apply_rejects_hub_skill_file_path_collision(self):
         saved: list[Skill] = []
-        hub_resp = _make_hub_response("skill", "my-skill", content="---\nname: My Skill\n---\n# My Skill\nDo stuff")
+        hub_resp = _make_hub_response(
+            "skill", "my-skill", content="---\nname: My Skill\ndescription: My Skill desc\n---\n# My Skill\nDo stuff"
+        )
         hub_resp["snapshot"]["files"] = {
             "references\\usage.md": "Windows-shaped key.",
             "references/usage.md": "POSIX-shaped key.",
@@ -206,7 +212,11 @@ class TestApplySkill:
         saved: list[Skill] = []
         packages: list[SkillPackage] = []
         hub_resp = _make_hub_response(
-            "skill", "tracked-skill", content="---\nname: Tracked Skill\n---\n# Hello", version="2.1.0", publisher="alice"
+            "skill",
+            "tracked-skill",
+            content="---\nname: Tracked Skill\ndescription: Track source\n---\n# Hello",
+            version="2.1.0",
+            publisher="alice",
         )
         skill_repo = SimpleNamespace(
             get_by_id=lambda _owner_user_id, _skill_id: None,
@@ -250,6 +260,20 @@ class TestApplySkill:
             apply_item("item-described", owner_user_id="owner-1", skill_repo=skill_repo)
 
         assert saved[0].description == "Frontmatter description"
+
+    def test_apply_skill_requires_frontmatter_description(self):
+        hub_resp = _make_hub_response("skill", "missing-description", content="---\nname: Missing Description\n---\n# Hello")
+        skill_repo = SimpleNamespace(
+            get_by_id=lambda _owner_user_id, _skill_id: None,
+            list_for_owner=lambda _owner_user_id: [],
+            upsert=lambda _skill: (_ for _ in ()).throw(AssertionError("must not save invalid Skill")),
+        )
+
+        with patch("backend.hub.client._hub_api", return_value=hub_resp):
+            from backend.hub.client import apply_item
+
+            with pytest.raises(ValueError, match="Skill snapshot frontmatter must include description"):
+                apply_item("item-missing-description", owner_user_id="owner-1", skill_repo=skill_repo)
 
     def test_apply_skill_requires_snapshot_version(self):
         hub_resp = _make_hub_response("skill", "broken-skill", content="---\nname: Broken Skill\ndescription: Broken\n---\nBody")
@@ -312,7 +336,7 @@ class TestApplySkill:
             created_at=datetime(2026, 4, 24, tzinfo=UTC),
             updated_at=datetime(2026, 4, 24, tzinfo=UTC),
         )
-        hub_resp = _make_hub_response("skill", "same-slug", content="---\nname: Renamed Skill\n---\nBody")
+        hub_resp = _make_hub_response("skill", "same-slug", content="---\nname: Renamed Skill\ndescription: Renamed\n---\nBody")
         skill_repo = SimpleNamespace(
             get_by_id=lambda _owner_user_id, _skill_id: None,
             list_for_owner=lambda _owner_user_id: [existing],
@@ -333,7 +357,7 @@ class TestApplySkill:
             created_at=datetime(2026, 4, 24, tzinfo=UTC),
             updated_at=datetime(2026, 4, 24, tzinfo=UTC),
         )
-        hub_resp = _make_hub_response("skill", "new-slug", content="---\nname: Shared Name\n---\nBody")
+        hub_resp = _make_hub_response("skill", "new-slug", content="---\nname: Shared Name\ndescription: Shared\n---\nBody")
         skill_repo = SimpleNamespace(
             get_by_id=lambda _owner_user_id, _skill_id: None,
             list_for_owner=lambda _owner_user_id: [existing],
@@ -413,7 +437,7 @@ class TestApplySkill:
 
     def test_slug_path_shape_does_not_affect_library_id(self, monkeypatch):
         monkeypatch.setattr("backend.hub.client.generate_skill_id", lambda: "skill_evilSafe1")
-        hub_resp = _make_hub_response("skill", "../../evil", content="---\nname: Evil\n---\n# Hello")
+        hub_resp = _make_hub_response("skill", "../../evil", content="---\nname: Evil\ndescription: Safe id probe\n---\n# Hello")
         saved: list[Skill] = []
         packages: list[SkillPackage] = []
         skill_repo = SimpleNamespace(
@@ -563,7 +587,7 @@ class TestApplySkill:
             "skill",
             "fastapi",
             version="1.2.3",
-            content='---\nname: " FastAPI "\n---\nAlways use APIRouter.',
+            content='---\nname: " FastAPI "\ndescription: Build FastAPI APIs\n---\nAlways use APIRouter.',
         )
 
         with patch("backend.hub.client._hub_api", return_value=hub_resp):
@@ -684,8 +708,8 @@ class TestApplyIdempotency:
         saved: dict[str, Skill] = {}
         packages: list[SkillPackage] = []
         selected: list[tuple[str, str, str]] = []
-        v1 = _make_hub_response("skill", "idem-skill", content="---\nname: Idem Skill\n---\nV1", version="1.0.0")
-        v2 = _make_hub_response("skill", "idem-skill", content="---\nname: Idem Skill\n---\nV2", version="1.0.1")
+        v1 = _make_hub_response("skill", "idem-skill", content="---\nname: Idem Skill\ndescription: Idempotent\n---\nV1", version="1.0.0")
+        v2 = _make_hub_response("skill", "idem-skill", content="---\nname: Idem Skill\ndescription: Idempotent\n---\nV2", version="1.0.1")
         skill_repo = SimpleNamespace(
             get_by_id=lambda _owner_user_id, skill_id: saved.get(skill_id),
             list_for_owner=lambda _owner_user_id: list(saved.values()),
@@ -706,8 +730,8 @@ class TestApplyIdempotency:
         assert result["package_id"] == packages[1].id
         assert list(saved) == ["skill_idem123"]
         assert saved["skill_idem123"].source["source_version"] == "1.0.1"
-        assert packages[0].skill_md == "---\nname: Idem Skill\n---\nV1"
-        assert packages[1].skill_md == "---\nname: Idem Skill\n---\nV2"
+        assert packages[0].skill_md == "---\nname: Idem Skill\ndescription: Idempotent\n---\nV1"
+        assert packages[1].skill_md == "---\nname: Idem Skill\ndescription: Idempotent\n---\nV2"
         assert selected[-1] == ("owner-1", "skill_idem123", packages[1].id)
 
 
@@ -823,7 +847,7 @@ def test_publish_uses_repo_material_when_member_dir_is_absent(tmp_path, monkeypa
                 skill_id="search",
                 version="1.0.0",
                 hash="sha256:search",
-                skill_md="---\nname: Search\n---\nskill content",
+                skill_md="---\nname: Search\ndescription: Search repos\n---\nskill content",
                 source={"name": "Search", "desc": "Repo Search"},
                 created_at=datetime(2026, 4, 25, tzinfo=UTC),
             )
