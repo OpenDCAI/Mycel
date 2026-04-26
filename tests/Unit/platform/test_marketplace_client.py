@@ -298,6 +298,33 @@ class TestApplySkill:
             with pytest.raises(ValueError, match="Hub download version must be a string"):
                 apply_item("item-broken", owner_user_id="owner-1", skill_repo=skill_repo)
 
+    def test_apply_skill_rejects_unversioned_skill_md_before_library_write(self, monkeypatch):
+        monkeypatch.setattr("backend.hub.client.generate_skill_id", lambda: "skill_unversioned123")
+        hub_resp = _make_hub_response(
+            "skill",
+            "unversioned-skill",
+            content="---\nname: Unversioned Skill\ndescription: Missing package version\n---\nBody",
+        )
+        hub_resp["snapshot"]["content"] = "---\nname: Unversioned Skill\ndescription: Missing package version\n---\nBody"
+        saved: list[Skill] = []
+        packages: list[SkillPackage] = []
+        skill_repo = SimpleNamespace(
+            get_by_id=lambda _owner_user_id, _skill_id: None,
+            list_for_owner=lambda _owner_user_id: [],
+            upsert=lambda skill: saved.append(skill) or skill,
+            create_package=lambda package: packages.append(package) or package,
+            select_package=lambda _owner_user_id, _skill_id, _package_id: None,
+        )
+
+        with patch("backend.hub.client._hub_api", return_value=hub_resp):
+            from backend.hub.client import apply_item
+
+            with pytest.raises(ValueError, match="SKILL.md frontmatter must include version"):
+                apply_item("item-unversioned", owner_user_id="owner-1", skill_repo=skill_repo)
+
+        assert saved == []
+        assert packages == []
+
     def test_apply_skill_does_not_require_item_slug(self, monkeypatch):
         monkeypatch.setattr("backend.hub.client.generate_skill_id", lambda: "skill_noSlug123")
         hub_resp = _make_hub_response("skill", "broken-skill", content="---\nname: Broken Skill\ndescription: Broken\n---\nBody")
