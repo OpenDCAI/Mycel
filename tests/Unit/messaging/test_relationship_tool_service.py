@@ -14,6 +14,7 @@ def _row(
     user_high: str = "human-user-1",
     state: str = "pending",
     initiator_user_id: str | None = "human-user-1",
+    message: str | None = None,
 ):
     now = datetime(2026, 4, 26, tzinfo=UTC)
     return SimpleNamespace(
@@ -22,6 +23,7 @@ def _row(
         user_high=user_high,
         state=state,
         initiator_user_id=initiator_user_id,
+        message=message,
         created_at=now,
         updated_at=now,
     )
@@ -54,6 +56,34 @@ def test_list_relationships_renders_pending_direction_and_relationship_id() -> N
     assert "incoming pending request" in result
     assert "relationship_id: hire_visit:agent-user-1:human-user-1" in result
     assert "other_user_id: human-user-1" in result
+
+
+def test_request_relationship_tool_accepts_natural_language_message() -> None:
+    seen: list[tuple[str, str, str | None]] = []
+    registry = ToolRegistry()
+    RelationshipToolService(
+        registry=registry,
+        relationship_identity_id="agent-user-1",
+        relationship_service=SimpleNamespace(
+            request=lambda requester_id, target_user_id, message=None: (
+                seen.append((requester_id, target_user_id, message))
+                or _row(
+                    user_low=requester_id,
+                    user_high=target_user_id,
+                    initiator_user_id=requester_id,
+                    message=message,
+                )
+            )
+        ),
+    )
+
+    result = registry.get("request_relationship").handler(
+        "human-user-1",
+        "I want to join the planning group.",
+    )
+
+    assert seen == [("agent-user-1", "human-user-1", "I want to join the planning group.")]
+    assert "message: I want to join the planning group." in result
 
 
 def test_approve_relationship_uses_current_identity_and_request_initiator() -> None:

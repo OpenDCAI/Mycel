@@ -54,8 +54,8 @@ class RelationshipToolService:
         )
 
     def _register_request_relationship(self, registry: ToolRegistry) -> None:
-        def handle(target_user_id: str) -> str:
-            row = self._relationships.request(self._identity_id, target_user_id)
+        def handle(target_user_id: str, message: str | None = None) -> str:
+            row = self._relationships.request(self._identity_id, target_user_id, message)
             return f"Requested relationship with {target_user_id}. {self._format_row(row)}"
 
         registry.register(
@@ -70,7 +70,11 @@ class RelationshipToolService:
                             "type": "string",
                             "description": "Target Mycel user id to request a relationship with.",
                             "minLength": 1,
-                        }
+                        },
+                        "message": {
+                            "type": "string",
+                            "description": "Optional natural-language reason for the relationship request.",
+                        },
                     },
                     required=["target_user_id"],
                 ),
@@ -161,9 +165,15 @@ class RelationshipToolService:
             direction = "incoming pending request" if initiator_user_id != self._identity_id else "outgoing pending request"
         else:
             direction = f"{state} relationship"
-        return f"- {direction}; relationship_id: {relationship_id}; other_user_id: {other_user_id}; state: {state}"
+        message = self._field(row, "message", default=None)
+        suffix = f"; message: {message}" if message else ""
+        return f"- {direction}; relationship_id: {relationship_id}; other_user_id: {other_user_id}; state: {state}{suffix}"
 
-    def _field(self, row: Any, field: str) -> Any:
+    def _field(self, row: Any, field: str, *, default: Any = ...) -> Any:
         if isinstance(row, dict):
-            return row[field]
-        return getattr(row, field)
+            if default is ...:
+                return row[field]
+            return row.get(field, default)
+        if default is ...:
+            return getattr(row, field)
+        return getattr(row, field, default)
