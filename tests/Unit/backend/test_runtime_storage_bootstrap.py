@@ -9,7 +9,7 @@ def test_build_runtime_storage_state_uses_shared_supabase_client(monkeypatch):
     fake_container = SimpleNamespace()
     fake_recipe_repo = object()
 
-    monkeypatch.setattr(runtime_storage_bootstrap, "create_supabase_client", lambda: fake_client)
+    monkeypatch.setattr(runtime_storage_bootstrap, "build_supabase_client", lambda: fake_client)
 
     def _build_storage_container(*, supabase_client):
         calls.append(supabase_client)
