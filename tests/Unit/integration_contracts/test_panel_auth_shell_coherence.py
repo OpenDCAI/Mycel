@@ -1318,6 +1318,23 @@ def test_library_skill_create_rejects_blank_separate_description() -> None:
     assert skill_repo.packages == {}
 
 
+def test_library_skill_create_rejects_newline_separate_description() -> None:
+    skill_repo = _MemorySkillRepo()
+
+    with pytest.raises(ValueError, match="Skill description must be declared in SKILL.md frontmatter"):
+        library_service.create_resource(
+            "skill",
+            "Loadable Skill",
+            "\n",
+            owner_user_id="owner-1",
+            skill_repo=skill_repo,
+            content=_editable_skill_md(description="Frontmatter desc"),
+        )
+
+    assert skill_repo.skills == {}
+    assert skill_repo.packages == {}
+
+
 def test_library_skill_create_rejects_matching_separate_description() -> None:
     skill_repo = _MemorySkillRepo()
 
