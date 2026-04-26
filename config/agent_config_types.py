@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, ValidationInfo, field_validator
+from pydantic import BaseModel, ConfigDict, Field, ValidationInfo, field_validator, model_validator
 
 from config.skill_document import parse_skill_document
 from config.skill_files import normalize_skill_file_map
@@ -56,16 +56,17 @@ class SkillPackage(AgentConfigSchemaModel):
             raise ValueError(f"skill_package.{info.field_name} must not be blank")
         return value
 
-    @field_validator("skill_md")
-    @classmethod
-    def _valid_skill_document(cls, value: str) -> str:
-        parse_skill_document(value, label="skill_package.skill_md", require_description=True)
-        return value
-
     @field_validator("files", mode="before")
     @classmethod
     def _normalize_files(cls, value: Any) -> Any:
         return normalize_skill_file_map(value, context="Skill package files") if isinstance(value, dict) else value
+
+    @model_validator(mode="after")
+    def _version_matches_skill_document(self) -> SkillPackage:
+        document = parse_skill_document(self.skill_md, label="skill_package.skill_md", require_description=True, require_version=True)
+        if document.version != self.version:
+            raise ValueError("skill_package.version must match SKILL.md frontmatter version")
+        return self
 
 
 class AgentSkill(AgentConfigSchemaModel):

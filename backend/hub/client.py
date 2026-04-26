@@ -272,7 +272,6 @@ def apply_item(
             build_skill_package(
                 owner_user_id=owner_user_id,
                 skill_id=skill.id,
-                version=source_version,
                 skill_md=content,
                 files=skill_files,
                 source=source,
@@ -281,7 +280,7 @@ def apply_item(
         )
         skill_repo.select_package(owner_user_id, skill.id, package.id)
 
-        return {"resource_id": skill.id, "package_id": package.id, "type": "skill", "version": source_version}
+        return {"resource_id": skill.id, "package_id": package.id, "type": "skill", "version": package.version}
 
     if item_type == "agent":
         raise ValueError("Marketplace agent items are not supported; apply Agent user items instead")

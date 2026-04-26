@@ -97,7 +97,6 @@ def _materialize_snapshot_skills(
             build_skill_package(
                 owner_user_id=owner_user_id,
                 skill_id=skill.id,
-                version=snapshot_skill.version,
                 skill_md=snapshot_skill.content,
                 files=snapshot_skill.files,
                 source=source,
