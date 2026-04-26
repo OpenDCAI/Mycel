@@ -10,7 +10,7 @@ create table if not exists library.skills (
     id text not null,
     owner_user_id text not null,
     name text not null,
-    description text not null default '',
+    description text not null,
     package_id text,
     source_json jsonb not null default '{}'::jsonb,
     created_at timestamptz not null default now(),
@@ -41,6 +41,9 @@ alter table library.skills
     add constraint skills_package_fk
         foreign key (package_id)
         references library.skill_packages(id);
+
+alter table if exists library.skills
+    alter column description drop default;
 
 alter table if exists library.skill_packages
     alter column version drop default;
@@ -162,6 +165,20 @@ end $$;
 
 do $$
 begin
+    if exists (
+        select 1
+        from library.skills
+        where description is null
+           or btrim(description) = ''
+    ) then
+        raise exception 'library.skills.description must be present before hard cut';
+    end if;
+
+    alter table library.skills
+        drop constraint if exists skills_description_required_ck,
+        add constraint skills_description_required_ck
+            check (description is not null and btrim(description) <> '');
+
     if exists (
         select 1
         from library.skills

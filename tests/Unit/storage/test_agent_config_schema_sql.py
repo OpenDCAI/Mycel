@@ -9,6 +9,8 @@ def test_agent_config_schema_uses_library_package_storage() -> None:
     assert "create table if not exists library.skills" in sql
     assert "create table if not exists library.skill_packages" in sql
     assert "create table if not exists agent.skill_bindings" in sql
+    assert "description text not null default ''" not in sql
+    assert "skills_description_required_ck" in sql
     assert "drop table if exists agent.agent_skills cascade" in sql
     assert "drop table if exists agent.skills cascade" in sql
     assert "skill_md text not null" in sql
@@ -106,6 +108,7 @@ def test_agent_config_schema_constrains_root_identity_fields() -> None:
     sql = Path("storage/schema/2026_04_24_agent_config_resolved_config_hardcut.sql").read_text(encoding="utf-8")
 
     assert "library.skills.source_json must be a JSON object before hard cut" in sql
+    assert "library.skills.description must be present before hard cut" in sql
     assert "library.skill_packages.manifest_json must be a JSON object before hard cut" in sql
     assert "library.skill_packages.version must be present before hard cut" in sql
     assert "library.skill_packages.files_json must be a JSON object before hard cut" in sql
