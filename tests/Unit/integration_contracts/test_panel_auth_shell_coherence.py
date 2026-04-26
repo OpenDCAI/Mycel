@@ -1177,6 +1177,71 @@ def test_library_skill_name_is_immutable_after_creation() -> None:
     assert skill_repo.get_by_id("owner-1", created["id"]).name == "Loadable Skill"
 
 
+def test_library_skill_description_comes_from_skill_md_frontmatter() -> None:
+    skill_repo = _MemorySkillRepo()
+
+    created = library_service.create_resource(
+        "skill",
+        "Loadable Skill",
+        "Caller desc",
+        owner_user_id="owner-1",
+        skill_repo=skill_repo,
+        content=_editable_skill_md(description="Frontmatter desc"),
+    )
+
+    stored = skill_repo.get_by_id("owner-1", created["id"])
+    assert stored is not None
+    assert created["desc"] == "Frontmatter desc"
+    assert stored.description == "Frontmatter desc"
+
+
+def test_library_skill_content_update_refreshes_description_from_skill_md() -> None:
+    skill_repo = _MemorySkillRepo()
+    created = library_service.create_resource(
+        "skill",
+        "Loadable Skill",
+        "Caller desc",
+        owner_user_id="owner-1",
+        skill_repo=skill_repo,
+        content=_editable_skill_md(description="Original desc"),
+    )
+
+    assert library_service.update_resource_content(
+        "skill",
+        created["id"],
+        _editable_skill_md(description="Updated desc", version="1.0.1"),
+        owner_user_id="owner-1",
+        skill_repo=skill_repo,
+    )
+
+    stored = skill_repo.get_by_id("owner-1", created["id"])
+    assert stored is not None
+    assert stored.description == "Updated desc"
+
+
+def test_library_skill_description_cannot_be_updated_without_skill_md() -> None:
+    skill_repo = _MemorySkillRepo()
+    created = library_service.create_resource(
+        "skill",
+        "Loadable Skill",
+        "Caller desc",
+        owner_user_id="owner-1",
+        skill_repo=skill_repo,
+        content=_editable_skill_md(description="Frontmatter desc"),
+    )
+
+    with pytest.raises(ValueError, match="Skill description comes from SKILL.md"):
+        library_service.update_resource(
+            "skill",
+            created["id"],
+            owner_user_id="owner-1",
+            skill_repo=skill_repo,
+            desc="Separate desc",
+        )
+
+    assert skill_repo.get_by_id("owner-1", created["id"]).description == "Frontmatter desc"
+
+
 def test_library_skill_create_rejects_duplicate_name_before_write() -> None:
     skill_repo = _MemorySkillRepo()
     created = library_service.create_resource(
@@ -1248,7 +1313,7 @@ def test_library_skill_create_fails_when_generated_id_exists(monkeypatch: pytest
         skill_id="skill_existing",
         name="Existing Skill",
         description="Existing",
-        content="---\nname: Existing Skill\nversion: 1.0.0\n---\nExisting.",
+        content="---\nname: Existing Skill\ndescription: Existing desc\nversion: 1.0.0\n---\nExisting.",
     )
     monkeypatch.setattr(library_service, "generate_skill_id", lambda: "skill_existing")
 
@@ -1890,7 +1955,7 @@ def test_get_agent_user_uses_repo_skill_desc():
         skill_id="search",
         name="Search",
         description="repo desc",
-        content="---\nname: Search\n---\nBody",
+        content="---\nname: Search\ndescription: Search repos\n---\nBody",
     )
     agent = UserRow(
         id="agent-1",
@@ -1929,7 +1994,7 @@ def test_get_agent_user_ignores_runtime_skill_desc_override():
         skill_id="search",
         name="Search",
         description="repo desc",
-        content="---\nname: Search\n---\nBody",
+        content="---\nname: Search\ndescription: Search repos\n---\nBody",
     )
     agent = UserRow(
         id="agent-1",
@@ -2085,7 +2150,7 @@ def test_get_agent_user_preserves_explicit_empty_repo_skill_desc():
         skill_id="search",
         name="Search",
         description="",
-        content="---\nname: Search\n---\nBody",
+        content="---\nname: Search\ndescription: Search repos\n---\nBody",
     )
     agent = UserRow(
         id="agent-1",
