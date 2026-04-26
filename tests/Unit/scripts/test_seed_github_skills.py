@@ -105,7 +105,7 @@ def test_seed_skill_parse_rejects_unreadable_skill_md(tmp_path: Path) -> None:
 
 def test_seed_skill_payload_publishes_snapshot_files(tmp_path: Path) -> None:
     skill_dir = tmp_path / "repo" / "skills" / "api-design"
-    _write_skill(skill_dir, "---\nname: API Design\ndescription: Design APIs\n---\nUse REST carefully.")
+    _write_skill(skill_dir, "---\nname: API Design\ndescription: Design APIs\nversion: 1.2.3\n---\nUse REST carefully.")
     (skill_dir / "references").mkdir()
     (skill_dir / "references" / "routing.md").write_text("Prefer explicit routes.", encoding="utf-8")
     package = seed_github_skills.read_skill_package(skill_dir)
@@ -120,6 +120,7 @@ def test_seed_skill_payload_publishes_snapshot_files(tmp_path: Path) -> None:
 
     assert payload["snapshot"]["content"] == package["content"]
     assert payload["snapshot"]["files"] == {"references/routing.md": "Prefer explicit routes."}
+    assert payload["version"] == "1.2.3"
 
 
 def test_seed_skill_slug_is_hub_item_path_not_library_identity(tmp_path: Path) -> None:
@@ -170,8 +171,9 @@ def test_seed_publish_skill_package_uses_package_payload(monkeypatch: pytest.Mon
         package={
             "name": "API Design",
             "description": "Design APIs",
+            "version": "1.0.0",
             "tags": ["backend"],
-            "content": "---\nname: API Design\n---\nUse REST carefully.",
+            "content": "---\nname: API Design\ndescription: Design APIs\nversion: 1.0.0\n---\nUse REST carefully.",
             "files": {"references/routing.md": "Prefer explicit routes."},
         },
         publisher_user_id="publisher-1",
