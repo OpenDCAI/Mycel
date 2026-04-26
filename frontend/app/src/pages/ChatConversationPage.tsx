@@ -252,10 +252,7 @@ function ChatConversationInner({ chatId }: { chatId: string }) {
     try {
       const res = await authFetch(`/api/chats/${chatId}/messages`, {
         method: "POST",
-        body: JSON.stringify({
-          content: text,
-          sender_id: myUserId,
-        }),
+        body: JSON.stringify({ content: text }),
       });
       if (!res.ok) {
         console.error("[ChatSend] failed:", res.status);

@@ -307,6 +307,65 @@ describe("ChatConversationPage SSE teardown", () => {
     expect(await screen.findByText("已复制")).toBeTruthy();
   });
 
+  it("sends chat messages using the authenticated user instead of a body sender_id", async () => {
+    authFetchMocks.authFetch.mockImplementation(async (url: string, init?: RequestInit) => {
+      if (url === "/api/chats/chat-1") {
+        return {
+          ok: true,
+          json: async () => ({
+            id: "chat-1",
+            type: "group",
+            title: "member room",
+            created_by_user_id: "owner-1",
+            status: "active",
+            created_at: 1,
+            members: [{ id: "user-1", name: "tester", type: "human" }],
+          }),
+        };
+      }
+      if (url === "/api/chats/chat-1/messages?limit=100") {
+        return { ok: true, json: async () => [] };
+      }
+      if (url === "/api/chats/chat-1/read") {
+        return { ok: true, json: async () => ({}) };
+      }
+      if (url === "/api/chats/chat-1/messages" && init?.method === "POST") {
+        return {
+          ok: true,
+          json: async () => ({
+            id: "message-1",
+            chat_id: "chat-1",
+            sender_id: "user-1",
+            sender_name: "tester",
+            content: "hello from the UI",
+            mentioned_ids: [],
+            created_at: 1,
+          }),
+        };
+      }
+      throw new Error(`Unexpected authFetch url: ${url}`);
+    });
+
+    render(
+      <MemoryRouter initialEntries={["/chat/visit/chat-1"]}>
+        <Routes>
+          <Route path="/chat/visit/:chatId" element={<ChatConversationPage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    const input = await screen.findByPlaceholderText("输入消息...");
+    fireEvent.change(input, { target: { value: "hello from the UI" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+
+    await waitFor(() => {
+      expect(authFetchMocks.authFetch).toHaveBeenCalledWith(
+        "/api/chats/chat-1/messages",
+        { method: "POST", body: JSON.stringify({ content: "hello from the UI" }) },
+      );
+    });
+  });
+
   it("does not fetch group join requests for a direct chat owner", async () => {
     authFetchMocks.authFetch.mockImplementation(async (url: string) => {
       if (url === "/api/chats/chat-1") {
