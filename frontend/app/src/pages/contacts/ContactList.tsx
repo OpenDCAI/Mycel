@@ -31,6 +31,41 @@ function isVisibleContact(candidate: UserChatCandidate, myUserId: string | null)
   return candidate.can_chat || candidate.relationship_state === "pending";
 }
 
+function pendingRelationshipMessage(contact: UserChatCandidate): string | null {
+  const message = contact.relationship_message?.trim();
+  return contact.relationship_state === "pending" && message ? message : null;
+}
+
+function ContactListItem({ contact, active }: { contact: UserChatCandidate; active: boolean }) {
+  const message = pendingRelationshipMessage(contact);
+
+  return (
+    <Link
+      to={`/contacts/users/${contact.user_id}`}
+      className={`flex items-center gap-2.5 px-3 py-2 rounded-lg transition-colors duration-fast ${
+        active ? "bg-background shadow-sm" : "hover:bg-muted"
+      }`}
+    >
+      <ActorAvatar
+        name={contact.name}
+        avatarUrl={contact.avatar_url ?? undefined}
+        type={contact.type === "agent" ? "mycel_agent" : "human"}
+        size="sm"
+      />
+      <div className="flex-1 min-w-0">
+        <span className="text-sm font-medium truncate block">{contact.name}</span>
+        <span className="text-2xs text-muted-foreground truncate block">
+          {contact.owner_name || (contact.type === "agent" ? "Agent" : "联系人")}
+        </span>
+        {message && <span className="text-2xs text-muted-foreground truncate block">{message}</span>}
+      </div>
+      <span className="rounded-full bg-muted px-2 py-0.5 text-2xs text-muted-foreground">
+        {contactStatusLabel(contact)}
+      </span>
+    </Link>
+  );
+}
+
 export default function ContactList() {
   const [search, setSearch] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
@@ -58,7 +93,10 @@ export default function ContactList() {
       .filter((candidate) => isVisibleContact(candidate, myUserId))
       .filter((item) => {
         if (!query) return true;
-        return [item.name, item.owner_name ?? "", item.type, item.relationship_state].join(" ").toLowerCase().includes(query);
+        return [item.name, item.owner_name ?? "", item.type, item.relationship_state, item.relationship_message ?? ""]
+          .join(" ")
+          .toLowerCase()
+          .includes(query);
       });
   }, [chatCandidates, myUserId, search]);
 
@@ -199,29 +237,11 @@ export default function ContactList() {
             </div>
           ) : (
             contacts.map((contact) => (
-              <Link
+              <ContactListItem
                 key={contact.user_id}
-                to={`/contacts/users/${contact.user_id}`}
-                className={`flex items-center gap-2.5 px-3 py-2 rounded-lg transition-colors duration-fast ${
-                  activeContactUserId === contact.user_id ? "bg-background shadow-sm" : "hover:bg-muted"
-                }`}
-              >
-                <ActorAvatar
-                  name={contact.name}
-                  avatarUrl={contact.avatar_url ?? undefined}
-                  type={contact.type === "agent" ? "mycel_agent" : "human"}
-                  size="sm"
-                />
-                <div className="flex-1 min-w-0">
-                  <span className="text-sm font-medium truncate block">{contact.name}</span>
-                  <span className="text-2xs text-muted-foreground truncate block">
-                    {contact.owner_name || (contact.type === "agent" ? "Agent" : "联系人")}
-                  </span>
-                </div>
-                <span className="rounded-full bg-muted px-2 py-0.5 text-2xs text-muted-foreground">
-                  {contactStatusLabel(contact)}
-                </span>
-              </Link>
+                contact={contact}
+                active={activeContactUserId === contact.user_id}
+              />
             ))
           )
         )}

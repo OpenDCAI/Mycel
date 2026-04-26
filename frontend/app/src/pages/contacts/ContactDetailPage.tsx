@@ -65,6 +65,11 @@ function relationshipButtons(contact: UserChatCandidate): RelationshipButton[] {
   ];
 }
 
+function relationshipMessage(contact: UserChatCandidate): string | null {
+  const message = contact.relationship_message?.trim();
+  return contact.relationship_state === "pending" && message ? message : null;
+}
+
 export default function ContactDetailPage() {
   const { userId } = useParams<{ userId: string }>();
   const navigate = useNavigate();
@@ -160,6 +165,7 @@ export default function ContactDetailPage() {
   const isAgent = contact.type === "agent";
   const relationshipStatus = relationshipLabel(contact);
   const actions = relationshipButtons(contact);
+  const pendingMessage = relationshipMessage(contact);
 
   return (
     <div className="h-full flex flex-col bg-background">
@@ -210,6 +216,12 @@ export default function ContactDetailPage() {
                 <dd className="mt-1 text-foreground">{contact.can_chat ? "是" : "否"}</dd>
               </div>
             </dl>
+            {pendingMessage && (
+              <div className="mt-4 rounded-md border border-border bg-muted/30 px-3 py-2">
+                <p className="text-xs text-muted-foreground">申请说明</p>
+                <p className="mt-1 whitespace-pre-wrap break-words text-sm text-foreground">{pendingMessage}</p>
+              </div>
+            )}
             {actions.length > 0 && (
               <div className="mt-5 flex flex-wrap gap-2">
                 {actions.map((item) => (
