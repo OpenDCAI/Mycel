@@ -278,7 +278,7 @@ def test_resolver_rejects_package_that_does_not_belong_to_selected_skill():
                         skill_id="other-skill",
                         version="1.0.0",
                         hash="sha256:visible",
-                        skill_md="---\nname: Runtime Skill\n---\n\n# Runtime Skill\n",
+                        skill_md="---\nname: Runtime Skill\ndescription: Runtime guidance\n---\n\n# Runtime Skill\n",
                         created_at=datetime(2026, 4, 25, tzinfo=UTC),
                     )
                 }

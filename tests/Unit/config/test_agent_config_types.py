@@ -259,6 +259,20 @@ def test_skill_package_rejects_blank_skill_md() -> None:
         SkillPackage(skill_md=" ", **common)
 
 
+def test_skill_package_requires_skill_md_description() -> None:
+    with pytest.raises(ValueError, match="skill_package.skill_md frontmatter must include description"):
+        SkillPackage(
+            id="package-1",
+            owner_user_id="owner-1",
+            skill_id="skill-1",
+            version="1.0.0",
+            hash="sha256:abc",
+            manifest={},
+            skill_md="---\nname: query-helper\n---\nUse exact terms.",
+            created_at=datetime(2026, 4, 25, tzinfo=UTC),
+        )
+
+
 @pytest.mark.parametrize(
     ("model_cls", "payload"),
     [
@@ -269,7 +283,7 @@ def test_skill_package_rejects_blank_skill_md() -> None:
                 "owner_user_id": "owner-1",
                 "skill_id": "skill-1",
                 "hash": "sha256:abc",
-                "skill_md": "---\nname: query-helper\n---\nUse exact terms.",
+                "skill_md": "---\nname: query-helper\ndescription: Build precise queries\n---\nUse exact terms.",
                 "created_at": datetime(2026, 4, 25, tzinfo=UTC),
             },
         ),

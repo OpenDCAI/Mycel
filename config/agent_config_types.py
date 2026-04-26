@@ -5,6 +5,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationInfo, field_validator
 
+from config.skill_document import parse_skill_document
 from config.skill_files import normalize_skill_file_map
 
 
@@ -53,6 +54,12 @@ class SkillPackage(AgentConfigSchemaModel):
     def _non_blank(cls, value: str, info: ValidationInfo) -> str:
         if not value.strip():
             raise ValueError(f"skill_package.{info.field_name} must not be blank")
+        return value
+
+    @field_validator("skill_md")
+    @classmethod
+    def _valid_skill_document(cls, value: str) -> str:
+        parse_skill_document(value, label="skill_package.skill_md", require_description=True)
         return value
 
     @field_validator("files", mode="before")

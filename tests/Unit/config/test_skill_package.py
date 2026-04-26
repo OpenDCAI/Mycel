@@ -5,7 +5,7 @@ from config.skill_package import build_skill_package, build_skill_package_hash, 
 
 def test_build_skill_package_uses_content_hash_as_identity() -> None:
     created_at = datetime(2026, 4, 26, tzinfo=UTC)
-    skill_md = "---\nname: Query Helper\n---\nUse exact terms."
+    skill_md = "---\nname: Query Helper\ndescription: Build precise queries\n---\nUse exact terms."
     files = {"references/query.md": "Prefer precise queries."}
 
     package = build_skill_package(

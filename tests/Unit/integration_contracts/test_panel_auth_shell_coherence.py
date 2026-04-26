@@ -203,7 +203,7 @@ async def test_panel_agent_detail_exposes_library_skill_id_for_round_trip() -> N
         skill_id="loadable-skill",
         name="Loadable Skill",
         description="loadable",
-        content="---\nname: Loadable Skill\n---\nUse it.",
+        content="---\nname: Loadable Skill\ndescription: loadable\n---\nUse it.",
     )
     agent = UserRow(
         id="agent-1",
@@ -444,7 +444,7 @@ def test_agent_config_patch_saves_library_skill_package_choice() -> None:
         skill_id="loadable-skill",
         name="Loadable Skill",
         description="loadable",
-        content="---\nname: Loadable Skill\n---\nUse it.",
+        content="---\nname: Loadable Skill\ndescription: loadable\n---\nUse it.",
     )
 
     class _AgentConfigRepo:
@@ -490,7 +490,7 @@ def test_agent_config_patch_keeps_package_source_out_of_agent_skill_binding() ->
         skill_id="loadable-skill",
         name="Loadable Skill",
         description="loadable",
-        content="---\nname: Loadable Skill\n---\nUse it.",
+        content="---\nname: Loadable Skill\ndescription: loadable\n---\nUse it.",
     )
     skill_repo.upsert(library_skill.model_copy(update={"source": {"source_version": "library-stale"}}))
 
@@ -680,7 +680,7 @@ def test_agent_config_patch_rejects_skill_item_without_library_skill_id() -> Non
         skill_id="loadable-skill",
         name="Loadable Skill",
         description="loadable",
-        content="---\nname: Loadable Skill\n---\nUse it.",
+        content="---\nname: Loadable Skill\ndescription: loadable\n---\nUse it.",
     )
 
     class _AgentConfigRepo:
@@ -720,7 +720,7 @@ def test_agent_config_patch_rejects_skill_name_and_desc_fields() -> None:
         skill_id="loadable-skill",
         name="Loadable Skill",
         description="loadable",
-        content="---\nname: Loadable Skill\n---\nUse it.",
+        content="---\nname: Loadable Skill\ndescription: loadable\n---\nUse it.",
     )
 
     class _AgentConfigRepo:
@@ -900,7 +900,7 @@ def test_agent_config_patch_explicit_library_id_uses_library_package_choice() ->
         skill_id="loadable-skill",
         name="Loadable Skill",
         description="loadable",
-        content="---\nname: Loadable Skill\n---\nLibrary content.",
+        content="---\nname: Loadable Skill\ndescription: loadable\n---\nLibrary content.",
     )
 
     class _AgentConfigRepo:
@@ -949,7 +949,7 @@ def test_select_agent_skill_uses_agent_config_skill_patch_boundary() -> None:
         skill_id="loadable-skill",
         name="Loadable Skill",
         description="loadable",
-        content="---\nname: Loadable Skill\n---\nUse it.",
+        content="---\nname: Loadable Skill\ndescription: loadable\n---\nUse it.",
     )
 
     class _AgentConfigRepo:
@@ -990,7 +990,7 @@ def test_select_agent_skill_rejects_package_for_another_skill() -> None:
         skill_id="loadable-skill",
         name="Loadable Skill",
         description="loadable",
-        content="---\nname: Loadable Skill\n---\nUse it.",
+        content="---\nname: Loadable Skill\ndescription: loadable\n---\nUse it.",
     )
     wrong_package = SkillPackage(
         id="wrong-package",
@@ -998,7 +998,7 @@ def test_select_agent_skill_rejects_package_for_another_skill() -> None:
         skill_id="other-skill",
         version="1.0.0",
         hash="sha256:wrong",
-        skill_md="---\nname: Other Skill\n---\nUse it.",
+        skill_md="---\nname: Other Skill\ndescription: Other\n---\nUse it.",
         created_at=datetime(2026, 4, 24, tzinfo=UTC),
     )
     skill_repo.create_package(wrong_package)
@@ -1064,7 +1064,7 @@ def test_library_skill_content_rejects_selected_package_for_another_skill() -> N
         skill_id="loadable-skill",
         name="Loadable Skill",
         description="loadable",
-        content="---\nname: Loadable Skill\n---\nUse it.",
+        content="---\nname: Loadable Skill\ndescription: loadable\n---\nUse it.",
     )
     wrong_package = SkillPackage(
         id="wrong-package",
@@ -1072,7 +1072,7 @@ def test_library_skill_content_rejects_selected_package_for_another_skill() -> N
         skill_id="other-skill",
         version="1.0.0",
         hash="sha256:wrong",
-        skill_md="---\nname: Other Skill\n---\nUse it.",
+        skill_md="---\nname: Other Skill\ndescription: Other\n---\nUse it.",
         created_at=datetime(2026, 4, 24, tzinfo=UTC),
     )
     skill_repo.create_package(wrong_package)
@@ -2776,7 +2776,7 @@ async def test_delete_skill_route_rejects_skill_still_selected_by_agent(monkeypa
         skill_id="skill-1",
         name="api-design-reviewer",
         description="API Design Reviewer",
-        content="---\nname: api-design-reviewer\n---\nBody",
+        content="---\nname: api-design-reviewer\ndescription: API Design Reviewer\n---\nBody",
     )
     agent = _agent_user(user_id="agent-1", owner_user_id="user-1")
     fake_user_repo = SimpleNamespace(list_by_owner_user_id=lambda owner_user_id: [agent] if owner_user_id == "user-1" else [])
@@ -2824,7 +2824,7 @@ async def test_delete_skill_route_allows_skill_after_agent_config_removal(monkey
         skill_id="skill-1",
         name="api-design-reviewer",
         description="API Design Reviewer",
-        content="---\nname: api-design-reviewer\n---\nBody",
+        content="---\nname: api-design-reviewer\ndescription: API Design Reviewer\n---\nBody",
     )
     agent = _agent_user(user_id="agent-1", owner_user_id="user-1")
     fake_user_repo = SimpleNamespace(list_by_owner_user_id=lambda owner_user_id: [agent] if owner_user_id == "user-1" else [])
