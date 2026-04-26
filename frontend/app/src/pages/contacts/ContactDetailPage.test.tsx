@@ -270,6 +270,7 @@ describe("ContactDetailPage", () => {
           relationship_state: "pending",
           relationship_id: "hire_visit:human-1:human-2",
           relationship_is_requester: false,
+          relationship_message: "请同意这个申请，方便后续协作。",
           can_chat: false,
         },
       ]))
@@ -298,6 +299,9 @@ describe("ContactDetailPage", () => {
     );
 
     fireEvent.click(await screen.findByRole("button", { name: "同意申请" }));
+
+    expect(screen.getByText("申请说明")).toBeTruthy();
+    expect(screen.getByText("请同意这个申请，方便后续协作。")).toBeTruthy();
 
     await waitFor(() => {
       expect(authFetch).toHaveBeenCalledWith("/api/relationships/hire_visit%3Ahuman-1%3Ahuman-2/approve", {

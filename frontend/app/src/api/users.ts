@@ -10,6 +10,7 @@ export type UserChatCandidate = {
   relationship_state: string;
   relationship_id: string | null;
   relationship_is_requester: boolean;
+  relationship_message: string | null;
   can_chat: boolean;
   default_thread_id?: string | null;
 };
@@ -43,6 +44,7 @@ export function parseUserChatCandidates(value: unknown): UserChatCandidate[] {
       relationship_state: row.relationship_state,
       relationship_id: typeof row.relationship_id === "string" ? row.relationship_id : null,
       relationship_is_requester: typeof row.relationship_is_requester === "boolean" ? row.relationship_is_requester : false,
+      relationship_message: typeof row.relationship_message === "string" ? row.relationship_message : null,
       can_chat: row.can_chat,
       default_thread_id: typeof row.default_thread_id === "string" ? row.default_thread_id : null,
     };

@@ -51,11 +51,13 @@ def _users_app(
     *,
     relationships: dict[str, str] | None = None,
     relationship_initiators: dict[str, str | None] | None = None,
+    relationship_messages: dict[str, str | None] | None = None,
     contact_repo: object | None = None,
     default_threads: dict[str, dict[str, object] | None] | None = None,
 ) -> SimpleNamespace:
     relationships = relationships or {}
     relationship_initiators = relationship_initiators or {}
+    relationship_messages = relationship_messages or {}
     default_threads = default_threads or {}
     relationship_service = SimpleNamespace(
         list_for_user=lambda _user_id: [
@@ -64,6 +66,7 @@ def _users_app(
                 other_user_id=other_user_id,
                 state=state,
                 initiator_user_id=relationship_initiators.get(other_user_id),
+                message=relationship_messages.get(other_user_id),
             )
             for other_user_id, state in relationships.items()
         ]
@@ -161,6 +164,7 @@ async def test_list_chat_candidates_marks_pending_relationship_requester_side():
         [_human("u1", "owner"), _human("u2", "other")],
         relationships={"u2": "pending"},
         relationship_initiators={"u2": "u1"},
+        relationship_messages={"u2": "Please approve so we can coordinate in chat."},
     )
 
     result = await _list_chat_candidates(app)
@@ -168,6 +172,7 @@ async def test_list_chat_candidates_marks_pending_relationship_requester_side():
     assert result[0]["relationship_state"] == "pending"
     assert result[0]["relationship_id"] == "hire_visit:u1:u2"
     assert result[0]["relationship_is_requester"] is True
+    assert result[0]["relationship_message"] == "Please approve so we can coordinate in chat."
 
 
 @pytest.mark.asyncio
@@ -240,6 +245,7 @@ async def test_list_chat_candidates_marks_normal_active_contacts_as_chat_candida
             "relationship_state": "none",
             "relationship_id": None,
             "relationship_is_requester": False,
+            "relationship_message": None,
             "can_chat": True,
         }
     ]
@@ -371,6 +377,7 @@ def test_chat_candidates_route_reads_dependencies_from_app_state() -> None:
             "relationship_state": "visit",
             "relationship_id": "hire_visit:u1:u2",
             "relationship_is_requester": False,
+            "relationship_message": None,
             "can_chat": True,
         }
     ]
@@ -409,6 +416,7 @@ def test_chat_candidates_route_exposes_owned_agent_default_thread_id() -> None:
             "relationship_state": "none",
             "relationship_id": None,
             "relationship_is_requester": False,
+            "relationship_message": None,
             "can_chat": True,
             "default_thread_id": "thread-ready",
         }
@@ -456,6 +464,7 @@ async def test_list_chat_candidates_projects_external_user_like_unowned_particip
             "relationship_state": "visit",
             "relationship_id": "hire_visit:ext-1:u1",
             "relationship_is_requester": False,
+            "relationship_message": None,
             "can_chat": True,
         }
     ]

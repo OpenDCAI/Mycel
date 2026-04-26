@@ -27,6 +27,7 @@ class RelationshipCandidateMetadata(TypedDict):
     id: str
     state: str
     is_requester: bool
+    message: str | None
 
 
 @users_router.get("")
@@ -139,6 +140,7 @@ def _relationship_metadata_for_user(relationship_service: Any, user_id: str) -> 
             "id": str(getattr(row, "id")),
             "state": str(getattr(row, "state")),
             "is_requester": initiator_user_id == user_id,
+            "message": getattr(row, "message", None),
         }
     return relationships
 
@@ -195,6 +197,7 @@ async def list_chat_candidates(
         relationship_fields = {
             "relationship_id": relationship["id"] if relationship else None,
             "relationship_is_requester": relationship["is_requester"] if relationship else False,
+            "relationship_message": relationship["message"] if relationship else None,
         }
         if user.type is UserType.HUMAN:
             items.append(

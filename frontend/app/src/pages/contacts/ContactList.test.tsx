@@ -134,6 +134,7 @@ describe("ContactList", () => {
         relationship_state: "pending",
         relationship_id: "hire_visit:human-1:human-3",
         relationship_is_requester: false,
+        relationship_message: "请批准这个申请，我想加入后续讨论。",
         can_chat: false,
       },
     ]));
@@ -162,6 +163,7 @@ describe("ContactList", () => {
     expect(screen.queryByText("Morel")).toBeNull();
     expect(screen.getByText("Pending")).toBeTruthy();
     expect(screen.getByText("待处理")).toBeTruthy();
+    expect(screen.getByText("请批准这个申请，我想加入后续讨论。")).toBeTruthy();
 
     fireEvent.click(screen.getByRole("link", { name: /Ada/ }));
 
@@ -180,6 +182,7 @@ describe("ContactList", () => {
         relationship_state: "pending",
         relationship_id: "hire_visit:human-1:human-5",
         relationship_is_requester: true,
+        relationship_message: "等待对方批准我的协作申请。",
         can_chat: false,
       },
     ]));
@@ -195,6 +198,7 @@ describe("ContactList", () => {
 
     expect(await screen.findByText("Waiting")).toBeTruthy();
     expect(screen.getByText("已申请")).toBeTruthy();
+    expect(screen.getByText("等待对方批准我的协作申请。")).toBeTruthy();
 
     fireEvent.click(screen.getByRole("link", { name: /Waiting/ }));
 
