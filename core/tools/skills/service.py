@@ -14,6 +14,7 @@ class SkillsService:
         skills: Sequence[ResolvedSkill] | None = None,
     ):
         self._skill_bodies: dict[str, str] = {}
+        self._skill_descriptions: dict[str, str] = {}
         self._skill_files: dict[str, dict[str, str]] = {}
         self._load_skills(skills if skills is not None else ())
         self._register(registry)
@@ -22,10 +23,11 @@ class SkillsService:
         for skill in skills:
             if not isinstance(skill, ResolvedSkill):
                 raise TypeError("SkillsService requires ResolvedSkill items")
-            document = parse_skill_document(skill.content, label="Skill content")
+            document = parse_skill_document(skill.content, label="Skill content", require_description=True)
             if document.name != skill.name:
                 raise ValueError("Skill frontmatter name must match ResolvedSkill.name")
             self._skill_bodies[skill.name] = document.body
+            self._skill_descriptions[skill.name] = document.description
             self._skill_files[skill.name] = skill.files
 
     def _register(self, registry: ToolRegistry) -> None:
@@ -46,7 +48,8 @@ class SkillsService:
 
     def _get_schema(self) -> dict:
         available_skills = sorted(self._skill_bodies)
-        skills_list = "\n".join(f"- {name}" for name in available_skills)
+        skills_list = "\n".join(f"- {name}: {self._skill_descriptions[name]}" for name in available_skills)
+        skill_options = "; ".join(f"{name} - {self._skill_descriptions[name]}" for name in available_skills)
 
         return make_tool_schema(
             name="load_skill",
@@ -59,7 +62,7 @@ class SkillsService:
             properties={
                 "skill_name": {
                     "type": "string",
-                    "description": f"Name of the skill to load. Available: {', '.join(available_skills)}",
+                    "description": f"Name of the skill to load. Available: {skill_options}",
                 },
             },
             required=["skill_name"],
