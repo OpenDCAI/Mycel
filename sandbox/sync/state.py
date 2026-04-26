@@ -1,11 +1,8 @@
 import hashlib
 from pathlib import Path
 
-from backend.web.core.storage_factory import make_sync_file_repo
-
 
 def _calculate_checksum(file_path: Path) -> str:
-    """Calculate SHA256 checksum of file."""
     sha256 = hashlib.sha256()
     with open(file_path, "rb") as f:
         for chunk in iter(lambda: f.read(8192), b""):
@@ -14,34 +11,22 @@ def _calculate_checksum(file_path: Path) -> str:
 
 
 class SyncState:
-    def __init__(self):
-        self._repo = make_sync_file_repo()
+    def __init__(self, repo=None):
+        self._repo = repo or InMemorySyncFileBacking()
 
     def close(self) -> None:
         self._repo.close()
 
-    def track_file(self, thread_id: str, relative_path: str, checksum: str, timestamp: int):
-        self._repo.track_file(thread_id, relative_path, checksum, timestamp)
-
     def track_files_batch(self, thread_id: str, file_records: list[tuple[str, str, int]]):
-        """Batch insert/update multiple files in a single transaction.
-        file_records: list of (relative_path, checksum, timestamp)
-        """
         self._repo.track_files_batch(thread_id, file_records)
 
-    def get_file_info(self, thread_id: str, relative_path: str) -> dict | None:
-        return self._repo.get_file_info(thread_id, relative_path)
-
     def get_all_files(self, thread_id: str) -> dict[str, str]:
-        """Batch fetch all tracked files for a thread. Returns {relative_path: checksum}."""
         return self._repo.get_all_files(thread_id)
 
     def clear_thread(self, thread_id: str) -> int:
-        """Delete all sync records for a thread."""
         return self._repo.clear_thread(thread_id)
 
     def detect_changes(self, thread_id: str, workspace_path: Path) -> list[str]:
-        """Detect files that changed since last sync. Uses batch DB query + mtime heuristic."""
         known = self.get_all_files(thread_id)
         changed = []
         for file_path in workspace_path.rglob("*"):
@@ -57,3 +42,23 @@ class SyncState:
             if current_checksum != known[relative]:
                 changed.append(relative)
         return changed
+
+
+class InMemorySyncFileBacking:
+    def __init__(self) -> None:
+        self._rows: dict[str, dict[str, tuple[str, int]]] = {}
+
+    def close(self) -> None:
+        return None
+
+    def track_files_batch(self, thread_id: str, file_records: list[tuple[str, str, int]]) -> None:
+        for relative_path, checksum, timestamp in file_records:
+            self._rows.setdefault(thread_id, {})[relative_path] = (checksum, timestamp)
+
+    def get_all_files(self, thread_id: str) -> dict[str, str]:
+        return {path: checksum for path, (checksum, _timestamp) in self._rows.get(thread_id, {}).items()}
+
+    def clear_thread(self, thread_id: str) -> int:
+        removed = len(self._rows.get(thread_id, {}))
+        self._rows.pop(thread_id, None)
+        return removed

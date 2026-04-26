@@ -1,22 +1,25 @@
-"""ContextCompactor — Layer 2: LLM-based conversation summarization.
-
-Generates summaries of old messages, caches them in memory.
-Does NOT modify LangGraph state.
-"""
-
 from __future__ import annotations
 
 from typing import Any
 
 from langchain_core.messages import HumanMessage, SystemMessage
 
+# CC L4b compact: system prompt is simple (~200 tokens) — NOT inherited from parent.
+# Using a distinct simple system prompt prevents reusing the parent conversation's cache
+# (different system prompt → different prefix hash), and reduces input token cost.
+COMPACT_SYSTEM_PROMPT = "You are a helpful AI assistant tasked with summarizing conversations."
+
 SUMMARY_PROMPT = """\
-Provide a detailed summary for continuing our conversation. Include:
-1. Key decisions made and their rationale
-2. Files created, modified, or read and their current state
-3. Errors encountered and how they were resolved
-4. Outstanding tasks and current progress
-5. Important context that would be needed to continue the work
+Summarize this conversation in the following 9 sections:
+1. Request/Intent — what the user asked for
+2. Technical Concepts — key technologies and approaches discussed
+3. Files/Code — files created or modified and their current state
+4. Errors — errors encountered and how they were resolved
+5. Problem Solving — decisions made and rationale
+6. User Messages — key user inputs and feedback
+7. Pending Tasks — unfinished work
+8. Current Work — what was actively being done at the end
+9. Next Step — the immediate next action needed
 Be concise but retain all information needed to continue seamlessly."""
 
 SPLIT_TURN_PREFIX_PROMPT = """\
@@ -26,8 +29,6 @@ Provide a concise summary that captures the essential context."""
 
 
 class ContextCompactor:
-    """Summarize old messages via LLM call. Stateless — caller manages cache."""
-
     def __init__(
         self,
         reserve_tokens: int = 16384,
@@ -37,16 +38,6 @@ class ContextCompactor:
         self.keep_recent_tokens = keep_recent_tokens
 
     def should_compact(self, estimated_tokens: int, context_limit: int, threshold: float = 0.7) -> bool:
-        """Whether current context exceeds the compaction threshold.
-
-        Args:
-            estimated_tokens: Current estimated token count
-            context_limit: Maximum context window size
-            threshold: Fraction of context_limit to trigger compaction (default 0.7)
-
-        Returns:
-            True if compaction should be triggered
-        """
         threshold_tokens = int(context_limit * threshold)
         return estimated_tokens > threshold_tokens
 
@@ -59,7 +50,7 @@ class ContextCompactor:
         if len(messages) <= 2:
             return [], messages
 
-        # Walk backwards, accumulating tokens for to_keep
+        # Walk from newest to oldest, accumulating tokens for to_keep.
         accumulated = 0
         split_idx = len(messages)
 
@@ -72,6 +63,11 @@ class ContextCompactor:
         else:
             return [], messages
 
+        # @@@keep-current-turn - compact may summarize history, but the active
+        # model call still needs the current user turn as real input.
+        if split_idx >= len(messages):
+            split_idx = len(messages) - 1
+
         # Adjust boundary to avoid splitting tool_calls from ToolMessages
         split_idx = self._adjust_boundary(messages, split_idx)
 
@@ -80,23 +76,66 @@ class ContextCompactor:
 
         return messages[:split_idx], messages[split_idx:]
 
-    async def compact(self, messages_to_summarize: list[Any], model: Any) -> str:
+    async def compact(
+        self,
+        messages_to_summarize: list[Any],
+        model: Any,
+        compact_boundary: int = 0,
+    ) -> str:
         """Generate a summary of the given messages using the LLM.
+
+        Aligned with CC L4b compact:
+        - Uses COMPACT_SYSTEM_PROMPT (simple, ~200 tokens — NOT parent system prompt)
+        - No tools passed (extended thinking disabled, tools=[])
+        - Slices from compact_boundary forward
+        - max_tokens capped at 20000 (CC max summary output)
 
         Returns plain text summary string.
         """
-        # Build the summarization request
+        # Slice from compact_boundary forward (CC: from last compact_boundary marker)
+        if compact_boundary > 0 and compact_boundary < len(messages_to_summarize):
+            messages_to_summarize = messages_to_summarize[compact_boundary:]
+
         formatted = self._format_messages_for_summary(messages_to_summarize)
+        # CC L4b: system prompt is simple — does NOT inherit parent's system prompt.
+        # No tools, no extended thinking.
         summary_messages = [
-            SystemMessage(content=SUMMARY_PROMPT),
-            HumanMessage(content=f"Here is the conversation to summarize:\n\n{formatted}"),
+            SystemMessage(content=COMPACT_SYSTEM_PROMPT),
+            HumanMessage(content=f"Summarize this conversation:\n\n{formatted}\n\n{SUMMARY_PROMPT}"),
         ]
 
-        response = await model.ainvoke(summary_messages)
-        return response.content if hasattr(response, "content") else str(response)
+        # Bind max_tokens=20000 (CC max summary output), no tools
+        try:
+            bound_model = model.bind(max_tokens=20000)
+        except Exception:
+            bound_model = model
+
+        response = await bound_model.ainvoke(summary_messages)
+        return self._extract_summary_text(response)
+
+    def _extract_summary_text(self, response: Any) -> str:
+        content = getattr(response, "content", None)
+        if isinstance(content, str):
+            summary = content.strip()
+        elif isinstance(content, list):
+            parts: list[str] = []
+            for block in content:
+                if isinstance(block, dict):
+                    text = block.get("text") or block.get("content") or ""
+                    if isinstance(text, str):
+                        parts.append(text)
+                elif isinstance(block, str):
+                    parts.append(block)
+            summary = "".join(parts).strip()
+        elif content is None:
+            summary = ""
+        else:
+            summary = str(content).strip()
+        if not summary:
+            raise RuntimeError("Compaction summary was empty")
+        return summary
 
     def _estimate_msg_tokens(self, msg: Any) -> int:
-        """Estimate tokens for a single message (chars // 2)."""
         content = getattr(msg, "content", "")
         if isinstance(content, str):
             return len(content) // 2
@@ -116,7 +155,7 @@ class ContextCompactor:
         Rules:
         1. Never start with ToolMessage (orphaned from its AIMessage)
         2. Never start with AIMessage (LLM expects Human→AI alternation after summary)
-        Move boundary backward until to_keep starts with HumanMessage.
+        Move boundary toward older entries until to_keep starts with HumanMessage.
         """
         while split_idx < len(messages):
             cls = messages[split_idx].__class__.__name__
@@ -146,19 +185,16 @@ class ContextCompactor:
         if len(to_keep) <= 1:
             return False, []
 
-        # Calculate token budgets
         new_content_tokens = sum(self._estimate_msg_tokens(msg) for msg in to_keep)
         max_history_tokens = int(context_limit * 0.5 * 1.2)  # 50% + 20% safety margin
 
         if new_content_tokens <= max_history_tokens:
             return False, []
 
-        # Need to split: extract prefix from to_keep
         turn_prefix = self._extract_turn_prefix(to_keep, max_history_tokens)
         return True, turn_prefix
 
     def _extract_turn_prefix(self, to_keep: list[Any], max_tokens: int) -> list[Any]:
-        """Extract prefix messages from to_keep up to max_tokens."""
         accumulated = 0
         prefix_end_idx = 0
 
@@ -192,13 +228,12 @@ class ContextCompactor:
             HumanMessage(content=f"Here is the turn prefix to summarize:\n\n{formatted_prefix}"),
         ]
         response = await model.ainvoke(prefix_messages)
-        prefix_summary = response.content if hasattr(response, "content") else str(response)
+        prefix_summary = self._extract_summary_text(response)
 
         combined = f"{history_summary}\n\n---\n\n**Turn Context (split turn):**\n\n{prefix_summary}"
         return combined, prefix_summary
 
     def _format_messages_for_summary(self, messages: list[Any]) -> str:
-        """Format messages into a readable string for the summarization LLM."""
         parts = []
         for msg in messages:
             role = msg.__class__.__name__.replace("Message", "")

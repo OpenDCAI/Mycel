@@ -1,120 +1,22 @@
-"""General helper utilities."""
-
 from pathlib import Path
 from typing import Any
 
 from fastapi import HTTPException
 
-from backend.web.core.config import DB_PATH
-from sandbox.sync.state import SyncState
-from storage.container import StorageContainer
-from storage.providers.sqlite.chat_session_repo import SQLiteChatSessionRepo
-from storage.providers.sqlite.kernel import SQLiteDBRole, resolve_role_db_path
-from storage.providers.sqlite.terminal_repo import SQLiteTerminalRepo
-from storage.runtime import build_storage_container
-
-SANDBOX_DB_PATH = resolve_role_db_path(SQLiteDBRole.SANDBOX)
-
-# @@@cached-container - reuse a single StorageContainer across helper calls to avoid per-call rebuild.
-_cached_container: StorageContainer | None = None
-_cached_container_db_path: Path | None = None
-
-
-def is_virtual_thread_id(thread_id: str | None) -> bool:
-    """Check if thread_id is a virtual thread (wrapped in parentheses)."""
-    return bool(thread_id) and thread_id.startswith("(") and thread_id.endswith(")")
-
-
-def get_terminal_timestamps(terminal_id: str) -> tuple[str | None, str | None]:
-    """Get created_at and updated_at timestamps for a terminal."""
-    if not SANDBOX_DB_PATH.exists():
-        return None, None
-    repo = SQLiteTerminalRepo(db_path=SANDBOX_DB_PATH)
-    try:
-        return repo.get_timestamps(terminal_id)
-    finally:
-        repo.close()
-
-
-def get_lease_timestamps(lease_id: str) -> tuple[str | None, str | None]:
-    """Get created_at and updated_at timestamps for a lease."""
-    from storage.providers.sqlite.lease_repo import SQLiteLeaseRepo
-
-    if not SANDBOX_DB_PATH.exists():
-        return None, None
-    repo = SQLiteLeaseRepo(db_path=SANDBOX_DB_PATH)
-    try:
-        row = repo.get(lease_id)
-    finally:
-        repo.close()
-    if row is None:
-        return None, None
-    return str(row.get("created_at") or "") or None, str(row.get("updated_at") or "") or None
-
-
-def extract_webhook_instance_id(payload: dict[str, Any]) -> str | None:
-    """Extract provider instance/session id from webhook payload."""
-    direct_keys = ("session_id", "sandbox_id", "instance_id", "id")
-    for key in direct_keys:
-        value = payload.get(key)
-        if isinstance(value, str) and value:
-            return value
-
-    nested = payload.get("data")
-    if isinstance(nested, dict):
-        for key in direct_keys:
-            value = nested.get(key)
-            if isinstance(value, str) and value:
-                return value
-
-    return None
-
-
-def _get_container() -> StorageContainer:
-    global _cached_container, _cached_container_db_path
-    if _cached_container is not None and _cached_container_db_path == DB_PATH:
-        return _cached_container
-    _cached_container = build_storage_container(main_db_path=DB_PATH)
-    _cached_container_db_path = DB_PATH
-    return _cached_container
-
+from storage.runtime import (
+    build_thread_repo,
+)
 
 _cached_thread_repo = None
 
 
-def _get_thread_repo(thread_repo=None):
-    """Get cached ThreadRepo instance, or use injected repo."""
-    if thread_repo is not None:
-        return thread_repo
-    global _cached_thread_repo
-    if _cached_thread_repo is not None:
-        return _cached_thread_repo
-    from storage.providers.sqlite.thread_repo import SQLiteThreadRepo
-
-    _cached_thread_repo = SQLiteThreadRepo(DB_PATH)
-    return _cached_thread_repo
-
-
-def save_thread_config(thread_id: str, thread_repo=None, **fields: Any) -> None:
-    """Update specific fields of thread config."""
-    allowed = {"sandbox_type", "cwd", "model", "observation_provider"}
-    updates = {k: v for k, v in fields.items() if k in allowed}
-    if not updates:
-        return
-    _get_thread_repo(thread_repo).update(thread_id, **updates)
-
-
-def load_thread_config(thread_id: str, thread_repo=None) -> dict[str, Any] | None:
-    """Load thread data. Returns dict or None."""
-    return _get_thread_repo(thread_repo).get_by_id(thread_id)
-
-
-def get_active_observation_provider() -> str | None:
-    """Read global observation config and return the active provider name."""
-    from config.observation_loader import ObservationLoader
-
-    config = ObservationLoader().load()
-    return config.active if config.active else None
+def load_thread_row(thread_id: str, thread_repo=None) -> dict[str, Any] | None:
+    if thread_repo is None:
+        global _cached_thread_repo
+        if _cached_thread_repo is None:
+            _cached_thread_repo = build_thread_repo()
+        thread_repo = _cached_thread_repo
+    return thread_repo.get_by_id(thread_id)
 
 
 def resolve_local_workspace_path(
@@ -123,19 +25,18 @@ def resolve_local_workspace_path(
     thread_cwd_map: dict[str, str] | None = None,
     local_workspace_root: Path | None = None,
 ) -> Path:
-    """Resolve a workspace path relative to thread-specific or global workspace root."""
     from backend.web.core.config import LOCAL_WORKSPACE_ROOT
 
     if local_workspace_root is None:
         local_workspace_root = LOCAL_WORKSPACE_ROOT
 
-    # Use thread-specific workspace root if available (memory → SQLite fallback)
+    # Use thread-specific workspace root if available (live map → persisted thread config).
     thread_cwd = None
     if thread_id:
         if thread_cwd_map:
             thread_cwd = thread_cwd_map.get(thread_id)
         if not thread_cwd:
-            tc = load_thread_config(thread_id)
+            tc = load_thread_row(thread_id)
             if tc:
                 thread_cwd = tc.get("cwd")
     # @@@workspace-base-normalize - relative LOCAL_WORKSPACE_ROOT must be normalized, or target.relative_to(base) always fails.
@@ -144,33 +45,9 @@ def resolve_local_workspace_path(
     if not raw_path:
         return base
     requested = Path(raw_path).expanduser()
-    if requested.is_absolute():
-        target = requested.resolve()
-    else:
-        target = (base / requested).resolve()
+    target = requested.resolve() if requested.is_absolute() else (base / requested).resolve()
     try:
         target.relative_to(base)
     except ValueError as exc:
         raise HTTPException(400, f"Path outside workspace: {target}") from exc
     return target
-
-
-def delete_thread_in_db(thread_id: str) -> None:
-    """Delete all records for a thread via storage repos + sandbox db."""
-    # Purge storage-managed repos (works for both sqlite and supabase strategies)
-    _get_container().purge_thread(thread_id)
-
-    if not SANDBOX_DB_PATH.exists():
-        return
-
-    session_repo = SQLiteChatSessionRepo(db_path=SANDBOX_DB_PATH)
-    terminal_repo = SQLiteTerminalRepo(db_path=SANDBOX_DB_PATH)
-    sync_state = SyncState()
-    try:
-        session_repo.delete_by_thread(thread_id)
-        terminal_repo.delete_by_thread(thread_id)
-        sync_state.clear_thread(thread_id)
-    finally:
-        sync_state.close()
-        session_repo.close()
-        terminal_repo.close()

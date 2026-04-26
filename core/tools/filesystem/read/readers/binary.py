@@ -1,5 +1,3 @@
-"""Binary file reader - returns metadata or image content blocks."""
-
 from __future__ import annotations
 
 import base64
@@ -25,18 +23,6 @@ MAX_IMAGE_SIZE: int = 20 * 1024 * 1024  # 20MB
 
 
 def read_binary(path: Path) -> ReadResult:
-    """
-    Read binary file.
-
-    For image files, returns content_blocks with base64-encoded image data.
-    For other binary files, returns metadata only.
-
-    Args:
-        path: Absolute path to file
-
-    Returns:
-        ReadResult with content_blocks for images, or metadata text for other binaries
-    """
     stat = path.stat()
     mime_type, _ = mimetypes.guess_type(str(path))
     ext = path.suffix.lstrip(".").lower()
@@ -62,7 +48,6 @@ def read_binary(path: Path) -> ReadResult:
 
 
 def _read_image(path: Path, size: int, mime_type: str) -> ReadResult:
-    """Read image file and return as content block."""
     if size > MAX_IMAGE_SIZE:
         return ReadResult(
             file_path=str(path),
@@ -91,7 +76,6 @@ def _read_image(path: Path, size: int, mime_type: str) -> ReadResult:
 
 
 def _format_size(size: int) -> str:
-    """Format file size in human-readable form."""
     for unit in ("B", "KB", "MB", "GB"):
         if size < 1024:
             return f"{size:.1f} {unit}" if unit != "B" else f"{size} {unit}"

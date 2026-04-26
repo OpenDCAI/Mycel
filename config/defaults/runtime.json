@@ -1,13 +1,14 @@
 {
-  "context_limit": 0,
-  "enable_audit_log": true,
-  "allowed_extensions": null,
-  "block_dangerous_commands": true,
-  "block_network_commands": false,
-  "queue_mode": "steer",
-  "temperature": null,
-  "max_tokens": null,
-  "model_kwargs": {},
+  "runtime": {
+    "context_limit": 0,
+    "enable_audit_log": true,
+    "allowed_extensions": null,
+    "block_dangerous_commands": true,
+    "block_network_commands": false,
+    "temperature": null,
+    "max_tokens": null,
+    "model_kwargs": {}
+  },
   "memory": {
     "pruning": {
       "enabled": true,
@@ -20,26 +21,18 @@
       "enabled": true,
       "reserve_tokens": 16384,
       "keep_recent_tokens": 20000,
-      "min_messages": 20
+      "min_messages": 20,
+      "trigger_tokens": null
     }
   },
   "system_prompt": null,
   "tools": {
     "filesystem": {
       "enabled": true,
-      "tools": {
-        "read_file": {
-          "enabled": true,
-          "max_file_size": 10485760
-        },
-        "write_file": true,
-        "edit_file": true,
-        "list_dir": true
-      }
+      "max_file_size": 10485760
     },
     "search": {
       "enabled": true,
-      "max_results": 50,
       "tools": {
         "grep": {
           "enabled": true,
@@ -59,30 +52,14 @@
           "exa_api_key": null,
           "firecrawl_api_key": null
         },
-        "fetch": {
+        "web_fetch": {
           "enabled": true,
           "jina_api_key": null
         }
       }
     },
     "command": {
-      "enabled": true,
-      "tools": {
-        "run_command": {
-          "enabled": true,
-          "default_timeout": 120
-        },
-        "command_status": true
-      }
+      "enabled": true
     }
-  },
-  "mcp": {
-    "enabled": true,
-    "servers": {}
-  },
-  "skills": {
-    "enabled": true,
-    "paths": ["~/.leon/skills"],
-    "skills": {}
   }
 }

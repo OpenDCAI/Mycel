@@ -7,6 +7,8 @@ COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 
 # Install dependencies (cached layer before source copy)
 COPY pyproject.toml uv.lock ./
+# @@@sandbox-sdk-image-parity - shared staging/provider inventory should reflect runtime truth,
+# not "SDK missing from image" accidents while config files are present.
 RUN uv sync --frozen --no-dev --no-install-project
 
 # Copy source and install project

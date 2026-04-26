@@ -49,13 +49,13 @@ flowchart LR
     | Daytona | API key, API URL |
     | AgentBay | API key |
 
-    Config is stored at `~/.leon/sandboxes/<provider>.json`.
+    Set `LEON_SANDBOXES_DIR` to the sandbox provider config directory. Config is stored as `<provider>.json` inside that directory.
   </Step>
   <Step title="Start a sandboxed thread">
     In the new conversation view, use the **sandbox dropdown** in the input area to select your provider. Send your first message — the Thread is now permanently bound to that sandbox.
   </Step>
   <Step title="Monitor resources">
-    Go to **Resources** (sidebar). Live CPU/RAM/disk metrics and a file browser per sandbox session.
+    Go to **Resources** (sidebar). Live CPU/RAM/disk metrics and a file browser per sandbox runtime.
   </Step>
 </Steps>
 
@@ -157,26 +157,25 @@ flowchart LR
 API keys are resolved in order:
 1. Config file field (`e2b.api_key`, `daytona.api_key`, etc.)
 2. Environment variable (`E2B_API_KEY`, `DAYTONA_API_KEY`, `AGENTBAY_API_KEY`)
-3. `~/.leon/config.env`
 
-## Session management
+## Sandbox runtime management
 
 ### Web UI
 
 From **Resources**:
-- Unified grid of all sessions across all providers
-- Click a session card → detail sheet with metrics and file browser
+- Unified grid of sandbox runtimes across all providers
+- Click a runtime card → detail sheet with metrics and file browser
 - Pause / Resume / Destroy via UI or API
 
 ### API endpoints
 
 | Action | Endpoint |
 |--------|----------|
-| List sessions | `GET /api/sandbox/sessions` |
-| Pause | `POST /api/sandbox/sessions/{id}/pause?provider={type}` |
-| Resume | `POST /api/sandbox/sessions/{id}/resume?provider={type}` |
-| Destroy | `DELETE /api/sandbox/sessions/{id}?provider={type}` |
-| Metrics | `GET /api/sandbox/sessions/{id}/metrics` |
+| List runtimes | `GET /api/sandbox/runtimes` |
+| Pause | `POST /api/sandbox/runtimes/{id}/pause?provider={type}` |
+| Resume | `POST /api/sandbox/runtimes/{id}/resume?provider={type}` |
+| Destroy | `DELETE /api/sandbox/runtimes/{id}?provider={type}` |
+| Metrics | `GET /api/sandbox/runtimes/{id}/metrics` |
 
 ## Architecture
 
@@ -191,11 +190,11 @@ flowchart TD
 
 Middleware owns **policy**. The sandbox backend owns **I/O**. Swapping the backend changes where operations run without touching any middleware logic.
 
-Sessions are tracked in SQLite (`~/.leon/sandbox.db`):
+When SQLite sandbox storage is enabled, set `LEON_SANDBOX_DB_PATH` to the sandbox runtime database:
 
 | Table | Purpose |
 |-------|---------|
-| `sandbox_leases` | Lease lifecycle — provider, desired/observed state |
-| `sandbox_instances` | Provider-side session IDs |
-| `abstract_terminals` | Virtual terminals bound to Thread + lease |
-| `lease_resource_snapshots` | CPU, memory, disk metrics |
+| `sandbox_leases` | Local sandbox lifecycle record — provider, desired/observed state |
+| `sandbox_instances` | Provider-side runtime IDs |
+| `abstract_terminals` | Virtual terminal pointers bound to Thread + sandbox runtime record |
+| `sandbox_resource_snapshots` | CPU, memory, disk metrics |

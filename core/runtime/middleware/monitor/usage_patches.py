@@ -1,30 +1,18 @@
-"""Provider-specific streaming usage patches.
-
-Centralizes workarounds for upstream bugs where streaming responses
-return incomplete token usage data. Each patch is idempotent and
-guarded by a flag so it can be called multiple times safely.
-
-Remove individual patches once the upstream library is fixed.
-"""
-
 from __future__ import annotations
 
 from typing import Any
 
-# ---------------------------------------------------------------------------
 # @@@langchain-anthropic-streaming-usage-regression
 # langchain-anthropic >= 1.0 dropped usage extraction from message_start,
 # assuming message_delta carries complete info. But Anthropic API only puts
 # input_tokens (+ cache tokens) in message_start and output_tokens in
 # message_delta. This patch restores the v0.2.4 behavior.
 # Remove this once upstream is fixed.
-# ---------------------------------------------------------------------------
 
 _anthropic_patched = False
 
 
 def patch_anthropic_streaming_usage() -> None:
-    """Restore input-token extraction from message_start in streaming."""
     global _anthropic_patched
     if _anthropic_patched:
         return
@@ -65,5 +53,4 @@ def patch_anthropic_streaming_usage() -> None:
 
 
 def apply_all() -> None:
-    """Apply all provider-specific streaming usage patches."""
     patch_anthropic_streaming_usage()

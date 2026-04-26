@@ -1,8 +1,3 @@
-"""SessionPruner — Layer 1: trim/clear old ToolMessage content.
-
-Pure string operations, no LLM calls. Protects recent tool results.
-"""
-
 from __future__ import annotations
 
 import copy
@@ -10,13 +5,6 @@ from typing import Any
 
 
 class SessionPruner:
-    """Prune old ToolMessage content to reduce context size.
-
-    Two levels:
-    - soft-trim: keep head + tail, replace middle with [...trimmed...]
-    - hard-clear: replace entire content with placeholder
-    """
-
     def __init__(
         self,
         soft_trim_chars: int = 3000,
@@ -28,10 +16,6 @@ class SessionPruner:
         self.protect_recent = protect_recent
 
     def prune(self, messages: list[Any]) -> list[Any]:
-        """Return new message list with old ToolMessage content trimmed/cleared.
-
-        Does NOT modify original messages — returns shallow copies with replaced content.
-        """
         protected_ids = self._get_protected_tool_call_ids(messages)
         result = []
         for msg in messages:
@@ -42,7 +26,6 @@ class SessionPruner:
         return result
 
     def _get_protected_tool_call_ids(self, messages: list[Any]) -> set[str]:
-        """Collect tool_call_ids from the most recent N AIMessages with tool_calls."""
         ids: set[str] = set()
         count = 0
         for msg in reversed(messages):
@@ -81,7 +64,6 @@ class SessionPruner:
         if n <= self.soft_trim_chars:
             return msg
 
-        # Determine new content based on size
         if n > self.hard_clear_threshold:
             new_content = f"[Tool output cleared — {n} chars]"
         else:

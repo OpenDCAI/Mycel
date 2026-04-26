@@ -1,8 +1,3 @@
-"""In-memory fake Supabase client for unit tests.
-
-Supports: select, insert, upsert, update, delete, eq, neq, in_, gt, gte, order, limit.
-"""
-
 from __future__ import annotations
 
 
@@ -26,7 +21,7 @@ class FakeSupabaseQuery:
         self._delete_requested = False
         self._auto_seq = False
 
-    def select(self, _columns: str):
+    def select(self, _columns: str, **_kwargs):
         return self
 
     def insert(self, payload: dict | list[dict]):
@@ -66,6 +61,10 @@ class FakeSupabaseQuery:
         self._filters.append((column, "gte", value))
         return self
 
+    def is_(self, column: str, value: object):
+        self._filters.append((column, "is", value))
+        return self
+
     def order(self, column: str, desc: bool = False):
         self._order_by = (column, desc)
         return self
@@ -85,6 +84,8 @@ class FakeSupabaseQuery:
                 return False
             if op == "gte" and not (cell is not None and cell >= value):
                 return False
+            if op == "is" and cell is not value:
+                return False
         if self._in_filter is not None:
             column, values = self._in_filter
             if row.get(column) not in values:
@@ -94,7 +95,6 @@ class FakeSupabaseQuery:
     def execute(self) -> FakeSupabaseResponse:
         table = self._tables.setdefault(self._table_name, [])
 
-        # INSERT
         if self._insert_payload is not None:
             rows_to_insert = self._insert_payload if isinstance(self._insert_payload, list) else [self._insert_payload]
             inserted = []
@@ -107,7 +107,6 @@ class FakeSupabaseQuery:
                 inserted.append(dict(row))
             return FakeSupabaseResponse(inserted)
 
-        # UPSERT
         if self._upsert_payload is not None:
             conflict_col = self._upsert_conflict or "id"
             conflict_val = self._upsert_payload.get(conflict_col)
@@ -119,19 +118,15 @@ class FakeSupabaseQuery:
             table.append(row)
             return FakeSupabaseResponse([dict(row)])
 
-        # Filter
         matching = [r for r in table if self._match(r)]
 
-        # ORDER
         if self._order_by is not None:
             column, desc = self._order_by
             matching = sorted(matching, key=lambda r: r.get(column), reverse=desc)
 
-        # LIMIT
         if self._limit_value is not None:
             matching = matching[: self._limit_value]
 
-        # UPDATE
         if self._update_payload is not None:
             updated = []
             for row in table:
@@ -140,33 +135,30 @@ class FakeSupabaseQuery:
                     updated.append(dict(row))
             return FakeSupabaseResponse(updated)
 
-        # DELETE
         if self._delete_requested:
             self._tables[self._table_name] = [r for r in table if not self._match(r)]
             return FakeSupabaseResponse([dict(r) for r in matching])
 
-        # SELECT
         return FakeSupabaseResponse([dict(r) for r in matching])
 
 
 class FakeSupabaseClient:
-    """In-memory Supabase client for tests.
-
-    Args:
-        tables: shared mutable dict of table_name -> list[dict].
-        auto_seq_tables: set of table names that auto-generate a `seq` column on insert.
-    """
-
     def __init__(
         self,
         tables: dict[str, list[dict]] | None = None,
         auto_seq_tables: set[str] | None = None,
+        schema_name: str | None = None,
     ):
         self._tables = tables if tables is not None else {}
         self._auto_seq_tables = auto_seq_tables or set()
+        self._schema_name = schema_name
 
     def table(self, table_name: str) -> FakeSupabaseQuery:
-        query = FakeSupabaseQuery(table_name, self._tables)
-        if table_name in self._auto_seq_tables:
+        resolved_table = f"{self._schema_name}.{table_name}" if self._schema_name else table_name
+        query = FakeSupabaseQuery(resolved_table, self._tables)
+        if resolved_table in self._auto_seq_tables:
             query._auto_seq = True
         return query
+
+    def schema(self, schema_name: str) -> FakeSupabaseClient:
+        return FakeSupabaseClient(self._tables, self._auto_seq_tables, schema_name=schema_name)

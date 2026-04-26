@@ -12,13 +12,6 @@ logger = logging.getLogger(__name__)
 
 
 def _native_upload(session_id: str, provider, workspace: Path, workspace_root: str, files: list[str]):
-    """Upload files using provider's native file API (upload_bytes).
-
-    Each file is uploaded individually via the SDK's binary upload endpoint.
-    No shell commands, no base64, no size limits from execute().
-    """
-    t0 = time.time()
-    total_bytes = 0
     # @@@mkdir-batch - collect all needed dirs, create in one command
     dirs_needed = {workspace_root}
     upload_items: list[tuple[str, bytes]] = []
@@ -37,24 +30,15 @@ def _native_upload(session_id: str, provider, workspace: Path, workspace_root: s
     provider.execute(session_id, "mkdir -p " + " ".join(sorted(dirs_needed)), timeout_ms=10000)
     for remote, data in upload_items:
         provider.upload_bytes(session_id, remote, data)
-        total_bytes += len(data)
-    logger.info("[SYNC-PERF] native_upload: %d files, %d bytes, %.3fs", len(files), total_bytes, time.time() - t0)
 
 
 def _native_download(session_id: str, provider, workspace: Path, workspace_root: str):
-    """Download files from sandbox using provider's native file API.
-
-    Lists remote dir, downloads each file individually.
-    """
-    t0 = time.time()
     try:
         entries = provider.list_dir(session_id, workspace_root)
     except Exception:
-        logger.info("[SYNC] native_download skipped: cannot list %s", workspace_root)
         return
 
     workspace.mkdir(parents=True, exist_ok=True)
-    total_bytes = 0
     stack = [(workspace_root, entries)]
     while stack:
         current_remote, items = stack.pop()
@@ -73,16 +57,12 @@ def _native_download(session_id: str, provider, workspace: Path, workspace_root:
                 local = workspace / rel
                 local.parent.mkdir(parents=True, exist_ok=True)
                 try:
-                    data = provider.download_bytes(session_id, remote_path)
-                    local.write_bytes(data)
-                    total_bytes += len(data)
+                    local.write_bytes(provider.download_bytes(session_id, remote_path))
                 except Exception:
                     logger.warning("[SYNC] native_download: failed to download %s", remote_path, exc_info=True)
-    logger.info("[SYNC-PERF] native_download: %d bytes, %.3fs", total_bytes, time.time() - t0)
 
 
 def _pack_tar(workspace: Path, files: list[str]) -> bytes:
-    """Pack files into an in-memory tar.gz archive."""
     buf = io.BytesIO()
     with tarfile.open(fileobj=buf, mode="w:gz") as tar:
         for rel_path in files:
@@ -95,8 +75,6 @@ def _pack_tar(workspace: Path, files: list[str]) -> bytes:
 
 
 def _batch_upload_tar(session_id: str, provider, workspace: Path, workspace_root: str, files: list[str]):
-    """Fallback: upload via tar+base64+execute for providers without native file API."""
-    t0 = time.time()
     tar_bytes = _pack_tar(workspace, files)
     if not tar_bytes or len(tar_bytes) < 10:
         return
@@ -113,16 +91,12 @@ def _batch_upload_tar(session_id: str, provider, workspace: Path, workspace_root
     if exit_code is not None and exit_code != 0:
         error_msg = getattr(result, "error", "") or getattr(result, "output", "")
         raise RuntimeError(f"Batch upload failed (exit {exit_code}): {error_msg}")
-    logger.info("[SYNC-PERF] batch_upload_tar: %d files, %d bytes tar, %.3fs", len(files), len(tar_bytes), time.time() - t0)
 
 
 def _batch_download_tar(session_id: str, provider, workspace: Path, workspace_root: str):
-    """Fallback: download via tar+base64+execute for providers without native file API."""
-    t0 = time.time()
     check = provider.execute(session_id, f"test -d {workspace_root} && echo EXISTS", timeout_ms=10000)
     check_out = (getattr(check, "output", "") or "").strip()
     if check_out != "EXISTS":
-        logger.info("[SYNC] download skipped: %s does not exist in sandbox", workspace_root)
         return
 
     cmd = f"cd {workspace_root} && tar czf - . | base64"
@@ -143,7 +117,6 @@ def _batch_download_tar(session_id: str, provider, workspace: Path, workspace_ro
     buf = io.BytesIO(tar_bytes)
     with tarfile.open(fileobj=buf, mode="r:gz") as tar:
         tar.extractall(path=str(workspace), filter="data")
-    logger.info("[SYNC-PERF] batch_download_tar: %d bytes, %.3fs", len(tar_bytes), time.time() - t0)
 
 
 class SyncStrategy(ABC):
@@ -164,7 +137,6 @@ class SyncStrategy(ABC):
         pass
 
     def clear_state(self, state_key: str):
-        """Remove all sync state for a key. Default no-op."""
         pass
 
 
@@ -201,15 +173,12 @@ class IncrementalSyncStrategy(SyncStrategy):
         if not source_path.exists():
             return
 
-        if files:
-            to_upload = files
-        else:
-            to_upload = self.state.detect_changes(state_key, source_path)
+        to_upload = files or self.state.detect_changes(state_key, source_path)
 
         if not to_upload:
             return
 
-        # @@@native-first - use provider SDK file API when available, fall back to tar+execute
+        # @@@native-first - use provider SDK file API when available, otherwise tar+execute
         if "upload_bytes" in type(provider).__dict__:
             _native_upload(session_id, provider, source_path, remote_path, to_upload)
         else:
@@ -237,8 +206,9 @@ class IncrementalSyncStrategy(SyncStrategy):
     def clear_state(self, state_key: str):
         self.state.clear_thread(state_key)
 
-    def _update_checksums_after_download(self, state_key: str, source_path: Path):
-        """Update checksum DB to match downloaded files, preventing redundant re-uploads on resume."""
+    def _update_checksums_after_download(self, state_key: str | None, source_path: Path):
+        if not state_key:
+            return
         if not source_path.exists():
             return
         from sandbox.sync.state import _calculate_checksum

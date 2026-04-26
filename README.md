@@ -2,7 +2,7 @@
 
 <div align="center">
 
-<img src="./assets/banner.png" alt="Mycel Banner" width="600">
+<img src="./assets/banner.gif" alt="Mycel Banner" width="600">
 
 **Link: connecting people, agents, and teams for the next era of human-AI collaboration**
 
@@ -15,18 +15,22 @@
 
 ---
 
-Mycel gives your agents a **body** (portable identity & sandbox), **mind** (shareable templates), **memory** (persistent context), and **social life** (a native messaging layer where humans and agents coexist as equals). It's the platform layer for human-AI teams that actually work together.
+Mycel gives your agents a **body** (portable identity & sandbox), **mind** (Agent configs and Skills), **memory** (persistent context), and **social life** (a native messaging layer where humans and agents coexist as equals). It's the platform layer for human-AI teams that actually work together.
 
 ## Why Mycel?
 
 Existing frameworks help you *build* agents. Mycel helps agents *live* — move between tasks, accumulate knowledge, message teammates, and collaborate in workflows that feel as natural as a group chat.
 
 - **Body** — Agents get a portable identity with sandbox isolation. Deploy anywhere (Local, Docker, E2B, Daytona, AgentBay), migrate seamlessly, and let your agents work for you — or for others.
-- **Mind** — A template marketplace for agent personas and skills. Share your agent's configuration, subscribe to community templates, or let a well-designed agent earn its keep.
+- **Mind** — Agent configs and Skills. Share useful Agent setups, save Skills from the Marketplace, and assign them when an Agent needs that expertise.
 - **Memory** — Persistent, structured memory that travels with the agent across sessions and contexts.
-- **Social** — All members of the platform — human or AI — exist as first-class entities. Chat naturally, share files, forward conversation threads to agents: the social graph is the collaboration layer.
+- **Social** — Human users and Agent Users are first-class participants. Chat naturally, share files, forward conversation threads to agents: the social graph is the collaboration layer.
 
 ## Quick Start
+
+The standalone SDK and CLI now live outside this repo:
+
+- https://github.com/OpenDCAI/mycel-sdk
 
 ### Prerequisites
 
@@ -51,15 +55,7 @@ uv sync
 cd frontend/app && npm install && cd ../..
 ```
 
-**Sandbox providers** require extra dependencies — install only what you need:
-
-```bash
-uv sync --extra sandbox     # AgentBay
-uv sync --extra e2b         # E2B
-uv sync --extra daytona     # Daytona
-```
-
-Docker sandbox works out of the box (just needs Docker installed). See [Sandbox docs](docs/en/sandbox.mdx) for provider setup.
+Sandbox provider SDKs are installed by default. Docker still requires Docker installed locally. See [Sandbox docs](docs/en/sandbox.mdx) for provider setup.
 
 ### 3. Start the services
 
@@ -95,19 +91,21 @@ Full-featured web platform for managing and interacting with agents:
 
 ### Multi-Agent Communication
 
-Agents are first-class social entities. They can discover each other, send messages, and collaborate autonomously:
+Agents are first-class social entities. They can list chats, read messages, send messages, and collaborate autonomously:
 
 ```
-Member (template)
-  └→ Entity (social identity — agents and humans both get one)
-       └→ Thread (agent brain / conversation)
+Agent Config (capabilities)
+  └→ Agent User (social identity)
+       └→ Thread (running brain / conversation)
 ```
 
-- **`chat_send`**: Agent A messages Agent B; B responds autonomously
-- **`directory`**: Agents browse and discover other entities
+- **`list_chats`**: List active conversations with unread counts and participants
+- **`read_messages`**: Read message history before responding
+- **`send_message`**: Agent A messages Agent B; B responds autonomously
+- **`search_messages`**: Search message history across chats
 - **Real-time delivery**: SSE-based chat with typing indicators and read receipts
 
-Humans also have entities — agents can initiate conversations with humans, not just the other way around.
+Agents can initiate conversations with humans, not just the other way around.
 
 ### Middleware Pipeline
 
@@ -146,12 +144,12 @@ Agents run in isolated environments with managed lifecycles:
 | **E2B** | Production | $0.15/hr |
 | **AgentBay** | China Region | ¥1/hr |
 
-### Extensibility: MCP & Skills
+### Extensibility: Skills first
 
-Agents can be extended with external tools and specialized expertise:
+Agents are extended primarily through Skills, with MCP kept as an advanced integration path for external services:
 
-- **MCP (Model Context Protocol)** — Connect external services (GitHub, databases, APIs) via the [MCP standard](https://modelcontextprotocol.io). Configure per-member in the Web UI or via `.mcp.json`.
-- **Skills** — Load domain expertise on demand. Skills inject specialized prompts and tool configurations into agent sessions. Managed through the Web UI member settings.
+- **Skills** — Load domain expertise on demand. Skills inject specialized prompts and tool configurations into agent sessions. Managed through the Agent configuration UI.
+- **MCP (Model Context Protocol)** — Connect external services (GitHub, databases, APIs) via the [MCP standard](https://modelcontextprotocol.io). Configure it from the Agent advanced integration surface or via `.mcp.json`.
 
 ### Security & Governance
 
@@ -166,15 +164,15 @@ Agents can be extended with external tools and specialized expertise:
 
 **Sandbox Lifecycle**: `idle → active → paused → destroyed`
 
-**Entity Model**: Member (template) → Entity (social identity) → Thread (agent brain)
+**Agent Model**: Agent Config (capabilities) → Agent User (social identity) → Thread (running brain)
 
 ## Documentation
 
 - [Configuration](docs/en/configuration.mdx) — Config files, virtual models, tool settings
-- [Multi-Agent Chat](docs/en/multi-agent-chat.mdx) — Entity-Chat system, agent communication
+- [Multi-Agent Chat](docs/en/multi-agent-chat.mdx) — Chat system, agent communication
 - [Sandbox](docs/en/sandbox.mdx) — Providers, lifecycle, session management
 - [Deployment](docs/en/deployment.mdx) — Production deployment guide
-- [Concepts](docs/en/concepts.mdx) — Core abstractions (Thread, Member, Task, Resource)
+- [Concepts](docs/en/concepts.mdx) — Core abstractions (Agent Config, Agent User, Thread, Skill, Task, Resource)
 
 ## Contact Us
 

@@ -1,202 +1,275 @@
-"""Panel API router — Members, Tasks, Library, Profile."""
-
 import asyncio
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 
-from backend.web.core.dependencies import get_current_user_id
+from backend.chat.api.http.dependencies import get_contact_repo, get_thread_repo
+from backend.identity import profile as profile_owner
+from backend.library import service as library_service
+from backend.threads import agent_user_service
+from backend.web.core.dependencies import get_current_user, get_current_user_id
 from backend.web.models.panel import (
-    BulkDeleteTasksRequest,
-    BulkTaskStatusRequest,
-    CreateCronJobRequest,
-    CreateMemberRequest,
+    AgentConfigPayload,
+    CreateAgentRequest,
     CreateResourceRequest,
-    CreateTaskRequest,
-    MemberConfigPayload,
-    PublishMemberRequest,
-    UpdateCronJobRequest,
-    UpdateMemberRequest,
+    PublishAgentRequest,
+    UpdateAgentRequest,
     UpdateProfileRequest,
     UpdateResourceContentRequest,
     UpdateResourceRequest,
-    UpdateTaskRequest,
 )
-from backend.web.services import cron_job_service, library_service, member_service, profile_service, task_service
 
 router = APIRouter(prefix="/api/panel", tags=["panel"])
+CurrentUserId = Annotated[str, Depends(get_current_user_id)]
+CurrentUser = Annotated[Any, Depends(get_current_user)]
 
 
-# ── Members ──
+def _require_owned_agent_user(agent_id: str, user_id: str, user_repo: Any) -> Any:
+    user = user_repo.get_by_id(agent_id)
+    if user is None or user.type.value != "agent":
+        raise HTTPException(404, "Agent not found")
+    if user.owner_user_id != user_id:
+        raise HTTPException(403, "Forbidden")
+    return user
 
 
-@router.get("/members")
-async def list_members(
-    user_id: Annotated[str, Depends(get_current_user_id)],
-    request: Request,
+def _get_owned_agent_or_404_with_config(
+    agent_id: str,
+    user_id: str,
+    user_repo: Any,
+    agent_config_repo: Any,
+    skill_repo: Any,
 ) -> dict[str, Any]:
-    member_repo = getattr(request.app.state, "member_repo", None)
-    items = await asyncio.to_thread(member_service.list_members, user_id, member_repo=member_repo)
-    return {"items": items}
-
-
-@router.get("/members/{member_id}")
-async def get_member(member_id: str) -> dict[str, Any]:
-    item = await asyncio.to_thread(member_service.get_member, member_id)
+    _require_owned_agent_user(agent_id, user_id, user_repo)
+    item = agent_user_service.get_agent_user(agent_id, user_repo=user_repo, agent_config_repo=agent_config_repo, skill_repo=skill_repo)
     if not item:
-        raise HTTPException(404, "Member not found")
+        raise HTTPException(404, "Agent not found")
     return item
 
 
-@router.post("/members")
-async def create_member(
-    req: CreateMemberRequest,
-    user_id: Annotated[str, Depends(get_current_user_id)],
+def _ensure_agent_has_no_threads_or_409(agent_id: str, thread_repo: Any) -> None:
+    rows = thread_repo.list_by_agent_user(agent_id)
+    if rows:
+        raise HTTPException(409, "Cannot delete agent with existing threads")
+
+
+def _agent_config_repo(request: Request) -> Any | None:
+    runtime_storage = getattr(request.app.state, "runtime_storage_state", None)
+    storage_container = getattr(runtime_storage, "storage_container", None)
+    repo_factory = getattr(storage_container, "agent_config_repo", None)
+    return repo_factory() if callable(repo_factory) else None
+
+
+def _recipe_repo(request: Request) -> Any:
+    runtime_storage = getattr(request.app.state, "runtime_storage_state", None)
+    recipe_repo = getattr(runtime_storage, "recipe_repo", None)
+    if recipe_repo is None:
+        raise RuntimeError("recipe_repo is required for panel library routes")
+    return recipe_repo
+
+
+def _recipe_repo_for(resource_type: str, request: Request) -> Any | None:
+    if resource_type != "sandbox-template":
+        return None
+    return _recipe_repo(request)
+
+
+def _skill_repo(request: Request) -> Any:
+    runtime_storage = getattr(request.app.state, "runtime_storage_state", None)
+    storage_container = getattr(runtime_storage, "storage_container", None)
+    repo_factory = getattr(storage_container, "skill_repo", None)
+    repo = repo_factory() if callable(repo_factory) else None
+    if repo is None:
+        raise RuntimeError("skill_repo is required for panel library routes")
+    return repo
+
+
+def _skill_repo_or_none(request: Request) -> Any | None:
+    runtime_storage = getattr(request.app.state, "runtime_storage_state", None)
+    storage_container = getattr(runtime_storage, "storage_container", None)
+    repo_factory = getattr(storage_container, "skill_repo", None)
+    return repo_factory() if callable(repo_factory) else None
+
+
+def _skill_repo_for(resource_type: str, request: Request) -> Any | None:
+    if resource_type != "skill":
+        return None
+    return _skill_repo(request)
+
+
+def _reject_skill_request_fields(resource_type: str, req: Any, fields: set[str]) -> None:
+    if resource_type != "skill":
+        return
+    sent = sorted(fields.intersection(req.model_fields_set))
+    if sent:
+        raise HTTPException(400, f"Skill Library requests must not include {', '.join(sent)}")
+
+
+def _panel_contact_repo(request: Request) -> Any:
+    try:
+        return get_contact_repo(request.app)
+    except HTTPException as exc:
+        raise HTTPException(503, "chat bootstrap not attached: contact_repo") from exc
+
+
+# ── Agents ──
+
+
+@router.get("/agents")
+async def list_agents(
+    user_id: CurrentUserId,
     request: Request,
 ) -> dict[str, Any]:
-    member_repo = getattr(request.app.state, "member_repo", None)
-    return await asyncio.to_thread(member_service.create_member, req.name, req.description, owner_user_id=user_id, member_repo=member_repo)
+    user_repo = request.app.state.user_repo
+    agent_config_repo = _agent_config_repo(request)
+    items = await asyncio.to_thread(
+        agent_user_service.list_agent_user_summaries,
+        user_id,
+        user_repo=user_repo,
+        agent_config_repo=agent_config_repo,
+    )
+    return {"items": items}
 
 
-@router.put("/members/{member_id}")
-async def update_member(member_id: str, req: UpdateMemberRequest, request: Request) -> dict[str, Any]:
-    member_repo = getattr(request.app.state, "member_repo", None)
-    entity_repo = getattr(request.app.state, "entity_repo", None)
-    thread_repo = getattr(request.app.state, "thread_repo", None)
+@router.get("/agents/{agent_id}")
+async def get_agent(
+    agent_id: str,
+    request: Request,
+    user_id: CurrentUserId,
+) -> dict[str, Any]:
+    return await asyncio.to_thread(
+        _get_owned_agent_or_404_with_config,
+        agent_id,
+        user_id,
+        request.app.state.user_repo,
+        _agent_config_repo(request),
+        _skill_repo_or_none(request),
+    )
+
+
+@router.post("/agents")
+async def create_agent(
+    req: CreateAgentRequest,
+    user_id: CurrentUserId,
+    request: Request,
+) -> dict[str, Any]:
+    user_repo = request.app.state.user_repo
+    agent_config_repo = _agent_config_repo(request)
+    # @@@panel-chat-consumer - panel owns the agent CRUD route, but contact
+    # edge cleanup is chat-owned truth. Borrow the repo explicitly from the
+    # shared chat HTTP dependency surface so panel does not keep its own
+    # parallel chat-runtime accessor layer alive.
+    contact_repo = _panel_contact_repo(request)
+    return await asyncio.to_thread(
+        agent_user_service.create_agent_user,
+        req.name,
+        req.description,
+        owner_user_id=user_id,
+        user_repo=user_repo,
+        agent_config_repo=agent_config_repo,
+        contact_repo=contact_repo,
+    )
+
+
+@router.put("/agents/{agent_id}")
+async def update_agent(
+    agent_id: str,
+    req: UpdateAgentRequest,
+    request: Request,
+    user_id: CurrentUserId,
+) -> dict[str, Any]:
+    user_repo = request.app.state.user_repo
+    agent_config_repo = _agent_config_repo(request)
+    await asyncio.to_thread(_require_owned_agent_user, agent_id, user_id, user_repo)
     item = await asyncio.to_thread(
-        member_service.update_member,
-        member_id,
-        member_repo=member_repo,
-        entity_repo=entity_repo,
-        thread_repo=thread_repo,
-        **req.model_dump(),
-    )
-    if not item:
-        raise HTTPException(404, "Member not found")
-    return item
-
-
-@router.put("/members/{member_id}/config")
-async def update_member_config(member_id: str, req: MemberConfigPayload) -> dict[str, Any]:
-    item = await asyncio.to_thread(member_service.update_member_config, member_id, req.model_dump())
-    if not item:
-        raise HTTPException(404, "Member not found")
-    return item
-
-
-@router.put("/members/{member_id}/publish")
-async def publish_member(member_id: str, req: PublishMemberRequest) -> dict[str, Any]:
-    if member_id == "__leon__":
-        raise HTTPException(403, "Cannot publish builtin member")
-    item = await asyncio.to_thread(member_service.publish_member, member_id, req.bump_type)
-    if not item:
-        raise HTTPException(404, "Member not found")
-    return item
-
-
-@router.delete("/members/{member_id}")
-async def delete_member(member_id: str, request: Request) -> dict[str, Any]:
-    if member_id == "__leon__":
-        raise HTTPException(403, "Cannot delete builtin member")
-    member_repo = getattr(request.app.state, "member_repo", None)
-    ok = await asyncio.to_thread(member_service.delete_member, member_id, member_repo=member_repo)
-    if not ok:
-        raise HTTPException(404, "Member not found")
-    return {"success": True}
-
-
-# ── Tasks ──
-
-
-@router.get("/tasks")
-async def list_tasks() -> dict[str, Any]:
-    items = await asyncio.to_thread(task_service.list_tasks)
-    return {"items": items}
-
-
-@router.post("/tasks")
-async def create_task(req: CreateTaskRequest) -> dict[str, Any]:
-    return await asyncio.to_thread(task_service.create_task, **req.model_dump())
-
-
-@router.put("/tasks/bulk-status")
-async def bulk_update_status(req: BulkTaskStatusRequest) -> dict[str, Any]:
-    count = await asyncio.to_thread(task_service.bulk_update_task_status, req.ids, req.status)
-    return {"updated": count}
-
-
-@router.post("/tasks/bulk-delete")
-async def bulk_delete_tasks(req: BulkDeleteTasksRequest) -> dict[str, Any]:
-    count = await asyncio.to_thread(task_service.bulk_delete_tasks, req.ids)
-    return {"deleted": count}
-
-
-@router.put("/tasks/{task_id}")
-async def update_task(task_id: str, req: UpdateTaskRequest) -> dict[str, Any]:
-    item = await asyncio.to_thread(task_service.update_task, task_id, **req.model_dump())
-    if not item:
-        raise HTTPException(404, "Task not found")
-    return item
-
-
-@router.delete("/tasks/{task_id}")
-async def delete_task(task_id: str) -> dict[str, Any]:
-    ok = await asyncio.to_thread(task_service.delete_task, task_id)
-    if not ok:
-        raise HTTPException(404, "Task not found")
-    return {"success": True}
-
-
-# ── Cron Jobs ──
-
-
-@router.get("/cron-jobs")
-async def list_cron_jobs() -> dict[str, Any]:
-    items = await asyncio.to_thread(cron_job_service.list_cron_jobs)
-    return {"items": items}
-
-
-@router.post("/cron-jobs")
-async def create_cron_job(req: CreateCronJobRequest) -> dict[str, Any]:
-    job = await asyncio.to_thread(
-        cron_job_service.create_cron_job,
+        agent_user_service.update_agent_user,
+        agent_id,
+        user_repo=user_repo,
+        agent_config_repo=agent_config_repo,
+        skill_repo=_skill_repo_or_none(request),
         name=req.name,
-        cron_expression=req.cron_expression,
         description=req.description,
-        task_template=req.task_template,
-        enabled=int(req.enabled),
+        status=req.status,
     )
-    return {"item": job}
+    if not item:
+        raise HTTPException(404, "Agent not found")
+    return item
 
 
-@router.put("/cron-jobs/{job_id}")
-async def update_cron_job(job_id: str, req: UpdateCronJobRequest) -> dict[str, Any]:
-    fields = req.model_dump(exclude_none=True)
-    if "enabled" in fields:
-        fields["enabled"] = int(fields["enabled"])
-    job = await asyncio.to_thread(cron_job_service.update_cron_job, job_id, **fields)
-    if not job:
-        raise HTTPException(404, "Cron job not found")
-    return {"item": job}
+@router.put("/agents/{agent_id}/config")
+async def update_agent_config(
+    agent_id: str,
+    req: AgentConfigPayload,
+    request: Request,
+    user_id: CurrentUserId,
+) -> dict[str, Any]:
+    user_repo = request.app.state.user_repo
+    await asyncio.to_thread(_require_owned_agent_user, agent_id, user_id, user_repo)
+    agent_config_repo = _agent_config_repo(request)
+    item = await asyncio.to_thread(
+        agent_user_service.update_agent_user_config,
+        agent_id,
+        req.model_dump(exclude_unset=True),
+        user_repo=user_repo,
+        agent_config_repo=agent_config_repo,
+        skill_repo=_skill_repo(request),
+    )
+    if not item:
+        raise HTTPException(404, "Agent not found")
+    return item
 
 
-@router.delete("/cron-jobs/{job_id}")
-async def delete_cron_job(job_id: str) -> dict[str, Any]:
-    ok = await asyncio.to_thread(cron_job_service.delete_cron_job, job_id)
+@router.put("/agents/{agent_id}/publish")
+async def publish_agent(
+    agent_id: str,
+    req: PublishAgentRequest,
+    request: Request,
+    user_id: CurrentUserId,
+) -> dict[str, Any]:
+    if agent_id == "__leon__":
+        raise HTTPException(403, "Cannot publish builtin agent")
+    user_repo = request.app.state.user_repo
+    await asyncio.to_thread(_require_owned_agent_user, agent_id, user_id, user_repo)
+    agent_config_repo = _agent_config_repo(request)
+    item = await asyncio.to_thread(
+        agent_user_service.publish_agent_user,
+        agent_id,
+        req.bump_type,
+        user_repo=user_repo,
+        agent_config_repo=agent_config_repo,
+        skill_repo=_skill_repo_or_none(request),
+    )
+    if not item:
+        raise HTTPException(404, "Agent not found")
+    return item
+
+
+@router.delete("/agents/{agent_id}")
+async def delete_agent(
+    agent_id: str,
+    request: Request,
+    user_id: CurrentUserId,
+    thread_repo: Annotated[Any, Depends(get_thread_repo)],
+) -> dict[str, Any]:
+    if agent_id == "__leon__":
+        raise HTTPException(403, "Cannot delete builtin agent")
+    user_repo = request.app.state.user_repo
+    await asyncio.to_thread(_require_owned_agent_user, agent_id, user_id, user_repo)
+    if thread_repo is None:
+        raise HTTPException(503, "Thread repo unavailable")
+    await asyncio.to_thread(_ensure_agent_has_no_threads_or_409, agent_id, thread_repo)
+    agent_config_repo = _agent_config_repo(request)
+    contact_repo = _panel_contact_repo(request)
+    ok = await asyncio.to_thread(
+        agent_user_service.delete_agent_user,
+        agent_id,
+        user_repo=user_repo,
+        agent_config_repo=agent_config_repo,
+        contact_repo=contact_repo,
+    )
     if not ok:
-        raise HTTPException(404, "Cron job not found")
-    return {"ok": True}
-
-
-@router.post("/cron-jobs/{job_id}/run")
-async def trigger_cron_job(job_id: str, request: Request) -> dict[str, Any]:
-    cron_service = getattr(request.app.state, "cron_service", None)
-    if not cron_service:
-        raise HTTPException(503, "Cron service not available")
-    task = await cron_service.trigger_job(job_id)
-    if not task:
-        raise HTTPException(404, "Cron job not found or disabled")
-    return {"item": task}
+        raise HTTPException(404, "Agent not found")
+    return {"success": True}
 
 
 # ── Library ──
@@ -206,9 +279,18 @@ async def trigger_cron_job(job_id: str, request: Request) -> dict[str, Any]:
 async def list_library(
     resource_type: str,
     request: Request,
-    user_id: Annotated[str, Depends(get_current_user_id)],
+    user_id: CurrentUserId,
 ) -> dict[str, Any]:
-    items = await asyncio.to_thread(library_service.list_library, resource_type, user_id, request.app.state.recipe_repo)
+    try:
+        items = await asyncio.to_thread(
+            library_service.list_library,
+            resource_type,
+            user_id,
+            _recipe_repo_for(resource_type, request),
+            _skill_repo_for(resource_type, request),
+        )
+    except ValueError as error:
+        raise HTTPException(400, str(error)) from error
     return {"items": items}
 
 
@@ -217,19 +299,26 @@ async def create_resource(
     resource_type: str,
     req: CreateResourceRequest,
     request: Request,
-    user_id: Annotated[str, Depends(get_current_user_id)],
+    user_id: CurrentUserId,
 ) -> dict[str, Any]:
+    _reject_skill_request_fields(resource_type, req, {"name", "desc", "features", "provider_name", "provider_type"})
     category = req.provider_type or ""
-    return await asyncio.to_thread(
-        library_service.create_resource,
-        resource_type,
-        req.name,
-        req.desc,
-        category,
-        req.features,
-        user_id,
-        request.app.state.recipe_repo,
-    )
+    try:
+        return await asyncio.to_thread(
+            library_service.create_resource,
+            resource_type,
+            req.name,
+            req.desc,
+            category,
+            req.features,
+            req.provider_name,
+            user_id,
+            _recipe_repo_for(resource_type, request),
+            _skill_repo_for(resource_type, request),
+            content=req.content,
+        )
+    except ValueError as error:
+        raise HTTPException(400, str(error)) from error
 
 
 @router.put("/library/{resource_type}/{resource_id}")
@@ -238,16 +327,23 @@ async def update_resource(
     resource_id: str,
     req: UpdateResourceRequest,
     request: Request,
-    user_id: Annotated[str, Depends(get_current_user_id)],
+    user_id: CurrentUserId,
 ) -> dict[str, Any]:
-    item = await asyncio.to_thread(
-        library_service.update_resource,
-        resource_type,
-        resource_id,
-        user_id,
-        request.app.state.recipe_repo,
-        **req.model_dump(),
-    )
+    _reject_skill_request_fields(resource_type, req, {"name", "desc", "features"})
+    try:
+        item = await asyncio.to_thread(
+            library_service.update_resource,
+            resource_type,
+            resource_id,
+            user_id,
+            _recipe_repo_for(resource_type, request),
+            _skill_repo_for(resource_type, request),
+            name=req.name,
+            desc=req.desc,
+            features=req.features,
+        )
+    except ValueError as error:
+        raise HTTPException(400, str(error)) from error
     if not item:
         raise HTTPException(404, "Resource not found")
     return item
@@ -258,9 +354,36 @@ async def delete_resource(
     resource_type: str,
     resource_id: str,
     request: Request,
-    user_id: Annotated[str, Depends(get_current_user_id)],
+    user_id: CurrentUserId,
 ) -> dict[str, Any]:
-    ok = await asyncio.to_thread(library_service.delete_resource, resource_type, resource_id, user_id, request.app.state.recipe_repo)
+    recipe_repo = _recipe_repo_for(resource_type, request)
+    skill_repo = _skill_repo_for(resource_type, request)
+    if resource_type == "skill":
+        if skill_repo is None:
+            raise HTTPException(500, "skill_repo is required for panel library routes")
+        skill = await asyncio.to_thread(skill_repo.get_by_id, user_id, resource_id)
+        if skill is not None:
+            used_by = await asyncio.to_thread(
+                library_service.get_resource_used_by,
+                "skill",
+                resource_id,
+                user_id,
+                user_repo=request.app.state.user_repo,
+                agent_config_repo=_agent_config_repo(request),
+            )
+            if used_by:
+                raise HTTPException(409, f"Skill is still assigned to Agent: {', '.join(used_by)}")
+    try:
+        ok = await asyncio.to_thread(
+            library_service.delete_resource,
+            resource_type,
+            resource_id,
+            user_id,
+            recipe_repo,
+            skill_repo,
+        )
+    except ValueError as error:
+        raise HTTPException(400, str(error)) from error
     if not ok:
         raise HTTPException(404, "Resource not found")
     return {"success": True}
@@ -270,16 +393,40 @@ async def delete_resource(
 async def list_library_names(
     resource_type: str,
     request: Request,
-    user_id: Annotated[str, Depends(get_current_user_id)],
+    user_id: CurrentUserId,
 ) -> dict[str, Any]:
-    items = await asyncio.to_thread(library_service.list_library_names, resource_type, user_id, request.app.state.recipe_repo)
+    try:
+        items = await asyncio.to_thread(
+            library_service.list_library_names,
+            resource_type,
+            user_id,
+            _recipe_repo_for(resource_type, request),
+            _skill_repo_for(resource_type, request),
+        )
+    except ValueError as error:
+        raise HTTPException(400, str(error)) from error
     return {"items": items}
 
 
 @router.get("/library/{resource_type}/{resource_name}/used-by")
-async def get_used_by(resource_type: str, resource_name: str) -> dict[str, Any]:
-    members = await asyncio.to_thread(library_service.get_resource_used_by, resource_type, resource_name)
-    return {"count": len(members), "members": members}
+async def get_used_by(
+    resource_type: str,
+    resource_name: str,
+    request: Request,
+    user_id: CurrentUserId,
+) -> dict[str, Any]:
+    try:
+        users = await asyncio.to_thread(
+            library_service.get_resource_used_by,
+            resource_type,
+            resource_name,
+            user_id,
+            user_repo=request.app.state.user_repo,
+            agent_config_repo=_agent_config_repo(request),
+        )
+    except ValueError as error:
+        raise HTTPException(400, str(error)) from error
+    return {"count": len(users), "users": users}
 
 
 @router.get("/library/{resource_type}/{resource_id}/content")
@@ -287,25 +434,45 @@ async def get_resource_content(
     resource_type: str,
     resource_id: str,
     request: Request,
-    user_id: Annotated[str, Depends(get_current_user_id)],
+    user_id: CurrentUserId,
 ) -> dict[str, Any]:
-    content = await asyncio.to_thread(
-        library_service.get_resource_content,
-        resource_type,
-        resource_id,
-        user_id,
-        request.app.state.recipe_repo,
-    )
+    try:
+        content = await asyncio.to_thread(
+            library_service.get_resource_content,
+            resource_type,
+            resource_id,
+            user_id,
+            _recipe_repo_for(resource_type, request),
+            _skill_repo_for(resource_type, request),
+        )
+    except ValueError as error:
+        raise HTTPException(400, str(error)) from error
     if content is None:
         raise HTTPException(404, "Resource not found")
     return {"content": content}
 
 
 @router.put("/library/{resource_type}/{resource_id}/content")
-async def update_resource_content(resource_type: str, resource_id: str, req: UpdateResourceContentRequest) -> dict[str, Any]:
-    if resource_type == "recipe":
-        raise HTTPException(400, "Recipes are read-only")
-    ok = await asyncio.to_thread(library_service.update_resource_content, resource_type, resource_id, req.content)
+async def update_resource_content(
+    resource_type: str,
+    resource_id: str,
+    req: UpdateResourceContentRequest,
+    request: Request,
+    user_id: CurrentUserId,
+) -> dict[str, Any]:
+    if resource_type == "sandbox-template":
+        raise HTTPException(400, "Sandbox templates are read-only")
+    try:
+        ok = await asyncio.to_thread(
+            library_service.update_resource_content,
+            resource_type,
+            resource_id,
+            req.content,
+            user_id,
+            _skill_repo_for(resource_type, request),
+        )
+    except ValueError as error:
+        raise HTTPException(400, str(error)) from error
     if not ok:
         raise HTTPException(404, "Resource not found or invalid content")
     return {"success": True}
@@ -315,10 +482,22 @@ async def update_resource_content(resource_type: str, resource_id: str, req: Upd
 
 
 @router.get("/profile")
-async def get_profile() -> dict[str, Any]:
-    return await asyncio.to_thread(profile_service.get_profile)
+async def get_profile(
+    user: CurrentUser,
+) -> dict[str, Any]:
+    return profile_owner.get_profile(user)
 
 
 @router.put("/profile")
-async def update_profile(req: UpdateProfileRequest) -> dict[str, Any]:
-    return await asyncio.to_thread(profile_service.update_profile, **req.model_dump())
+async def update_profile(
+    req: UpdateProfileRequest,
+    request: Request,
+    user_id: CurrentUserId,
+) -> dict[str, Any]:
+    return await asyncio.to_thread(
+        profile_owner.update_profile,
+        user_repo=request.app.state.user_repo,
+        user_id=user_id,
+        name=req.name,
+        email=req.email,
+    )

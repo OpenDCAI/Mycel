@@ -1,10 +1,10 @@
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
-import { MessageSquare, MessagesSquare, Users, ListTodo, Store, Layers, Plug, Settings, Plus, ChevronLeft, ChevronRight, LogOut, Camera, Eye, EyeOff } from "lucide-react";
+import { MessageSquare, Users, Store, Settings, Plus, ChevronLeft, ChevronRight, LogOut, Camera, Eye, EyeOff } from "lucide-react";
 import { useState, useEffect, useCallback, useRef } from "react";
-import { uploadMemberAvatar } from "@/api/client";
-import MemberAvatar from "@/components/MemberAvatar";
+import { uploadUserAvatar } from "@/api/client";
+import ActorAvatar from "@/components/ActorAvatar";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
-import CreateMemberDialog from "@/components/CreateMemberDialog";
+import CreateAgentDialog from "@/components/CreateAgentDialog";
 import NewChatDialog from "@/components/NewChatDialog";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useAppStore } from "@/store/app-store";
@@ -12,13 +12,9 @@ import { useAuthStore } from "@/store/auth-store";
 import { toast } from "sonner";
 
 const navItems = [
-  { to: "/threads", icon: MessageSquare, label: "Workspace" },
-  { to: "/chats", icon: MessagesSquare, label: "Chats" },
-  { to: "/members", icon: Users, label: "Members" },
-  { to: "/tasks", icon: ListTodo, label: "Tasks" },
-  { to: "/resources", icon: Layers, label: "Resources" },
-  { to: "/marketplace", icon: Store, label: "Marketplace" },
-  { to: "/connections", icon: Plug, label: "Connections" },
+  { to: "/chat", icon: MessageSquare, label: "对话" },
+  { to: "/contacts", icon: Users, label: "通讯录" },
+  { to: "/marketplace", icon: Store, label: "市场" },
 ];
 
 const mobileNavItems = [
@@ -28,8 +24,10 @@ const mobileNavItems = [
 
 // @@@auth-guard — wrapper that shows LoginForm when not authenticated
 export default function RootLayout() {
+  const hydrated = useAuthStore(s => s.hydrated);
   const token = useAuthStore(s => s.token);
   const setupInfo = useAuthStore(s => s.setupInfo);
+  if (!hydrated) return null;
   if (!token) return <LoginForm />;
   if (setupInfo) return <SetupNameStep userId={setupInfo.userId} defaultName={setupInfo.defaultName} />;
   return <AuthenticatedLayout />;
@@ -40,10 +38,9 @@ function AuthenticatedLayout() {
   const authLogout = useAuthStore(s => s.logout);
 
   const location = useLocation();
-  const navigate = useNavigate();
   const isMobile = useIsMobile();
   const [showCreate, setShowCreate] = useState(false);
-  const [createMemberOpen, setCreateMemberOpen] = useState(false);
+  const [createAgentOpen, setCreateAgentOpen] = useState(false);
   const [newChatOpen, setNewChatOpen] = useState(false);
   const [avatarRev, setAvatarRev] = useState(0);
   const avatarInputRef = useRef<HTMLInputElement>(null);
@@ -53,7 +50,7 @@ function AuthenticatedLayout() {
     const file = e.target.files?.[0];
     if (!file || !authUser) return;
     try {
-      await uploadMemberAvatar(authUser.id, file);
+      await uploadUserAvatar(authUser.id, file);
       setAvatarRev(r => r + 1);
       // Persist avatar flag so it survives page refresh
       useAuthStore.setState(s => ({ user: s.user ? { ...s.user, avatar: `avatars/${authUser.id}.png` } : s.user }));
@@ -65,9 +62,25 @@ function AuthenticatedLayout() {
   }, [authUser]);
 
   const loadAll = useAppStore((s) => s.loadAll);
-  const storeAddTask = useAppStore((s) => s.addTask);
+  const resetSessionData = useAppStore((s) => s.resetSessionData);
+  const lastLoadedUserIdRef = useRef<string | null>(null);
+  const shouldBootstrapPanel = !location.pathname.startsWith("/settings");
 
-  useEffect(() => { loadAll(); }, [loadAll]);
+  useEffect(() => {
+    const userId = authUser?.id ?? null;
+    if (!userId) return;
+    if (lastLoadedUserIdRef.current === userId) return;
+    // @@@auth-session-reset - switching users in the same SPA process must discard
+    // panel caches before reloading, otherwise the next account inherits old
+    // agents/resources and the sidebar mixes identities.
+    lastLoadedUserIdRef.current = userId;
+    resetSessionData();
+  }, [authUser?.id, resetSessionData]);
+
+  useEffect(() => {
+    if (!authUser?.id || !shouldBootstrapPanel) return;
+    void loadAll();
+  }, [authUser?.id, loadAll, shouldBootstrapPanel]);
 
   const [expanded, setExpanded] = useState(() => {
     const saved = localStorage.getItem("sidebar-expanded");
@@ -88,18 +101,10 @@ function AuthenticatedLayout() {
   const handleCreateAction = useCallback(async (action: string) => {
     setShowCreate(false);
     switch (action) {
-      case "staff": setCreateMemberOpen(true); break;
+      case "staff": setCreateAgentOpen(true); break;
       case "chat": setNewChatOpen(true); break;
-      case "task":
-        try {
-          await storeAddTask();
-          navigate("/tasks");
-        } catch (e: unknown) {
-          toast.error("创建失败: " + (e instanceof Error ? e.message : String(e)));
-        }
-        break;
     }
-  }, [navigate, storeAddTask]);
+  }, []);
 
   const createBtnRef = useRef<HTMLButtonElement>(null);
 
@@ -139,7 +144,7 @@ function AuthenticatedLayout() {
     return () => { window.removeEventListener("mousemove", onMove); window.removeEventListener("mouseup", onUp); };
   }, [dragging, dragWidth]);
 
-  const isChat = location.pathname.startsWith("/threads") || location.pathname.startsWith("/chats");
+  const isChat = location.pathname.startsWith("/chat");
   const sidebarPx = dragging && dragWidth !== null ? dragWidth : (expanded ? EXPANDED_W : COLLAPSED_W);
   const showLabels = dragging ? (dragWidth !== null && dragWidth >= SNAP_THRESHOLD) : expanded;
 
@@ -187,7 +192,10 @@ function AuthenticatedLayout() {
       <div className="flex flex-col h-full overflow-hidden bg-background">
         {/* Main content - no top bar, pages have their own headers */}
         <main className="flex-1 overflow-hidden">
-          <div key={location.pathname} className="h-full animate-page-in"><Outlet /></div>
+          {/* @@@outlet-no-route-key - thread switches should not remount the entire
+              outlet tree; RootLayout route keys were re-triggering AppLayout
+              bootstrap fetches on every /chat/hire/thread/:threadId hop. */}
+          <div className="h-full animate-page-in"><Outlet /></div>
         </main>
 
         {/* Bottom tab bar */}
@@ -210,7 +218,7 @@ function AuthenticatedLayout() {
           })}
         </nav>
 
-        <CreateMemberDialog open={createMemberOpen} onOpenChange={setCreateMemberOpen} />
+        <CreateAgentDialog open={createAgentOpen} onOpenChange={setCreateAgentOpen} />
         <NewChatDialog open={newChatOpen} onOpenChange={setNewChatOpen} />
       </div>
     );
@@ -229,6 +237,7 @@ function AuthenticatedLayout() {
           <div className={`relative ${showLabels ? "px-3" : "flex justify-center"} mb-4`}>
             <button
               ref={createBtnRef}
+              aria-label="新建"
               onClick={() => setShowCreate(!showCreate)}
               className={`rounded-full bg-primary text-primary-foreground flex items-center justify-center shadow-md hover:shadow-lg hover:scale-105 transition-all duration-fast ${
                 showLabels ? "w-full h-9 rounded-lg gap-2" : "w-10 h-10"
@@ -251,7 +260,7 @@ function AuthenticatedLayout() {
             <Popover>
               <PopoverTrigger asChild>
                 <button className={`flex items-center ${showLabels ? "px-3 gap-3" : "justify-center"} h-10 mb-1 rounded-xl hover:bg-muted transition-colors duration-fast w-full`}>
-                  <MemberAvatar name={authUser?.name || "User"} avatarUrl={(authUser?.avatar || avatarRev > 0) && authUser?.id ? `/api/members/${authUser.id}/avatar` : undefined} size="sm" type="human" rev={avatarRev} />
+                  <ActorAvatar name={authUser?.name || "User"} avatarUrl={(authUser?.avatar || avatarRev > 0) && authUser?.id ? `/api/users/${authUser.id}/avatar` : undefined} size="sm" type="human" rev={avatarRev} />
                   {showLabels && (
                     <div className="min-w-0 flex-1 text-left">
                       <p className="text-xs font-medium text-foreground truncate">{authUser?.name || "User"}</p>
@@ -262,7 +271,7 @@ function AuthenticatedLayout() {
               <PopoverContent side="top" align="start" className="w-56">
                 <div className="flex flex-col items-center gap-3">
                   <div className="relative group/avatar cursor-pointer" onClick={() => avatarInputRef.current?.click()}>
-                    <MemberAvatar name={authUser?.name || "User"} avatarUrl={(authUser?.avatar || avatarRev > 0) && authUser?.id ? `/api/members/${authUser.id}/avatar` : undefined} size="lg" type="human" rev={avatarRev} />
+                    <ActorAvatar name={authUser?.name || "User"} avatarUrl={(authUser?.avatar || avatarRev > 0) && authUser?.id ? `/api/users/${authUser.id}/avatar` : undefined} size="lg" type="human" rev={avatarRev} />
                     <div className="absolute inset-0 rounded-full bg-black/40 opacity-0 group-hover/avatar:opacity-100 transition-opacity duration-fast flex items-center justify-center">
                       <Camera className="w-5 h-5 text-white" />
                     </div>
@@ -311,9 +320,9 @@ function AuthenticatedLayout() {
       </div>
 
       <main className="flex-1 overflow-hidden">
-        <div key={location.pathname} className="h-full animate-page-in"><Outlet /></div>
+        <div className="h-full animate-page-in"><Outlet /></div>
       </main>
-      <CreateMemberDialog open={createMemberOpen} onOpenChange={setCreateMemberOpen} />
+      <CreateAgentDialog open={createAgentOpen} onOpenChange={setCreateAgentOpen} />
       <NewChatDialog open={newChatOpen} onOpenChange={setNewChatOpen} />
     </div>
   );
@@ -351,13 +360,10 @@ function CreateDropdown({
         style={{ top: pos.top, left: pos.left }}
       >
         <button onClick={() => onAction("staff")} className="w-full px-3 py-2 text-left text-sm text-foreground hover:bg-muted transition-colors duration-fast flex items-center gap-2.5">
-          <Users className="w-3.5 h-3.5 text-muted-foreground" /> 新建成员
+          <Users className="w-3.5 h-3.5 text-muted-foreground" /> 新建 Agent
         </button>
         <button onClick={() => onAction("chat")} className="w-full px-3 py-2 text-left text-sm text-foreground hover:bg-muted transition-colors duration-fast flex items-center gap-2.5">
           <MessageSquare className="w-3.5 h-3.5 text-muted-foreground" /> 发起会话
-        </button>
-        <button onClick={() => onAction("task")} className="w-full px-3 py-2 text-left text-sm text-foreground hover:bg-muted transition-colors duration-fast flex items-center gap-2.5">
-          <ListTodo className="w-3.5 h-3.5 text-muted-foreground" /> 新建任务
         </button>
       </div>
     </>
@@ -388,10 +394,11 @@ function AuthHeader({ title, subtitle }: { title: string; subtitle?: string }) {
   );
 }
 
-function LoginForm() {
+export function LoginForm() {
   const [step, setStep] = useState<AuthStep>({ type: "login" });
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const navigate = useNavigate();
 
   const login = useAuthStore(s => s.login);
   const sendOtp = useAuthStore(s => s.sendOtp);
@@ -405,6 +412,7 @@ function LoginForm() {
     return <LoginStep
       onSubmit={async (identifier, password) => {
         await login(identifier, password);
+        navigate("/chat", { replace: true });
       }}
       onSwitch={() => reset({ type: "reg_email" })}
       error={error} setError={setError}
@@ -466,8 +474,8 @@ function LoginStep({ onSubmit, onSwitch, error, setError, loading, setLoading }:
     <AuthCard>
       <AuthHeader title="Mycel" subtitle="登录你的账号" />
       <form onSubmit={handle} className="space-y-4">
-        <input type="text" placeholder="邮箱或 Mycel ID" value={identifier} onChange={e => setIdentifier(e.target.value)} className={inputCls} required autoComplete="username" />
-        <input type="password" placeholder="密码" value={password} onChange={e => setPassword(e.target.value)} className={inputCls} required autoComplete="current-password" />
+        <input type="text" name="identifier" aria-label="邮箱或 Mycel ID" placeholder="邮箱或 Mycel ID" value={identifier} onChange={e => setIdentifier(e.target.value)} className={inputCls} required autoComplete="username" />
+        <input type="password" name="password" aria-label="密码" placeholder="密码" value={password} onChange={e => setPassword(e.target.value)} className={inputCls} required autoComplete="current-password" />
         {error && <p className="text-xs text-destructive">{error}</p>}
         <button type="submit" disabled={loading} className={btnCls}>{loading ? "请稍候..." : "登录"}</button>
       </form>
@@ -500,10 +508,10 @@ function RegEmailStep({ onSubmit, onBack, error, setError, loading, setLoading }
     <AuthCard>
       <AuthHeader title="注册账号" subtitle="填写信息，发送验证码" />
       <form onSubmit={handle} className="space-y-4">
-        <input type="email" placeholder="邮箱" value={email} onChange={e => setEmail(e.target.value)} className={inputCls} required autoComplete="email" autoFocus />
-        <PasswordInput value={password} onChange={setPassword} placeholder="设置密码" autoComplete="new-password" />
-        <PasswordInput value={confirm} onChange={setConfirm} placeholder="确认密码" autoComplete="new-password" />
-        <input type="text" placeholder="邀请码" value={inviteCode} onChange={e => setInviteCode(e.target.value)} className={inputCls} autoComplete="off" required />
+        <input type="email" name="email" aria-label="邮箱" placeholder="邮箱" value={email} onChange={e => setEmail(e.target.value)} className={inputCls} required autoComplete="email" autoFocus />
+        <PasswordInput value={password} onChange={setPassword} placeholder="设置密码" autoComplete="new-password" name="register-password" ariaLabel="设置密码" />
+        <PasswordInput value={confirm} onChange={setConfirm} placeholder="确认密码" autoComplete="new-password" name="register-password-confirm" ariaLabel="确认密码" />
+        <input type="text" name="inviteCode" aria-label="邀请码" placeholder="邀请码" value={inviteCode} onChange={e => setInviteCode(e.target.value)} className={inputCls} autoComplete="off" required />
         {error && <p className="text-xs text-destructive">{error}</p>}
         <button type="submit" disabled={loading} className={btnCls}>{loading ? "发送中..." : "发送验证码"}</button>
       </form>
@@ -542,7 +550,7 @@ function RegOtpStep({ email, onSubmit, onResend, onBack, error, setError, loadin
       <AuthHeader title="验证邮箱" subtitle={`验证码已发送至 ${email}`} />
       <form onSubmit={handle} className="space-y-4">
         <input
-          type="text" inputMode="numeric" placeholder="6 位验证码"
+          type="text" name="otp" aria-label="6 位验证码" inputMode="numeric" placeholder="6 位验证码"
           value={otp} onChange={e => setOtp(e.target.value.replace(/\D/g, ""))}
           maxLength={6} autoComplete="one-time-code" autoFocus
           className={`${inputCls} text-center tracking-widest text-lg font-mono`}
@@ -563,18 +571,22 @@ function RegOtpStep({ email, onSubmit, onResend, onBack, error, setError, loadin
   );
 }
 
-function PasswordInput({ value, onChange, placeholder, autoFocus, autoComplete }: {
+function PasswordInput({ value, onChange, placeholder, autoFocus, autoComplete, name, ariaLabel }: {
   value: string;
   onChange: (v: string) => void;
   placeholder: string;
   autoFocus?: boolean;
   autoComplete?: string;
+  name?: string;
+  ariaLabel?: string;
 }) {
   const [visible, setVisible] = useState(false);
   return (
     <div className="relative">
       <input
         type={visible ? "text" : "password"}
+        name={name}
+        aria-label={ariaLabel ?? placeholder}
         placeholder={placeholder}
         value={value}
         onChange={e => onChange(e.target.value)}
@@ -600,12 +612,13 @@ function PasswordInput({ value, onChange, placeholder, autoFocus, autoComplete }
 function SetupNameStep({ userId, defaultName }: { userId: string; defaultName: string }) {
   const [name, setName] = useState(defaultName);
   const [loading, setLoading] = useState(false);
+  const navigate = useNavigate();
   const token = useAuthStore(s => s.token);
   const clearSetupInfo = useAuthStore(s => s.clearSetupInfo);
 
   function done() {
     clearSetupInfo();
-    window.location.href = "/threads";
+    navigate("/chat", { replace: true });
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -613,7 +626,7 @@ function SetupNameStep({ userId, defaultName }: { userId: string; defaultName: s
     setLoading(true);
     try {
       if (name.trim() && name.trim() !== defaultName) {
-        await fetch(`/api/panel/members/${userId}`, {
+        await fetch(`/api/panel/agents/${userId}`, {
           method: "PUT",
           headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
           body: JSON.stringify({ name: name.trim() }),
@@ -631,6 +644,8 @@ function SetupNameStep({ userId, defaultName }: { userId: string; defaultName: s
       <form onSubmit={handleSubmit} className="space-y-4">
         <input
           type="text"
+          name="displayName"
+          aria-label="显示名称"
           value={name}
           onChange={e => setName(e.target.value)}
           className={inputCls}

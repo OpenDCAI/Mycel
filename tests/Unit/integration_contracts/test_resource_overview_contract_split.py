@@ -1,0 +1,419 @@
+from __future__ import annotations
+
+import asyncio
+
+import pytest
+from fastapi import FastAPI, HTTPException
+from fastapi.testclient import TestClient
+
+import backend.sandboxes.resources.projection as resource_projection_service
+import backend.sandboxes.resources.provider_boundary as resource_provider_boundary_service
+from backend.monitor.api.http import global_router
+from backend.monitor.infrastructure.read_models import resource_read_service as monitor_resource_read_service
+from backend.monitor.infrastructure.web import gateway as monitor_gateway
+from backend.sandboxes.resources import common as resource_common
+from backend.web.core.dependencies import get_current_user_id
+from backend.web.routers import resources as resources_router
+
+
+class _State:
+    thread_repo = object()
+    user_repo = object()
+
+
+class _App:
+    state = _State()
+
+
+class _FakeMonitorRepo:
+    def __init__(self, runtime_ids: dict[str, str | None]) -> None:
+        self._runtime_ids = runtime_ids
+        self.batch_calls: list[list[str]] = []
+
+    def query_sandbox_instance_ids(self, sandbox_ids: list[str]) -> dict[str, str | None]:
+        self.batch_calls.append(list(sandbox_ids))
+        return {sandbox_id: self._runtime_ids.get(sandbox_id) for sandbox_id in sandbox_ids}
+
+    def close(self) -> None:
+        return None
+
+
+def _patch_provider_contracts(monkeypatch, *, description: str, vendor: str, type_: str, console_url: str | None) -> None:
+    monkeypatch.setattr(
+        resource_provider_boundary_service,
+        "get_provider_display_contract",
+        lambda config_name, *_args, **_kwargs: {
+            "provider_name": "local" if config_name == "local" else "daytona",
+            "description": description if config_name != "local" else "local",
+            "vendor": vendor if config_name != "local" else "local",
+            "type": type_ if config_name != "local" else "local",
+            "console_url": console_url if config_name != "local" else None,
+        },
+        raising=False,
+    )
+    monkeypatch.setattr(
+        resource_provider_boundary_service,
+        "get_provider_capability_contract",
+        lambda *_args, **_kwargs: (resource_common.empty_capabilities(), None),
+        raising=False,
+    )
+
+
+def _sandbox_runtime_row(
+    sandbox_runtime_id: str,
+    *,
+    sandbox_id: str | None = None,
+    provider_name: str = "daytona_selfhost",
+    thread_id: str,
+    agent_user_id: str,
+    agent_name: str,
+    avatar_url: str | None,
+    observed_state: str = "running",
+    desired_state: str = "running",
+    created_at: str = "2026-04-07T10:00:00Z",
+    runtime_id: str | None = None,
+    cwd: str | None = None,
+    recipe: dict | None = None,
+) -> dict:
+    payload = {
+        "lease_" + "id": sandbox_runtime_id,
+        "sandbox_id": sandbox_id,
+        "provider_name": provider_name,
+        "thread_ids": [thread_id],
+        "agents": [{"agent_user_id": agent_user_id, "agent_name": agent_name, "avatar_url": avatar_url}],
+        "observed_state": observed_state,
+        "desired_state": desired_state,
+        "created_at": created_at,
+    }
+    if runtime_id is not None:
+        payload["runtime_id"] = runtime_id
+    if cwd is not None:
+        payload["cwd"] = cwd
+    if recipe is not None:
+        payload["recipe"] = recipe
+    return payload
+
+
+def _sandbox(*args, **kwargs) -> dict:
+    payload = _sandbox_runtime_row(*args, **kwargs)
+    payload.pop("lease_" + "id", None)
+    return payload
+
+
+def test_resources_overview_maps_runtime_error_to_500(monkeypatch) -> None:
+    monkeypatch.setattr(
+        monitor_gateway,
+        "list_user_resource_providers",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("provider unavailable")),
+    )
+
+    request = type("_Request", (), {"app": object()})()
+
+    with pytest.raises(HTTPException) as exc_info:
+        asyncio.run(
+            resources_router.resources_overview(
+                user_id="user-1",
+                request=request,
+            )
+        )
+
+    assert exc_info.value.status_code == 500
+    assert exc_info.value.detail == "provider unavailable"
+
+
+def test_monitor_resources_route_stays_global(monkeypatch) -> None:
+    monkeypatch.setattr(
+        global_router.monitor_gateway,
+        "get_resource_overview",
+        lambda: {"summary": {"snapshot_at": "now"}, "providers": [{"id": "global-daytona"}]},
+    )
+
+    test_app = FastAPI()
+    test_app.include_router(global_router.router, prefix="/api/monitor")
+    test_app.dependency_overrides[get_current_user_id] = lambda: "user-1"
+    try:
+        with TestClient(test_app) as client:
+            response = client.get("/api/monitor/resources")
+    finally:
+        test_app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    assert response.json()["providers"][0]["id"] == "global-daytona"
+
+
+def test_user_resource_projection_groups_visible_sandboxes_into_provider_cards(monkeypatch) -> None:
+    monkeypatch.setattr(
+        resource_provider_boundary_service,
+        "list_user_sandboxes",
+        lambda owner_user_id, **_kwargs: [
+            _sandbox(
+                "runtime-1",
+                sandbox_id="sandbox-1",
+                thread_id="thread-1",
+                agent_user_id="agent-1",
+                agent_name="Morel",
+                avatar_url="/api/users/agent-1/avatar",
+                runtime_id="provider-session-1",
+                cwd="/home/daytona/app",
+                recipe={"id": "daytona:default", "provider_type": "daytona", "name": "Daytona Default"},
+            )
+        ],
+    )
+    _patch_provider_contracts(
+        monkeypatch,
+        description="Daytona",
+        vendor="Daytona",
+        type_="cloud",
+        console_url="https://example.com/daytona",
+    )
+
+    payload = resource_projection_service.list_user_resource_providers(_App(), "owner-1")
+
+    assert payload["summary"]["total_providers"] == 1
+    assert payload["summary"]["running_resource_rows"] == 1
+    assert "running_" + "sess" + "ions" not in payload["summary"]
+    assert payload["providers"][0]["id"] == "daytona_selfhost"
+    assert payload["providers"][0]["description"] == "Daytona"
+    assert payload["providers"][0]["vendor"] == "Daytona"
+    assert payload["providers"][0]["type"] == "cloud"
+    assert payload["providers"][0]["consoleUrl"] == "https://example.com/daytona"
+    assert "sess" + "ions" not in payload["providers"][0]
+    resource_row = payload["providers"][0]["resource_rows"][0]
+    assert "".join(["lea", "se", "Id"]) not in resource_row
+    assert resource_row["sandboxId"] == "sandbox-1"
+    assert resource_row["id"] == "sandbox-1:thread-1"
+    assert resource_row["threadId"] == "thread-1"
+    assert resource_row["agentUserId"] == "agent-1"
+    assert resource_row["agentName"] == "Morel"
+    assert resource_row["avatarUrl"] == "/api/users/agent-1/avatar"
+    assert resource_row["runtimeId"] == "provider-session-1"
+    assert "runtime" + "SessionId" not in resource_row
+    assert resource_row["startedAt"] == "2026-04-07T10:00:00Z"
+    assert "memberId" not in resource_row
+    assert "memberName" not in resource_row
+
+
+def test_user_resource_projection_omits_sandbox_runtime_identity(monkeypatch) -> None:
+    monkeypatch.setattr(
+        resource_provider_boundary_service,
+        "list_user_sandboxes",
+        lambda owner_user_id, **_kwargs: [
+            _sandbox_runtime_row(
+                "runtime-1",
+                sandbox_id="sandbox-1",
+                thread_id="thread-1",
+                agent_user_id="agent-1",
+                agent_name="Morel",
+                avatar_url="/api/users/agent-1/avatar",
+                runtime_id="provider-session-1",
+                cwd="/home/daytona/app",
+                recipe={"id": "daytona:default", "provider_type": "daytona", "name": "Daytona Default"},
+            )
+        ],
+    )
+    _patch_provider_contracts(
+        monkeypatch,
+        description="Daytona",
+        vendor="Daytona",
+        type_="cloud",
+        console_url="https://example.com/daytona",
+    )
+
+    payload = resource_projection_service.list_user_resource_providers(_App(), "owner-1")
+
+    assert payload["summary"]["total_providers"] == 1
+    assert "".join(["lea", "se", "Id"]) not in payload["providers"][0]["resource_rows"][0]
+
+
+def test_user_resource_projection_marks_provider_unavailable_when_capability_probe_fails(monkeypatch) -> None:
+    monkeypatch.setattr(
+        resource_provider_boundary_service,
+        "list_user_sandboxes",
+        lambda owner_user_id, **_kwargs: [
+            _sandbox(
+                "runtime-1",
+                thread_id="thread-1",
+                agent_user_id="agent-1",
+                agent_name="Morel",
+                avatar_url="/api/users/agent-1/avatar",
+                observed_state="paused",
+                desired_state="paused",
+                runtime_id="provider-session-1",
+            )
+        ],
+    )
+    _patch_provider_contracts(
+        monkeypatch,
+        description="Daytona",
+        vendor="Daytona",
+        type_="cloud",
+        console_url="https://example.com/daytona",
+    )
+    monkeypatch.setattr(
+        resource_provider_boundary_service,
+        "get_provider_capability_contract",
+        lambda *_args, **_kwargs: (resource_common.empty_capabilities(), "provider unavailable"),
+        raising=False,
+    )
+
+    payload = resource_projection_service.list_user_resource_providers(_App(), "owner-1")
+
+    assert payload["providers"][0]["status"] == "unavailable"
+    assert payload["providers"][0]["unavailableReason"] == "provider unavailable"
+    assert payload["providers"][0]["error"] == {
+        "code": "PROVIDER_UNAVAILABLE",
+        "message": "provider unavailable",
+    }
+    assert payload["providers"][0]["resource_rows"][0]["runtimeId"] == "provider-session-1"
+    assert "runtime" + "SessionId" not in payload["providers"][0]["resource_rows"][0]
+    assert payload["providers"][0]["resource_rows"][0]["agentUserId"] == "agent-1"
+    assert payload["providers"][0]["resource_rows"][0]["agentName"] == "Morel"
+    assert payload["providers"][0]["resource_rows"][0]["avatarUrl"] == "/api/users/agent-1/avatar"
+    assert "memberId" not in payload["providers"][0]["resource_rows"][0]
+    assert "memberName" not in payload["providers"][0]["resource_rows"][0]
+
+
+@pytest.mark.parametrize(
+    ("leases", "runtime_ids", "assertions"),
+    [
+        (
+            [
+                _sandbox_runtime_row(
+                    "runtime-local",
+                    sandbox_id="sandbox-local",
+                    provider_name="local",
+                    thread_id="thread-local",
+                    agent_user_id="agent-local",
+                    agent_name="Local",
+                    avatar_url=None,
+                    observed_state="detached",
+                    desired_state="running",
+                ),
+                _sandbox_runtime_row(
+                    "runtime-remote",
+                    sandbox_id="sandbox-remote",
+                    thread_id="thread-remote",
+                    agent_user_id="agent-remote",
+                    agent_name="Remote",
+                    avatar_url=None,
+                    observed_state="detached",
+                    desired_state="running",
+                    created_at="2026-04-07T10:00:01Z",
+                ),
+            ],
+            {"sandbox-local": None, "sandbox-remote": "provider-session-remote"},
+            lambda payload: (
+                "runtimeId" not in {item["id"]: item for item in payload["providers"]}["local"]["resource_rows"][0],
+                "runtime" + "SessionId" not in {item["id"]: item for item in payload["providers"]}["daytona_selfhost"]["resource_rows"][0],
+                {item["id"]: item for item in payload["providers"]}["daytona_selfhost"]["resource_rows"][0]["runtimeId"]
+                == "provider-session-remote",
+            ),
+        ),
+        (
+            [
+                _sandbox_runtime_row(
+                    "runtime-remote-a",
+                    sandbox_id="sandbox-a",
+                    thread_id="thread-a",
+                    agent_user_id="agent-a",
+                    agent_name="A",
+                    avatar_url=None,
+                    observed_state="detached",
+                    desired_state="running",
+                ),
+                _sandbox_runtime_row(
+                    "runtime-remote-b",
+                    sandbox_id="sandbox-b",
+                    thread_id="thread-b",
+                    agent_user_id="agent-b",
+                    agent_name="B",
+                    avatar_url=None,
+                    observed_state="detached",
+                    desired_state="running",
+                    created_at="2026-04-07T10:00:01Z",
+                ),
+            ],
+            {"sandbox-a": "provider-session-a", "sandbox-b": "provider-session-b"},
+            lambda payload: (
+                all("runtime" + "SessionId" not in resource_row for resource_row in payload["providers"][0]["resource_rows"]),
+                [resource_row["runtimeId"] for resource_row in payload["providers"][0]["resource_rows"]]
+                == ["provider-session-a", "provider-session-b"],
+            ),
+        ),
+    ],
+    ids=["skip-local-backfill", "batch-backfill-remote-only"],
+)
+def test_user_resource_projection_runtime_backfill_contract(monkeypatch, leases, runtime_ids, assertions) -> None:
+    monitor_repo = _FakeMonitorRepo(runtime_ids)
+
+    def _fake_list_user_sandboxes(owner_user_id: str, **kwargs):
+        return leases
+
+    monkeypatch.setattr(
+        resource_provider_boundary_service, "load_user_sandboxes", lambda _app, _owner_user_id: _fake_list_user_sandboxes(_owner_user_id)
+    )
+    monkeypatch.setattr(monitor_resource_read_service, "make_sandbox_monitor_repo", lambda: monitor_repo)
+    _patch_provider_contracts(
+        monkeypatch,
+        description="daytona",
+        vendor="daytona",
+        type_="cloud",
+        console_url=None,
+    )
+
+    payload = resource_projection_service.list_user_resource_providers(_App(), "owner-1")
+
+    assert all(assertions(payload))
+    assert monitor_repo.batch_calls == [[sandbox["sandbox_id"] for sandbox in leases]]
+
+
+def test_resources_overview_route_surfaces_actor_first_user_payload(monkeypatch) -> None:
+    class _State:
+        thread_repo = object()
+        user_repo = object()
+
+    test_app = FastAPI()
+    test_app.state = _State()
+    test_app.include_router(resources_router.router)
+    test_app.dependency_overrides[get_current_user_id] = lambda: "owner-1"
+
+    monkeypatch.setattr(
+        resource_provider_boundary_service,
+        "list_user_sandboxes",
+        lambda owner_user_id, **_kwargs: [
+            _sandbox(
+                "runtime-1",
+                thread_id="thread-1",
+                agent_user_id="agent-1",
+                agent_name="Morel",
+                avatar_url="/api/users/agent-1/avatar",
+                runtime_id="provider-session-1",
+            )
+        ],
+    )
+    _patch_provider_contracts(
+        monkeypatch,
+        description="Daytona",
+        vendor="Daytona",
+        type_="cloud",
+        console_url="https://example.com/daytona",
+    )
+
+    try:
+        with TestClient(test_app) as client:
+            response = client.get("/api/resources/overview")
+    finally:
+        test_app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    payload = response.json()
+    resource_row = payload["providers"][0]["resource_rows"][0]
+    assert payload["summary"]["scope"] == "user"
+    assert payload["providers"][0]["id"] == "daytona_selfhost"
+    assert resource_row["runtimeId"] == "provider-session-1"
+    assert "runtime" + "SessionId" not in resource_row
+    assert resource_row["agentUserId"] == "agent-1"
+    assert resource_row["agentName"] == "Morel"
+    assert resource_row["avatarUrl"] == "/api/users/agent-1/avatar"
+    assert "memberId" not in resource_row
+    assert "memberName" not in resource_row

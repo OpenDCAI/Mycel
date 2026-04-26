@@ -1,12 +1,9 @@
-"""Model parameter normalization for provider/model-specific compatibility."""
-
 from __future__ import annotations
 
 from typing import Any
 
 
 def normalize_model_kwargs(model_name: str, model_kwargs: dict[str, Any]) -> dict[str, Any]:
-    """Return model kwargs normalized for the target model/provider behavior."""
     kwargs = dict(model_kwargs)
     provider = str(kwargs.get("model_provider") or "").strip().lower()
     name = (model_name or "").strip().lower()

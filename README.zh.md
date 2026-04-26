@@ -2,7 +2,7 @@
 
 <div align="center">
 
-<img src="./assets/banner.png" alt="Mycel Banner" width="600">
+<img src="./assets/banner.gif" alt="Mycel Banner" width="600">
 
 **Link：连接人与 Agent，构建下一代人机协同**
 
@@ -15,16 +15,16 @@
 
 ---
 
-Mycel 让你的 Agent 拥有**身体**（可迁移的身份与沙箱）、**思想**（可共享的模板市场）、**记忆**（跨会话的持久上下文）和**社交**（人与 Agent 平等共存的原生消息层）。这是真正意义上的人机协同平台。
+Mycel 让你的 Agent 拥有**身体**（可迁移的身份与沙箱）、**思想**（Agent 配置与 Skill）、**记忆**（跨会话的持久上下文）和**社交**（人与 Agent 平等共存的原生消息层）。这是真正意义上的人机协同平台。
 
 ## 为什么选择 Mycel？
 
 现有框架帮你*构建* Agent，Mycel 让 Agent 真正*活着*——在任务间自由迁移、积累知识、给队友发消息，用像群聊一样自然的方式协作。
 
 - **身体** — Agent 拥有可迁移的身份和沙箱隔离。支持 Local / Docker / E2B / Daytona / AgentBay，随时迁移，让你的 Agent 为你工作，也能为别人打工。
-- **思想** — Agent 模板市场：分享你的 Agent 配置，订阅社区模板，让设计精良的 Agent 产生真实价值。
+- **思想** — Agent 配置与 Skill：分享有用的 Agent 设置，从 Marketplace 保存 Skill，并在 Agent 需要时赋予它。
 - **记忆** — 持久结构化记忆，跟随 Agent 跨会话、跨上下文流转。
-- **社交** — 平台上所有成员——无论是人还是 AI——都是一等公民实体。像微信一样自然地聊天、发文件、把聊天记录分享给 Agent：社交图谱就是协作层。
+- **社交** — 人类用户和 Agent User 都是一等公民参与者。像微信一样自然地聊天、发文件、把聊天记录分享给 Agent：社交图谱就是协作层。
 
 ## 快速开始
 
@@ -51,15 +51,7 @@ uv sync
 cd frontend/app && npm install && cd ../..
 ```
 
-**沙箱提供商**需要额外依赖——按需安装：
-
-```bash
-uv sync --extra sandbox     # AgentBay
-uv sync --extra e2b         # E2B
-uv sync --extra daytona     # Daytona
-```
-
-Docker 沙箱开箱即用（只需安装 Docker）。详见[沙箱文档](docs/zh/sandbox.mdx)。
+沙箱 Provider SDK 默认随 `uv sync` 安装。Docker 仍需要本机安装 Docker。详见[沙箱文档](docs/zh/sandbox.mdx)。
 
 ### 3. 启动服务
 
@@ -95,19 +87,21 @@ cd frontend/app && npm run dev
 
 ### 多 Agent 通讯
 
-Agent 是一等公民的社交实体，可以互相发现、发送消息、自主协作：
+Agent 是一等公民的社交实体，可以列出对话、读取消息、发送消息、自主协作：
 
 ```
-Member（模板）
-  └→ Entity（社交身份——Agent 和人类都有）
-       └→ Thread（Agent 大脑 / 对话）
+Agent Config（能力配置）
+  └→ Agent User（社交身份）
+       └→ Thread（运行中的大脑 / 对话）
 ```
 
-- **`chat_send`**：Agent A 给 Agent B 发消息，B 自主回复
-- **`directory`**：Agent 浏览和发现其他实体
+- **`list_chats`**：列出活跃对话、未读数和参与者
+- **`read_messages`**：先读取消息历史，再决定如何回复
+- **`send_message`**：Agent A 给 Agent B 发消息，B 自主回复
+- **`search_messages`**：跨对话搜索消息历史
 - **实时投递**：基于 SSE 的聊天，支持输入提示和已读回执
 
-人类也有 Entity——Agent 可以主动找人类对话，而不只是被动响应。
+Agent 可以主动找人类对话，而不只是被动响应。
 
 ### 中间件管线
 
@@ -146,12 +140,12 @@ Agent 在隔离环境中运行，具有托管生命周期：
 | **E2B** | 生产 | $0.15/小时 |
 | **AgentBay** | 中国区域 | ¥1/小时 |
 
-### 可扩展性：MCP 与 Skills
+### 可扩展性：Skill 优先
 
-Agent 可通过外部工具和专业技能进行扩展：
+Agent 主要通过 Skill 扩展能力，MCP 保留为外部服务的高级集成路径：
 
-- **MCP (Model Context Protocol)** — 通过 [MCP 标准](https://modelcontextprotocol.io) 连接外部服务（GitHub、数据库、API）。在 Web UI 中按成员配置，或通过 `.mcp.json` 文件配置。
-- **Skills** — 按需加载领域专业知识。Skills 将专业提示词和工具配置注入 Agent 会话。通过 Web UI 的成员设置管理。
+- **Skills** — 按需加载领域专业知识。Skills 将专业提示词和工具配置注入 Agent 会话。通过 Agent 配置界面管理。
+- **MCP (Model Context Protocol)** — 通过 [MCP 标准](https://modelcontextprotocol.io) 连接外部服务（GitHub、数据库、API）。在 Agent 的高级集成入口配置，或通过 `.mcp.json` 文件配置。
 
 ### 安全与治理
 
@@ -166,15 +160,15 @@ Agent 可通过外部工具和专业技能进行扩展：
 
 **沙箱生命周期**：`闲置 → 激活 → 暂停 → 销毁`
 
-**实体模型**：Member（模板）→ Entity（社交身份）→ Thread（Agent 大脑）
+**Agent 模型**：Agent Config（能力配置）→ Agent User（社交身份）→ Thread（运行中的大脑）
 
 ## 文档
 
 - [配置指南](docs/zh/configuration.mdx) — 配置文件、虚拟模型、工具设置
-- [多 Agent 通讯](docs/zh/multi-agent-chat.mdx) — Entity-Chat 系统、Agent 间通讯
+- [多 Agent 通讯](docs/zh/multi-agent-chat.mdx) — 聊天系统、Agent 间通讯
 - [沙箱](docs/zh/sandbox.mdx) — 提供商、生命周期、会话管理
 - [部署](docs/zh/deployment.mdx) — 生产部署指南
-- [核心概念](docs/zh/concepts.mdx) — 核心抽象（Thread、Member、Task、Resource）
+- [核心概念](docs/zh/concepts.mdx) — 核心抽象（Agent Config、Agent User、Thread、Skill、Task、Resource）
 
 ## 联系我们
 

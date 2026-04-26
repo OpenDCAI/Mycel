@@ -1,0 +1,60 @@
+import { describe, expect, it } from "vitest";
+
+import { buildSandboxWorkbenchShell } from "./SandboxesPage";
+
+describe("sandboxes page shell", () => {
+  const lowerLocalRuntimePrefix = ["leon", "runtime"].join("-") + "-";
+
+  it("uses sandbox-shaped headings and canonical sandbox links", () => {
+    const shell = buildSandboxWorkbenchShell({
+      title: "All Sandboxes",
+      count: 2,
+      source: "sandbox_canonical",
+      triage: {
+        summary: {
+          active_drift: 1,
+          detached_residue: 0,
+          orphan_cleanup: 0,
+          healthy_capacity: 1,
+        },
+      },
+      items: [
+        {
+          sandbox_id: "sandbox-1",
+          provider: "docker",
+          instance_id: "runtime-1",
+          triage: { category: "active_drift", title: "Active Drift" },
+          thread: { thread_id: "thread-1" },
+          state_badge: { text: "running" },
+          updated_ago: "1m ago",
+          error: null,
+        },
+      ],
+    });
+
+    expect(shell.triageTitle).toBe("Sandbox Triage");
+    expect(shell.workbenchTitle).toBe("Sandbox Workbench");
+    expect(shell.sourceLabel).toBe("Source: sandbox_canonical");
+    expect(shell.rows[0].href).toBe("/sandboxes/sandbox-1");
+  });
+
+  it("does not expose local runtime ids in visible row data", () => {
+    const shell = buildSandboxWorkbenchShell({
+      title: "All Sandboxes",
+      count: 1,
+      source: "sandbox_canonical",
+      items: [
+        {
+          sandbox_id: "sandbox-local",
+          provider: "local",
+          instance_id: `${lowerLocalRuntimePrefix}abc123`,
+          thread: {},
+          state_badge: { text: "running" },
+        },
+      ],
+    });
+
+    expect(JSON.stringify(shell.rows)).not.toContain(lowerLocalRuntimePrefix.slice(0, -1));
+    expect(shell.rows[0].runtime).toEqual({ label: "local runtime", href: null });
+  });
+});

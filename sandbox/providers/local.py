@@ -1,5 +1,3 @@
-"""LocalSessionProvider — in-process session provider for local sandbox."""
-
 from __future__ import annotations
 
 import os
@@ -7,6 +5,7 @@ import platform
 import shlex
 import subprocess
 import threading
+import time
 import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -22,15 +21,13 @@ from sandbox.provider import (
 )
 
 if TYPE_CHECKING:
-    from sandbox.lease import SandboxLease
     from sandbox.runtime import PhysicalTerminalRuntime
+    from sandbox.runtime_handle import SandboxRuntimeHandle
     from sandbox.terminal import AbstractTerminal
 
 
 @dataclass
 class LocalSessionProvider(SandboxProvider):
-    """Local session provider with direct host access."""
-
     CATALOG_ENTRY = {"vendor": None, "description": "Direct host access", "provider_type": "local"}
     name: str = "local"
     CAPABILITY = ProviderCapability(
@@ -78,7 +75,7 @@ class LocalSessionProvider(SandboxProvider):
         with self._state_lock:
             # @@@local-provider-process-boundary - LocalSessionProvider state is in-memory only; in multi-worker
             # web backends the pause/resume request can land on a different process than the one that created
-            # the session. For lease-bound local sessions (context_id like "leon-<lease_id>" or "local-..."),
+            # the session. For runtime-bound local sessions (context_id like "leon-<runtime_id>" or "local-..."),
             # treat missing in-memory state as "running" so pause/resume stays idempotent across processes.
             state = self._session_states.get(session_id)
             if state is None:
@@ -171,6 +168,12 @@ class LocalSessionProvider(SandboxProvider):
         return items
 
     def get_metrics(self, session_id: str) -> Metrics | None:
+        if platform.system() == "Linux":
+            metrics = self._get_metrics_via_procfs()
+            if metrics is not None:
+                return metrics
+            return self.get_metrics_via_commands(session_id)
+
         if platform.system() != "Darwin":
             return self.get_metrics_via_commands(session_id)
 
@@ -222,10 +225,63 @@ class LocalSessionProvider(SandboxProvider):
         except Exception:
             return None
 
-    def create_runtime(self, terminal: AbstractTerminal, lease: SandboxLease) -> PhysicalTerminalRuntime:
+    def _get_metrics_via_procfs(self) -> Metrics | None:
+        try:
+            cpu_percent = self._sample_linux_cpu_percent()
+
+            meminfo: dict[str, int] = {}
+            with open("/proc/meminfo") as fh:
+                for line in fh:
+                    key, _, raw = line.partition(":")
+                    value = raw.strip().split()[0] if raw.strip() else ""
+                    if value.isdigit():
+                        meminfo[key] = int(value)
+
+            total_kb = meminfo.get("MemTotal")
+            available_kb = meminfo.get("MemAvailable")
+            memory_total_mb = (total_kb / 1024.0) if total_kb is not None else None
+            memory_used_mb = ((total_kb - available_kb) / 1024.0) if total_kb is not None and available_kb is not None else None
+
+            stat = os.statvfs("/")
+            total_bytes = stat.f_blocks * stat.f_frsize
+            free_bytes = stat.f_bavail * stat.f_frsize
+            disk_total_gb = total_bytes / (1024.0**3)
+            disk_used_gb = (total_bytes - free_bytes) / (1024.0**3)
+
+            return Metrics(
+                cpu_percent=cpu_percent,
+                memory_used_mb=memory_used_mb,
+                memory_total_mb=memory_total_mb,
+                disk_used_gb=disk_used_gb,
+                disk_total_gb=disk_total_gb,
+            )
+        except Exception:
+            return None
+
+    def _sample_linux_cpu_percent(self) -> float | None:
+        first_total, first_idle = self._read_linux_cpu_totals()
+        time.sleep(0.1)
+        second_total, second_idle = self._read_linux_cpu_totals()
+        total_delta = second_total - first_total
+        idle_delta = second_idle - first_idle
+        if total_delta <= 0:
+            return None
+        busy_delta = total_delta - idle_delta
+        return max(0.0, min(100.0, (busy_delta / total_delta) * 100.0))
+
+    def _read_linux_cpu_totals(self) -> tuple[int, int]:
+        with open("/proc/stat") as fh:
+            first = fh.readline().strip()
+        parts = first.split()
+        values = [int(value) for value in parts[1:9]]
+        total = sum(values)
+        idle = values[3] + values[4]
+        return total, idle
+
+    def create_runtime(self, terminal: AbstractTerminal, sandbox_runtime: SandboxRuntimeHandle) -> PhysicalTerminalRuntime:
         from sandbox.providers.local import LocalPersistentShellRuntime
 
-        return LocalPersistentShellRuntime(terminal, lease)
+        return LocalPersistentShellRuntime(terminal, sandbox_runtime)
 
 
 # ── Runtime ──────────────────────────────────────────────────────────────────
@@ -280,18 +336,13 @@ def _build_windows_shell_script(
 
 
 class LocalPersistentShellRuntime(PhysicalTerminalRuntime):
-    """Local persistent shell runtime (for local provider).
-
-    Uses a persistent PTY-backed shell session.
-    """
-
     def __init__(
         self,
         terminal,
-        lease,
+        sandbox_runtime,
         shell_command: tuple[str, ...] = ("/bin/bash",),
     ):
-        super().__init__(terminal, lease)
+        super().__init__(terminal, sandbox_runtime)
         self.shell_command = shell_command
         self._pty_session: _SubprocessPtySession | None = None
         self._session_lock = asyncio.Lock()
@@ -320,8 +371,8 @@ class LocalPersistentShellRuntime(PhysicalTerminalRuntime):
         timeout: float | None,
         on_stdout_chunk: Callable[[str], None] | None = None,
     ) -> ExecuteResult:
-        if self.lease.observed_state == "paused":
-            raise RuntimeError(f"Sandbox lease {self.lease.lease_id} is paused. Resume before executing commands.")
+        if self.sandbox_runtime.observed_state == "paused":
+            raise RuntimeError(f"Sandbox runtime {self.sandbox_runtime.sandbox_runtime_id} is paused. Resume before executing commands.")
 
         state = self.terminal.get_state()
         start, end, script = _build_windows_shell_script(command, cwd=state.cwd, env_delta=state.env_delta)
@@ -336,15 +387,15 @@ class LocalPersistentShellRuntime(PhysicalTerminalRuntime):
             cwd=state.cwd,
             env=os.environ.copy(),
         )
-        env_fallback = dict(self._baseline_env or os.environ.copy())
+        previous_env = dict(self._baseline_env or os.environ.copy())
         new_cwd, env_map, stdout = _extract_state_from_output(
             completed.stdout,
             start,
             end,
-            cwd_fallback=state.cwd,
-            env_fallback=env_fallback,
+            previous_cwd=state.cwd,
+            previous_env=previous_env,
         )
-        env_delta = _compute_env_delta(env_map, env_fallback, state.env_delta)
+        env_delta = _compute_env_delta(env_map, previous_env, state.env_delta)
 
         from sandbox.terminal import TerminalState
 
@@ -367,8 +418,8 @@ class LocalPersistentShellRuntime(PhysicalTerminalRuntime):
         if self._use_windows_shell:
             return self._execute_windows_once_sync(command, timeout, on_stdout_chunk=on_stdout_chunk)
 
-        if self.lease.observed_state == "paused":
-            raise RuntimeError(f"Sandbox lease {self.lease.lease_id} is paused. Resume before executing commands.")
+        if self.sandbox_runtime.observed_state == "paused":
+            raise RuntimeError(f"Sandbox runtime {self.sandbox_runtime.sandbox_runtime_id} is paused. Resume before executing commands.")
 
         state = self.terminal.get_state()
         pty_session = self._ensure_session_sync(timeout)
@@ -419,7 +470,6 @@ class LocalPersistentShellRuntime(PhysicalTerminalRuntime):
                 )
 
     async def _recover_after_timeout(self) -> None:
-        """Recover PTY session after a command timeout."""
         if self._use_windows_shell:
             return
         if self._pty_session is None:
@@ -429,12 +479,17 @@ class LocalPersistentShellRuntime(PhysicalTerminalRuntime):
             await asyncio.to_thread(self._pty_session.close)
             self._pty_session = None
 
+    async def _cancel_running_command(self) -> bool:
+        if self._use_windows_shell or self._pty_session is None:
+            return False
+        await asyncio.to_thread(self._pty_session.close)
+        self._pty_session = None
+        return True
+
     async def execute(self, command: str, timeout: float | None = None) -> ExecuteResult:
-        """Execute command in local shell."""
         return await self._execute_background_command(command, timeout=timeout)
 
     async def close(self) -> None:
-        """Close the shell session."""
         if self._use_windows_shell:
             return
         if self._pty_session:

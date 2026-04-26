@@ -1,0 +1,328 @@
+// @vitest-environment jsdom
+
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+import MarketplacePage from "./MarketplacePage";
+
+function LocationProbe() {
+  const location = useLocation();
+  return <output aria-label="location">{location.pathname + location.search}</output>;
+}
+
+function renderMarketplace(initialEntry = "/marketplace", element = <MarketplacePage />) {
+  return render(
+    <MemoryRouter initialEntries={[initialEntry]}>
+      <Routes>
+        <Route path="/marketplace" element={element} />
+      </Routes>
+    </MemoryRouter>,
+  );
+}
+
+let fetchItemsMock: ReturnType<typeof vi.fn>;
+let marketplaceState: Record<string, unknown>;
+
+vi.mock("@/hooks/use-mobile", () => ({
+  useIsMobile: () => false,
+}));
+
+vi.mock("@/components/marketplace/MarketplaceCard", () => ({
+  default: () => null,
+}));
+
+vi.mock("@/components/marketplace/UpdateDialog", () => ({
+  default: () => null,
+}));
+
+vi.mock("@/store/marketplace-store", () => ({
+  useMarketplaceStore: (selector: (state: Record<string, unknown>) => unknown) =>
+    selector(marketplaceState),
+}));
+
+const appStoreFetchLibrary = vi.fn();
+const appStoreDeleteResource = vi.fn();
+const appStoreAddResource = vi.fn();
+const { toastErrorMock } = vi.hoisted(() => ({
+  toastErrorMock: vi.fn(),
+}));
+let appStoreState: Record<string, unknown>;
+
+vi.mock("@/store/app-store", () => ({
+  useAppStore: (selector: (state: Record<string, unknown>) => unknown) =>
+    selector(appStoreState),
+}));
+
+vi.mock("sonner", () => ({
+  toast: {
+    error: toastErrorMock,
+  },
+}));
+
+afterEach(() => {
+  cleanup();
+});
+
+describe("MarketplacePage wording contract", () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    fetchItemsMock = vi.fn();
+    marketplaceState = {
+      items: [],
+      total: 0,
+      loading: false,
+      error: null,
+      updates: [],
+      filters: { type: null, sort: "downloads" },
+      setFilter: vi.fn(),
+      fetchItems: fetchItemsMock,
+      checkUpdates: vi.fn(),
+    };
+    appStoreFetchLibrary.mockReset();
+    appStoreDeleteResource.mockReset();
+    toastErrorMock.mockReset();
+    appStoreAddResource.mockReset();
+    appStoreAddResource.mockResolvedValue({
+      id: "daytona_selfhost:custom:probe",
+      name: "Selfhost Custom",
+      desc: "custom self-host sandbox",
+      type: "sandbox-template",
+      provider_name: "daytona_selfhost",
+      provider_type: "daytona",
+      features: { lark_cli: false },
+      created_at: 1,
+      updated_at: 1,
+    });
+    appStoreState = {
+      agentList: [],
+      agentsLoaded: true,
+      librarySkills: [],
+      librarySandboxTemplates: [
+        {
+          id: "daytona:selfhost:default",
+          name: "Self-host Daytona",
+          desc: "Use the self-host Daytona provider",
+          type: "sandbox-template",
+          provider_type: "daytona",
+          provider_name: "daytona_selfhost",
+          features: { lark_cli: false },
+          feature_options: [{
+            key: "lark_cli",
+            name: "Lark CLI",
+            description: "Install lark-cli during sandbox bootstrap",
+          }],
+        },
+      ],
+      librariesLoaded: { skill: true, "sandbox-template": true },
+      fetchLibrary: appStoreFetchLibrary,
+      deleteResource: appStoreDeleteResource,
+      addResource: appStoreAddResource,
+    };
+  });
+
+  it("uses Agent wording for the library agent tab", () => {
+    renderMarketplace("/marketplace?tab=library&sub=agent-user");
+
+    expect(screen.getAllByRole("button", { name: /Agent/ }).length).toBeGreaterThan(0);
+    expect(screen.getByText("暂无 Agent")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Member" })).toBeNull();
+  });
+
+  it("uses agent-user as the library Agent tab URL key", () => {
+    renderMarketplace("/marketplace?tab=library", <><MarketplacePage /><LocationProbe /></>);
+
+    fireEvent.click(screen.getAllByRole("button", { name: /Agent/ })[0]);
+
+    expect(screen.getByLabelText("location").textContent).toContain("sub=agent-user");
+    expect(screen.getByLabelText("location").textContent).not.toContain("sub=member");
+  });
+
+  it("shows 检查更新 only on the library Agent tab", () => {
+    const { unmount } = renderMarketplace("/marketplace?tab=library&sub=agent-user");
+
+    expect(screen.getByRole("button", { name: "检查更新" })).toBeTruthy();
+
+    unmount();
+
+    renderMarketplace("/marketplace?tab=library&sub=skill");
+
+    expect(screen.queryByRole("button", { name: "检查更新" })).toBeNull();
+  });
+
+  it("does not show 检查更新 on the library Sandbox tab", () => {
+    renderMarketplace("/marketplace?tab=library&sub=sandbox-template");
+
+    expect(screen.queryByRole("button", { name: "检查更新" })).toBeNull();
+  });
+
+  it("uses Skill wording for the library Skill tab", () => {
+    renderMarketplace("/marketplace?tab=library&sub=skill");
+
+    expect(screen.queryByRole("button", { name: "检查更新" })).toBeNull();
+    expect(screen.getByText("暂无 Skill")).toBeTruthy();
+  });
+
+  it("shows the backend reason when deleting a selected Skill is rejected", async () => {
+    appStoreDeleteResource.mockRejectedValue(new Error("Skill is still assigned to Agent: Toad"));
+    appStoreState = {
+      ...appStoreState,
+      librarySkills: [{
+        id: "skill-1",
+        name: "api-design-reviewer",
+        desc: "API Design Reviewer",
+        type: "skill",
+        created_at: 1,
+        updated_at: 1,
+      }],
+    };
+
+    renderMarketplace("/marketplace?tab=library&sub=skill");
+
+    fireEvent.click(screen.getByTitle("删除"));
+
+    await waitFor(() => {
+      expect(toastErrorMock).toHaveBeenCalledWith("删除失败：Skill is still assigned to Agent: Toad");
+    });
+  });
+
+  it("uses Sandbox wording for the library Sandbox tab", () => {
+    renderMarketplace("/marketplace?tab=library&sub=sandbox-template");
+
+    expect(screen.queryByRole("button", { name: "检查更新" })).toBeNull();
+  });
+
+  it("disables check-updates when no library agents have marketplace source metadata", () => {
+    appStoreState = {
+      ...appStoreState,
+      agentList: [{
+        id: "agent-1",
+        name: "Local Agent",
+        description: "local only",
+        status: "active",
+        version: "1.0.0",
+        config: { prompt: "", rules: [], tools: [], mcpServers: [], skills: [], subAgents: [] },
+        created_at: 1,
+        updated_at: 1,
+        builtin: false,
+      }],
+    };
+
+    renderMarketplace("/marketplace?tab=library&sub=agent-user");
+
+    expect(screen.getByRole("button", { name: "检查更新" }).hasAttribute("disabled")).toBe(true);
+  });
+
+  it("matches Agent update badges by marketplace source id", () => {
+    marketplaceState = {
+      ...marketplaceState,
+      updates: [{
+        marketplace_item_id: "hub-item-1",
+        source_version: "1.0.0",
+        latest_version: "1.1.0",
+        release_notes: "new version",
+      }],
+    };
+    appStoreState = {
+      ...appStoreState,
+      agentList: [{
+        id: "agent-user-1",
+        name: "Market Agent",
+        description: "from hub",
+        status: "active",
+        version: "1.0.0",
+        source: { marketplace_item_id: "hub-item-1", source_version: "1.0.0" },
+        config: { prompt: "", rules: [], tools: [], mcpServers: [], skills: [], subAgents: [] },
+        created_at: 1,
+        updated_at: 1,
+        builtin: false,
+      }],
+    };
+
+    renderMarketplace("/marketplace?tab=library&sub=agent-user");
+
+    expect(screen.getByText("更新到 v1.1.0")).toBeTruthy();
+  });
+
+  it("normalizes the removed library agent tab to Agent users", () => {
+    renderMarketplace("/marketplace?tab=library&sub=agent");
+
+    expect(screen.queryByRole("button", { name: /Subagent/ })).toBeNull();
+    expect(screen.getByText("暂无 Agent")).toBeTruthy();
+  });
+
+  it("does not bootstrap marketplace libraries because RootLayout owns panel loading", () => {
+    renderMarketplace("/marketplace?tab=library&sub=skill");
+
+    expect(appStoreFetchLibrary).not.toHaveBeenCalled();
+  });
+
+  it("shows sandbox recipes as the sandbox library tab", () => {
+    renderMarketplace("/marketplace?tab=library&sub=sandbox-template");
+
+    expect(screen.getAllByRole("button", { name: /Sandbox/ }).length).toBeGreaterThan(0);
+    expect(screen.queryByRole("button", { name: /Recipe/ })).toBeNull();
+    expect(screen.getByText("Self-host Daytona")).toBeTruthy();
+    expect(screen.getByText("Sandbox · daytona_selfhost")).toBeTruthy();
+  });
+
+  it("does not show sandbox empty state before recipe library is loaded", () => {
+    appStoreState = {
+      ...appStoreState,
+      librarySandboxTemplates: [],
+      librariesLoaded: { skill: true, "sandbox-template": false },
+    };
+
+    renderMarketplace("/marketplace?tab=library&sub=sandbox-template");
+
+    expect(screen.queryByText("暂无 Sandbox")).toBeNull();
+    expect(screen.getByText("正在加载库内容...")).toBeTruthy();
+  });
+
+  it("creates sandbox recipes with concrete provider_name from backend-loaded recipes", async () => {
+    renderMarketplace("/marketplace?tab=library&sub=sandbox-template");
+
+    fireEvent.click(screen.getByRole("button", { name: "新建 Sandbox" }));
+    fireEvent.change(screen.getByLabelText("Name"), { target: { value: "Selfhost Custom" } });
+    fireEvent.change(screen.getByLabelText("Description"), { target: { value: "custom self-host sandbox" } });
+    fireEvent.click(screen.getByRole("button", { name: "创建" }));
+
+    await waitFor(() => {
+      expect(appStoreAddResource).toHaveBeenCalledWith("sandbox-template", "Selfhost Custom", "custom self-host sandbox", {
+        provider_name: "daytona_selfhost",
+        features: { lark_cli: false },
+      });
+    });
+  });
+
+  it("uses Agent wording for the Hub agent-user item type", () => {
+    renderMarketplace();
+
+    expect(screen.getByRole("button", { name: "Agent" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Member" })).toBeNull();
+  });
+
+  it("falls back to explore for invalid tab params", () => {
+    renderMarketplace("/marketplace?tab=unknown&sub=ghost");
+
+    expect(screen.getByRole("heading", { name: "Explore" })).toBeTruthy();
+  });
+
+  it("aborts the explore fetch when navigation leaves the marketplace page", () => {
+    const seenSignals: AbortSignal[] = [];
+    fetchItemsMock.mockImplementation((signal?: AbortSignal) => {
+      if (signal) seenSignals.push(signal);
+      return Promise.resolve();
+    });
+
+    const { unmount } = renderMarketplace();
+
+    expect(fetchItemsMock).toHaveBeenCalledOnce();
+    expect(seenSignals).toHaveLength(1);
+    expect(seenSignals[0].aborted).toBe(false);
+
+    unmount();
+
+    expect(seenSignals[0].aborted).toBe(true);
+  });
+});

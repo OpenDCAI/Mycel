@@ -1,6 +1,6 @@
-"""Three-tier models.json loader.
+"""Models configuration loader.
 
-Merge priority: system defaults → user (~/.leon/models.json) → project (.leon/models.json) → CLI overrides
+Merge priority: system defaults → explicit user config → CLI overrides
 
 Merge strategies:
 - providers: deep merge (per-provider)
@@ -16,49 +16,48 @@ from pathlib import Path
 from typing import Any
 
 from config.models_schema import ModelsConfig
-from config.user_paths import remap_legacy_user_home_string, user_home_read_candidates
+from config.path_remap import remap_default_home_string
 
 
 class ModelsLoader:
-    """Three-tier models.json loader."""
+    """Load model defaults and explicit model overrides."""
 
-    def __init__(self, workspace_root: str | Path | None = None):
-        self.workspace_root = Path(workspace_root).resolve() if workspace_root else None
+    def __init__(self):
         self._system_dir = Path(__file__).parent / "defaults"
 
     def load(self, cli_overrides: dict[str, Any] | None = None) -> ModelsConfig:
-        """Load and merge models config from all tiers."""
+        """Load model config from system defaults and explicit overrides."""
         system = self._load_json(self._system_dir / "models.json")
-        user = self._load_user()
-        project = self._load_project()
+        merged = system
 
-        # Merge: system → user → project
-        merged = self._merge(system, user)
-        merged = self._merge(merged, project)
-
-        # CLI overrides
         if cli_overrides:
             merged = self._merge(merged, cli_overrides)
 
-        # Expand env vars in string values
         merged = self._expand_env_vars(merged)
 
-        # catalog and virtual_models come only from system
         merged["catalog"] = system.get("catalog", [])
         merged["virtual_models"] = system.get("virtual_models", [])
 
         return ModelsConfig(**merged)
 
-    def _load_project(self) -> dict[str, Any]:
-        if not self.workspace_root:
-            return {}
-        return self._load_json(self.workspace_root / ".leon" / "models.json")
+    def load_with_user_config(
+        self,
+        user_config: dict[str, Any] | None,
+        cli_overrides: dict[str, Any] | None = None,
+    ) -> ModelsConfig:
+        """Load system defaults plus explicit repo-backed user config.
 
-    def _load_user(self) -> dict[str, Any]:
-        merged: dict[str, Any] = {}
-        for path in user_home_read_candidates("models.json"):
-            merged = self._merge(merged, self._load_json(path))
-        return merged
+        Web runtime supplies repo-backed user config explicitly. It must not
+        read the local operator's home directory as a silent user-settings layer.
+        """
+        system = self._load_json(self._system_dir / "models.json")
+        merged = self._merge(system, user_config or {})
+        if cli_overrides:
+            merged = self._merge(merged, cli_overrides)
+        merged = self._expand_env_vars(merged)
+        merged["catalog"] = system.get("catalog", [])
+        merged["virtual_models"] = system.get("virtual_models", [])
+        return ModelsConfig(**merged)
 
     @staticmethod
     def _load_json(path: Path) -> dict[str, Any]:
@@ -119,13 +118,10 @@ class ModelsLoader:
         if isinstance(obj, list):
             return [self._expand_env_vars(v) for v in obj]
         if isinstance(obj, str):
-            return remap_legacy_user_home_string(obj)
+            return remap_default_home_string(obj)
         return obj
 
 
-def load_models(
-    workspace_root: str | Path | None = None,
-    cli_overrides: dict[str, Any] | None = None,
-) -> ModelsConfig:
+def load_models(cli_overrides: dict[str, Any] | None = None) -> ModelsConfig:
     """Convenience function to load models config."""
-    return ModelsLoader(workspace_root=workspace_root).load(cli_overrides=cli_overrides)
+    return ModelsLoader().load(cli_overrides=cli_overrides)

@@ -1,15 +1,16 @@
-import { Download, GitFork, Star } from "lucide-react";
+import { Download, GitFork } from "lucide-react";
 import type { MarketplaceItemSummary } from "@/store/marketplace-store";
 import { typeBadgeColors } from "./constants";
+import { marketplaceTypeLabel } from "@/lib/marketplace-types";
 
 interface Props {
   item: MarketplaceItemSummary;
   onClick?: () => void;
-  installed?: boolean;
+  inLibrary?: boolean;
   hasUpdate?: boolean;
 }
 
-export default function MarketplaceCard({ item, onClick, installed, hasUpdate }: Props) {
+export default function MarketplaceCard({ item, onClick, inLibrary, hasUpdate }: Props) {
   return (
     <div
       onClick={onClick}
@@ -20,11 +21,8 @@ export default function MarketplaceCard({ item, onClick, installed, hasUpdate }:
           {item.name}
         </h4>
         <span className={`text-2xs px-1.5 py-0.5 rounded-full font-medium shrink-0 ${typeBadgeColors[item.type] || "bg-muted text-muted-foreground"}`}>
-          {item.type}
+          {marketplaceTypeLabel(item.type)}
         </span>
-        {item.featured && (
-          <Star className="w-3 h-3 text-warning fill-warning shrink-0" />
-        )}
       </div>
       <p className="text-xs text-muted-foreground line-clamp-2">
         {item.description || "No description"}
@@ -42,12 +40,12 @@ export default function MarketplaceCard({ item, onClick, installed, hasUpdate }:
           </span>
         )}
       </div>
-      {installed && (
+      {inLibrary && (
         <div className="absolute top-2 right-2">
           <span className={`text-2xs px-1.5 py-0.5 rounded-full font-medium ${
             hasUpdate ? "bg-primary/10 text-primary" : "bg-success/10 text-success"
           }`}>
-            {hasUpdate ? "有可用更新" : "已安装"}
+            {hasUpdate ? "有可用更新" : "在库中"}
           </span>
         </div>
       )}

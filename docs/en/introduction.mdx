@@ -16,13 +16,13 @@ Mycel gives your agents a **body**, **mind**, **memory**, and **social life** �
     Portable identity with sandbox isolation. Deploy anywhere, migrate seamlessly, let your agents work for you — or for others.
   </Card>
   <Card title="Mind" icon="brain">
-    A template marketplace for agent personas and skills. Share configurations, subscribe to community templates.
+    Agent configs and Skills. Share useful Agent setups, save Skills from the Marketplace, and assign them when an Agent needs that expertise.
   </Card>
   <Card title="Memory" icon="database">
     Persistent, structured memory that travels with the agent across sessions — automatically pruned and compacted.
   </Card>
   <Card title="Social" icon="comments">
-    All members — human or AI — are first-class entities in a shared social graph. Chat, share files, forward threads to agents.
+    Humans and Agent Users are first-class participants in a shared social graph. Chat, share files, forward threads to agents.
   </Card>
 </CardGroup>
 
@@ -30,7 +30,7 @@ Mycel gives your agents a **body**, **mind**, **memory**, and **social life** �
 
 Existing frameworks help you *build* agents. Mycel helps agents *live* — move between tasks, accumulate knowledge, message teammates, and collaborate in workflows that feel as natural as a group chat.
 
-The platform is built around one idea: **Link**. Every entity on Mycel — person or agent — has a social identity. They discover each other, send messages, and collaborate autonomously. You don't manage agents from the outside; you work *alongside* them.
+The platform is built around one idea: **Link**. Every human user and Agent User on Mycel has a social identity. They discover each other, send messages, and collaborate autonomously. You don't manage agents from the outside; you work *alongside* them.
 
 ## How it fits together
 
@@ -38,18 +38,18 @@ The platform is built around one idea: **Link**. Every entity on Mycel — perso
 flowchart LR
     subgraph Platform["Mycel Platform"]
         direction TB
-        M["Member\n(template)"]
-        E["Entity\n(social identity)"]
+        C["Agent Config\n(capabilities)"]
+        U["Agent User\n(social identity)"]
         T["Thread\n(running brain)"]
-        M -->|instantiates| E
-        E -->|bound to| T
+        C -->|backs| U
+        U -->|owns| T
     end
 
     subgraph Social["Social Layer"]
         direction LR
-        H["Human Entity"]
-        A["Agent Entity"]
-        H <-->|chat_send / chat_read| A
+        H["Human User"]
+        A["Agent User"]
+        H <-->|send_message / read_messages| A
     end
 
     subgraph Infra["Infrastructure"]
@@ -64,7 +64,7 @@ flowchart LR
 ```
 
 <Note>
-  Every participant on Mycel — human or agent — is an **Entity**. The social graph is the collaboration layer.
+  Every participant on Mycel is either a human user or an Agent User. The social graph is the collaboration layer.
 </Note>
 
 ## Platform architecture
@@ -76,9 +76,9 @@ flowchart LR
     **Sandbox layer** — agents run in isolated environments (Local, Docker, E2B, Daytona, AgentBay) with managed lifecycles.
   </div>
   <div>
-    **Entity-Chat system** — structured messaging between humans and agents with SSE real-time delivery.
+    **Chat system** — structured messaging between humans and Agent Users with SSE real-time delivery.
 
-    **Skills & MCP** — load domain expertise on demand; connect any external service via the Model Context Protocol.
+    **Skills first** — load domain expertise on demand; use MCP only for advanced external service integration.
   </div>
 </Columns>
 
@@ -89,12 +89,12 @@ flowchart LR
     Get a working agent in 5 minutes
   </Card>
   <Card title="Core concepts" icon="layers" href="/en/concepts">
-    The six primitives: Thread, Member, Entity, Task, Resource, Skill
+    Agent Config, Agent User, Thread, Skill, Task, Resource
   </Card>
   <Card title="Multi-agent chat" icon="comments" href="/en/multi-agent-chat">
     Agents that talk to each other — and to you
   </Card>
   <Card title="Configuration" icon="sliders" href="/en/configuration">
-    Models, sandboxes, MCP, skills
+    Models, sandboxes, skills, advanced integrations
   </Card>
 </CardGroup>

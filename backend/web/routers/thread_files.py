@@ -1,14 +1,12 @@
-"""Thread file browsing endpoints."""
-
 import asyncio
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from fastapi.responses import FileResponse
 
+from backend.threads import file_channel as file_channel_service
+from backend.threads.sandbox_resolution import resolve_thread_sandbox
 from backend.web.core.dependencies import get_app, verify_thread_owner
-from backend.web.services import file_channel_service
-from backend.web.services.agent_pool import resolve_thread_sandbox
 from backend.web.utils.helpers import resolve_local_workspace_path
 from sandbox.thread_context import set_current_thread_id
 
@@ -19,6 +17,28 @@ router = APIRouter(
 )
 # @@@public-download — download is accessed via <a href> which can't carry auth headers
 _public = APIRouter(prefix="/api/threads/{thread_id}/files", tags=["thread-files"])
+
+
+async def _call_channel_file_service(
+    method_name: str | Any,
+    *,
+    thread_id: str,
+    relative_path: str | None = None,
+    missing_status: int | None = None,
+) -> Any:
+    try:
+        if not callable(method_name):
+            source = file_channel_service.get_file_channel_source(thread_id)
+            method_name = getattr(source, method_name)
+        if relative_path is None:
+            return await asyncio.to_thread(method_name)
+        return await asyncio.to_thread(method_name, relative_path)
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from e
+    except FileNotFoundError as e:
+        if missing_status is None:
+            raise
+        raise HTTPException(missing_status, str(e)) from e
 
 
 @router.get("/list")
@@ -48,7 +68,7 @@ async def list_workspace_path(
         }
 
     # Remote sandbox
-    from backend.web.services.agent_pool import get_or_create_agent
+    from backend.threads.activity_pool_service import get_or_create_agent
 
     try:
         set_current_thread_id(thread_id)
@@ -64,10 +84,15 @@ async def list_workspace_path(
     if agent._sandbox.name == "local":
         raise HTTPException(400, "Agent has no remote sandbox")
 
+    try:
+        default_path = path or (await asyncio.to_thread(file_channel_service.get_file_channel_binding, thread_id)).workspace_path
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from e
+
     def _list_remote() -> dict[str, Any]:
         set_current_thread_id(thread_id)
         capability = agent._sandbox.manager.get_sandbox(thread_id)
-        target = path or capability._session.terminal.get_state().cwd
+        target = default_path
         result = capability.fs.list_dir(target)
         if result.error:
             raise RuntimeError(result.error)
@@ -110,7 +135,7 @@ async def read_workspace_file(
         return {"thread_id": thread_id, "path": str(target), "content": data.content, "size": data.size}
 
     # Remote sandbox
-    from backend.web.services.agent_pool import get_or_create_agent
+    from backend.threads.activity_pool_service import get_or_create_agent
 
     try:
         set_current_thread_id(thread_id)
@@ -145,8 +170,14 @@ async def get_sandbox_files(
     thread_id: str,
 ) -> dict[str, Any]:
     """Get thread-scoped upload/download channel paths."""
-    source = await asyncio.to_thread(file_channel_service.get_file_channel_source, thread_id)
-    return {"thread_id": thread_id, "files_path": str(source.host_path)}
+    binding = await asyncio.to_thread(file_channel_service.get_file_channel_binding, thread_id)
+    files_path = str(binding.local_staging_root) if binding.local_staging_root is not None else binding.remote_files_dir
+    return {
+        "thread_id": thread_id,
+        "files_path": files_path,
+        "workspace_id": binding.workspace_id,
+        "workspace_path": binding.workspace_path,
+    }
 
 
 _MAX_UPLOAD_BYTES = 100 * 1024 * 1024  # 100 MB
@@ -185,35 +216,27 @@ async def download_file(
     path: str = Query(...),
 ) -> FileResponse:
     """Download a file from thread-scoped files directory."""
-    try:
-        target = await asyncio.to_thread(
-            file_channel_service.resolve_channel_file,
-            thread_id=thread_id,
-            relative_path=path,
-        )
-    except ValueError as e:
-        raise HTTPException(400, str(e)) from e
-    except FileNotFoundError as e:
-        raise HTTPException(404, str(e)) from e
+    target = await _call_channel_file_service(
+        "resolve_file",
+        thread_id=thread_id,
+        relative_path=path,
+        missing_status=404,
+    )
     return FileResponse(path=str(target), filename=target.name, media_type="application/octet-stream")
 
 
 @router.delete("/files")
-async def delete_workspace_file(
+async def delete_channel_file(
     thread_id: str,
     path: str = Query(...),
 ) -> dict[str, Any]:
-    """Delete a file from workspace."""
-    try:
-        await asyncio.to_thread(
-            file_channel_service.delete_channel_file,
-            thread_id=thread_id,
-            relative_path=path,
-        )
-    except ValueError as e:
-        raise HTTPException(400, str(e)) from e
-    except FileNotFoundError as e:
-        raise HTTPException(404, str(e)) from e
+    """Delete a file from the thread file channel."""
+    await _call_channel_file_service(
+        "delete_file",
+        thread_id=thread_id,
+        relative_path=path,
+        missing_status=404,
+    )
     return {"ok": True, "path": path}
 
 
@@ -222,11 +245,8 @@ async def list_channel_files(
     thread_id: str,
 ) -> dict[str, Any]:
     """List files under thread-scoped files directory."""
-    try:
-        entries = await asyncio.to_thread(
-            file_channel_service.list_channel_files,
-            thread_id=thread_id,
-        )
-    except ValueError as e:
-        raise HTTPException(400, str(e)) from e
+    entries = await _call_channel_file_service(
+        "list_files",
+        thread_id=thread_id,
+    )
     return {"thread_id": thread_id, "entries": entries}

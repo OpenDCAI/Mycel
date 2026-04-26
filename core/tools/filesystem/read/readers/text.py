@@ -1,5 +1,3 @@
-"""Text file reader with triple limits: lines, chars, line length."""
-
 from __future__ import annotations
 
 from pathlib import Path
@@ -13,23 +11,6 @@ def read_text(
     offset: int | None = None,
     limit: int | None = None,
 ) -> ReadResult:
-    """
-    Read text file with triple limits.
-
-    Limits applied (first reached wins):
-    1. max_lines: Maximum number of lines to return
-    2. max_chars: Maximum total characters to return
-    3. max_line_length: Truncate individual lines exceeding this
-
-    Args:
-        path: Absolute path to file
-        limits: ReadLimits configuration
-        offset: Start line (1-indexed, None = start from beginning)
-        limit: Number of lines to read (None = use limits.max_lines)
-
-    Returns:
-        ReadResult with content and metadata
-    """
     result = ReadResult(
         file_path=str(path),
         file_type=FileType.TEXT,
@@ -54,7 +35,7 @@ def read_text(
         result.error = f"Offset {offset} exceeds file length {total_lines}"
         return result
 
-    effective_limit = limit if limit else limits.max_lines
+    effective_limit = limit or limits.max_lines
     if offset is None and limit is None and total_lines > limits.max_lines:
         effective_limit = limits.max_lines
 

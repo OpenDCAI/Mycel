@@ -1,23 +1,50 @@
-"""Lease resource probing helpers."""
-
 from __future__ import annotations
 
-from pathlib import Path
 from typing import Any
 
 from sandbox.provider import SandboxProvider
-from storage.providers.sqlite.kernel import SQLiteDBRole, resolve_role_db_path
-from storage.providers.sqlite.resource_snapshot_repo import (
-    ensure_resource_snapshot_table,
-    list_snapshots_by_lease_ids,
-    upsert_lease_resource_snapshot,
-)
+from storage.runtime import build_resource_snapshot_repo
 
-# Re-export storage functions for backward compatibility
+
+def upsert_resource_snapshot_for_sandbox(
+    *,
+    sandbox_id: str,
+    provider_name: str,
+    observed_state: str,
+    probe_mode: str,
+    cpu_used: float | None = None,
+    cpu_limit: float | None = None,
+    memory_used_mb: float | None = None,
+    memory_total_mb: float | None = None,
+    disk_used_gb: float | None = None,
+    disk_total_gb: float | None = None,
+    network_rx_kbps: float | None = None,
+    network_tx_kbps: float | None = None,
+    probe_error: str | None = None,
+) -> None:
+    repo = build_resource_snapshot_repo()
+    try:
+        repo.upsert_resource_snapshot_for_sandbox(
+            sandbox_id=sandbox_id,
+            provider_name=provider_name,
+            observed_state=observed_state,
+            probe_mode=probe_mode,
+            cpu_used=cpu_used,
+            cpu_limit=cpu_limit,
+            memory_used_mb=memory_used_mb,
+            memory_total_mb=memory_total_mb,
+            disk_used_gb=disk_used_gb,
+            disk_total_gb=disk_total_gb,
+            network_rx_kbps=network_rx_kbps,
+            network_tx_kbps=network_tx_kbps,
+            probe_error=probe_error,
+        )
+    finally:
+        repo.close()
+
+
 __all__ = [
-    "ensure_resource_snapshot_table",
-    "upsert_lease_resource_snapshot",
-    "list_snapshots_by_lease_ids",
+    "upsert_resource_snapshot_for_sandbox",
     "probe_and_upsert_for_instance",
 ]
 
@@ -39,16 +66,17 @@ def _metric_float(metrics: Any, field: str) -> float | None:
 
 def probe_and_upsert_for_instance(
     *,
-    lease_id: str,
+    sandbox_id: str | None = None,
     provider_name: str,
     observed_state: str,
     probe_mode: str,
     provider: SandboxProvider,
     instance_id: str,
-    db_path: Path | None = None,
+    repo: Any | None = None,
 ) -> dict[str, Any]:
-    """Probe provider metrics and persist to storage."""
-    db_path = db_path or resolve_role_db_path(SQLiteDBRole.SANDBOX)
+    if not sandbox_id:
+        return {"ok": False, "error": "sandbox-shaped snapshot helper requires sandbox_id"}
+
     metrics = None
     cpu_used = None
     cpu_limit = None
@@ -86,20 +114,44 @@ def probe_and_upsert_for_instance(
     ) and probe_error is None:
         probe_error = "metrics unavailable"
 
-    upsert_lease_resource_snapshot(
-        lease_id=lease_id,
-        provider_name=provider_name,
-        observed_state=observed_state,
-        probe_mode=probe_mode,
-        cpu_used=cpu_used,
-        cpu_limit=cpu_limit,
-        memory_used_mb=memory_used_mb,
-        memory_total_mb=memory_total_mb,
-        disk_used_gb=disk_used_gb,
-        disk_total_gb=disk_total_gb,
-        network_rx_kbps=network_rx_kbps,
-        network_tx_kbps=network_tx_kbps,
-        probe_error=probe_error,
-        db_path=db_path,
-    )
+    try:
+        # @@@snapshot-write-nonblocking - runtime startup truth belongs to runtime/session creation;
+        # snapshot persistence is auxiliary monitor data and must report write failure
+        # without turning local sandbox bringup into a Supabase-config contract.
+        if repo is not None and hasattr(repo, "upsert_resource_snapshot_for_sandbox"):
+            if not sandbox_id:
+                raise RuntimeError("sandbox-shaped snapshot repo requires sandbox_id")
+            repo.upsert_resource_snapshot_for_sandbox(
+                sandbox_id=sandbox_id,
+                provider_name=provider_name,
+                observed_state=observed_state,
+                probe_mode=probe_mode,
+                cpu_used=cpu_used,
+                cpu_limit=cpu_limit,
+                memory_used_mb=memory_used_mb,
+                memory_total_mb=memory_total_mb,
+                disk_used_gb=disk_used_gb,
+                disk_total_gb=disk_total_gb,
+                network_rx_kbps=network_rx_kbps,
+                network_tx_kbps=network_tx_kbps,
+                probe_error=probe_error,
+            )
+        else:
+            upsert_resource_snapshot_for_sandbox(
+                sandbox_id=sandbox_id,
+                provider_name=provider_name,
+                observed_state=observed_state,
+                probe_mode=probe_mode,
+                cpu_used=cpu_used,
+                cpu_limit=cpu_limit,
+                memory_used_mb=memory_used_mb,
+                memory_total_mb=memory_total_mb,
+                disk_used_gb=disk_used_gb,
+                disk_total_gb=disk_total_gb,
+                network_rx_kbps=network_rx_kbps,
+                network_tx_kbps=network_tx_kbps,
+                probe_error=probe_error,
+            )
+    except Exception as exc:
+        return {"ok": False, "error": str(exc)}
     return {"ok": probe_error is None, "error": probe_error}

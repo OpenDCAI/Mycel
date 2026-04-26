@@ -6,8 +6,6 @@ logger = logging.getLogger(__name__)
 
 
 class RetryWithBackoff:
-    """Decorator: retry on transient errors with exponential backoff."""
-
     TRANSIENT = (OSError, ConnectionError, TimeoutError)
 
     def __init__(self, max_retries: int = 3, backoff_factor: int = 2):

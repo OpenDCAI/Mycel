@@ -1,0 +1,207 @@
+// @vitest-environment jsdom
+
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { MemoryRouter, Route, Routes } from "react-router-dom";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+import ContactList from "./ContactList";
+import { useAppStore } from "@/store/app-store";
+
+const { authFetch, authState } = vi.hoisted(() => ({
+  authFetch: vi.fn(),
+  authState: { userId: "human-1", token: "token-1" },
+}));
+
+vi.mock("@/store/auth-store", () => ({
+  authFetch,
+  useAuthStore: Object.assign(
+    (selector: (state: typeof authState) => unknown) => selector(authState),
+    { getState: () => authState },
+  ),
+}));
+
+vi.mock("@/components/ActorAvatar", () => ({
+  default: ({ name }: { name: string }) => <span>{name.slice(0, 2)}</span>,
+}));
+
+vi.mock("@/components/CreateAgentDialog", () => ({
+  default: () => null,
+}));
+
+function okJson(payload: unknown): Response {
+  return {
+    ok: true,
+    status: 200,
+    statusText: "OK",
+    json: async () => payload,
+    text: async () => JSON.stringify(payload),
+  } as Response;
+}
+
+describe("ContactList", () => {
+  let ensureAgents: ReturnType<typeof vi.fn<() => Promise<void>>>;
+
+  afterEach(() => {
+    cleanup();
+  });
+
+  beforeEach(() => {
+    authFetch.mockReset();
+    ensureAgents = vi.fn<() => Promise<void>>().mockResolvedValue(undefined);
+    useAppStore.setState({
+      agentList: [
+        {
+          id: "agent-1",
+          name: "Morel",
+          description: "owned agent",
+          status: "active",
+          version: "1.0.0",
+          config: { prompt: "", rules: [], tools: [], mcpServers: [], skills: [], subAgents: [] },
+          created_at: 0,
+          updated_at: 0,
+          avatar_url: "/api/users/agent-1/avatar",
+        },
+      ],
+      agentsLoaded: true,
+      ensureAgents,
+    });
+  });
+
+  it("does not bootstrap owned agents because RootLayout owns panel loading", () => {
+    render(
+      <MemoryRouter>
+        <ContactList />
+      </MemoryRouter>,
+    );
+
+    expect(ensureAgents).not.toHaveBeenCalled();
+    expect(screen.getByText("Morel")).toBeTruthy();
+  });
+
+  it("shows agent loading instead of empty state before panel bootstrap completes", () => {
+    useAppStore.setState({ agentList: [], agentsLoaded: false });
+
+    render(
+      <MemoryRouter>
+        <ContactList />
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByText("加载 Agent...")).toBeTruthy();
+    expect(screen.queryByText("暂无 Agent")).toBeNull();
+    expect(screen.queryByText("无匹配结果")).toBeNull();
+  });
+
+  it("shows backend-approved external contacts from the user candidate surface", async () => {
+    authFetch.mockResolvedValueOnce(okJson([
+      {
+        user_id: "human-2",
+        name: "Ada",
+        type: "human",
+        avatar_url: null,
+        owner_name: null,
+        is_owned: false,
+        relationship_state: "visit",
+        can_chat: true,
+      },
+      {
+        user_id: "human-4",
+        name: "Grace",
+        type: "human",
+        avatar_url: null,
+        owner_name: null,
+        is_owned: false,
+        relationship_state: "none",
+        can_chat: true,
+      },
+      {
+        user_id: "agent-1",
+        name: "Morel",
+        type: "agent",
+        avatar_url: "/api/users/agent-1/avatar",
+        owner_name: "Me",
+        is_owned: true,
+        relationship_state: "none",
+        can_chat: true,
+      },
+      {
+        user_id: "human-3",
+        name: "Pending",
+        type: "human",
+        avatar_url: null,
+        owner_name: null,
+        is_owned: false,
+        relationship_state: "pending",
+        relationship_id: "hire_visit:human-1:human-3",
+        relationship_is_requester: false,
+        relationship_message: "请批准这个申请，我想加入后续讨论。",
+        can_chat: false,
+      },
+    ]));
+
+    render(
+      <MemoryRouter initialEntries={["/contacts"]}>
+        <Routes>
+          <Route path="/contacts" element={<ContactList />} />
+          <Route path="/contacts/users" element={<ContactList />} />
+          <Route path="/contacts/users/:userId" element={<div>contact detail route</div>} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByRole("button", { name: "创建 Agent" })).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: /联系人/ }));
+
+    await waitFor(() => {
+      expect(authFetch).toHaveBeenCalledWith("/api/users/chat-candidates");
+    });
+    expect(await screen.findByText("Ada")).toBeTruthy();
+    expect(screen.getByText("Grace")).toBeTruthy();
+    expect(screen.queryByText("none")).toBeNull();
+    expect(screen.queryByText("联系人功能即将上线")).toBeNull();
+    expect(screen.queryByText("Morel")).toBeNull();
+    expect(screen.getByText("Pending")).toBeTruthy();
+    expect(screen.getByText("待处理")).toBeTruthy();
+    expect(screen.getByText("请批准这个申请，我想加入后续讨论。")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("link", { name: /Ada/ }));
+
+    expect(await screen.findByText("contact detail route")).toBeTruthy();
+  });
+
+  it("keeps outgoing relationship requests reachable from contacts", async () => {
+    authFetch.mockResolvedValueOnce(okJson([
+      {
+        user_id: "human-5",
+        name: "Waiting",
+        type: "human",
+        avatar_url: null,
+        owner_name: null,
+        is_owned: false,
+        relationship_state: "pending",
+        relationship_id: "hire_visit:human-1:human-5",
+        relationship_is_requester: true,
+        relationship_message: "等待对方批准我的协作申请。",
+        can_chat: false,
+      },
+    ]));
+
+    render(
+      <MemoryRouter initialEntries={["/contacts/users"]}>
+        <Routes>
+          <Route path="/contacts/users" element={<ContactList />} />
+          <Route path="/contacts/users/:userId" element={<div>contact detail route</div>} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText("Waiting")).toBeTruthy();
+    expect(screen.getByText("已申请")).toBeTruthy();
+    expect(screen.getByText("等待对方批准我的协作申请。")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("link", { name: /Waiting/ }));
+
+    expect(await screen.findByText("contact detail route")).toBeTruthy();
+  });
+});

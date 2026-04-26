@@ -1,19 +1,15 @@
-"""PowerShell executor implementation for Windows."""
-
 from __future__ import annotations
 
 import asyncio
 import os
 import uuid
 
-from ..base import AsyncCommand, BaseExecutor, ExecuteResult
+from sandbox.interfaces.executor import AsyncCommand, BaseExecutor, ExecuteResult
 
 _RUNNING_COMMANDS: dict[str, AsyncCommand] = {}
 
 
 class PowerShellExecutor(BaseExecutor):
-    """Executor for PowerShell (Windows default)."""
-
     shell_name = "powershell"
     shell_command = ("powershell.exe", "-Command")
 
@@ -117,7 +113,6 @@ class PowerShellExecutor(BaseExecutor):
         return async_cmd
 
     async def _monitor_process(self, async_cmd: AsyncCommand) -> None:
-        """Background task to monitor process and collect output."""
         proc = async_cmd.process
         if proc is None:
             return
@@ -167,23 +162,3 @@ class PowerShellExecutor(BaseExecutor):
     async def _wait_until_done(self, async_cmd: AsyncCommand) -> None:
         while not async_cmd.done:
             await asyncio.sleep(0.1)
-
-    def store_completed_result(
-        self,
-        command_id: str,
-        command_line: str,
-        cwd: str,
-        result: ExecuteResult,
-    ) -> None:
-        """Store a completed result for later retrieval."""
-        async_cmd = AsyncCommand(
-            command_id=command_id,
-            command_line=command_line,
-            cwd=cwd,
-            process=None,
-            stdout_buffer=[result.stdout],
-            stderr_buffer=[result.stderr],
-            exit_code=result.exit_code,
-            done=True,
-        )
-        _RUNNING_COMMANDS[command_id] = async_cmd

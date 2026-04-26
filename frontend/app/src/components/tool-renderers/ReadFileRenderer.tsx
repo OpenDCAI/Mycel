@@ -2,10 +2,16 @@ import { memo } from "react";
 import type { ToolRendererProps } from "./types";
 import { CodeBlock } from "../shared/CodeBlock";
 import { inferLanguage } from "../shared/utils";
+import { asRecord, recordNumber, recordString } from "@/lib/records";
 
 function parseArgs(args: unknown): { file_path?: string; limit?: number; offset?: number } {
-  if (args && typeof args === "object") return args as { file_path?: string; limit?: number; offset?: number };
-  return {};
+  const record = asRecord(args);
+  if (!record) return {};
+  return {
+    file_path: recordString(record, "file_path"),
+    limit: recordNumber(record, "limit"),
+    offset: recordNumber(record, "offset"),
+  };
 }
 
 export default memo(function ReadFileRenderer({ step, expanded }: ToolRendererProps) {

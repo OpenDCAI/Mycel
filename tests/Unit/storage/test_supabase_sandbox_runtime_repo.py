@@ -1,0 +1,226 @@
+import pytest
+
+from storage.providers.supabase.sandbox_runtime_repo import SupabaseSandboxRuntimeRepo
+from tests.fakes.supabase import FakeSupabaseClient
+
+
+class _RejectBareSandboxRuntimeClient(FakeSupabaseClient):
+    def table(self, table_name: str):
+        if table_name == "sandbox_" + "leases":
+            raise AssertionError("staging sandbox_" + "leases should not be accessed")
+        return super().table(table_name)
+
+
+def _client(tables: dict[str, list[dict]] | None = None) -> _RejectBareSandboxRuntimeClient:
+    return _RejectBareSandboxRuntimeClient(tables={} if tables is None else tables)
+
+
+def _sandbox_row(
+    *,
+    sandbox_id: str = "sandbox-1",
+    sandbox_runtime_id: str = "runtime-1",
+    provider_env_id: str | None = "inst-1",
+    observed_state: str = "running",
+    status: str = "ready",
+    runtime_status: str = "active",
+    version: int = 2,
+    needs_refresh: int = 1,
+    refresh_hint_at: str | None = "2026-04-07T00:00:06+00:00",
+    instance_created_at: str | None = "2026-04-07T00:00:01+00:00",
+) -> dict:
+    return {
+        "id": sandbox_id,
+        "owner_user_id": "owner-1",
+        "provider_name": "local",
+        "provider_env_id": provider_env_id,
+        "sandbox_template_id": "local:default",
+        "desired_state": "running",
+        "observed_state": observed_state,
+        "status": status,
+        "observed_at": "2026-04-07T00:00:05+00:00",
+        "last_error": None,
+        "config": {
+            "runtime_handle": sandbox_runtime_id,
+            "runtime_state": {
+                "recipe_id": "local:default",
+                "recipe_json": '{"id":"local:default"}',
+                "workspace_key": None,
+                "version": version,
+                "needs_refresh": needs_refresh,
+                "refresh_hint_at": refresh_hint_at,
+                "instance_created_at": instance_created_at,
+                "status": runtime_status,
+            },
+        },
+        "created_at": "2026-04-07T00:00:00+00:00",
+        "updated_at": "2026-04-07T00:00:05+00:00",
+    }
+
+
+def test_supabase_sandbox_runtime_repo_get_reads_container_sandbox_runtime_state():
+    repo = SupabaseSandboxRuntimeRepo(client=_client({"container.sandboxes": [_sandbox_row()]}))
+
+    sandbox_runtime = repo.get("runtime-1")
+
+    assert sandbox_runtime is not None
+    assert sandbox_runtime["sandbox_id"] == "sandbox-1"
+    assert sandbox_runtime["sandbox_runtime_id"] == "runtime-1"
+    assert sandbox_runtime["provider_name"] == "local"
+    assert sandbox_runtime["recipe_id"] == "local:default"
+    assert sandbox_runtime["recipe_json"] == '{"id":"local:default"}'
+    assert sandbox_runtime["current_instance_id"] == "inst-1"
+    assert sandbox_runtime["instance_created_at"] == "2026-04-07T00:00:01+00:00"
+    assert sandbox_runtime["version"] == 2
+    assert sandbox_runtime["needs_refresh"] == 1
+    assert sandbox_runtime["refresh_hint_at"] == "2026-04-07T00:00:06+00:00"
+    assert sandbox_runtime["_instance"]["instance_id"] == "inst-1"
+
+
+def test_supabase_sandbox_runtime_repo_create_requires_owner_user_id():
+    repo = SupabaseSandboxRuntimeRepo(client=_client())
+
+    with pytest.raises(RuntimeError, match="requires owner_user_id"):
+        repo.create("runtime-1", "local")
+
+
+def test_supabase_sandbox_runtime_repo_get_fails_loudly_when_runtime_state_is_missing():
+    row = _sandbox_row()
+    row["config"].pop("runtime_state")
+    repo = SupabaseSandboxRuntimeRepo(client=_client({"container.sandboxes": [row]}))
+
+    with pytest.raises(RuntimeError, match="missing config.runtime_state"):
+        repo.get("runtime-1")
+
+
+def test_supabase_sandbox_runtime_repo_provider_list_ignores_stale_rows_without_runtime_state():
+    stale = _sandbox_row(sandbox_id="sandbox-stale", sandbox_runtime_id="runtime-stale")
+    stale["config"].pop("runtime_state")
+    repo = SupabaseSandboxRuntimeRepo(client=_client({"container.sandboxes": [_sandbox_row(), stale]}))
+
+    runtimes = repo.list_by_provider("local")
+
+    assert [sandbox_runtime["sandbox_runtime_id"] for sandbox_runtime in runtimes] == ["runtime-1"]
+    with pytest.raises(RuntimeError, match="missing config.runtime_state"):
+        repo.get("runtime-stale")
+
+
+def test_supabase_sandbox_runtime_repo_create_writes_container_sandbox_runtime_state():
+    tables: dict[str, list[dict]] = {}
+    repo = SupabaseSandboxRuntimeRepo(client=_client(tables))
+
+    created = repo.create(
+        "runtime-1",
+        "local",
+        recipe_id="local:default",
+        recipe_json='{"id":"local:default"}',
+        owner_user_id="owner-1",
+    )
+
+    row = tables["container.sandboxes"][0]
+    assert created["sandbox_id"] == row["id"]
+    assert created["sandbox_runtime_id"] == "runtime-1"
+    assert row["owner_user_id"] == "owner-1"
+    assert row["provider_name"] == "local"
+    assert row["sandbox_template_id"] == "local:default"
+    assert row["provider_env_id"] is None
+    assert row["observed_state"] == "detached"
+    assert row["status"] == "ready"
+    assert created["current_instance_id"] is None
+    assert created["_instance"] is None
+    assert row["config"]["runtime_handle"] == "runtime-1"
+    assert row["config"]["runtime_state"]["recipe_json"] == '{"id":"local:default"}'
+    assert row["config"]["runtime_state"]["needs_refresh"] == 0
+    assert set(row["config"]) == {"runtime_handle", "runtime_state"}
+    assert "volume_id" not in row
+
+
+def test_supabase_sandbox_runtime_repo_adopt_instance_updates_container_runtime_fields_and_state():
+    tables = {"container.sandboxes": [_sandbox_row(provider_env_id=None, observed_state="detached", version=0, needs_refresh=0)]}
+    repo = SupabaseSandboxRuntimeRepo(client=_client(tables))
+
+    updated = repo.adopt_instance(
+        sandbox_runtime_id="runtime-1",
+        provider_name="local",
+        instance_id="inst-1",
+        status="running",
+    )
+
+    row = tables["container.sandboxes"][0]
+    assert row["provider_env_id"] == "inst-1"
+    assert row["observed_state"] == "running"
+    assert row["config"]["runtime_state"]["version"] == 1
+    assert row["config"]["runtime_state"]["needs_refresh"] == 1
+    assert updated["_instance"]["instance_id"] == "inst-1"
+
+
+def test_supabase_sandbox_runtime_repo_persist_metadata_updates_container_runtime_state_fields():
+    tables = {"container.sandboxes": [_sandbox_row(provider_env_id=None, observed_state="detached", version=0, needs_refresh=0)]}
+    repo = SupabaseSandboxRuntimeRepo(client=_client(tables))
+
+    updated = repo.persist_metadata(
+        sandbox_runtime_id="runtime-1",
+        recipe_id="local:python",
+        recipe_json='{"id":"local:python"}',
+        desired_state="running",
+        observed_state="unknown",
+        version=3,
+        observed_at="2026-04-07T00:00:05+00:00",
+        last_error="provider boom",
+        needs_refresh=True,
+        refresh_hint_at="2026-04-07T00:00:06+00:00",
+        status="recovering",
+    )
+
+    row = tables["container.sandboxes"][0]
+    runtime_state = row["config"]["runtime_state"]
+    assert updated["sandbox_runtime_id"] == "runtime-1"
+    assert row["sandbox_template_id"] == "local:python"
+    assert row["observed_state"] == "unknown"
+    assert row["last_error"] == "provider boom"
+    assert runtime_state["recipe_json"] == '{"id":"local:python"}'
+    assert runtime_state["version"] == 3
+    assert runtime_state["needs_refresh"] == 1
+    assert runtime_state["refresh_hint_at"] == "2026-04-07T00:00:06+00:00"
+    assert runtime_state["status"] == "recovering"
+
+
+def test_supabase_sandbox_runtime_repo_observe_status_detaches_instance_from_container_sandbox():
+    tables = {"container.sandboxes": [_sandbox_row()]}
+    repo = SupabaseSandboxRuntimeRepo(client=_client(tables))
+
+    updated = repo.observe_status(
+        sandbox_runtime_id="runtime-1",
+        status="detached",
+        observed_at="2026-04-07T00:00:05+00:00",
+    )
+
+    row = tables["container.sandboxes"][0]
+    runtime_state = row["config"]["runtime_state"]
+    assert updated["sandbox_runtime_id"] == "runtime-1"
+    assert row["provider_env_id"] is None
+    assert row["observed_state"] == "detached"
+    assert runtime_state["status"] == "expired"
+    assert runtime_state["needs_refresh"] == 0
+    assert runtime_state["refresh_hint_at"] is None
+    assert runtime_state["instance_created_at"] is None
+    assert updated["_instance"] is None
+
+
+def test_supabase_sandbox_runtime_repo_mark_needs_refresh_updates_runtime_state_only():
+    tables = {"container.sandboxes": [_sandbox_row(needs_refresh=0, refresh_hint_at=None)]}
+    repo = SupabaseSandboxRuntimeRepo(client=_client(tables))
+
+    assert repo.mark_needs_refresh("runtime-1", hint_at="2026-04-07T00:00:06+00:00") is True
+
+    runtime_state = tables["container.sandboxes"][0]["config"]["runtime_state"]
+    assert runtime_state["needs_refresh"] == 1
+    assert runtime_state["refresh_hint_at"] == "2026-04-07T00:00:06+00:00"
+
+
+def test_supabase_sandbox_runtime_repo_delete_removes_container_sandbox_runtime_row():
+    tables = {"container.sandboxes": [_sandbox_row()]}
+    repo = SupabaseSandboxRuntimeRepo(client=_client(tables))
+
+    repo.delete("runtime-1")
+
+    assert tables["container.sandboxes"] == []

@@ -1,15 +1,3 @@
-"""SummaryStore - Persistent storage for conversation summaries.
-
-This module implements persistent storage for MemoryMiddleware summaries,
-preventing loss of cached summaries across restarts.
-
-Architecture:
-    MemoryMiddleware → SummaryStore → SQLite
-    - Summaries stored with thread_id as key
-    - Only latest summary per thread is active
-    - Historical summaries retained for audit
-"""
-
 from __future__ import annotations
 
 import logging
@@ -22,24 +10,19 @@ from pathlib import Path
 from typing import Any
 
 from storage.contracts import SummaryRepo, SummaryRow
-from storage.providers.sqlite.kernel import SQLiteDBRole, connect_sqlite, resolve_role_db_path
+from storage.providers.sqlite.kernel import connect_sqlite
 from storage.providers.sqlite.summary_repo import SQLiteSummaryRepo
+from storage.runtime import build_summary_repo, uses_supabase_runtime_defaults
 
 logger = logging.getLogger(__name__)
 
 
 def _connect(db_path: Path) -> sqlite3.Connection:
-    """Create SQLite connection with proper timeout settings."""
     return connect_sqlite(db_path)
 
 
 @dataclass
 class SummaryData:
-    """Summary data snapshot.
-
-    Represents a conversation summary that persists across sessions.
-    """
-
     summary_id: str
     thread_id: str
     summary_text: str
@@ -52,24 +35,23 @@ class SummaryData:
 
 
 class SummaryStore:
-    """Store for managing conversation summary persistence.
-
-    Handles CRUD operations for summaries in the database.
-    Follows the same pattern as TerminalStore for consistency.
-    """
-
     def __init__(self, db_path: Path | None = None, summary_repo: SummaryRepo | None = None):
-        self.db_path = db_path or resolve_role_db_path(SQLiteDBRole.SANDBOX)
+        self.db_path = Path(db_path) if db_path is not None else None
         self._repo: SummaryRepo
         if summary_repo is not None:
             self._repo = summary_repo
+        elif db_path is None and uses_supabase_runtime_defaults():
+            # @@@explicit-db-path-wins - an explicit local path is an operator choice,
+            # so only path-less construction is allowed to switch to runtime storage.
+            self._repo = build_summary_repo()
+        elif db_path is None:
+            raise RuntimeError("SummaryStore requires summary_repo or db_path.")
         else:
             # @@@connect_injection - keep _connect as an indirection point so existing retry/rollback tests can patch it.
-            self._repo = SQLiteSummaryRepo(db_path, connect_fn=lambda p: _connect(p))
+            self._repo = SQLiteSummaryRepo(self.db_path, connect_fn=lambda p: _connect(Path(p)))
         self._ensure_tables()
 
     def _ensure_tables(self) -> None:
-        """Ensure summaries table exists."""
         self._repo.ensure_tables()
 
     def save_summary(
@@ -115,7 +97,6 @@ class SummaryStore:
                     created_at=now,
                 )
 
-                logger.info(f"[SummaryStore] Saved summary {summary_id} for thread {thread_id}")
                 return summary_id
 
             except Exception as e:
@@ -125,6 +106,8 @@ class SummaryStore:
                 else:
                     logger.error(f"[SummaryStore] Save failed after {max_retries} attempts: {e}")
                     raise
+
+        raise RuntimeError("Summary save loop exited without returning or raising")
 
     def get_latest_summary(
         self,
@@ -147,7 +130,6 @@ class SummaryStore:
                 if not row:
                     return None
 
-                # Validate data integrity
                 try:
                     return SummaryData(
                         summary_id=row["summary_id"],
@@ -175,22 +157,7 @@ class SummaryStore:
         return None
 
     def list_summaries(self, thread_id: str) -> list[dict[str, Any]]:
-        """List all summaries for a thread (for audit purposes).
-
-        Args:
-            thread_id: Thread identifier
-
-        Returns:
-            List of summary records as dictionaries
-        """
         return self._repo.list_summaries(thread_id)
 
     def delete_thread_summaries(self, thread_id: str) -> None:
-        """Delete all summaries for a thread.
-
-        Args:
-            thread_id: Thread identifier
-        """
         self._repo.delete_thread_summaries(thread_id)
-
-        logger.info(f"[SummaryStore] Deleted all summaries for thread {thread_id}")

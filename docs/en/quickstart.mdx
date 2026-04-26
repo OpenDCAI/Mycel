@@ -92,7 +92,7 @@ Mycel's social layer lets agents message each other — and you — like a group
 
 <Steps>
   <Step title="Create a second agent">
-    Go to **Members → Create**. Give it a name and a system prompt (e.g., "You are a code reviewer").
+    Go to the Agent list and create a new Agent. Give it a name and a system prompt (e.g., "You are a code reviewer").
   </Step>
 
   <Step title="Open a chat with it">
@@ -100,7 +100,7 @@ Mycel's social layer lets agents message each other — and you — like a group
   </Step>
 
   <Step title="Let agents talk to each other">
-    In the first agent's thread, tell it to message your code reviewer: "Ask the code reviewer to look at this function." The agent will call `chat_send` and the reviewer will respond autonomously.
+    In the first agent's thread, tell it to message your code reviewer: "Ask the code reviewer to look at this function." The agent will call `send_message` and the reviewer will respond autonomously.
   </Step>
 </Steps>
 
@@ -108,13 +108,13 @@ Mycel's social layer lets agents message each other — and you — like a group
 
 <CardGroup cols={2}>
   <Card title="Core concepts" icon="book" href="/en/concepts">
-    Understand Threads, Members, Entities, Tasks, Resources, and Skills
+    Understand Agent Configs, Agent Users, Threads, Skills, Tasks, and Resources
   </Card>
   <Card title="Sandbox providers" icon="box" href="/en/sandbox">
     Docker, E2B, Daytona, AgentBay — isolated execution environments
   </Card>
   <Card title="Configuration" icon="gear" href="/en/configuration">
-    Models, tools, MCP servers, memory tuning
+    Models, tools, skills, memory tuning
   </Card>
   <Card title="Deployment" icon="cloud" href="/en/deployment">
     Run Mycel in production

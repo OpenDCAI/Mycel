@@ -1,5 +1,3 @@
-"""Supabase repository for eval trajectory persistence operations."""
-
 from __future__ import annotations
 
 from typing import Any
@@ -12,14 +10,65 @@ _REPO = "eval repo"
 
 
 class SupabaseEvalRepo:
-    """Minimal eval repository backed by a Supabase client."""
-
     def __init__(self, client: Any) -> None:
         self._client = q.validate_client(client, _REPO)
 
-    def ensure_schema(self) -> None:
-        """Supabase schema is managed via migrations, not runtime DDL."""
-        return None
+    def upsert_run_header(
+        self,
+        *,
+        run_id: str,
+        thread_id: str,
+        started_at: str,
+        user_message: str,
+        status: str,
+    ) -> None:
+        rows = q.rows(
+            self._t("eval_runs")
+            .upsert(
+                {
+                    "id": run_id,
+                    "thread_id": thread_id,
+                    "started_at": started_at,
+                    "user_message": user_message,
+                    "status": status,
+                },
+                on_conflict="id",
+            )
+            .execute(),
+            _REPO,
+            "upsert_run_header",
+        )
+        if not rows:
+            raise RuntimeError("Supabase eval repo expected row for upsert_run_header. Check table permissions.")
+
+    def finalize_run(
+        self,
+        *,
+        run_id: str,
+        finished_at: str,
+        final_response: str,
+        status: str,
+        run_tree_json: str,
+        trajectory_json: str,
+    ) -> None:
+        rows = q.rows(
+            self._t("eval_runs")
+            .update(
+                {
+                    "finished_at": finished_at,
+                    "final_response": final_response,
+                    "status": status,
+                    "run_tree_json": run_tree_json,
+                    "trajectory_json": trajectory_json,
+                }
+            )
+            .eq("id", run_id)
+            .execute(),
+            _REPO,
+            "finalize_run",
+        )
+        if not rows:
+            raise RuntimeError(f"Supabase eval repo expected existing row for finalize_run: {run_id}")
 
     def save_trajectory(self, trajectory: RunTrajectory, trajectory_json: str) -> str:
         run_id = trajectory.id
@@ -121,6 +170,26 @@ class SupabaseEvalRepo:
             raise RuntimeError("Supabase eval repo expected non-null trajectory_json in get_trajectory_json. Check eval_runs table schema.")
         return str(val)
 
+    def get_run(self, run_id: str) -> dict | None:
+        query = q.limit(
+            self._t("eval_runs").select("id,thread_id,started_at,finished_at,status,user_message").eq("id", run_id),
+            1,
+            _REPO,
+            "get_run",
+        )
+        rows = q.rows(query.execute(), _REPO, "get_run")
+        if not rows:
+            return None
+        row = rows[0]
+        return {
+            "id": str(row.get("id") or ""),
+            "thread_id": str(row.get("thread_id") or ""),
+            "started_at": row.get("started_at"),
+            "finished_at": row.get("finished_at"),
+            "status": str(row.get("status") or ""),
+            "user_message": str(row.get("user_message") or ""),
+        }
+
     def list_runs(self, thread_id: str | None = None, limit: int = 50) -> list[dict]:
         query = self._t("eval_runs").select("id,thread_id,started_at,finished_at,status,user_message")
         if thread_id:
@@ -154,4 +223,4 @@ class SupabaseEvalRepo:
         ]
 
     def _t(self, table_name: str) -> Any:
-        return self._client.table(table_name)
+        return q.schema_table(self._client, "observability", table_name, _REPO)

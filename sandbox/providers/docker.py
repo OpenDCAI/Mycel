@@ -1,9 +1,3 @@
-"""
-Docker sandbox provider.
-
-Implements SandboxProvider using local Docker containers.
-"""
-
 from __future__ import annotations
 
 import asyncio
@@ -13,8 +7,9 @@ import shlex
 import subprocess
 import uuid
 from collections.abc import Callable
+from contextlib import suppress
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal, overload
 
 from sandbox.config import MountSpec
 from sandbox.interfaces.executor import ExecuteResult
@@ -38,23 +33,14 @@ from sandbox.runtime import (
 )
 
 if TYPE_CHECKING:
-    from sandbox.lease import SandboxLease
     from sandbox.runtime import PhysicalTerminalRuntime
+    from sandbox.runtime_handle import SandboxRuntimeHandle
     from sandbox.terminal import AbstractTerminal
 
 logger = logging.getLogger(__name__)
 
 
 class DockerProvider(SandboxProvider):
-    """
-    Local Docker sandbox provider.
-
-    Notes:
-    - Requires Docker CLI available on host.
-    - Uses one container per session.
-    - If context_id is provided, uses a named Docker volume for persistence.
-    """
-
     CATALOG_ENTRY = {"vendor": None, "description": "Isolated container sandbox", "provider_type": "container"}
 
     name = "docker"
@@ -79,7 +65,7 @@ class DockerProvider(SandboxProvider):
             supports_copy=True,
             supports_read_only=True,
             mode_handlers={"mount": True, "copy": True},
-            supports_managed_volume=True,
+            supports_managed_volume=False,
         ),
     )
 
@@ -106,41 +92,9 @@ class DockerProvider(SandboxProvider):
         self._docker_host = docker_host
         self._sessions: dict[str, str] = {}  # session_id -> container_id
         self._thread_bind_mounts: dict[str, list[MountSpec]] = {}  # thread_id -> bind_mounts
-        self._volume_mounts: dict[str, MountSpec] = {}  # thread_id -> member volume bind mount
 
     def set_thread_bind_mounts(self, thread_id: str, mounts: list[MountSpec | dict]) -> None:
-        """Set thread-specific bind mounts that will be applied when creating sessions."""
         self._thread_bind_mounts[thread_id] = [MountSpec.model_validate(m) if isinstance(m, dict) else m for m in mounts]
-
-    # ==================== Managed Volume ====================
-
-    def create_managed_volume(self, member_id: str, mount_path: str) -> str:
-        """Create a host directory as managed volume. Returns host path as backend_ref."""
-        volume_dir = Path.home() / ".leon" / "managed_volumes" / member_id
-        volume_dir.mkdir(parents=True, exist_ok=True)
-        logger.info("Created Docker managed volume: %s", volume_dir)
-        return str(volume_dir)
-
-    def set_managed_volume_mount(self, thread_id: str, backend_ref: str, mount_path: str) -> None:
-        self._volume_mounts[thread_id] = MountSpec(
-            source=backend_ref,
-            target=mount_path,
-            mode="mount",
-            read_only=False,
-        )
-
-    def delete_managed_volume(self, backend_ref: str) -> None:
-        """Delete managed volume host directory. backend_ref is the host path."""
-        import shutil
-
-        volume_dir = Path(backend_ref).resolve()
-        # @@@safe-volume-delete - refuse to delete outside expected directory
-        expected_parent = (Path.home() / ".leon" / "managed_volumes").resolve()
-        if not str(volume_dir).startswith(str(expected_parent)):
-            raise ValueError(f"Refusing to delete volume outside {expected_parent}: {volume_dir}")
-        if volume_dir.exists():
-            logger.info("Deleting Docker managed volume: %s", volume_dir)
-            shutil.rmtree(volume_dir)
 
     def create_session(self, context_id: str | None = None, thread_id: str | None = None) -> SessionInfo:
         session_id = f"leon-{uuid.uuid4().hex[:12]}"
@@ -156,10 +110,8 @@ class DockerProvider(SandboxProvider):
             f"leon.session_id={session_id}",
         ]
 
-        # Merge global bind_mounts with thread-specific mounts + member volume mount
+        # Merge global bind_mounts with thread-specific mounts + managed volume mount
         all_mounts = list(self.bind_mounts)
-        if thread_id and thread_id in self._volume_mounts:
-            all_mounts.append(self._volume_mounts.pop(thread_id))
         if thread_id and thread_id in self._thread_bind_mounts:
             all_mounts.extend(self._thread_bind_mounts[thread_id])
 
@@ -174,7 +126,7 @@ class DockerProvider(SandboxProvider):
             cmd.extend(["-v", volume_arg])
 
         if context_id:
-            # @@@context-label - also label with context_id so probe can find container via lease_id
+            # @@@context-label - also label with context_id so probe can find container via runtime handle
             cmd.extend(["--label", f"leon.context_id={context_id}"])
             volume = context_id
             cmd.extend(["-v", f"{volume}:{self.mount_path}"])
@@ -374,10 +326,8 @@ class DockerProvider(SandboxProvider):
             if len(lines) >= 2:
                 df_parts = lines[1].split()
                 if len(df_parts) >= 3:
-                    try:
+                    with suppress(ValueError):
                         disk_used_gb = float(df_parts[2].rstrip("G"))
-                    except ValueError:
-                        pass
 
         return Metrics(
             cpu_percent=cpu_percent,
@@ -388,7 +338,6 @@ class DockerProvider(SandboxProvider):
         )
 
     def _disk_usage_from_ps(self, container_id: str) -> float | None:
-        """Read writable-layer size for any container state via docker ps --size."""
         result = self._run(
             ["docker", "ps", "-a", "--filter", f"id={container_id}", "--format", "{{.Size}}"],
             timeout=self.command_timeout_sec,
@@ -401,7 +350,7 @@ class DockerProvider(SandboxProvider):
             return None
         # Output: "8.19kB (virtual 159MB)" — first token is writable layer
         writable = size_str.split(" (")[0]
-        try:
+        with suppress(ValueError):
             if writable.endswith("GB"):
                 return float(writable[:-2])
             if writable.endswith("MB"):
@@ -410,8 +359,6 @@ class DockerProvider(SandboxProvider):
                 return float(writable[:-2]) / (1024.0 * 1024.0)
             if writable.endswith("B"):
                 return float(writable[:-1]) / (1024.0**3)
-        except ValueError:
-            pass
         return None
 
     def _copy_host_path_into_container(self, container_id: str, *, source: str, target: str) -> None:
@@ -441,8 +388,14 @@ class DockerProvider(SandboxProvider):
             return
         raise RuntimeError(f"Unsupported copy source path type: {source}")
 
-    def create_runtime(self, terminal: AbstractTerminal, lease: SandboxLease) -> PhysicalTerminalRuntime:
-        return DockerPtyRuntime(terminal, lease, self)
+    def create_runtime(self, terminal: AbstractTerminal, sandbox_runtime: SandboxRuntimeHandle) -> PhysicalTerminalRuntime:
+        return DockerPtyRuntime(terminal, sandbox_runtime, self)
+
+    @overload
+    def _get_container_id(self, session_id: str, allow_missing: Literal[False] = False) -> str: ...
+
+    @overload
+    def _get_container_id(self, session_id: str, allow_missing: Literal[True]) -> str | None: ...
 
     def _get_container_id(self, session_id: str, allow_missing: bool = False) -> str | None:
         container_id = self._sessions.get(session_id)
@@ -506,12 +459,6 @@ class DockerProvider(SandboxProvider):
             return 0.0, 0.0
         return self._parse_size_mb(parts[0]), self._parse_size_mb(parts[1])
 
-    def _parse_io(self, value: str) -> tuple[float, float]:
-        parts = [p.strip() for p in value.split("/")]
-        if len(parts) != 2:
-            return 0.0, 0.0
-        return self._parse_size_kb(parts[0]), self._parse_size_kb(parts[1])
-
     def _parse_size_mb(self, value: str) -> float:
         num, unit = self._split_size(value)
         if unit == "b":
@@ -524,20 +471,6 @@ class DockerProvider(SandboxProvider):
             return num * 1024
         if unit == "tb":
             return num * 1024 * 1024
-        return 0.0
-
-    def _parse_size_kb(self, value: str) -> float:
-        num, unit = self._split_size(value)
-        if unit == "b":
-            return num / 1024
-        if unit == "kb":
-            return num
-        if unit == "mb":
-            return num * 1024
-        if unit == "gb":
-            return num * 1024 * 1024
-        if unit == "tb":
-            return num * 1024 * 1024 * 1024
         return 0.0
 
     def _split_size(self, value: str) -> tuple[float, str]:
@@ -565,10 +498,8 @@ class DockerProvider(SandboxProvider):
 
 
 class DockerPtyRuntime(_RemoteRuntimeBase):
-    """Docker runtime using a persistent PTY shell inside container."""
-
-    def __init__(self, terminal, lease, provider):
-        super().__init__(terminal, lease, provider)
+    def __init__(self, terminal, sandbox_runtime, provider):
+        super().__init__(terminal, sandbox_runtime, provider)
         self._session_lock = asyncio.Lock()
         self._bound_instance_id: str | None = None
         self._pty_session: _SubprocessPtySession | None = None
@@ -580,7 +511,7 @@ class DockerPtyRuntime(_RemoteRuntimeBase):
         self._pty_session = None
 
     def _ensure_shell_sync(self, timeout: float | None) -> _SubprocessPtySession:
-        instance = self.lease.ensure_active_instance(self.provider)
+        instance = self.sandbox_runtime.ensure_active_instance(self.provider)
         if self._bound_instance_id != instance.instance_id:
             self._close_shell_sync()
             self._bound_instance_id = instance.instance_id
@@ -618,8 +549,8 @@ class DockerPtyRuntime(_RemoteRuntimeBase):
             snapshot_out,
             start_marker,
             end_marker,
-            cwd_fallback=state.cwd,
-            env_fallback=state.env_delta,
+            previous_cwd=state.cwd,
+            previous_env=state.env_delta,
         )
         env_delta = _compute_env_delta(env_map, self._baseline_env or {}, state.env_delta)
         from sandbox.terminal import TerminalState
@@ -650,13 +581,18 @@ class DockerPtyRuntime(_RemoteRuntimeBase):
                 return ExecuteResult(exit_code=1, stdout="", stderr=f"Error: {exc}")
 
     async def _recover_after_timeout(self) -> None:
-        """Recover PTY session after a command timeout."""
         if self._pty_session is None:
             return
         recovered = await asyncio.to_thread(self._pty_session.interrupt_and_recover)
         if not recovered:
             await asyncio.to_thread(self._pty_session.close)
             self._pty_session = None
+
+    async def _cancel_running_command(self) -> bool:
+        if self._pty_session is None:
+            return False
+        await asyncio.to_thread(self._close_shell_sync)
+        return True
 
     async def execute(self, command: str, timeout: float | None = None) -> ExecuteResult:
         return await self._execute_background_command(command, timeout=timeout)

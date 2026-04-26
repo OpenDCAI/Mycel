@@ -1,19 +1,19 @@
 """模型成本计算
 
 定价来源优先级：
-1. OpenRouter API（启动时拉取，缓存到 ~/.leon/pricing_cache.json，24h TTL）
-2. 本地 models.json（OpenRouter /models 原始快照，随代码发布，离线兜底）
+1. OpenRouter API（启动时拉取）
+2. 本地 models.json（OpenRouter /models 原始快照，随代码发布）
 """
 
 from __future__ import annotations
 
 import json
-import time
+import logging
 from decimal import Decimal
 from pathlib import Path
 from typing import Any
 
-from config.user_paths import preferred_existing_user_home_path, user_home_path
+logger = logging.getLogger(__name__)
 
 # 定价数据（运行时填充）
 _pricing_data: dict[str, dict[str, Decimal]] = {}
@@ -23,8 +23,6 @@ _initialized = False
 
 # 路径
 _BUNDLED_PATH = Path(__file__).parent / "models.json"
-_CACHE_PATH = user_home_path("pricing_cache.json")
-_CACHE_TTL = 86400  # 24 小时
 
 M = Decimal("1000000")
 _PER_TOKEN_TO_PER_M = Decimal("1000000")
@@ -106,51 +104,8 @@ def _infer_cache_prices(provider: str, input_per_m: Decimal, cache_read: Decimal
     return cache_read, cache_write
 
 
-def _load_cache() -> tuple[dict[str, dict[str, str]], dict[str, int], dict[str, str]] | None:
-    """从磁盘缓存加载定价数据、上下文窗口大小和 provider 映射"""
-    cache_path = preferred_existing_user_home_path("pricing_cache.json")
-    if not cache_path.exists():
-        return None
-    try:
-        data = json.loads(cache_path.read_text())
-        if time.time() - data.get("timestamp", 0) > _CACHE_TTL:
-            return None
-        models = data.get("models", {})
-        ctx = data.get("context_limits", {})
-        provs = data.get("providers", {})
-        return models, ctx, provs
-    except Exception:
-        return None
-
-
-def _save_cache(models: dict[str, dict[str, str]], context_limits: dict[str, int], providers: dict[str, str]) -> None:
-    """保存定价数据、上下文窗口大小和 provider 映射到磁盘缓存"""
-    try:
-        _CACHE_PATH.parent.mkdir(parents=True, exist_ok=True)
-        data = {"timestamp": time.time(), "models": models, "context_limits": context_limits, "providers": providers}
-        _CACHE_PATH.write_text(json.dumps(data))
-    except Exception:
-        pass
-
-
-def _deserialize_costs(raw: dict[str, dict[str, str]]) -> dict[str, dict[str, Decimal]]:
-    """将缓存中的字符串值转为 Decimal"""
-    result = {}
-    for model_name, costs in raw.items():
-        try:
-            result[model_name] = {k: Decimal(v) for k, v in costs.items()}
-        except Exception:
-            continue
-    return result
-
-
-def _serialize_costs(costs: dict[str, dict[str, Decimal]]) -> dict[str, dict[str, str]]:
-    """将 Decimal 值转为字符串用于缓存"""
-    return {model: {k: str(v) for k, v in c.items()} for model, c in costs.items()}
-
-
 def fetch_openrouter_pricing() -> dict[str, dict[str, Decimal]]:
-    """加载定价数据：API 缓存 → OpenRouter API → bundled 文件
+    """加载定价数据：API 缓存 → OpenRouter API → packaged 文件
 
     同步调用（启动时一次性），超时 5 秒。
     同时加载上下文窗口大小和 provider 映射数据。
@@ -160,16 +115,7 @@ def fetch_openrouter_pricing() -> dict[str, dict[str, Decimal]]:
     if _initialized:
         return _pricing_data
 
-    cached = _load_cache()
-    if cached:
-        models_raw, ctx, provs = cached
-        _pricing_data = _deserialize_costs(models_raw)
-        _context_limits = ctx
-        _model_providers = provs
-        _initialized = True
-        return _pricing_data
-
-    _pricing_data = _fetch_from_openrouter() or _load_bundled()
+    _pricing_data = _fetch_from_openrouter() or _load_packaged()
     _initialized = True
     return _pricing_data
 
@@ -182,7 +128,7 @@ def _fetch_from_openrouter() -> dict[str, dict[str, Decimal]] | None:
 
         req = urllib.request.Request(
             "https://openrouter.ai/api/v1/models",
-            headers={"User-Agent": "leon-agent/1.0"},
+            headers={"User-Agent": "mycel-agent/1.0"},
         )
         with urllib.request.urlopen(req, timeout=5) as resp:
             data = json.loads(resp.read())
@@ -205,21 +151,23 @@ def _fetch_from_openrouter() -> dict[str, dict[str, Decimal]] | None:
         if result:
             _context_limits = ctx_result
             _model_providers = prov_result
-            _save_cache(_serialize_costs(result), ctx_result, prov_result)
             return result
     except Exception:
-        pass
+        logger.warning("Failed to fetch OpenRouter pricing; packaged pricing will be used", exc_info=True)
 
     return None
 
 
-def _load_bundled() -> dict[str, dict[str, Decimal]]:
+def _load_packaged() -> dict[str, dict[str, Decimal]]:
     """从随代码发布的 models.json（OpenRouter 原始快照）加载"""
     global _context_limits, _model_providers
     if not _BUNDLED_PATH.exists():
         return {}
     try:
-        data = json.loads(_BUNDLED_PATH.read_text())
+        # @@@packaged-models-utf8 - Windows runners do not default to UTF-8.
+        # The packaged OpenRouter snapshot contains non-ASCII descriptions, so
+        # implicit decoding can fail and silently collapse pricing/context data.
+        data = json.loads(_BUNDLED_PATH.read_text(encoding="utf-8"))
         result: dict[str, dict[str, Decimal]] = {}
         ctx_result: dict[str, int] = {}
         prov_result: dict[str, str] = {}
@@ -236,7 +184,6 @@ def _load_bundled() -> dict[str, dict[str, Decimal]]:
                         prov_result[name] = provider
         _context_limits = ctx_result
         _model_providers = prov_result
-        _save_cache(_serialize_costs(result), ctx_result, prov_result)
         return result
     except Exception:
         return {}
@@ -301,8 +248,7 @@ class CostCalculator:
         import re
 
         name = re.sub(r"-\d{8}$", "", name)
-        name = re.sub(r"-(\d+)-(\d+)$", r"-\1.\2", name)
-        return name
+        return re.sub(r"-(\d+)-(\d+)$", r"-\1.\2", name)
 
     def calculate(self, tokens: dict) -> dict:
         """返回各项成本（USD）

@@ -42,6 +42,7 @@ export default function CenteredInputBox({
   const [model, setModel] = useState(defaultModel);
   const [draftModel, setDraftModel] = useState(defaultModel);
   const [sending, setSending] = useState(false);
+  const [sendError, setSendError] = useState<string | null>(null);
   const [advancedConfigOpen, setAdvancedConfigOpen] = useState(false);
   const [applyingConfig, setApplyingConfig] = useState(false);
 
@@ -55,10 +56,13 @@ export default function CenteredInputBox({
     if (!text || sending) return;
 
     setSending(true);
+    setSendError(null);
     try {
       await onSend(text, model);
       setMessage("");
       setAdvancedConfigOpen(false);
+    } catch (err) {
+      setSendError(err instanceof Error ? err.message : String(err));
     } finally {
       setSending(false);
     }
@@ -109,6 +113,11 @@ export default function CenteredInputBox({
           style={{ boxShadow: "none" }}
         />
         <p className="text-xs text-muted-foreground/70 mb-4">Enter 发送，Shift + Enter 换行</p>
+        {sendError && (
+          <div className="mb-4 rounded-lg border border-destructive/20 bg-destructive/5 px-3 py-2 text-xs text-destructive">
+            {sendError}
+          </div>
+        )}
 
         <div className="flex items-center gap-3">
           <div className="min-w-0 flex-1 text-left">

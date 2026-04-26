@@ -1,13 +1,3 @@
-"""AbstractTerminal - Durable terminal identity + state snapshot.
-
-This module implements the terminal abstraction layer that separates
-durable terminal state (cwd, env_delta) from ephemeral runtime processes.
-
-Architecture:
-    Thread → AbstractTerminal (durable state) → SandboxLease → Instance
-    Thread → ChatSession → PhysicalTerminalRuntime (ephemeral process)
-"""
-
 from __future__ import annotations
 
 import json
@@ -17,12 +7,12 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 
-from storage.providers.sqlite.kernel import SQLiteDBRole, connect_sqlite, resolve_role_db_path
+from storage.providers.sqlite.kernel import SQLiteDBRole, connect_sqlite, resolve_explicit_role_db_path
 
 REQUIRED_ABSTRACT_TERMINAL_COLUMNS = {
     "terminal_id",
     "thread_id",
-    "lease_id",
+    "sandbox_runtime_id",
     "cwd",
     "env_delta_json",
     "state_version",
@@ -44,19 +34,11 @@ def _connect(db_path: Path) -> sqlite3.Connection:
 
 @dataclass
 class TerminalState:
-    """Terminal state snapshot.
-
-    Represents the current state of a terminal that needs to persist
-    across session boundaries. This is the "continuity" layer that
-    makes terminals feel persistent even when physical processes die.
-    """
-
     cwd: str
     env_delta: dict[str, str] = field(default_factory=dict)
     state_version: int = 0
 
     def to_json(self) -> str:
-        """Serialize to JSON for DB storage."""
         return json.dumps(
             {
                 "cwd": self.cwd,
@@ -67,7 +49,6 @@ class TerminalState:
 
     @classmethod
     def from_json(cls, data: str) -> TerminalState:
-        """Deserialize from JSON."""
         obj = json.loads(data)
         return cls(
             cwd=obj["cwd"],
@@ -77,71 +58,43 @@ class TerminalState:
 
 
 class AbstractTerminal(ABC):
-    """Durable terminal identity + state snapshot.
-
-    This is the logical terminal that persists across ChatSession boundaries.
-    It does NOT own the physical process - that's owned by PhysicalTerminalRuntime.
-
-    Responsibilities:
-    - Store terminal identity (terminal_id, thread_id, lease_id)
-    - Maintain state snapshot (cwd, env_delta, state_version)
-    - Persist state to database
-    - Provide state to PhysicalTerminalRuntime for hydration
-
-    Does NOT:
-    - Own physical shell/pty process
-    - Execute commands directly
-    - Manage process lifecycle
-    """
-
     def __init__(
         self,
         terminal_id: str,
         thread_id: str,
-        lease_id: str,
+        sandbox_runtime_id: str,
         state: TerminalState,
     ):
         self.terminal_id = terminal_id
         self.thread_id = thread_id
-        self.lease_id = lease_id
+        self.sandbox_runtime_id = sandbox_runtime_id
         self._state = state
 
     def get_state(self) -> TerminalState:
-        """Get current terminal state snapshot."""
         return self._state
 
     def update_state(self, state: TerminalState) -> None:
-        """Update terminal state snapshot.
-
-        This should be called after each command execution to persist
-        the new cwd/env state.
-        """
         state.state_version = self._state.state_version + 1
         self._state = state
         self._persist_state()
 
     @abstractmethod
-    def _persist_state(self) -> None:
-        """Persist state to storage backend."""
-        ...
+    def _persist_state(self) -> None: ...
 
 
 class SQLiteTerminal(AbstractTerminal):
-    """SQLite-backed terminal implementation."""
-
     def __init__(
         self,
         terminal_id: str,
         thread_id: str,
-        lease_id: str,
+        sandbox_runtime_id: str,
         state: TerminalState,
         db_path: Path | None = None,
     ):
-        super().__init__(terminal_id, thread_id, lease_id, state)
-        self.db_path = db_path or resolve_role_db_path(SQLiteDBRole.SANDBOX)
+        super().__init__(terminal_id, thread_id, sandbox_runtime_id, state)
+        self.db_path = Path(db_path) if db_path is not None else resolve_explicit_role_db_path(SQLiteDBRole.SANDBOX)
 
     def _persist_state(self) -> None:
-        """Persist state to SQLite."""
         with _connect(self.db_path) as conn:
             conn.execute(
                 """
@@ -160,17 +113,45 @@ class SQLiteTerminal(AbstractTerminal):
             conn.commit()
 
 
-def terminal_from_row(row: dict, db_path: Path) -> AbstractTerminal:
-    """Construct SQLiteTerminal from a repo dict."""
+class RepoBackedTerminal(AbstractTerminal):
+    def __init__(
+        self,
+        terminal_id: str,
+        thread_id: str,
+        sandbox_runtime_id: str,
+        state: TerminalState,
+        terminal_repo,
+    ):
+        super().__init__(terminal_id, thread_id, sandbox_runtime_id, state)
+        self._terminal_repo = terminal_repo
+
+    def _persist_state(self) -> None:
+        self._terminal_repo.persist_state(
+            terminal_id=self.terminal_id,
+            cwd=self._state.cwd,
+            env_delta_json=json.dumps(self._state.env_delta),
+            state_version=self._state.state_version,
+        )
+
+
+def terminal_from_row(row: dict, db_path: Path | None = None, *, terminal_repo=None) -> AbstractTerminal:
     state = TerminalState(
         cwd=row.get("cwd", "/root"),
         env_delta=json.loads(row.get("env_delta_json", "{}")),
         state_version=int(row.get("state_version", 0)),
     )
+    if terminal_repo is not None:
+        return RepoBackedTerminal(
+            terminal_id=row["terminal_id"],
+            thread_id=row["thread_id"],
+            sandbox_runtime_id=row["sandbox_runtime_id"],
+            state=state,
+            terminal_repo=terminal_repo,
+        )
     return SQLiteTerminal(
         terminal_id=row["terminal_id"],
         thread_id=row["thread_id"],
-        lease_id=row["lease_id"],
+        sandbox_runtime_id=row["sandbox_runtime_id"],
         state=state,
         db_path=db_path,
     )

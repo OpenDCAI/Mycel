@@ -1,0 +1,258 @@
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { ArrowLeft, Bot, MessageSquare, User } from "lucide-react";
+import { useNavigate, useParams } from "react-router-dom";
+
+import {
+  actOnRelationship,
+  fetchUserChatCandidates,
+  requestRelationship,
+  type RelationshipAction,
+  type UserChatCandidate,
+} from "@/api/users";
+import ActorAvatar from "@/components/ActorAvatar";
+import { Button } from "@/components/ui/button";
+import { authFetch, useAuthStore } from "@/store/auth-store";
+
+function errorText(err: unknown): string {
+  return err instanceof Error ? err.message : String(err);
+}
+
+async function createDirectChat(targetUserId: string): Promise<string> {
+  const response = await authFetch("/api/chats", {
+    method: "POST",
+    body: JSON.stringify({ user_ids: [targetUserId] }),
+  });
+  if (!response.ok) throw new Error(`API ${response.status}: ${await response.text()}`);
+  const payload = await response.json();
+  if (!payload || typeof payload !== "object" || typeof (payload as Record<string, unknown>).id !== "string") {
+    throw new Error("Malformed chat create response");
+  }
+  return (payload as { id: string }).id;
+}
+
+function relationshipLabel(contact: UserChatCandidate): string {
+  if (contact.relationship_state === "visit" || contact.relationship_state === "hire") return contact.relationship_state;
+  if (contact.can_chat) return "联系人";
+  return contact.relationship_state;
+}
+
+type ContactRelationshipAction = RelationshipAction | "request";
+
+type RelationshipButton = {
+  action: ContactRelationshipAction;
+  label: string;
+  variant?: "default" | "outline" | "destructive";
+};
+
+const RELATIONSHIP_BUTTONS_BY_STATE: Record<string, RelationshipButton[]> = {
+  none: [{ action: "request", label: "申请联系" }],
+  visit: [
+    { action: "upgrade", label: "升级为 hire", variant: "outline" },
+    { action: "revoke", label: "解除关系", variant: "outline" },
+  ],
+  hire: [
+    { action: "downgrade", label: "降级为 visit", variant: "outline" },
+    { action: "revoke", label: "解除关系", variant: "outline" },
+  ],
+};
+
+function relationshipButtons(contact: UserChatCandidate): RelationshipButton[] {
+  if (contact.relationship_state !== "pending") return RELATIONSHIP_BUTTONS_BY_STATE[contact.relationship_state] ?? [];
+  if (contact.relationship_is_requester) return [{ action: "revoke", label: "取消申请", variant: "outline" }];
+  return [
+    { action: "approve", label: "同意申请" },
+    { action: "reject", label: "拒绝申请", variant: "outline" },
+  ];
+}
+
+function relationshipMessage(contact: UserChatCandidate): string | null {
+  const message = contact.relationship_message?.trim();
+  return contact.relationship_state === "pending" && message ? message : null;
+}
+
+export default function ContactDetailPage() {
+  const { userId } = useParams<{ userId: string }>();
+  const navigate = useNavigate();
+  const myUserId = useAuthStore((s) => s.userId);
+  const [chatCandidates, setChatCandidates] = useState<UserChatCandidate[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [opening, setOpening] = useState(false);
+  const [openError, setOpenError] = useState<string | null>(null);
+  const [relationshipAction, setRelationshipAction] = useState<ContactRelationshipAction | null>(null);
+  const [relationshipError, setRelationshipError] = useState<string | null>(null);
+
+  const readCandidates = useCallback(async () => fetchUserChatCandidates(), []);
+
+  const loadCandidates = useCallback(async () => {
+    setLoadError(null);
+    setChatCandidates(await readCandidates());
+  }, [readCandidates]);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    setLoadError(null);
+    readCandidates()
+      .then((items) => {
+        if (!cancelled) setChatCandidates(items);
+      })
+      .catch((err) => {
+        if (!cancelled) setLoadError(errorText(err));
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [readCandidates]);
+
+  const contact = useMemo(() => chatCandidates.find((item) => item.user_id === userId), [chatCandidates, userId]);
+
+  const openConversation = async () => {
+    if (!contact || opening) return;
+    setOpening(true);
+    setOpenError(null);
+    try {
+      if (!myUserId) throw new Error("当前用户未登录");
+      const chatId = await createDirectChat(contact.user_id);
+      navigate(`/chat/visit/${chatId}`);
+    } catch (err) {
+      setOpenError(errorText(err));
+    } finally {
+      setOpening(false);
+    }
+  };
+
+  const runRelationshipAction = async (action: ContactRelationshipAction) => {
+    if (!contact || relationshipAction) return;
+    setRelationshipAction(action);
+    setRelationshipError(null);
+    try {
+      if (action === "request") {
+        await requestRelationship(contact.user_id);
+      } else {
+        if (!contact.relationship_id) throw new Error("缺少 relationship id");
+        await actOnRelationship(contact.relationship_id, action);
+      }
+      await loadCandidates();
+    } catch (err) {
+      setRelationshipError(errorText(err));
+    } finally {
+      setRelationshipAction(null);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="h-full flex items-center justify-center">
+        <p className="text-sm text-muted-foreground">加载联系人...</p>
+      </div>
+    );
+  }
+
+  if (loadError || !contact) {
+    return (
+      <div className="h-full flex items-center justify-center px-6 text-center">
+        <p className="text-sm text-destructive">
+          {loadError ? `联系人加载失败：${loadError}` : "联系人不存在或不可访问"}
+        </p>
+      </div>
+    );
+  }
+
+  const isAgent = contact.type === "agent";
+  const relationshipStatus = relationshipLabel(contact);
+  const actions = relationshipButtons(contact);
+  const pendingMessage = relationshipMessage(contact);
+
+  return (
+    <div className="h-full flex flex-col bg-background">
+      <div className="flex items-center gap-3 px-4 py-3 border-b shrink-0">
+        <Button variant="ghost" size="icon" onClick={() => navigate("/contacts/users")}>
+          <ArrowLeft className="h-4 w-4" />
+        </Button>
+        {isAgent ? <Bot className="h-5 w-5 text-primary" /> : <User className="h-5 w-5 text-primary" />}
+        <h1 className="text-sm font-semibold text-foreground">{contact.name}</h1>
+        <span className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">{contact.type}</span>
+        <div className="flex-1" />
+        {contact.can_chat && (
+          <Button size="sm" onClick={() => void openConversation()} disabled={opening}>
+            <MessageSquare className="h-3.5 w-3.5 mr-1" />
+            {opening ? "打开中..." : "发起对话"}
+          </Button>
+        )}
+      </div>
+
+      <div className="flex-1 min-h-0 overflow-y-auto p-6">
+        <div className="max-w-2xl space-y-4">
+          <section className="rounded-xl border border-border bg-card p-5">
+            <div className="flex items-start gap-4">
+              <ActorAvatar
+                name={contact.name}
+                avatarUrl={contact.avatar_url ?? undefined}
+                type={isAgent ? "mycel_agent" : "human"}
+                size="lg"
+              />
+              <div className="min-w-0 flex-1">
+                <p className="text-base font-semibold text-foreground">{contact.name}</p>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  {contact.owner_name ? `由 ${contact.owner_name} 拥有` : isAgent ? "Agent 用户" : "Human 用户"}
+                </p>
+              </div>
+            </div>
+          </section>
+
+          <section className="rounded-xl border border-border bg-card p-5">
+            <h2 className="text-sm font-semibold text-foreground mb-4">关系</h2>
+            <dl className="grid grid-cols-2 gap-4 text-sm">
+              <div>
+                <dt className="text-xs text-muted-foreground">关系状态</dt>
+                <dd className="mt-1 text-foreground">{relationshipStatus}</dd>
+              </div>
+              <div>
+                <dt className="text-xs text-muted-foreground">可对话</dt>
+                <dd className="mt-1 text-foreground">{contact.can_chat ? "是" : "否"}</dd>
+              </div>
+            </dl>
+            {pendingMessage && (
+              <div className="mt-4 rounded-md border border-border bg-muted/30 px-3 py-2">
+                <p className="text-xs text-muted-foreground">申请说明</p>
+                <p className="mt-1 whitespace-pre-wrap break-words text-sm text-foreground">{pendingMessage}</p>
+              </div>
+            )}
+            {actions.length > 0 && (
+              <div className="mt-5 flex flex-wrap gap-2">
+                {actions.map((item) => (
+                  <Button
+                    key={item.action}
+                    type="button"
+                    size="sm"
+                    variant={item.variant ?? "default"}
+                    onClick={() => void runRelationshipAction(item.action)}
+                    disabled={relationshipAction !== null}
+                  >
+                    {relationshipAction === item.action ? "处理中..." : item.label}
+                  </Button>
+                ))}
+              </div>
+            )}
+          </section>
+
+          {relationshipError && (
+            <p className="rounded-lg border border-destructive/20 bg-destructive/5 px-3 py-2 text-sm text-destructive">
+              {relationshipError}
+            </p>
+          )}
+
+          {openError && (
+            <p className="rounded-lg border border-destructive/20 bg-destructive/5 px-3 py-2 text-sm text-destructive">
+              {openError}
+            </p>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}

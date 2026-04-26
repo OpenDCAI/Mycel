@@ -1,0 +1,1102 @@
+import asyncio
+import time
+from datetime import datetime
+from pathlib import Path
+from types import SimpleNamespace
+from typing import Any, cast
+
+import pytest
+
+from backend.threads import activity_pool_service as agent_pool
+from config.agent_config_types import AgentConfig, AgentSkill, ResolvedAgentConfig, SkillPackage
+
+
+class _FakeThreadRepo:
+    def get_by_id(self, thread_id: str):
+        return {"id": thread_id, "cwd": "/tmp", "model": "leon:large"}
+
+
+class _EmptyAgentConfigRepo:
+    def get_agent_config(self, agent_config_id: str):
+        return AgentConfig(
+            id=agent_config_id,
+            owner_user_id="owner-test",
+            agent_user_id="agent-user-test",
+            name="Test Agent",
+            version="1.0.0",
+        )
+
+
+def _runtime_storage_state(agent_config_repo: object | None, skill_repo: object | None = None) -> SimpleNamespace:
+    return SimpleNamespace(storage_container=SimpleNamespace(agent_config_repo=lambda: agent_config_repo, skill_repo=lambda: skill_repo))
+
+
+@pytest.mark.asyncio
+async def test_get_or_create_agent_borrows_messaging_service_for_registry(monkeypatch: pytest.MonkeyPatch):
+    captured: dict[str, object] = {}
+    messaging_service = object()
+
+    async def _fake_registry_get_or_create_agent(*args, **kwargs):
+        captured["args"] = args
+        captured["kwargs"] = kwargs
+        return SimpleNamespace()
+
+    monkeypatch.setattr(agent_pool._registry, "get_or_create_agent", _fake_registry_get_or_create_agent)
+    app = SimpleNamespace(state=SimpleNamespace(threads_runtime_state=SimpleNamespace(messaging_service=messaging_service)))
+
+    await agent_pool.get_or_create_agent(cast(Any, app), "local", thread_id="thread-borrowed")
+
+    kwargs = cast(dict[str, object], captured["kwargs"])
+    assert kwargs["messaging_service"] is messaging_service
+
+
+@pytest.mark.asyncio
+async def test_get_or_create_agent_borrows_relationship_service_for_registry(monkeypatch: pytest.MonkeyPatch):
+    captured: dict[str, object] = {}
+    relationship_service = object()
+
+    async def _fake_registry_get_or_create_agent(*args, **kwargs):
+        captured["args"] = args
+        captured["kwargs"] = kwargs
+        return SimpleNamespace()
+
+    monkeypatch.setattr(agent_pool._registry, "get_or_create_agent", _fake_registry_get_or_create_agent)
+    app = SimpleNamespace(state=SimpleNamespace(threads_runtime_state=SimpleNamespace(relationship_service=relationship_service)))
+
+    await agent_pool.get_or_create_agent(cast(Any, app), "local", thread_id="thread-borrowed")
+
+    kwargs = cast(dict[str, object], captured["kwargs"])
+    assert kwargs["relationship_service"] is relationship_service
+
+
+@pytest.mark.asyncio
+async def test_get_or_create_agent_borrows_chat_join_request_service_for_registry(monkeypatch: pytest.MonkeyPatch):
+    captured: dict[str, object] = {}
+    chat_join_request_service = object()
+
+    async def _fake_registry_get_or_create_agent(*args, **kwargs):
+        captured["args"] = args
+        captured["kwargs"] = kwargs
+        return SimpleNamespace()
+
+    monkeypatch.setattr(agent_pool._registry, "get_or_create_agent", _fake_registry_get_or_create_agent)
+    app = SimpleNamespace(state=SimpleNamespace(threads_runtime_state=SimpleNamespace(chat_join_request_service=chat_join_request_service)))
+
+    await agent_pool.get_or_create_agent(cast(Any, app), "local", thread_id="thread-borrowed")
+
+    kwargs = cast(dict[str, object], captured["kwargs"])
+    assert kwargs["chat_join_request_service"] is chat_join_request_service
+
+
+@pytest.mark.asyncio
+async def test_get_or_create_agent_skips_borrow_when_chat_bootstrap_missing(monkeypatch: pytest.MonkeyPatch):
+    captured: dict[str, object] = {}
+
+    async def _fake_registry_get_or_create_agent(*args, **kwargs):
+        captured["args"] = args
+        captured["kwargs"] = kwargs
+        return SimpleNamespace()
+
+    monkeypatch.setattr(agent_pool._registry, "get_or_create_agent", _fake_registry_get_or_create_agent)
+    app = SimpleNamespace(state=SimpleNamespace(threads_runtime_state=None))
+
+    await agent_pool.get_or_create_agent(cast(Any, app), "local", thread_id="thread-no-chat")
+
+    kwargs = cast(dict[str, object], captured["kwargs"])
+    assert "messaging_service" not in kwargs
+
+
+@pytest.mark.asyncio
+async def test_registry_get_or_create_agent_uses_explicit_messaging_service(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    captured: dict[str, object] = {}
+    messaging_service = object()
+
+    def _fake_create_agent_sync(**kwargs) -> object:
+        captured["chat_repos"] = kwargs.get("chat_repos")
+        return SimpleNamespace()
+
+    class _ThreadRepo:
+        def get_by_id(self, thread_id: str):
+            return {
+                "id": thread_id,
+                "agent_user_id": "agent-user-explicit",
+                "cwd": None,
+                "model": "leon:large",
+            }
+
+    class _UserRepo:
+        def get_by_id(self, user_id: str):
+            return SimpleNamespace(id=user_id, owner_user_id="owner-explicit", agent_config_id="cfg-explicit")
+
+    monkeypatch.setattr(agent_pool._registry, "create_agent_sync", _fake_create_agent_sync)
+    monkeypatch.setattr(agent_pool._registry, "get_or_create_agent_id", lambda **_: "agent-explicit")
+    monkeypatch.setattr(
+        agent_pool._registry, "get_file_channel_binding", lambda _thread_id: (_ for _ in ()).throw(ValueError()), raising=False
+    )
+
+    app = SimpleNamespace(
+        state=SimpleNamespace(
+            agent_pool={},
+            thread_repo=_ThreadRepo(),
+            user_repo=_UserRepo(),
+            runtime_storage_state=_runtime_storage_state(_EmptyAgentConfigRepo()),
+            thread_cwd={},
+            thread_sandbox={},
+        )
+    )
+
+    await agent_pool._registry.get_or_create_agent(
+        cast(Any, app),
+        "local",
+        thread_id="thread-explicit",
+        messaging_service=messaging_service,
+    )
+
+    chat_repos = cast(dict[str, object], captured["chat_repos"])
+    assert chat_repos["messaging_service"] is messaging_service
+
+
+@pytest.mark.asyncio
+async def test_registry_get_or_create_agent_uses_explicit_relationship_service(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    captured: dict[str, object] = {}
+    messaging_service = object()
+    relationship_service = object()
+
+    def _fake_create_agent_sync(**kwargs) -> object:
+        captured["chat_repos"] = kwargs.get("chat_repos")
+        return SimpleNamespace()
+
+    class _ThreadRepo:
+        def get_by_id(self, thread_id: str):
+            return {
+                "id": thread_id,
+                "agent_user_id": "agent-user-explicit",
+                "cwd": None,
+                "model": "leon:large",
+            }
+
+    class _UserRepo:
+        def get_by_id(self, user_id: str):
+            return SimpleNamespace(id=user_id, owner_user_id="owner-explicit", agent_config_id="cfg-explicit")
+
+    monkeypatch.setattr(agent_pool._registry, "create_agent_sync", _fake_create_agent_sync)
+    monkeypatch.setattr(agent_pool._registry, "get_or_create_agent_id", lambda **_: "agent-explicit")
+    monkeypatch.setattr(
+        agent_pool._registry, "get_file_channel_binding", lambda _thread_id: (_ for _ in ()).throw(ValueError()), raising=False
+    )
+
+    app = SimpleNamespace(
+        state=SimpleNamespace(
+            agent_pool={},
+            thread_repo=_ThreadRepo(),
+            user_repo=_UserRepo(),
+            runtime_storage_state=_runtime_storage_state(_EmptyAgentConfigRepo()),
+            thread_cwd={},
+            thread_sandbox={},
+        )
+    )
+
+    await agent_pool._registry.get_or_create_agent(
+        cast(Any, app),
+        "local",
+        thread_id="thread-explicit",
+        messaging_service=messaging_service,
+        relationship_service=relationship_service,
+    )
+
+    chat_repos = cast(dict[str, object], captured["chat_repos"])
+    assert chat_repos["relationship_service"] is relationship_service
+
+
+@pytest.mark.asyncio
+async def test_registry_get_or_create_agent_uses_explicit_chat_join_request_service(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    captured: dict[str, object] = {}
+    messaging_service = object()
+    chat_join_request_service = object()
+
+    def _fake_create_agent_sync(**kwargs) -> object:
+        captured["chat_repos"] = kwargs.get("chat_repos")
+        return SimpleNamespace()
+
+    class _ThreadRepo:
+        def get_by_id(self, thread_id: str):
+            return {
+                "id": thread_id,
+                "agent_user_id": "agent-user-explicit",
+                "cwd": None,
+                "model": "leon:large",
+            }
+
+    class _UserRepo:
+        def get_by_id(self, user_id: str):
+            return SimpleNamespace(id=user_id, owner_user_id="owner-explicit", agent_config_id="cfg-explicit")
+
+    monkeypatch.setattr(agent_pool._registry, "create_agent_sync", _fake_create_agent_sync)
+    monkeypatch.setattr(agent_pool._registry, "get_or_create_agent_id", lambda **_: "agent-explicit")
+    monkeypatch.setattr(
+        agent_pool._registry, "get_file_channel_binding", lambda _thread_id: (_ for _ in ()).throw(ValueError()), raising=False
+    )
+
+    app = SimpleNamespace(
+        state=SimpleNamespace(
+            agent_pool={},
+            thread_repo=_ThreadRepo(),
+            user_repo=_UserRepo(),
+            runtime_storage_state=_runtime_storage_state(_EmptyAgentConfigRepo()),
+            thread_cwd={},
+            thread_sandbox={},
+        )
+    )
+
+    await agent_pool._registry.get_or_create_agent(
+        cast(Any, app),
+        "local",
+        thread_id="thread-explicit",
+        messaging_service=messaging_service,
+        chat_join_request_service=chat_join_request_service,
+    )
+
+    chat_repos = cast(dict[str, object], captured["chat_repos"])
+    assert chat_repos["chat_join_request_service"] is chat_join_request_service
+
+
+@pytest.mark.asyncio
+async def test_registry_get_or_create_agent_requires_explicit_messaging_service_for_chat_repos(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    def _fake_create_agent_sync(**_kwargs) -> object:
+        return SimpleNamespace()
+
+    class _ThreadRepo:
+        def get_by_id(self, thread_id: str):
+            return {
+                "id": thread_id,
+                "agent_user_id": "agent-user-direct-missing",
+                "cwd": None,
+                "model": "leon:large",
+            }
+
+    class _UserRepo:
+        def get_by_id(self, user_id: str):
+            return SimpleNamespace(id=user_id, owner_user_id="owner-direct-missing", agent_config_id="cfg-direct-missing")
+
+    monkeypatch.setattr(agent_pool._registry, "create_agent_sync", _fake_create_agent_sync)
+    monkeypatch.setattr(agent_pool._registry, "get_or_create_agent_id", lambda **_: "agent-direct-missing")
+
+    app = SimpleNamespace(
+        state=SimpleNamespace(
+            agent_pool={},
+            thread_repo=_ThreadRepo(),
+            user_repo=_UserRepo(),
+            threads_runtime_state=SimpleNamespace(messaging_service=SimpleNamespace()),
+            runtime_storage_state=_runtime_storage_state(_EmptyAgentConfigRepo()),
+            thread_cwd={},
+            thread_sandbox={},
+        )
+    )
+
+    with pytest.raises(RuntimeError, match="messaging_service is required for agent chat runtime"):
+        await agent_pool._registry.get_or_create_agent(cast(Any, app), "local", thread_id="thread-direct-missing")
+
+
+@pytest.mark.asyncio
+async def test_registry_get_or_create_agent_requires_threads_runtime_messaging_service(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    def _fake_create_agent_sync(**_kwargs) -> object:
+        return SimpleNamespace()
+
+    class _ThreadRepo:
+        def get_by_id(self, thread_id: str):
+            return {
+                "id": thread_id,
+                "agent_user_id": "agent-user-runtime-state",
+                "cwd": None,
+                "model": "leon:large",
+            }
+
+    class _UserRepo:
+        def get_by_id(self, user_id: str):
+            return SimpleNamespace(id=user_id, owner_user_id="owner-runtime-state", agent_config_id="cfg-runtime-state")
+
+    app = SimpleNamespace(
+        state=SimpleNamespace(
+            agent_pool={},
+            thread_repo=_ThreadRepo(),
+            user_repo=_UserRepo(),
+            threads_runtime_state=SimpleNamespace(messaging_service=SimpleNamespace()),
+            runtime_storage_state=_runtime_storage_state(_EmptyAgentConfigRepo()),
+            thread_cwd={},
+            thread_sandbox={},
+        )
+    )
+
+    monkeypatch.setattr(agent_pool._registry, "create_agent_sync", _fake_create_agent_sync)
+    monkeypatch.setattr(agent_pool._registry, "get_or_create_agent_id", lambda **_: "agent-runtime-state")
+    monkeypatch.setattr(
+        agent_pool._registry,
+        "get_messaging_service",
+        lambda _app: (_ for _ in ()).throw(AssertionError("registry should not read app.state messaging_service")),
+        raising=False,
+    )
+
+    with pytest.raises(RuntimeError, match="messaging_service is required for agent chat runtime"):
+        await agent_pool._registry.get_or_create_agent(cast(Any, app), "local", thread_id="thread-runtime-state")
+
+
+@pytest.mark.asyncio
+async def test_get_or_create_agent_creates_once_per_thread(monkeypatch: pytest.MonkeyPatch):
+    created: list[object] = []
+
+    def _fake_create_agent_sync(
+        sandbox_name: str,
+        workspace_root=None,
+        model_name: str | None = None,
+        agent: str | None = None,
+        resolved_agent_config=None,
+        thread_repo=None,
+        user_repo=None,
+        queue_manager=None,
+        chat_repos=None,
+        extra_allowed_paths=None,
+        web_app=None,
+        **_kwargs,
+    ) -> object:
+        time.sleep(0.05)
+        obj = SimpleNamespace()
+        created.append(obj)
+        return obj
+
+    monkeypatch.setattr(agent_pool, "create_agent_sync", _fake_create_agent_sync)
+    monkeypatch.setattr(agent_pool, "get_or_create_agent_id", lambda **_: "agent-1")
+
+    app = SimpleNamespace(
+        state=SimpleNamespace(
+            agent_pool={},
+            thread_repo=_FakeThreadRepo(),
+            thread_cwd={},
+            thread_sandbox={},
+        )
+    )
+
+    first, second = await asyncio.gather(
+        agent_pool.get_or_create_agent(cast(Any, app), "local", thread_id="thread-1"),
+        agent_pool.get_or_create_agent(cast(Any, app), "local", thread_id="thread-1"),
+    )
+
+    assert len(created) == 1
+    assert first is second
+    assert app.state.agent_pool["thread-1:local"] is first
+
+
+@pytest.mark.asyncio
+async def test_get_or_create_agent_ignores_unavailable_local_cwd(monkeypatch: pytest.MonkeyPatch):
+    captured: dict[str, object] = {}
+
+    def _fake_create_agent_sync(
+        sandbox_name: str,
+        workspace_root=None,
+        model_name: str | None = None,
+        agent: str | None = None,
+        resolved_agent_config=None,
+        thread_repo=None,
+        user_repo=None,
+        queue_manager=None,
+        chat_repos=None,
+        extra_allowed_paths=None,
+        web_app=None,
+        **_kwargs,
+    ) -> object:
+        captured["workspace_root"] = workspace_root
+        return SimpleNamespace()
+
+    class _ThreadRepo:
+        def get_by_id(self, thread_id: str):
+            return {
+                "id": thread_id,
+                "cwd": "/Users/lexicalmathical/Codebase/homeworks/aiagent",
+                "model": "leon:large",
+            }
+
+    monkeypatch.setattr(agent_pool, "create_agent_sync", _fake_create_agent_sync)
+    monkeypatch.setattr(agent_pool, "get_or_create_agent_id", lambda **_: "agent-2")
+    monkeypatch.setattr(Path, "exists", lambda self: False)
+
+    app = SimpleNamespace(
+        state=SimpleNamespace(
+            agent_pool={},
+            thread_repo=_ThreadRepo(),
+            thread_cwd={},
+            thread_sandbox={},
+        )
+    )
+
+    await agent_pool.get_or_create_agent(cast(Any, app), "local", thread_id="thread-2")
+
+    assert captured["workspace_root"] is None
+
+
+@pytest.mark.asyncio
+async def test_get_or_create_agent_does_not_create_unavailable_live_local_cwd(monkeypatch: pytest.MonkeyPatch, tmp_path):
+    captured: dict[str, object] = {}
+    requested = tmp_path / "fresh-workspace"
+
+    def _fake_create_agent_sync(
+        sandbox_name: str,
+        workspace_root=None,
+        model_name: str | None = None,
+        agent: str | None = None,
+        resolved_agent_config=None,
+        thread_repo=None,
+        user_repo=None,
+        queue_manager=None,
+        chat_repos=None,
+        extra_allowed_paths=None,
+        web_app=None,
+        **_kwargs,
+    ) -> object:
+        captured["workspace_root"] = workspace_root
+        return SimpleNamespace()
+
+    class _ThreadRepo:
+        def get_by_id(self, thread_id: str):
+            return {
+                "id": thread_id,
+                "cwd": None,
+                "model": "leon:large",
+            }
+
+    monkeypatch.setattr(agent_pool, "create_agent_sync", _fake_create_agent_sync)
+    monkeypatch.setattr(agent_pool, "get_or_create_agent_id", lambda **_: "agent-3")
+
+    app = SimpleNamespace(
+        state=SimpleNamespace(
+            agent_pool={},
+            thread_repo=_ThreadRepo(),
+            thread_cwd={"thread-3": str(requested)},
+            thread_sandbox={},
+        )
+    )
+
+    await agent_pool.get_or_create_agent(cast(Any, app), "local", thread_id="thread-3")
+
+    assert captured["workspace_root"] is None
+    assert not requested.exists()
+    assert "thread-3" not in app.state.thread_cwd
+
+
+@pytest.mark.asyncio
+async def test_get_or_create_agent_passes_resolved_config_even_with_conflicting_stale_member_shell(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+):
+    captured: dict[str, object] = {}
+    stale_member_dir = tmp_path / "members" / "agent-user-1"
+    stale_member_dir.mkdir(parents=True)
+    (stale_member_dir / "agent.md").write_text(
+        "---\nname: Stale Toad\ndescription: stale shell\n---\nYou are the wrong source.\n",
+        encoding="utf-8",
+    )
+
+    def _fake_create_agent_sync(
+        sandbox_name: str,
+        workspace_root=None,
+        model_name: str | None = None,
+        agent: str | None = None,
+        resolved_agent_config=None,
+        thread_repo=None,
+        user_repo=None,
+        queue_manager=None,
+        chat_repos=None,
+        extra_allowed_paths=None,
+        web_app=None,
+        **_kwargs,
+    ) -> object:
+        captured["resolved_agent_config"] = resolved_agent_config
+        return SimpleNamespace()
+
+    class _ThreadRepo:
+        def get_by_id(self, thread_id: str):
+            return {
+                "id": thread_id,
+                "cwd": None,
+                "model": "leon:large",
+                "agent_user_id": "agent-user-1",
+            }
+
+    monkeypatch.setattr(agent_pool, "create_agent_sync", _fake_create_agent_sync)
+    monkeypatch.setattr(agent_pool, "get_or_create_agent_id", lambda **_: "agent-4")
+
+    app = SimpleNamespace(
+        state=SimpleNamespace(
+            agent_pool={},
+            thread_repo=_ThreadRepo(),
+            user_repo=SimpleNamespace(
+                get_by_id=lambda user_id: SimpleNamespace(id=user_id, agent_config_id="cfg-1", owner_user_id="owner-1")
+            ),
+            threads_runtime_state=SimpleNamespace(messaging_service=SimpleNamespace()),
+            runtime_storage_state=_runtime_storage_state(_EmptyAgentConfigRepo()),
+            thread_cwd={},
+            thread_sandbox={},
+        )
+    )
+
+    await agent_pool.get_or_create_agent(cast(Any, app), "local", thread_id="thread-4")
+
+    # @@@runtime-resolved-config-source - runtime startup must pass a resolved
+    # config, not repo handles, even when a stale member shell still exists on disk.
+    resolved = captured["resolved_agent_config"]
+    assert isinstance(resolved, ResolvedAgentConfig)
+    assert resolved.name == "Test Agent"
+
+
+@pytest.mark.asyncio
+async def test_get_or_create_agent_resolves_skill_packages_before_runtime_startup(monkeypatch: pytest.MonkeyPatch):
+    captured: dict[str, object] = {}
+
+    def _fake_create_agent_sync(**kwargs) -> object:
+        captured.update(kwargs)
+        return SimpleNamespace()
+
+    class _ThreadRepo:
+        def get_by_id(self, thread_id: str):
+            return {
+                "id": thread_id,
+                "cwd": None,
+                "model": "leon:large",
+                "agent_user_id": "agent-user-skill",
+            }
+
+    class _AgentConfigRepo:
+        def get_agent_config(self, agent_config_id: str):
+            assert agent_config_id == "cfg-skill"
+            return AgentConfig(
+                id="cfg-skill",
+                owner_user_id="owner-skill",
+                agent_user_id="agent-user-skill",
+                name="Skill Agent",
+                version="1.0.0",
+                skills=[AgentSkill(skill_id="fastapi", package_id="pkg-fastapi")],
+            )
+
+    class _SkillRepo:
+        def get_package(self, owner_user_id: str, package_id: str):
+            assert owner_user_id == "owner-skill"
+            assert package_id == "pkg-fastapi"
+            return SkillPackage(
+                id="pkg-fastapi",
+                owner_user_id="owner-skill",
+                skill_id="fastapi",
+                version="1.0.0",
+                hash="sha256:fastapi",
+                skill_md="---\nname: FastAPI\ndescription: Build FastAPI routes\nversion: 1.0.0\n---\nUse APIRouter.",
+                created_at=datetime.fromisoformat("2026-04-26T00:00:00+00:00"),
+            )
+
+    monkeypatch.setattr(agent_pool, "create_agent_sync", _fake_create_agent_sync)
+    monkeypatch.setattr(agent_pool, "get_or_create_agent_id", lambda **_: "agent-skill")
+
+    app = SimpleNamespace(
+        state=SimpleNamespace(
+            agent_pool={},
+            thread_repo=_ThreadRepo(),
+            user_repo=SimpleNamespace(
+                get_by_id=lambda user_id: SimpleNamespace(id=user_id, agent_config_id="cfg-skill", owner_user_id="owner-skill")
+            ),
+            threads_runtime_state=SimpleNamespace(messaging_service=SimpleNamespace()),
+            runtime_storage_state=_runtime_storage_state(_AgentConfigRepo(), _SkillRepo()),
+            thread_cwd={},
+            thread_sandbox={},
+        )
+    )
+
+    await agent_pool.get_or_create_agent(cast(Any, app), "local", thread_id="thread-skill")
+
+    resolved = captured["resolved_agent_config"]
+    assert isinstance(resolved, ResolvedAgentConfig)
+    assert [skill.name for skill in resolved.skills] == ["FastAPI"]
+    assert resolved.skills[0].content.endswith("Use APIRouter.")
+    assert "agent_config_repo" not in captured
+    assert "skill_repo" not in captured
+
+
+@pytest.mark.asyncio
+async def test_get_or_create_agent_uses_thread_user_id_for_chat_identity(monkeypatch: pytest.MonkeyPatch):
+    captured: dict[str, object] = {}
+
+    def _fake_create_agent_sync(
+        sandbox_name: str,
+        workspace_root=None,
+        model_name: str | None = None,
+        agent: str | None = None,
+        resolved_agent_config=None,
+        thread_repo=None,
+        user_repo=None,
+        queue_manager=None,
+        chat_repos=None,
+        extra_allowed_paths=None,
+        web_app=None,
+        **_kwargs,
+    ) -> object:
+        captured["chat_repos"] = chat_repos
+        return SimpleNamespace()
+
+    class _ThreadRepo:
+        def get_by_id(self, thread_id: str):
+            return {
+                "id": thread_id,
+                "agent_user_id": "agent-user-5",
+                "cwd": None,
+                "model": "leon:large",
+            }
+
+    class _UserRepo:
+        def get_by_id(self, user_id: str):
+            return SimpleNamespace(id=user_id, owner_user_id="owner-5", agent_config_id="cfg-5")
+
+    monkeypatch.setattr(agent_pool, "create_agent_sync", _fake_create_agent_sync)
+    monkeypatch.setattr(agent_pool, "get_or_create_agent_id", lambda **_: "agent-5")
+
+    app = SimpleNamespace(
+        state=SimpleNamespace(
+            agent_pool={},
+            thread_repo=_ThreadRepo(),
+            user_repo=_UserRepo(),
+            threads_runtime_state=SimpleNamespace(messaging_service=SimpleNamespace()),
+            runtime_storage_state=_runtime_storage_state(_EmptyAgentConfigRepo()),
+            thread_cwd={},
+            thread_sandbox={},
+        )
+    )
+
+    await agent_pool.get_or_create_agent(cast(Any, app), "local", thread_id="thread-5")
+
+    chat_repos = cast(dict[str, object], captured["chat_repos"])
+    assert chat_repos["chat_identity_id"] == "agent-user-5"
+    assert chat_repos["owner_id"] == "owner-5"
+    assert "user_id" not in chat_repos
+    assert "chat_member_repo" not in chat_repos
+    assert "messages_repo" not in chat_repos
+    assert "relationship_repo" not in chat_repos
+
+
+@pytest.mark.asyncio
+async def test_get_or_create_agent_fails_loud_when_chat_repos_need_missing_messaging_service(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    def _fake_create_agent_sync(**_kwargs) -> object:
+        return SimpleNamespace()
+
+    class _ThreadRepo:
+        def get_by_id(self, thread_id: str):
+            return {
+                "id": thread_id,
+                "agent_user_id": "agent-user-5",
+                "cwd": None,
+                "model": "leon:large",
+            }
+
+    class _UserRepo:
+        def get_by_id(self, user_id: str):
+            return SimpleNamespace(id=user_id, owner_user_id="owner-5", agent_config_id="cfg-5")
+
+    monkeypatch.setattr(agent_pool, "create_agent_sync", _fake_create_agent_sync)
+    monkeypatch.setattr(agent_pool, "get_or_create_agent_id", lambda **_: "agent-5")
+
+    app = SimpleNamespace(
+        state=SimpleNamespace(
+            agent_pool={},
+            thread_repo=_ThreadRepo(),
+            user_repo=_UserRepo(),
+            runtime_storage_state=_runtime_storage_state(_EmptyAgentConfigRepo()),
+            thread_cwd={},
+            thread_sandbox={},
+        )
+    )
+
+    with pytest.raises(RuntimeError, match="messaging_service is required for agent chat runtime"):
+        await agent_pool.get_or_create_agent(cast(Any, app), "local", thread_id="thread-5")
+
+
+@pytest.mark.asyncio
+async def test_get_or_create_agent_uses_binding_local_staging_root_for_extra_allowed_paths(monkeypatch: pytest.MonkeyPatch):
+    captured: dict[str, object] = {}
+
+    def _fake_create_agent_sync(**kwargs) -> object:
+        captured["extra_allowed_paths"] = kwargs.get("extra_allowed_paths")
+        return SimpleNamespace()
+
+    class _ThreadRepo:
+        def get_by_id(self, thread_id: str):
+            return {
+                "id": thread_id,
+                "agent_user_id": "agent-user-binding",
+                "cwd": None,
+                "model": "leon:large",
+            }
+
+    class _UserRepo:
+        def get_by_id(self, user_id: str):
+            return SimpleNamespace(id=user_id, owner_user_id="owner-binding", agent_config_id="cfg-binding")
+
+    monkeypatch.setattr(agent_pool, "create_agent_sync", _fake_create_agent_sync)
+    monkeypatch.setattr(agent_pool, "get_or_create_agent_id", lambda **_: "agent-binding")
+    monkeypatch.setattr(
+        agent_pool,
+        "get_file_channel_binding",
+        lambda thread_id: SimpleNamespace(local_staging_root=Path("/tmp/channel-root")),
+        raising=False,
+    )
+
+    app = SimpleNamespace(
+        state=SimpleNamespace(
+            agent_pool={},
+            thread_repo=_ThreadRepo(),
+            user_repo=_UserRepo(),
+            threads_runtime_state=SimpleNamespace(messaging_service=SimpleNamespace()),
+            runtime_storage_state=_runtime_storage_state(_EmptyAgentConfigRepo()),
+            thread_cwd={},
+            thread_sandbox={},
+        )
+    )
+
+    await agent_pool.get_or_create_agent(cast(Any, app), "local", thread_id="thread-binding")
+
+    assert captured["extra_allowed_paths"] == [str(Path("/tmp/channel-root"))]
+
+
+@pytest.mark.asyncio
+async def test_registry_non_local_sandbox_requires_explicit_config_dir(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.delenv("LEON_SANDBOXES_DIR", raising=False)
+    monkeypatch.setattr(
+        agent_pool._registry,
+        "create_agent_sync",
+        lambda **_kwargs: (_ for _ in ()).throw(AssertionError("agent should not be created")),
+    )
+    monkeypatch.setattr(agent_pool._registry, "get_or_create_agent_id", lambda **_: "agent-no-config")
+    monkeypatch.setattr(
+        agent_pool._registry,
+        "get_file_channel_binding",
+        lambda _thread_id: (_ for _ in ()).throw(ValueError()),
+        raising=False,
+    )
+
+    app = SimpleNamespace(
+        state=SimpleNamespace(
+            agent_pool={},
+            thread_repo=_FakeThreadRepo(),
+            thread_cwd={},
+            thread_sandbox={},
+        )
+    )
+
+    with pytest.raises(RuntimeError, match="LEON_SANDBOXES_DIR"):
+        await agent_pool._registry.get_or_create_agent(cast(Any, app), "daytona", thread_id="thread-no-config")
+
+
+@pytest.mark.asyncio
+async def test_get_or_create_agent_requires_thread_agent_user_id_for_chat_identity(monkeypatch: pytest.MonkeyPatch):
+    def _fake_create_agent_sync(**kwargs) -> object:
+        return SimpleNamespace()
+
+    class _ThreadRepo:
+        def get_by_id(self, thread_id: str):
+            return {
+                "id": thread_id,
+                "cwd": None,
+                "model": "leon:large",
+            }
+
+    class _UserRepo:
+        def get_by_id(self, user_id: str):
+            return SimpleNamespace(id=user_id, owner_user_id="owner-6")
+
+    monkeypatch.setattr(agent_pool, "create_agent_sync", _fake_create_agent_sync)
+    monkeypatch.setattr(agent_pool, "get_or_create_agent_id", lambda **_: "agent-6")
+
+    app = SimpleNamespace(
+        state=SimpleNamespace(
+            agent_pool={},
+            thread_repo=_ThreadRepo(),
+            user_repo=_UserRepo(),
+            thread_cwd={},
+            thread_sandbox={},
+        )
+    )
+
+    with pytest.raises(RuntimeError, match="thread.agent_user_id"):
+        await agent_pool.get_or_create_agent(cast(Any, app), "local", thread_id="thread-6")
+
+
+@pytest.mark.asyncio
+async def test_get_or_create_agent_keys_registry_by_agent_user_id(monkeypatch: pytest.MonkeyPatch):
+    seen: dict[str, object] = {}
+
+    def _fake_create_agent_sync(**kwargs) -> object:
+        return SimpleNamespace()
+
+    def _fake_get_or_create_agent_id(**kwargs) -> str:
+        seen.update(kwargs)
+        return "agent-7"
+
+    class _ThreadRepo:
+        def get_by_id(self, thread_id: str):
+            return {
+                "id": thread_id,
+                "agent_user_id": "agent-user-7",
+                "cwd": None,
+                "model": "leon:large",
+            }
+
+    monkeypatch.setattr(agent_pool, "create_agent_sync", _fake_create_agent_sync)
+    monkeypatch.setattr(agent_pool, "get_or_create_agent_id", _fake_get_or_create_agent_id)
+
+    class _UserRepo:
+        def get_by_id(self, user_id: str):
+            return SimpleNamespace(id=user_id, owner_user_id="owner-7", agent_config_id="cfg-7")
+
+    app = SimpleNamespace(
+        state=SimpleNamespace(
+            agent_pool={},
+            thread_repo=_ThreadRepo(),
+            user_repo=_UserRepo(),
+            threads_runtime_state=SimpleNamespace(messaging_service=SimpleNamespace()),
+            runtime_storage_state=_runtime_storage_state(_EmptyAgentConfigRepo()),
+            thread_cwd={},
+            thread_sandbox={},
+        )
+    )
+
+    await agent_pool.get_or_create_agent(cast(Any, app), "local", thread_id="thread-7")
+
+    assert seen["user_id"] == "agent-user-7"
+    assert "member" not in seen
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("settings_row", "expected_model_name", "agent_id", "owner_id", "config_id", "thread_id", "agent_user_id"),
+    [
+        ({"default_model": "repo-default-model"}, "repo-default-model", "agent-8", "owner-8", "cfg-8", "thread-8", "agent-user-8"),
+        (None, None, "agent-9", "owner-9", "cfg-9", "thread-9", "agent-user-9"),
+    ],
+    ids=["prefer-repo-default-model", "missing-repo-default-stays-none"],
+)
+async def test_get_or_create_agent_uses_repo_backed_default_model_contract(
+    monkeypatch: pytest.MonkeyPatch,
+    settings_row,
+    expected_model_name,
+    agent_id,
+    owner_id,
+    config_id,
+    thread_id,
+    agent_user_id,
+):
+    captured: dict[str, object] = {}
+
+    def _fake_create_agent_sync(**kwargs) -> object:
+        captured["model_name"] = kwargs.get("model_name")
+        return SimpleNamespace()
+
+    monkeypatch.setattr(agent_pool, "create_agent_sync", _fake_create_agent_sync)
+    monkeypatch.setattr(agent_pool, "get_or_create_agent_id", lambda **_: agent_id)
+
+    class _ThreadRepo:
+        def get_by_id(self, thread_id: str):
+            return {
+                "id": thread_id,
+                "agent_user_id": agent_user_id,
+                "cwd": None,
+                "model": None,
+            }
+
+    class _UserRepo:
+        def get_by_id(self, user_id: str):
+            return SimpleNamespace(id=user_id, owner_user_id=owner_id, agent_config_id=config_id)
+
+    class _UserSettingsRepo:
+        def get(self, user_id: str):
+            assert user_id == owner_id
+            return settings_row
+
+    app = SimpleNamespace(
+        state=SimpleNamespace(
+            agent_pool={},
+            thread_repo=_ThreadRepo(),
+            user_repo=_UserRepo(),
+            threads_runtime_state=SimpleNamespace(messaging_service=SimpleNamespace()),
+            runtime_storage_state=SimpleNamespace(
+                storage_container=SimpleNamespace(
+                    user_settings_repo=lambda: _UserSettingsRepo(),
+                    agent_config_repo=lambda: _EmptyAgentConfigRepo(),
+                )
+            ),
+            thread_cwd={},
+            thread_sandbox={},
+        )
+    )
+
+    await agent_pool.get_or_create_agent(cast(Any, app), "local", thread_id=thread_id)
+
+    assert captured["model_name"] == expected_model_name
+
+
+@pytest.mark.asyncio
+async def test_get_or_create_agent_passes_repo_backed_models_config_to_runtime(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    captured: dict[str, object] = {}
+
+    def _fake_create_agent_sync(**kwargs) -> object:
+        captured["models_config_override"] = kwargs.get("models_config_override")
+        return SimpleNamespace()
+
+    monkeypatch.setattr(agent_pool, "create_agent_sync", _fake_create_agent_sync)
+    monkeypatch.setattr(agent_pool, "get_or_create_agent_id", lambda **_: "agent-11")
+
+    class _ThreadRepo:
+        def get_by_id(self, thread_id: str):
+            return {
+                "id": thread_id,
+                "agent_user_id": "agent-user-11",
+                "cwd": None,
+                "model": None,
+            }
+
+    class _UserRepo:
+        def get_by_id(self, user_id: str):
+            return SimpleNamespace(id=user_id, owner_user_id="owner-11", agent_config_id="cfg-11")
+
+    class _UserSettingsRepo:
+        def get(self, user_id: str):
+            assert user_id == "owner-11"
+            return {"default_model": "leon:large"}
+
+        def get_models_config(self, user_id: str):
+            assert user_id == "owner-11"
+            return {"providers": {"openai": {"credential_source": "user", "api_key": "repo-key"}}}
+
+    app = SimpleNamespace(
+        state=SimpleNamespace(
+            agent_pool={},
+            thread_repo=_ThreadRepo(),
+            user_repo=_UserRepo(),
+            threads_runtime_state=SimpleNamespace(messaging_service=SimpleNamespace()),
+            runtime_storage_state=SimpleNamespace(
+                storage_container=SimpleNamespace(
+                    user_settings_repo=lambda: _UserSettingsRepo(),
+                    agent_config_repo=lambda: _EmptyAgentConfigRepo(),
+                )
+            ),
+            thread_cwd={},
+            thread_sandbox={},
+        )
+    )
+
+    await agent_pool.get_or_create_agent(cast(Any, app), "local", thread_id="thread-11")
+
+    assert captured["models_config_override"] == {"providers": {"openai": {"credential_source": "user", "api_key": "repo-key"}}}
+
+
+@pytest.mark.asyncio
+async def test_get_or_create_agent_passes_repo_backed_compact_config_to_runtime(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    captured: dict[str, object] = {}
+
+    def _fake_create_agent_sync(**kwargs) -> object:
+        captured["memory_config_override"] = kwargs.get("memory_config_override")
+        return SimpleNamespace()
+
+    monkeypatch.setattr(agent_pool, "create_agent_sync", _fake_create_agent_sync)
+    monkeypatch.setattr(agent_pool, "get_or_create_agent_id", lambda **_: "agent-12")
+
+    class _ThreadRepo:
+        def get_by_id(self, thread_id: str):
+            return {
+                "id": thread_id,
+                "agent_user_id": "agent-user-12",
+                "cwd": None,
+                "model": None,
+            }
+
+    class _UserRepo:
+        def get_by_id(self, user_id: str):
+            return SimpleNamespace(id=user_id, owner_user_id="owner-12", agent_config_id="cfg-12")
+
+    class _AgentConfigRepo:
+        def get_agent_config(self, agent_config_id: str):
+            assert agent_config_id == "cfg-12"
+            return AgentConfig(
+                id="cfg-12",
+                owner_user_id="owner-12",
+                agent_user_id="agent-user-12",
+                name="Compact Agent",
+                version="1.0.0",
+                compact={"trigger_tokens": 80000},
+            )
+
+    app = SimpleNamespace(
+        state=SimpleNamespace(
+            agent_pool={},
+            thread_repo=_ThreadRepo(),
+            user_repo=_UserRepo(),
+            threads_runtime_state=SimpleNamespace(messaging_service=SimpleNamespace()),
+            runtime_storage_state=_runtime_storage_state(_AgentConfigRepo()),
+            thread_cwd={},
+            thread_sandbox={},
+        )
+    )
+
+    await agent_pool.get_or_create_agent(cast(Any, app), "local", thread_id="thread-12")
+
+    assert captured["memory_config_override"] == {"compaction": {"trigger_tokens": 80000}}
+
+
+@pytest.mark.asyncio
+async def test_get_or_create_agent_does_not_use_local_preferences_when_repo_missing(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    captured: dict[str, object] = {}
+
+    def _fake_create_agent_sync(**kwargs) -> object:
+        captured["model_name"] = kwargs.get("model_name")
+        return SimpleNamespace()
+
+    monkeypatch.setattr(agent_pool, "create_agent_sync", _fake_create_agent_sync)
+    monkeypatch.setattr(agent_pool, "get_or_create_agent_id", lambda **_: "agent-10")
+
+    class _ThreadRepo:
+        def get_by_id(self, thread_id: str):
+            return {
+                "id": thread_id,
+                "agent_user_id": "agent-user-10",
+                "cwd": None,
+                "model": None,
+            }
+
+    class _UserRepo:
+        def get_by_id(self, user_id: str):
+            return SimpleNamespace(id=user_id, owner_user_id="owner-10", agent_config_id="cfg-10")
+
+    app = SimpleNamespace(
+        state=SimpleNamespace(
+            agent_pool={},
+            thread_repo=_ThreadRepo(),
+            user_repo=_UserRepo(),
+            threads_runtime_state=SimpleNamespace(messaging_service=SimpleNamespace()),
+            runtime_storage_state=_runtime_storage_state(_EmptyAgentConfigRepo()),
+            thread_cwd={},
+            thread_sandbox={},
+        )
+    )
+
+    await agent_pool.get_or_create_agent(cast(Any, app), "local", thread_id="thread-10")
+
+    assert captured["model_name"] is None

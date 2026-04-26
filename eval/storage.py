@@ -1,41 +1,69 @@
-"""SQLite storage for eval trajectories and metrics.
-
-Database: ~/.leon/eval.db (separate from main leon.db)
-"""
+"""Storage for eval trajectories and metrics."""
 
 from __future__ import annotations
 
 import json
 from datetime import UTC
-from pathlib import Path
 
-from config.user_paths import user_home_path
 from eval.models import (
     ObjectiveMetrics,
     RunTrajectory,
     SystemMetrics,
 )
-from eval.repo import SQLiteEvalRepo
-
-_DEFAULT_DB_PATH = user_home_path("eval.db")
 
 
 class TrajectoryStore:
-    """SQLite-backed storage for eval trajectories and metrics."""
+    """Storage for eval trajectories and metrics."""
 
-    def __init__(self, db_path: str | Path | None = None):
-        self.db_path = Path(db_path) if db_path else _DEFAULT_DB_PATH
-        self.db_path.parent.mkdir(parents=True, exist_ok=True)
-        self._repo = SQLiteEvalRepo(self.db_path)
-        self._init_db()
+    def __init__(self, eval_repo=None):
+        if eval_repo is not None:
+            self._repo = eval_repo
+        else:
+            from storage.runtime import build_storage_container
 
-    def _init_db(self) -> None:
-        self._repo.ensure_schema()
+            container = build_storage_container()
+            self._repo = container.eval_repo()
 
     def save_trajectory(self, trajectory: RunTrajectory) -> str:
         """Save a trajectory and its LLM/tool call records. Returns run_id."""
         trajectory_json = trajectory.model_dump_json()
         return self._repo.save_trajectory(trajectory, trajectory_json)
+
+    def upsert_run_header(
+        self,
+        *,
+        run_id: str,
+        thread_id: str,
+        started_at: str,
+        user_message: str,
+        status: str,
+    ) -> None:
+        self._repo.upsert_run_header(
+            run_id=run_id,
+            thread_id=thread_id,
+            started_at=started_at,
+            user_message=user_message,
+            status=status,
+        )
+
+    def finalize_run(
+        self,
+        *,
+        run_id: str,
+        finished_at: str,
+        final_response: str,
+        status: str,
+        run_tree_json: str,
+        trajectory_json: str,
+    ) -> None:
+        self._repo.finalize_run(
+            run_id=run_id,
+            finished_at=finished_at,
+            final_response=final_response,
+            status=status,
+            run_tree_json=run_tree_json,
+            trajectory_json=trajectory_json,
+        )
 
     def save_metrics(
         self,
@@ -59,6 +87,10 @@ class TrajectoryStore:
         if not trajectory_json:
             return None
         return RunTrajectory.model_validate_json(trajectory_json)
+
+    def get_run(self, run_id: str) -> dict | None:
+        """Load one persisted run header by run_id."""
+        return self._repo.get_run(run_id)
 
     def list_runs(self, thread_id: str | None = None, limit: int = 50) -> list[dict]:
         """List eval runs, optionally filtered by thread_id."""

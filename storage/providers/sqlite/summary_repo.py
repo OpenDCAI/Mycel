@@ -1,5 +1,3 @@
-"""SQLite repository for summaries persistence."""
-
 from __future__ import annotations
 
 import sqlite3
@@ -7,12 +5,10 @@ from collections.abc import Callable
 from contextlib import contextmanager
 from pathlib import Path
 
-from storage.providers.sqlite.connection import create_connection
+from storage.providers.sqlite.kernel import connect_sqlite
 
 
 class SQLiteSummaryRepo:
-    """Repository boundary for summaries table operations."""
-
     def __init__(
         self,
         db_path: Path | str,
@@ -27,7 +23,7 @@ class SQLiteSummaryRepo:
         elif connect_fn is not None:
             self._conn = None
         else:
-            self._conn = create_connection(db_path, row_factory=sqlite3.Row)
+            self._conn = connect_sqlite(db_path, row_factory=sqlite3.Row, check_same_thread=False)
 
     @contextmanager
     def _connection(self):

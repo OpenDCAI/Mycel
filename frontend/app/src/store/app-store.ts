@@ -1,61 +1,48 @@
 import { create } from "zustand";
-import type {
-  Member, Task, ResourceItem, UserProfile,
-  MemberConfig, TaskStatus, CronJob,
-} from "./types";
+import type { Agent, AgentConfigPatch, ResourceItem, UserProfile } from "./types";
 import { useAuthStore } from "./auth-store";
 
 const API = "/api/panel";
+let loadAllInflight: Promise<void> | null = null;
+let ensureAgentsInflight: Promise<void> | null = null;
+const ensureLibraryInflight: Partial<Record<LibraryType, Promise<void>>> = {};
 
 interface AppState {
   // ── Data ──
-  memberList: Member[];
-  taskList: Task[];
-  cronJobs: CronJob[];
+  agentList: Agent[];
   librarySkills: ResourceItem[];
-  libraryMcps: ResourceItem[];
-  libraryAgents: ResourceItem[];
-  libraryRecipes: ResourceItem[];
+  librarySandboxTemplates: ResourceItem[];
   userProfile: UserProfile;
   loaded: boolean;
+  agentsLoaded: boolean;
+  librariesLoaded: Record<LibraryType, boolean>;
   error: string | null;
 
   // ── Init ──
   loadAll: () => Promise<void>;
   retry: () => Promise<void>;
+  resetSessionData: () => void;
 
-  // ── Members ──
-  fetchMembers: () => Promise<void>;
-  addMember: (name: string, description?: string) => Promise<Member>;
-  updateMember: (id: string, fields: Partial<Member>) => Promise<void>;
-  updateMemberConfig: (id: string, patch: Partial<MemberConfig>) => Promise<void>;
-  publishMember: (id: string, bumpType: string) => Promise<Member>;
-  deleteMember: (id: string) => Promise<void>;
-  getMemberById: (id: string) => Member | undefined;
-
-  // ── Tasks ──
-  fetchTasks: () => Promise<void>;
-  addTask: (fields?: Partial<Task>) => Promise<Task>;
-  updateTask: (id: string, fields: Partial<Task>) => Promise<void>;
-  deleteTask: (id: string) => Promise<void>;
-  bulkUpdateTaskStatus: (ids: string[], status: TaskStatus) => Promise<void>;
-  bulkDeleteTasks: (ids: string[]) => Promise<void>;
-
-  // ── Cron Jobs ──
-  fetchCronJobs: () => Promise<void>;
-  addCronJob: (fields?: Partial<CronJob>) => Promise<CronJob>;
-  updateCronJob: (id: string, fields: Partial<CronJob>) => Promise<void>;
-  deleteCronJob: (id: string) => Promise<void>;
-  triggerCronJob: (id: string) => Promise<void>;
+  // ── Agents ──
+  ensureAgents: () => Promise<void>;
+  fetchAgents: () => Promise<void>;
+  fetchAgent: (id: string) => Promise<Agent>;
+  addAgent: (name: string, description?: string) => Promise<Agent>;
+  updateAgent: (id: string, fields: Partial<Agent>) => Promise<void>;
+  updateAgentConfig: (id: string, patch: AgentConfigPatch) => Promise<void>;
+  publishAgent: (id: string, bumpType: string) => Promise<Agent>;
+  deleteAgent: (id: string) => Promise<void>;
+  getAgentById: (id: string) => Agent | undefined;
 
   // ── Library ──
+  ensureLibrary: (type: string) => Promise<void>;
   fetchLibrary: (type: string) => Promise<void>;
   fetchLibraryNames: (type: string) => Promise<{ name: string; desc: string }[]>;
   addResource: (
     type: string,
     name: string,
     desc?: string,
-    extra?: { provider_type?: string; features?: Record<string, boolean> },
+    extra?: { provider_name?: string; provider_type?: string; features?: Record<string, boolean> },
   ) => Promise<ResourceItem>;
   updateResource: (type: string, id: string, fields: Partial<ResourceItem>) => Promise<void>;
   deleteResource: (type: string, id: string) => Promise<void>;
@@ -67,8 +54,78 @@ interface AppState {
   updateProfile: (fields: Partial<UserProfile>) => Promise<void>;
 
   // ── Helpers ──
-  getMemberNames: () => { id: string; name: string }[];
+  getAgentNames: () => { id: string; name: string }[];
   getResourceUsedBy: (type: string, name: string) => string[];
+}
+
+type LibraryType = "skill" | "sandbox-template";
+type LibraryStateKey = "librarySkills" | "librarySandboxTemplates";
+
+const DEFAULT_PROFILE: UserProfile = { name: "User", initials: "U", email: "" };
+const LIBRARY_STATE_KEYS: Record<LibraryType, LibraryStateKey> = {
+  skill: "librarySkills",
+  "sandbox-template": "librarySandboxTemplates",
+};
+const EMPTY_LIBRARY_LOADED: Record<LibraryType, boolean> = {
+  skill: false,
+  "sandbox-template": false,
+};
+const EMPTY_AGENT_CONFIG: Agent["config"] = {
+  prompt: "",
+  rules: [],
+  tools: [],
+  mcpServers: [],
+  skills: [],
+  subAgents: [],
+};
+
+function isLibraryType(type: string): type is LibraryType {
+  return type in LIBRARY_STATE_KEYS;
+}
+
+function getLibraryStateKey(type: string): LibraryStateKey {
+  if (!isLibraryType(type)) throw new Error(`Unsupported library type: ${type}`);
+  return LIBRARY_STATE_KEYS[type];
+}
+
+function emptySessionState() {
+  return {
+    agentList: [],
+    librarySkills: [],
+    librarySandboxTemplates: [],
+    userProfile: DEFAULT_PROFILE,
+    loaded: false,
+    agentsLoaded: false,
+    librariesLoaded: { ...EMPTY_LIBRARY_LOADED },
+    error: null,
+  };
+}
+
+function normalizeAgentSummary(agent: Agent): Agent {
+  return {
+    ...agent,
+    config: agent.config ?? EMPTY_AGENT_CONFIG,
+    config_loaded: Boolean(agent.config),
+  };
+}
+
+function normalizeAgentDetail(agent: Agent): Agent {
+  return {
+    ...agent,
+    config_loaded: true,
+  };
+}
+
+async function fetchAgentSummaries(): Promise<Agent[]> {
+  const data = await api<{ items: Agent[] }>("/agents");
+  return data.items.map(normalizeAgentSummary);
+}
+
+async function fetchLibraryItems(type: string): Promise<{ key: LibraryStateKey; items: ResourceItem[]; libraryType: LibraryType }> {
+  const libraryType = isLibraryType(type) ? type : null;
+  if (!libraryType) throw new Error(`Unsupported library type: ${type}`);
+  const data = await api<{ items: ResourceItem[] }>(`/library/${libraryType}`);
+  return { key: getLibraryStateKey(libraryType), items: data.items, libraryType };
 }
 
 async function api<T = unknown>(path: string, opts?: RequestInit): Promise<T> {
@@ -76,40 +133,61 @@ async function api<T = unknown>(path: string, opts?: RequestInit): Promise<T> {
   const headers: Record<string, string> = { "Content-Type": "application/json" };
   if (token) headers["Authorization"] = `Bearer ${token}`;
   const res = await fetch(`${API}${path}`, { headers, ...opts });
-  if (!res.ok) throw new Error(`API error: ${res.status}`);
+  if (!res.ok) {
+    const text = await res.text();
+    let message = text || `API error: ${res.status}`;
+    try {
+      const parsed = JSON.parse(text) as { detail?: unknown; message?: unknown };
+      const detail = parsed.detail;
+      if (typeof detail === "string") {
+        message = detail;
+      } else if (Array.isArray(detail)) {
+        message = detail
+          .map((item: { msg?: string; loc?: string[] }) => `${item.loc?.at(-1) ?? "?"}: ${item.msg ?? "invalid"}`)
+          .join("; ");
+      } else if (typeof parsed.message === "string") {
+        message = parsed.message;
+      }
+    } catch {
+      // keep raw response text
+    }
+    throw new Error(message);
+  }
   return res.json();
 }
 
 export const useAppStore = create<AppState>()((set, get) => ({
-  memberList: [],
-  taskList: [],
-  cronJobs: [],
-  librarySkills: [],
-  libraryMcps: [],
-  libraryAgents: [],
-  libraryRecipes: [],
-  userProfile: { name: "User", initials: "U", email: "" },
-  loaded: false,
-  error: null,
+  ...emptySessionState(),
 
   loadAll: async () => {
     if (get().loaded) return;
-    set({ error: null });
+    if (loadAllInflight) return loadAllInflight;
+
+    const pending = (async () => {
+      set({ error: null });
+      try {
+        // @@@load-all-singleflight - RootLayout can mount twice in dev StrictMode and /threads
+        // index redirect now avoids AppLayout, so keep the global panel bootstrap idempotent.
+        await Promise.all([
+          get().ensureAgents(),
+          get().ensureLibrary("skill"),
+          get().ensureLibrary("sandbox-template"),
+          get().fetchProfile(),
+        ]);
+        set({ loaded: true });
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        set({ error: `数据加载失败: ${msg}`, loaded: true });
+      }
+    })();
+
+    loadAllInflight = pending;
     try {
-      await Promise.all([
-        get().fetchMembers(),
-        get().fetchTasks(),
-        get().fetchCronJobs(),
-        get().fetchLibrary("skill"),
-        get().fetchLibrary("mcp"),
-        get().fetchLibrary("agent"),
-        get().fetchLibrary("recipe"),
-        get().fetchProfile(),
-      ]);
-      set({ loaded: true });
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      set({ error: `数据加载失败: ${msg}`, loaded: true });
+      await pending;
+    } finally {
+      if (loadAllInflight === pending) {
+        loadAllInflight = null;
+      }
     }
   },
 
@@ -118,146 +196,121 @@ export const useAppStore = create<AppState>()((set, get) => ({
     await get().loadAll();
   },
 
-  // ── Members ──
-  fetchMembers: async () => {
-    const data = await api<{ items: Member[] }>("/members");
-    set({ memberList: data.items });
+  resetSessionData: () => {
+    loadAllInflight = null;
+    ensureAgentsInflight = null;
+    for (const key of Object.keys(ensureLibraryInflight)) {
+      delete ensureLibraryInflight[key as LibraryType];
+    }
+    set(emptySessionState());
   },
 
-  addMember: async (name, description = "") => {
-    const member = await api<Member>("/members", {
+  // ── Agents ──
+  ensureAgents: async () => {
+    if (get().agentsLoaded) return;
+    if (ensureAgentsInflight) return ensureAgentsInflight;
+
+    const pending = Promise.resolve().then(async () => {
+      const agentList = await fetchAgentSummaries();
+      set({ agentList, agentsLoaded: true });
+    }).finally(() => {
+      if (ensureAgentsInflight === pending) {
+        ensureAgentsInflight = null;
+      }
+    });
+
+    ensureAgentsInflight = pending;
+    return pending;
+  },
+
+  fetchAgents: async () => {
+    const agentList = await fetchAgentSummaries();
+    set({ agentList, agentsLoaded: true });
+  },
+
+  fetchAgent: async (id) => {
+    const agent = normalizeAgentDetail(await api<Agent>(`/agents/${id}`));
+    set((s) => {
+      const exists = s.agentList.some((item) => item.id === id);
+      return {
+        agentList: exists
+          ? s.agentList.map((item) => (item.id === id ? agent : item))
+          : [agent, ...s.agentList],
+      };
+    });
+    return agent;
+  },
+
+  addAgent: async (name, description = "") => {
+    const agent = await api<Agent>("/agents", {
       method: "POST",
       body: JSON.stringify({ name, description }),
     });
-    set((s) => ({ memberList: [member, ...s.memberList] }));
-    return member;
+    set((s) => ({ agentList: [agent, ...s.agentList] }));
+    return agent;
   },
 
-  updateMember: async (id, fields) => {
-    const updated = await api<Member>(`/members/${id}`, {
+  updateAgent: async (id, fields) => {
+    const updated = await api<Agent>(`/agents/${id}`, {
       method: "PUT",
       body: JSON.stringify(fields),
     });
-    set((s) => ({ memberList: s.memberList.map((x) => (x.id === id ? updated : x)) }));
+    set((s) => ({ agentList: s.agentList.map((x) => (x.id === id ? updated : x)) }));
   },
 
-  updateMemberConfig: async (id, patch) => {
-    const updated = await api<Member>(`/members/${id}/config`, {
+  updateAgentConfig: async (id, patch) => {
+    const updated = await api<Agent>(`/agents/${id}/config`, {
       method: "PUT",
       body: JSON.stringify(patch),
     });
-    set((s) => ({ memberList: s.memberList.map((x) => (x.id === id ? updated : x)) }));
+    set((s) => ({ agentList: s.agentList.map((x) => (x.id === id ? updated : x)) }));
   },
 
-  publishMember: async (id, bumpType) => {
-    const updated = await api<Member>(`/members/${id}/publish`, {
+  publishAgent: async (id, bumpType) => {
+    const updated = await api<Agent>(`/agents/${id}/publish`, {
       method: "PUT",
       body: JSON.stringify({ bump_type: bumpType }),
     });
-    set((s) => ({ memberList: s.memberList.map((x) => (x.id === id ? updated : x)) }));
+    set((s) => ({ agentList: s.agentList.map((x) => (x.id === id ? updated : x)) }));
     return updated;
   },
 
-  deleteMember: async (id) => {
-    await api(`/members/${id}`, { method: "DELETE" });
-    set((s) => ({ memberList: s.memberList.filter((x) => x.id !== id) }));
+  deleteAgent: async (id) => {
+    await api(`/agents/${id}`, { method: "DELETE" });
+    set((s) => ({ agentList: s.agentList.filter((x) => x.id !== id) }));
   },
 
-  getMemberById: (id) => get().memberList.find((x) => x.id === id),
-
-  // ── Tasks ──
-  fetchTasks: async () => {
-    const data = await api<{ items: Task[] }>("/tasks");
-    set({ taskList: data.items });
-  },
-
-  addTask: async (fields = {}) => {
-    const task = await api<Task>("/tasks", {
-      method: "POST",
-      body: JSON.stringify(fields),
-    });
-    set((s) => ({ taskList: [task, ...s.taskList] }));
-    return task;
-  },
-
-  updateTask: async (id, fields) => {
-    const updated = await api<Task>(`/tasks/${id}`, {
-      method: "PUT",
-      body: JSON.stringify(fields),
-    });
-    set((s) => ({ taskList: s.taskList.map((x) => (x.id === id ? updated : x)) }));
-  },
-
-  deleteTask: async (id) => {
-    await api(`/tasks/${id}`, { method: "DELETE" });
-    set((s) => ({ taskList: s.taskList.filter((x) => x.id !== id) }));
-  },
-
-  bulkUpdateTaskStatus: async (ids, status) => {
-    await api("/tasks/bulk-status", {
-      method: "PUT",
-      body: JSON.stringify({ ids, status }),
-    });
-    set((s) => ({
-      taskList: s.taskList.map((t) =>
-        ids.includes(t.id)
-          ? { ...t, status, progress: status === "completed" ? 100 : status === "pending" ? 0 : t.progress }
-          : t
-      ),
-    }));
-  },
-
-  bulkDeleteTasks: async (ids) => {
-    await api("/tasks/bulk-delete", {
-      method: "POST",
-      body: JSON.stringify({ ids }),
-    });
-    set((s) => ({
-      taskList: s.taskList.filter((t) => !ids.includes(t.id)),
-    }));
-  },
-
-  // ── Cron Jobs ──
-  fetchCronJobs: async () => {
-    const data = await api<{ items: CronJob[] }>("/cron-jobs");
-    set({ cronJobs: data.items });
-  },
-
-  addCronJob: async (fields = {}) => {
-    const data = await api<{ item: CronJob }>("/cron-jobs", {
-      method: "POST",
-      body: JSON.stringify(fields),
-    });
-    const item = data.item;
-    set((s) => ({ cronJobs: [item, ...s.cronJobs] }));
-    return item;
-  },
-
-  updateCronJob: async (id, fields) => {
-    const data = await api<{ item: CronJob }>(`/cron-jobs/${id}`, {
-      method: "PUT",
-      body: JSON.stringify(fields),
-    });
-    const updated = data.item;
-    set((s) => ({ cronJobs: s.cronJobs.map((x) => (x.id === id ? updated : x)) }));
-  },
-
-  deleteCronJob: async (id) => {
-    await api(`/cron-jobs/${id}`, { method: "DELETE" });
-    set((s) => ({ cronJobs: s.cronJobs.filter((x) => x.id !== id) }));
-  },
-
-  triggerCronJob: async (id) => {
-    await api(`/cron-jobs/${id}/run`, { method: "POST" });
-  },
+  getAgentById: (id) => get().agentList.find((x) => x.id === id),
 
   // ── Library ──
+  ensureLibrary: async (type) => {
+    const libraryType = isLibraryType(type) ? type : null;
+    if (!libraryType) throw new Error(`Unsupported library type: ${type}`);
+    if (get().librariesLoaded[libraryType]) return;
+    if (ensureLibraryInflight[libraryType]) return ensureLibraryInflight[libraryType];
+
+    const pending = Promise.resolve().then(async () => {
+      const { key, items } = await fetchLibraryItems(libraryType);
+      set((s) => ({
+        [key]: items,
+        librariesLoaded: { ...s.librariesLoaded, [libraryType]: true },
+      }) as Pick<AppState, typeof key | "librariesLoaded">);
+    }).finally(() => {
+      if (ensureLibraryInflight[libraryType] === pending) {
+        delete ensureLibraryInflight[libraryType];
+      }
+    });
+
+    ensureLibraryInflight[libraryType] = pending;
+    return pending;
+  },
+
   fetchLibrary: async (type) => {
-    const data = await api<{ items: ResourceItem[] }>(`/library/${type}`);
-    if (type === "skill") set({ librarySkills: data.items });
-    else if (type === "mcp") set({ libraryMcps: data.items });
-    else if (type === "agent") set({ libraryAgents: data.items });
-    else if (type === "recipe") set({ libraryRecipes: data.items });
+    const { key, items, libraryType } = await fetchLibraryItems(type);
+    set((s) => ({
+      [key]: items,
+      librariesLoaded: { ...s.librariesLoaded, [libraryType]: true },
+    }) as Pick<AppState, typeof key | "librariesLoaded">);
   },
 
   fetchLibraryNames: async (type) => {
@@ -270,10 +323,8 @@ export const useAppStore = create<AppState>()((set, get) => ({
       method: "POST",
       body: JSON.stringify({ name, desc, ...extra }),
     });
-    if (type === "skill") set((s) => ({ librarySkills: [...s.librarySkills, item] }));
-    else if (type === "mcp") set((s) => ({ libraryMcps: [...s.libraryMcps, item] }));
-    else if (type === "agent") set((s) => ({ libraryAgents: [...s.libraryAgents, item] }));
-    else set((s) => ({ libraryRecipes: [...s.libraryRecipes, item] }));
+    const key = getLibraryStateKey(type);
+    set((s) => ({ [key]: [...s[key], item] }) as Pick<AppState, typeof key>);
     return item;
   },
 
@@ -282,23 +333,23 @@ export const useAppStore = create<AppState>()((set, get) => ({
       method: "PUT",
       body: JSON.stringify(fields),
     });
-    const updater = (list: ResourceItem[]) => list.map((x) => (x.id === id ? updated : x));
-    if (type === "skill") set((s) => ({ librarySkills: updater(s.librarySkills) }));
-    else if (type === "mcp") set((s) => ({ libraryMcps: updater(s.libraryMcps) }));
-    else if (type === "agent") set((s) => ({ libraryAgents: updater(s.libraryAgents) }));
-    else set((s) => ({ libraryRecipes: updater(s.libraryRecipes) }));
+    const key = getLibraryStateKey(type);
+    set((s) => ({
+      [key]: s[key].map((item) => (item.id === id ? updated : item)),
+    }) as Pick<AppState, typeof key>);
   },
 
   deleteResource: async (type, id) => {
     await api(`/library/${type}/${id}`, { method: "DELETE" });
-    const filter = (list: ResourceItem[]) => list.filter((x) => x.id !== id);
-    if (type === "skill") set((s) => ({ librarySkills: filter(s.librarySkills) }));
-    else if (type === "mcp") set((s) => ({ libraryMcps: filter(s.libraryMcps) }));
-    else if (type === "agent") set((s) => ({ libraryAgents: filter(s.libraryAgents) }));
-    else {
+    if (type === "sandbox-template") {
       const data = await api<{ items: ResourceItem[] }>(`/library/${type}`);
-      set({ libraryRecipes: data.items });
+      set({ librarySandboxTemplates: data.items });
+      return;
     }
+    const key = getLibraryStateKey(type);
+    set((s) => ({
+      [key]: s[key].filter((item) => item.id !== id),
+    }) as Pick<AppState, typeof key>);
   },
 
   fetchResourceContent: async (type, id) => {
@@ -328,12 +379,13 @@ export const useAppStore = create<AppState>()((set, get) => ({
   },
 
   // ── Helpers ──
-  getMemberNames: () => get().memberList.map((s) => ({ id: s.id, name: s.name })),
+  getAgentNames: () => get().agentList.map((s) => ({ id: s.id, name: s.name })),
 
   getResourceUsedBy: (type, name) => {
-    if (type === "recipe") return [];
-    const key = type === "skill" ? "skills" : type === "mcp" ? "mcps" : "subAgents";
-    return get().memberList.filter((s) =>
+    if (type === "sandbox-template") return [];
+    if (type !== "skill") return [];
+    const key = "skills";
+    return get().agentList.filter((s) =>
       (s.config?.[key as keyof typeof s.config] as { name: string }[] | undefined)?.some((i) => i.name === name)
     ).map((s) => s.name);
   },

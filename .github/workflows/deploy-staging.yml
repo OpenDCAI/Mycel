@@ -17,15 +17,19 @@ on:
         default: "main"
 
 permissions:
+  contents: read
   pull-requests: write
 
 jobs:
   deploy-staging:
     # For label trigger: only run when the label is exactly "deploy-staging"
     if: >
+      github.event_name == 'push' ||
       github.event_name == 'workflow_dispatch' ||
       (github.event_name == 'pull_request' && github.event.label.name == 'deploy-staging')
     runs-on: ubuntu-latest
+    env:
+      STAGING_STACK_UUID: fasbsube26s75ag6qus5bpi2
 
     steps:
       - name: Resolve target ref
@@ -33,33 +37,101 @@ jobs:
         run: |
           if [ "${{ github.event_name }}" = "pull_request" ]; then
             echo "ref=${{ github.head_ref }}" >> "$GITHUB_OUTPUT"
+          elif [ "${{ github.event_name }}" = "push" ]; then
+            echo "ref=${{ github.ref_name }}" >> "$GITHUB_OUTPUT"
           else
             echo "ref=${{ inputs.ref }}" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Update staging backend branch
+      - name: Check out target ref
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.ref.outputs.ref }}
+
+      - name: Resolve target commit
+        id: target
         run: |
-          curl -s -X PATCH "${{ secrets.COOLIFY_URL }}/api/v1/applications/${{ secrets.COOLIFY_BACKEND_STAGING_UUID }}" \
+          set -euo pipefail
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Assert repo staging compose contract
+        run: |
+          set -euo pipefail
+          grep -F "leon-home:/root/.leon" docker-compose.yml >/dev/null
+          grep -F "volumes:" docker-compose.yml >/dev/null
+
+      - name: Update staging stack branch
+        run: |
+          set -euo pipefail
+          body="$(curl -sS --fail-with-body -X PATCH "${{ secrets.COOLIFY_URL }}/api/v1/applications/${STAGING_STACK_UUID}" \
             -H "Authorization: Bearer ${{ secrets.COOLIFY_TOKEN }}" \
             -H "Content-Type: application/json" \
-            -d '{"git_branch": "${{ steps.ref.outputs.ref }}"}'
+            -d "{\"git_branch\": \"${{ steps.ref.outputs.ref }}\"}")"
+          echo "$body"
+          printf '%s' "$body" | jq -e --arg uuid "$STAGING_STACK_UUID" '.uuid == $uuid' >/dev/null
 
-      - name: Update staging frontend branch
+      - name: Deploy staging stack
+        id: deploy
         run: |
-          curl -s -X PATCH "${{ secrets.COOLIFY_URL }}/api/v1/applications/${{ secrets.COOLIFY_FRONTEND_STAGING_UUID }}" \
-            -H "Authorization: Bearer ${{ secrets.COOLIFY_TOKEN }}" \
-            -H "Content-Type: application/json" \
-            -d '{"git_branch": "${{ steps.ref.outputs.ref }}"}'
+          set -euo pipefail
+          body="$(curl -sS --fail-with-body "${{ secrets.COOLIFY_URL }}/api/v1/deploy?uuid=${STAGING_STACK_UUID}&force=false" \
+            -H "Authorization: Bearer ${{ secrets.COOLIFY_TOKEN }}")"
+          echo "$body"
+          printf '%s' "$body" | jq -e --arg uuid "$STAGING_STACK_UUID" '.deployments[0].resource_uuid == $uuid' >/dev/null
+          echo "deployment_uuid=$(printf '%s' "$body" | jq -r '.deployments[0].deployment_uuid')" >> "$GITHUB_OUTPUT"
 
-      - name: Deploy backend to staging
+      - name: Wait for staging deployment
         run: |
-          curl -sX GET "${{ secrets.COOLIFY_URL }}/api/v1/deploy?uuid=${{ secrets.COOLIFY_BACKEND_STAGING_UUID }}&force=false" \
-            -H "Authorization: Bearer ${{ secrets.COOLIFY_TOKEN }}"
+          set -euo pipefail
+          deployment_uuid="${{ steps.deploy.outputs.deployment_uuid }}"
+          for _ in $(seq 1 60); do
+            body="$(curl -sS --fail-with-body "${{ secrets.COOLIFY_URL }}/api/v1/deployments/${deployment_uuid}" \
+              -H "Authorization: Bearer ${{ secrets.COOLIFY_TOKEN }}")"
+            status="$(printf '%s' "$body" | jq -r '.status')"
+            echo "deployment status: $status"
+            if [ "$status" = "finished" ]; then
+              exit 0
+            fi
+            if [ "$status" != "queued" ] && [ "$status" != "in_progress" ]; then
+              echo "$body"
+              exit 1
+            fi
+            sleep 10
+          done
+          echo "Timed out waiting for staging deployment ${deployment_uuid}"
+          exit 1
 
-      - name: Deploy frontend to staging
+      - name: Verify Coolify staging contract
         run: |
-          curl -sX GET "${{ secrets.COOLIFY_URL }}/api/v1/deploy?uuid=${{ secrets.COOLIFY_FRONTEND_STAGING_UUID }}&force=false" \
-            -H "Authorization: Bearer ${{ secrets.COOLIFY_TOKEN }}"
+          set -euo pipefail
+          body="$(curl -sS --fail-with-body "${{ secrets.COOLIFY_URL }}/api/v1/applications/${STAGING_STACK_UUID}" \
+            -H "Authorization: Bearer ${{ secrets.COOLIFY_TOKEN }}")"
+          echo "$body" | jq '{uuid,git_branch,docker_compose_location}'
+          printf '%s' "$body" | jq -e --arg ref "${{ steps.ref.outputs.ref }}" '.git_branch == $ref' >/dev/null
+          printf '%s' "$body" | jq -e '.docker_compose_raw | contains("leon-home:/root/.leon")' >/dev/null
+          printf '%s' "$body" | jq -e --arg volume "${STAGING_STACK_UUID}_leon-home:/root/.leon" '.docker_compose | contains($volume)' >/dev/null
+          printf '%s' "$body" | jq -e --arg sha "${{ steps.target.outputs.sha }}" '.docker_compose | contains($sha)' >/dev/null
+
+      - name: Verify staging API contract
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 18); do
+            configs_status="$(curl -sS -o /tmp/staging-sandbox-configs.json -w '%{http_code}' "https://app.staging.mycel.nextmind.space/api/monitor/sandbox-configs")"
+            sandboxes_status="$(curl -sS -o /tmp/staging-sandboxes.json -w '%{http_code}' "https://app.staging.mycel.nextmind.space/api/monitor/sandboxes")"
+            echo "api attempt ${attempt}: sandbox-configs=${configs_status} sandboxes=${sandboxes_status}"
+            if [ "$configs_status" = "200" ] && [ "$sandboxes_status" = "200" ]; then
+              cat /tmp/staging-sandbox-configs.json
+              cat /tmp/staging-sandboxes.json
+              jq -e '.source == "runtime_sandbox_inventory" and (.count | type == "number") and (.providers | type == "array") and all(.providers[]?; has("provider") and has("available") and has("capability"))' /tmp/staging-sandbox-configs.json >/dev/null
+              jq -e '.source == "sandbox_canonical" and (.count | type == "number") and (.items | type == "array") and all(.items[]?; has("sandbox_id") and has("provider") and (has("lease_id") | not))' /tmp/staging-sandboxes.json >/dev/null
+              exit 0
+            fi
+            cat /tmp/staging-sandbox-configs.json || true
+            cat /tmp/staging-sandboxes.json || true
+            sleep 10
+          done
+          echo "Staging API contract did not become ready in time"
+          exit 1
 
       - name: Comment on PR with staging URL
         if: github.event_name == 'pull_request'
@@ -70,5 +142,5 @@ jobs:
               issue_number: context.issue.number,
               owner: context.repo.owner,
               repo: context.repo.repo,
-              body: `🚀 **预发部署已触发**\n\n- 前端: https://app.staging.mycel.nextmind.space\n- 后端: https://api.staging.mycel.nextmind.space\n\n分支: \`${{ steps.ref.outputs.ref }}\``
+              body: `🚀 **预发部署已触发**\n\n- 共享 Staging: https://app.staging.mycel.nextmind.space\n- API（同域反代）: https://app.staging.mycel.nextmind.space/api\n\n分支: \`${{ steps.ref.outputs.ref }}\``
             })

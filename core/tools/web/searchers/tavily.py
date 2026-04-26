@@ -1,5 +1,3 @@
-"""Tavily searcher - AI-optimized search."""
-
 from __future__ import annotations
 
 import httpx
@@ -9,15 +7,6 @@ from core.tools.web.types import SearchItem, SearchResult
 
 
 class TavilySearcher(BaseSearcher):
-    """
-    Searcher using Tavily API.
-
-    Features:
-    - AI-optimized search results
-    - Returns relevant snippets
-    - Supports domain filtering
-    """
-
     API_URL = "https://api.tavily.com/search"
 
     def __init__(
@@ -36,7 +25,6 @@ class TavilySearcher(BaseSearcher):
         include_domains: list[str] | None = None,
         exclude_domains: list[str] | None = None,
     ) -> SearchResult:
-        """Search using Tavily API."""
         result = SearchResult(query=query)
 
         try:
@@ -77,7 +65,5 @@ class TavilySearcher(BaseSearcher):
             result.error = f"Tavily API error {e.response.status_code}"
         except httpx.RequestError as e:
             result.error = f"Search error: {e}"
-        except Exception as e:
-            result.error = f"Unexpected error: {e}"
 
         return result

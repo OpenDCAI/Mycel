@@ -1,5 +1,3 @@
-"""Types for file reading operations."""
-
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -8,8 +6,6 @@ from pathlib import Path
 
 
 class FileType(Enum):
-    """Supported file types."""
-
     TEXT = "text"
     BINARY = "binary"
     DOCUMENT = "document"
@@ -19,13 +15,6 @@ class FileType(Enum):
 
 @dataclass
 class ReadLimits:
-    """Limits for file reading to prevent excessive token usage.
-
-    Two layers of limits:
-    - max_size_bytes / max_tokens: Hard-reject when no offset/limit specified (bypassed with offset/limit)
-    - max_lines / max_chars: Per-read limits (always enforced)
-    """
-
     max_lines: int = 2000
     max_chars: int = 200_000
     max_line_length: int = 2000
@@ -47,8 +36,6 @@ class ReadLimits:
 
 @dataclass
 class ReadResult:
-    """Result of a file read operation."""
-
     file_path: str
     file_type: FileType
 
@@ -71,7 +58,6 @@ class ReadResult:
     error: str | None = None
 
     def format_output(self) -> str:
-        """Format result as string output for the agent."""
         if self.error:
             return self.error
 
@@ -254,7 +240,6 @@ ARCHIVE_EXTENSIONS: set[str] = {
 
 
 def detect_file_type(path: Path) -> FileType:
-    """Detect file type based on extension."""
     ext = path.suffix.lstrip(".").lower()
 
     if not ext:

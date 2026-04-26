@@ -1,0 +1,45 @@
+"""Typing indicator tracker - maps agent run lifecycle to chat SSE."""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from messaging.realtime.events import ChatEventBus
+
+
+@dataclass
+class _ChatEntry:
+    chat_id: str
+    user_id: str
+
+
+class TypingTracker:
+    """Tracks which chat triggered each brain thread run."""
+
+    def __init__(self, chat_event_bus: ChatEventBus) -> None:
+        self._chat_bus = chat_event_bus
+        self._active: dict[str, _ChatEntry] = {}
+
+    def start_chat(self, thread_id: str, chat_id: str, user_id: str) -> None:
+        self._active[thread_id] = _ChatEntry(chat_id, user_id)
+        self._chat_bus.publish(
+            chat_id,
+            {
+                "event": "typing_start",
+                "data": {"user_id": user_id},
+            },
+        )
+
+    def stop(self, thread_id: str) -> None:
+        entry = self._active.pop(thread_id, None)
+        if not entry:
+            return
+        self._chat_bus.publish(
+            entry.chat_id,
+            {
+                "event": "typing_stop",
+                "data": {"user_id": entry.user_id},
+            },
+        )

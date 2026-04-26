@@ -1,6 +1,8 @@
 import { Check, ChevronDown, Cpu, Loader2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
+import { asRecord, recordString } from "@/lib/records";
+import { authFetch } from "@/store/auth-store";
 
 interface ModelOption {
   id: string;
@@ -15,6 +17,25 @@ const VIRTUAL_MODELS: ModelOption[] = [
   { id: "leon:large", name: "Large", description: "复杂推理，困难任务" },
   { id: "leon:max", name: "Max", description: "极限性能，最难任务" },
 ];
+
+function parseEnabledModels(value: unknown): string[] {
+  const data = asRecord(value);
+  const models = data?.enabled_models;
+  if (!Array.isArray(models)) {
+    throw new Error("加载模型失败");
+  }
+  return models.filter((item): item is string => typeof item === "string");
+}
+
+function errorDetail(value: unknown): string | undefined {
+  const data = asRecord(value);
+  return data ? recordString(data, "detail") : undefined;
+}
+
+function savedModel(value: unknown, requestedModel: string): string {
+  const data = asRecord(value);
+  return data ? recordString(data, "model") || requestedModel : requestedModel;
+}
 
 interface ModelSelectorProps {
   currentModel: string;
@@ -38,10 +59,16 @@ export default function ModelSelector({
   // Fetch enabled models when dropdown opens
   useEffect(() => {
     if (!isOpen) return;
-    fetch("/api/settings")
-      .then((r) => r.json())
-      .then((d) => setEnabledModels(d.enabled_models || []))
-      .catch(() => {});
+    authFetch("/api/settings")
+      .then(async (r) => {
+        if (!r.ok) throw new Error(`加载模型失败：API ${r.status}: ${await r.text()}`);
+        return r.json();
+      })
+      .then((d) => setEnabledModels(parseEnabledModels(d)))
+      .catch((err: unknown) => {
+        setEnabledModels([]);
+        setError(err instanceof Error ? err.message : "加载模型失败");
+      });
   }, [isOpen]);
 
   async function handleModelSelect(model: string) {
@@ -49,19 +76,18 @@ export default function ModelSelector({
     setError(null);
 
     try {
-      const response = await fetch("/api/settings/config", {
+      const response = await authFetch("/api/settings/config", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ model, thread_id: threadId }),
       });
 
       if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.detail || "更新模型失败");
+        throw new Error(errorDetail(await response.json()) || "更新模型失败");
       }
 
       const result = await response.json();
-      onModelChange?.(result.model || model);
+      onModelChange?.(savedModel(result, model));
       setIsOpen(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : "更新模型失败");

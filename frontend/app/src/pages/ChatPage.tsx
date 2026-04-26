@@ -1,15 +1,19 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useParams, useOutletContext, useLocation } from "react-router-dom";
+import { Check, ShieldAlert, X } from "lucide-react";
 import { toast } from "sonner";
 import ChatArea from "../components/ChatArea";
-import type { AssistantTurn } from "../api";
-import { uploadSandboxFile } from "../api";
-import ComputerPanel from "../components/ComputerPanel";
+import type { AskUserAnswer, AskUserQuestionPrompt, PermissionRequest } from "../api";
+import { isAssistantTurn, uploadThreadFile } from "../api";
+import { Alert, AlertDescription, AlertTitle } from "../components/ui/alert";
+import { Button } from "../components/ui/button";
+import ComputerPanel from "../components/computer-panel";
 import { DragHandle } from "../components/DragHandle";
 import Header from "../components/Header";
 import InputBox from "../components/InputBox";
 import TaskProgress from "../components/TaskProgress";
 import TokenStats from "../components/TokenStats";
+import { askUserQuestionSelectionKey, buildAskUserAnswers } from "./ask-user-question";
 import { authFetch, useAuthStore } from "../store/auth-store";
 import { useAppActions } from "../hooks/use-app-actions";
 import { useBackgroundTasks } from "../hooks/use-background-tasks";
@@ -18,18 +22,27 @@ import { useResizableX } from "../hooks/use-resizable-x";
 import { useSandboxManager } from "../hooks/use-sandbox-manager";
 import { useDisplayDeltas } from "../hooks/use-display-deltas";
 import { useThreadData } from "../hooks/use-thread-data";
+import { useThreadPermissions } from "../hooks/use-thread-permissions";
+import { useThreadStream } from "../hooks/use-thread-stream";
+import { asRecord } from "../lib/records";
+import { fetchDefaultModel } from "../api/settings";
+import type { PermissionRuleBehavior } from "../api";
 import type { ThreadManagerState, ThreadManagerActions } from "../hooks/use-thread-manager";
 
 interface OutletContext {
   tm: ThreadManagerState & ThreadManagerActions;
-  sidebarCollapsed: boolean;
   setSidebarCollapsed: React.Dispatch<React.SetStateAction<boolean>>;
-  setSessionsOpen: (value: boolean) => void;
+}
+
+function isAskUserQuestionRequest(
+  request: PermissionRequest | null,
+): request is PermissionRequest & { args: PermissionRequest["args"] & { questions: AskUserQuestionPrompt[] } } {
+  return !!request && request.tool_name === "AskUserQuestion" && Array.isArray(request.args?.questions);
 }
 
 /** Thin wrapper: key={threadId} forces remount → all hook state resets naturally. */
 export default function ChatPage() {
-  const { threadId } = useParams<{ memberId: string; threadId: string }>();
+  const { threadId } = useParams<{ threadId: string }>();
   if (!threadId) return null;
   return <ChatPageInner key={threadId} threadId={threadId} />;
 }
@@ -43,13 +56,15 @@ function ChatPageInner({ threadId }: { threadId: string }) {
 
   // Derive avatar URLs from thread data
   const currentThread = tm.threads.find(t => t.thread_id === threadId);
-  const agentName = currentThread?.entity_name ?? currentThread?.member_name;
+  const threadDisplayName = currentThread?.sidebar_label ?? currentThread?.agent_name ?? null;
+  const agentName = threadDisplayName ?? undefined;
   const agentAvatarUrl = currentThread?.avatar_url;
-  const userAvatarUrl = userHasAvatar && userId ? `/api/members/${userId}/avatar` : undefined;
+  const userAvatarUrl = userHasAvatar && userId ? `/api/users/${userId}/avatar` : undefined;
   const [attachedFiles, setAttachedFiles] = useState<File[]>([]);
 
   const state = location.state as { selectedModel?: string; runStarted?: boolean; message?: string } | null;
   const [currentModel, setCurrentModel] = useState<string>(state?.selectedModel ?? "");
+  const [defaultModel, setDefaultModel] = useState<string>("");
 
   // location.state.runStarted is set by NewChatPage on SPA navigation only.
   // On page refresh the browser preserves state but React Router resets it to null,
@@ -60,52 +75,50 @@ function ChatPageInner({ threadId }: { threadId: string }) {
   // Backend sends user_message + run_start via display_delta.
   const initialEntries = undefined;
 
-  useEffect(() => {
-    if (state?.selectedModel) return;
-    authFetch(`/api/threads/${threadId}/runtime`)
-      .then((r) => r.json())
-      .then((d) => {
-        if (d.model) {
-          setCurrentModel(d.model);
-          return;
-        }
-        return fetch("/api/settings")
-          .then((r) => r.json())
-          .then((settings) => setCurrentModel(settings.default_model || "leon:large"));
-      })
-      .catch(() => setCurrentModel("leon:large"));
-  }, [state?.selectedModel, threadId]);
-
   const { entries, activeSandbox, loading, displaySeq, setEntries, setActiveSandbox, refreshThread } = useThreadData(threadId, runStarted, initialEntries);
+  const threadStream = useThreadStream(threadId, {
+    loading,
+    refreshThreads: tm.refreshThreads,
+    runStarted,
+  });
+  const {
+    requests: pendingPermissionRequests,
+    sessionRules,
+    managedOnly,
+    resolvingId,
+    addSessionRule,
+    removeSessionRule,
+    resolvePermission,
+  } = useThreadPermissions(threadId);
 
   const { runtimeStatus, isRunning, handleSendMessage, handleStopStreaming } =
     useDisplayDeltas({
       threadId,
-      refreshThreads: tm.refreshThreads,
       onUpdate: (updater) => setEntries(updater),
-      loading,
-      runStarted,
       displaySeq,
+      stream: threadStream,
     });
 
-  // @@@debug-entries — expose current entries for backend comparison
   useEffect(() => {
-    (window as Window & { __debugEntries?: () => unknown[] }).__debugEntries =
-      () => JSON.parse(JSON.stringify(entries)) as unknown[];
-  }, [entries]);
+    if (state?.selectedModel || runtimeStatus?.model || currentModel) return;
+    if (threadStream.phase === "connecting" || threadStream.phase === "idle") return;
+    void fetchDefaultModel()
+      .then(setDefaultModel)
+      .catch((err) => {
+        toast.error(`默认模型加载失败: ${err instanceof Error ? err.message : String(err)}`);
+      });
+  }, [currentModel, runtimeStatus?.model, state?.selectedModel, threadStream.phase]);
 
-  const { tasks, refresh: refreshTasks } = useBackgroundTasks({ threadId, loading, refreshThreads: tm.refreshThreads });
+  const { tasks, refresh: refreshTasks } = useBackgroundTasks({ threadId, subscribe: threadStream.subscribe });
 
   const isStreaming = isRunning;
 
-  const { sandboxActionError, handlePauseSandbox, handleResumeSandbox } =
-    useSandboxManager({
-      activeThreadId: threadId,
-      isStreaming,
-      activeSandbox,
-      setActiveSandbox,
-      loadThread: refreshThread,
-    });
+  useSandboxManager({
+    activeThreadId: threadId,
+    isStreaming,
+    activeSandbox,
+    setActiveSandbox,
+  });
 
   const ui = useAppActions({ activeThreadId: threadId });
   const {
@@ -117,10 +130,10 @@ function ChatPageInner({ threadId }: { threadId: string }) {
   const handleTaskNoticeClick = useCallback(
     (taskId: string) => {
       for (const entry of entries) {
-        if (entry.role !== "assistant") continue;
-        for (const seg of (entry as AssistantTurn).segments) {
+        if (!isAssistantTurn(entry)) continue;
+        for (const seg of entry.segments) {
           if (seg.type === "tool" && seg.step.name === "Agent" && seg.step.subagent_stream?.task_id === taskId) {
-            handleFocusAgent(seg.step.id);
+            handleFocusAgent();
             return;
           }
         }
@@ -148,6 +161,115 @@ function ChatPageInner({ threadId }: { threadId: string }) {
   );
 
   const computerResize = useResizableX(600, 360, 1200, true);
+  const currentPermissionRequest = pendingPermissionRequests[0] ?? null;
+  const [questionSelectionsByRequest, setQuestionSelectionsByRequest] = useState<Record<string, Record<string, string[]>>>({});
+  const questionSelections = useMemo(
+    () => (currentPermissionRequest ? (questionSelectionsByRequest[currentPermissionRequest.request_id] ?? {}) : {}),
+    [currentPermissionRequest, questionSelectionsByRequest],
+  );
+  const effectiveModel = (state?.selectedModel ?? runtimeStatus?.model ?? currentModel) || defaultModel;
+
+  const handleResolvePermission = useCallback(
+    async (decision: "allow" | "deny") => {
+      if (!currentPermissionRequest) return;
+      try {
+        await resolvePermission(currentPermissionRequest.request_id, decision);
+        await refreshThread();
+        toast.success(decision === "allow" ? "已批准该权限请求" : "已拒绝该权限请求");
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        toast.error(`权限处理失败: ${message}`);
+      }
+    },
+    [currentPermissionRequest, refreshThread, resolvePermission],
+  );
+
+  const handleQuestionSelection = useCallback(
+    (questionIndex: number, question: AskUserQuestionPrompt, optionLabel: string) => {
+      if (!currentPermissionRequest) return;
+      const key = askUserQuestionSelectionKey(questionIndex);
+      setQuestionSelectionsByRequest((prev) => {
+        const currentForRequest = prev[currentPermissionRequest.request_id] ?? {};
+        const current = currentForRequest[key] ?? [];
+        if (question.multiSelect) {
+          const next = current.includes(optionLabel)
+            ? current.filter((item) => item !== optionLabel)
+            : [...current, optionLabel];
+          return {
+            ...prev,
+            [currentPermissionRequest.request_id]: { ...currentForRequest, [key]: next },
+          };
+        }
+        return {
+          ...prev,
+          [currentPermissionRequest.request_id]: { ...currentForRequest, [key]: [optionLabel] },
+        };
+      });
+    },
+    [currentPermissionRequest],
+  );
+
+  const handleSubmitQuestionAnswers = useCallback(async () => {
+    if (!currentPermissionRequest || !isAskUserQuestionRequest(currentPermissionRequest)) return;
+    const answers: AskUserAnswer[] = buildAskUserAnswers(currentPermissionRequest.args.questions, questionSelections);
+    try {
+      await resolvePermission(
+        currentPermissionRequest.request_id,
+        "allow",
+        undefined,
+        answers,
+        asRecord(currentPermissionRequest.args.annotations) ?? undefined,
+      );
+      await refreshThread();
+      toast.success("已提交回答，Mycel 会继续当前任务");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      toast.error(`提交回答失败: ${message}`);
+    }
+  }, [currentPermissionRequest, questionSelections, refreshThread, resolvePermission]);
+
+  const questionPrompts = isAskUserQuestionRequest(currentPermissionRequest)
+    ? currentPermissionRequest.args.questions
+    : [];
+  const canSubmitQuestionAnswers = questionPrompts.length > 0
+    && questionPrompts.every((_, index) => (questionSelections[askUserQuestionSelectionKey(index)] ?? []).length > 0);
+
+  const handlePersistedPermissionDecision = useCallback(
+    async (decision: "allow" | "deny") => {
+      if (!currentPermissionRequest) return;
+      try {
+        await addSessionRule(decision, currentPermissionRequest.tool_name);
+        await resolvePermission(currentPermissionRequest.request_id, decision);
+        await refreshThread();
+        toast.success(decision === "allow" ? "已为当前线程保存长期批准" : "已为当前线程保存长期拒绝");
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        toast.error(`线程权限规则保存失败: ${message}`);
+      }
+    },
+    [addSessionRule, currentPermissionRequest, refreshThread, resolvePermission],
+  );
+
+  const activeSessionRules = ([
+    ["allow", sessionRules.allow],
+    ["deny", sessionRules.deny],
+    ["ask", sessionRules.ask],
+  ] as const).flatMap(([behavior, tools]) =>
+    tools.map((toolName) => ({ behavior, toolName })),
+  );
+
+  const handleRemoveSessionRule = useCallback(
+    async (behavior: PermissionRuleBehavior, toolName: string) => {
+      try {
+        await removeSessionRule(behavior, toolName);
+        toast.success("已移除当前线程权限规则");
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        toast.error(`移除线程权限规则失败: ${message}`);
+      }
+    },
+    [removeSessionRule],
+  );
 
   // @@@workspace-upload — upload attached files then send message with attachment filenames
   async function handleSendWithAttachments(message: string): Promise<void> {
@@ -156,7 +278,7 @@ function ChatPageInner({ threadId }: { threadId: string }) {
       const toastId = toast.loading(`Uploading ${attachedFiles.length} file(s)...`);
       try {
         await Promise.all(attachedFiles.map((file) =>
-          uploadSandboxFile(threadId, { file, path: file.name }),
+          uploadThreadFile(threadId, { file, path: file.name }),
         ));
         toast.success(`Uploaded ${attachedFiles.length} file(s)`, { id: toastId });
         setAttachedFiles([]);
@@ -173,20 +295,102 @@ function ChatPageInner({ threadId }: { threadId: string }) {
     <>
       <Header
         activeThreadId={threadId}
-        threadTitle={currentThread?.entity_name ?? null}
+        threadTitle={threadDisplayName}
         sandboxInfo={activeSandbox}
-        currentModel={currentModel}
+        currentModel={effectiveModel}
         onToggleSidebar={() => setSidebarCollapsed(v => !v)}
-        onPauseSandbox={() => void handlePauseSandbox()}
-        onResumeSandbox={() => void handleResumeSandbox()}
         onModelChange={setCurrentModel}
       />
-
       <div className="flex-1 flex min-h-0">
-        <div className="flex-1 flex flex-col min-w-[320px]">
-          {sandboxActionError && (
-            <div className="px-3 py-2 text-xs bg-destructive/10 text-destructive border-b border-destructive/20">
-              {sandboxActionError}
+        <div className="flex-1 flex flex-col min-w-[320px] min-h-0">
+          {currentPermissionRequest && !isAskUserQuestionRequest(currentPermissionRequest) && (
+            <div className="px-3 py-2 border-b border-warning/20 bg-warning/5">
+              <div className="max-w-3xl mx-auto">
+                <Alert className="border-warning/20 bg-transparent px-0 py-0">
+                  <ShieldAlert className="text-warning" />
+                  <AlertTitle>{`权限确认：${currentPermissionRequest.tool_name}`}</AlertTitle>
+                  <AlertDescription>
+                    <>
+                      <p>{currentPermissionRequest.message || "该工具需要你明确批准后才能继续。"}</p>
+                      <p className="text-xs text-muted-foreground">
+                        处理后不会自动重跑；Mycel 需要在下一次相同操作时继续执行。
+                      </p>
+                      <code className="block w-full overflow-x-auto rounded-md bg-background/80 px-2 py-1 text-xs text-foreground border border-border/60">
+                        {JSON.stringify(currentPermissionRequest.args)}
+                      </code>
+                    </>
+                    {pendingPermissionRequests.length > 1 && (
+                      <p className="text-xs text-muted-foreground">
+                        还有 {pendingPermissionRequests.length - 1} 条待处理请求。
+                      </p>
+                    )}
+                    <div className="flex items-center gap-2 pt-1">
+                      <Button
+                        size="sm"
+                        onClick={() => void handleResolvePermission("allow")}
+                        disabled={resolvingId === currentPermissionRequest.request_id}
+                      >
+                        <Check className="w-4 h-4" />
+                        批准
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => void handleResolvePermission("deny")}
+                        disabled={resolvingId === currentPermissionRequest.request_id}
+                      >
+                        <X className="w-4 h-4" />
+                        拒绝
+                      </Button>
+                      {!managedOnly && (
+                        <>
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            onClick={() => void handlePersistedPermissionDecision("allow")}
+                            disabled={resolvingId === currentPermissionRequest.request_id}
+                          >
+                            本线程始终批准
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            onClick={() => void handlePersistedPermissionDecision("deny")}
+                            disabled={resolvingId === currentPermissionRequest.request_id}
+                          >
+                            本线程始终拒绝
+                          </Button>
+                        </>
+                      )}
+                    </div>
+                    {managedOnly && (
+                      <p className="pt-1 text-xs text-muted-foreground">
+                        当前为 managed-only 模式，不能写入线程级权限覆盖规则。
+                      </p>
+                    )}
+                  </AlertDescription>
+                </Alert>
+              </div>
+            </div>
+          )}
+          {activeSessionRules.length > 0 && (
+            <div className="px-3 py-2 border-b border-border/60 bg-muted/20">
+              <div className="max-w-3xl mx-auto flex flex-wrap items-center gap-2">
+                <span className="text-xs font-medium text-muted-foreground">本线程权限规则</span>
+                {activeSessionRules.map(({ behavior, toolName }) => (
+                  <Button
+                    key={`${behavior}:${toolName}`}
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="h-7 gap-2 text-xs"
+                    onClick={() => void handleRemoveSessionRule(behavior, toolName)}
+                  >
+                    <span>{behavior}:{toolName}</span>
+                    <X className="w-3 h-3" />
+                  </Button>
+                ))}
+              </div>
             </div>
           )}
           <div className="relative flex-1 flex flex-col min-h-0">
@@ -201,6 +405,21 @@ function ChatPageInner({ threadId }: { threadId: string }) {
               agentAvatarUrl={agentAvatarUrl}
               userName={userName}
               userAvatarUrl={userAvatarUrl}
+              askUserQuestion={
+                isAskUserQuestionRequest(currentPermissionRequest)
+                  ? {
+                      requestId: currentPermissionRequest.request_id,
+                      promptMessage: currentPermissionRequest.message || "Mycel 需要你的回答后才能继续当前任务。",
+                      prompts: questionPrompts,
+                      selections: questionSelections,
+                      resolving: resolvingId === currentPermissionRequest.request_id,
+                      canSubmit: canSubmitQuestionAnswers,
+                      onSelect: handleQuestionSelection,
+                      onSubmit: () => void handleSubmitQuestionAnswers(),
+                      selectionKeyForIndex: askUserQuestionSelectionKey,
+                    }
+                  : undefined
+              }
             />
           </div>
           <TaskProgress
@@ -214,7 +433,7 @@ function ChatPageInner({ threadId }: { threadId: string }) {
           <InputBox
             disabled={isStreaming}
             isStreaming={isStreaming}
-            placeholder="告诉 Leon 你需要什么帮助..."
+            placeholder="告诉 Mycel 你需要什么帮助..."
             onSendMessage={(msg) => void handleSendWithAttachments(msg)}
             onSendQueueMessage={handleSendQueueMessage}
             onStop={handleStopStreaming}
@@ -237,7 +456,6 @@ function ChatPageInner({ threadId }: { threadId: string }) {
               width={computerResize.width}
               activeTab={computerTab}
               onTabChange={setComputerTab}
-              isStreaming={isStreaming}
             />
           </>
         )}

@@ -1,14 +1,19 @@
-"""Sandbox management endpoints."""
-
 import asyncio
-import subprocess
-import sys
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
+from backend.identity.avatar.urls import avatar_url
+from backend.sandboxes import provider_availability as sandbox_provider_availability
+from backend.sandboxes import user_reads as user_sandbox_reads
+from backend.sandboxes.inventory import init_providers_and_managers
+from backend.sandboxes.runtime import metrics as sandbox_runtime_metrics
+from backend.sandboxes.runtime import mutations as sandbox_runtime_mutations
+from backend.sandboxes.runtime.reads import find_runtime_and_manager, load_all_sandbox_runtimes
+from backend.threads.projection import canonical_owner_threads
+from backend.threads.virtual_threads import is_virtual_thread_id
 from backend.web.core.dependencies import get_current_user_id
-from backend.web.services import sandbox_service
+from storage.runtime import build_sandbox_monitor_repo as make_sandbox_monitor_repo
 
 router = APIRouter(prefix="/api/sandbox", tags=["sandbox"])
 
@@ -19,146 +24,93 @@ def _runtime_http_error(exc: RuntimeError) -> HTTPException:
     return HTTPException(status, message)
 
 
-async def _mutate_session_action(session_id: str, action: str, provider: str | None) -> dict[str, Any]:
+async def _mutate_runtime_action(runtime_id: str, action: str, provider: str | None) -> dict[str, Any]:
     try:
-        return await asyncio.to_thread(
-            sandbox_service.mutate_sandbox_session,
-            session_id=session_id,
+        result = await asyncio.to_thread(
+            sandbox_runtime_mutations.mutate_sandbox_runtime,
+            runtime_id=runtime_id,
             action=action,
             provider_hint=provider,
+            init_providers_and_managers_fn=init_providers_and_managers,
+            load_all_sandbox_runtimes_fn=load_all_sandbox_runtimes,
+            find_runtime_and_manager_fn=find_runtime_and_manager,
         )
+        return _public_runtime_payload(result)
     except RuntimeError as e:
         raise _runtime_http_error(e) from e
+
+
+def _public_runtime_payload(row: dict[str, Any]) -> dict[str, Any]:
+    return {key: value for key, value in row.items() if key not in {"sandbox_runtime_id"}}
 
 
 @router.get("/types")
 async def list_sandbox_types() -> dict[str, Any]:
     """List available sandbox types."""
-    types = await asyncio.to_thread(sandbox_service.available_sandbox_types)
+    # @@@sandbox-type-availability - this route reflects the current process
+    # inventory contract: configured providers are either instantiated and
+    # exposed as available, or reported unavailable with an explicit reason.
+    types = await asyncio.to_thread(sandbox_provider_availability.available_sandbox_types)
     return {"types": types}
 
 
-@router.get("/pick-folder")
-async def pick_folder() -> dict[str, Any]:
-    """Open system folder picker dialog and return selected path."""
-    try:
-        if sys.platform == "darwin":  # macOS
-            result = subprocess.run(
-                [
-                    "osascript",
-                    "-e",
-                    'POSIX path of (choose folder with prompt "选择工作目录")',
-                ],
-                capture_output=True,
-                text=True,
-                timeout=60,
-            )
-            if result.returncode == 0:
-                path = result.stdout.strip()
-                return {"path": path}
-            else:
-                raise HTTPException(400, "User cancelled folder selection")
-        elif sys.platform == "win32":  # Windows
-            # Use PowerShell folder browser
-            ps_script = """
-            Add-Type -AssemblyName System.Windows.Forms
-            $dialog = New-Object System.Windows.Forms.FolderBrowserDialog
-            $dialog.Description = "选择工作目录"
-            $dialog.ShowNewFolderButton = $true
-            if ($dialog.ShowDialog() -eq 'OK') {
-                Write-Output $dialog.SelectedPath
-            }
-            """
-            result = subprocess.run(
-                ["powershell", "-Command", ps_script],
-                capture_output=True,
-                text=True,
-                timeout=60,
-            )
-            if result.returncode == 0 and result.stdout.strip():
-                path = result.stdout.strip()
-                return {"path": path}
-            else:
-                raise HTTPException(400, "User cancelled folder selection")
-        else:  # Linux
-            # Try zenity first, fallback to kdialog
-            try:
-                result = subprocess.run(
-                    ["zenity", "--file-selection", "--directory", "--title=选择工作目录"],
-                    capture_output=True,
-                    text=True,
-                    timeout=60,
-                )
-                if result.returncode == 0:
-                    path = result.stdout.strip()
-                    return {"path": path}
-            except FileNotFoundError:
-                # Try kdialog
-                result = subprocess.run(
-                    ["kdialog", "--getexistingdirectory", ".", "--title", "选择工作目录"],
-                    capture_output=True,
-                    text=True,
-                    timeout=60,
-                )
-                if result.returncode == 0:
-                    path = result.stdout.strip()
-                    return {"path": path}
-            raise HTTPException(400, "User cancelled folder selection")
-    except subprocess.TimeoutExpired:
-        raise HTTPException(408, "Folder selection timed out")
-    # @@@http_passthrough - keep explicit business/status errors from selection branches intact
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(500, f"Failed to open folder picker: {str(e)}") from e
+@router.get("/runtimes")
+async def list_sandbox_runtimes() -> dict[str, Any]:
+    """List all sandbox runtime rows across providers."""
+    _, managers = await asyncio.to_thread(init_providers_and_managers)
+    runtime_rows = await asyncio.to_thread(load_all_sandbox_runtimes, managers)
+    return {"runtime_rows": [_public_runtime_payload(row) for row in runtime_rows]}
 
 
-@router.get("/sessions")
-async def list_sandbox_sessions() -> dict[str, Any]:
-    """List all sandbox sessions across providers."""
-    _, managers = await asyncio.to_thread(sandbox_service.init_providers_and_managers)
-    sessions = await asyncio.to_thread(sandbox_service.load_all_sessions, managers)
-    return {"sessions": sessions}
-
-
-@router.get("/leases/mine")
-async def list_my_leases(
+@router.get("/sandboxes/mine")
+async def list_my_sandboxes(
     user_id: Annotated[str, Depends(get_current_user_id)],
     request: Request,
 ) -> dict[str, Any]:
     thread_repo = getattr(request.app.state, "thread_repo", None)
-    member_repo = getattr(request.app.state, "member_repo", None)
-    leases = await asyncio.to_thread(
-        sandbox_service.list_user_leases,
+    user_repo = getattr(request.app.state, "user_repo", None)
+    sandboxes = await asyncio.to_thread(
+        user_sandbox_reads.list_user_sandboxes,
         user_id,
         thread_repo=thread_repo,
-        member_repo=member_repo,
+        user_repo=user_repo,
+        make_sandbox_monitor_repo_fn=make_sandbox_monitor_repo,
+        canonical_owner_threads_fn=canonical_owner_threads,
+        avatar_url_fn=avatar_url,
+        is_virtual_thread_id_fn=is_virtual_thread_id,
     )
-    return {"leases": leases}
+    return {"sandboxes": sandboxes}
 
 
-@router.get("/sessions/{session_id}/metrics")
-async def get_session_metrics(session_id: str, provider: str | None = Query(default=None)) -> dict[str, Any]:
-    """Get metrics for a specific sandbox session."""
+@router.get("/runtimes/{runtime_id}/metrics")
+async def get_sandbox_runtime_metrics(runtime_id: str, provider: str | None = Query(default=None)) -> dict[str, Any]:
+    """Get metrics for a specific sandbox runtime row."""
     try:
-        return await asyncio.to_thread(sandbox_service.get_session_metrics, session_id, provider)
+        return await asyncio.to_thread(
+            sandbox_runtime_metrics.get_runtime_metrics,
+            runtime_id,
+            provider,
+            init_providers_and_managers_fn=init_providers_and_managers,
+            load_all_sandbox_runtimes_fn=load_all_sandbox_runtimes,
+            find_runtime_and_manager_fn=find_runtime_and_manager,
+        )
     except RuntimeError as e:
         raise _runtime_http_error(e) from e
 
 
-@router.post("/sessions/{session_id}/pause")
-async def pause_sandbox_session(session_id: str, provider: str | None = Query(default=None)) -> dict[str, Any]:
-    """Pause a sandbox session."""
-    return await _mutate_session_action(session_id, "pause", provider)
+@router.post("/runtimes/{runtime_id}/pause")
+async def pause_sandbox_runtime(runtime_id: str, provider: str | None = Query(default=None)) -> dict[str, Any]:
+    """Pause a sandbox runtime row."""
+    return await _mutate_runtime_action(runtime_id, "pause", provider)
 
 
-@router.post("/sessions/{session_id}/resume")
-async def resume_sandbox_session(session_id: str, provider: str | None = Query(default=None)) -> dict[str, Any]:
-    """Resume a paused sandbox session."""
-    return await _mutate_session_action(session_id, "resume", provider)
+@router.post("/runtimes/{runtime_id}/resume")
+async def resume_sandbox_runtime(runtime_id: str, provider: str | None = Query(default=None)) -> dict[str, Any]:
+    """Resume a paused sandbox runtime row."""
+    return await _mutate_runtime_action(runtime_id, "resume", provider)
 
 
-@router.delete("/sessions/{session_id}")
-async def destroy_sandbox_session(session_id: str, provider: str | None = Query(default=None)) -> dict[str, Any]:
-    """Destroy a sandbox session."""
-    return await _mutate_session_action(session_id, "destroy", provider)
+@router.delete("/runtimes/{runtime_id}")
+async def destroy_sandbox_runtime(runtime_id: str, provider: str | None = Query(default=None)) -> dict[str, Any]:
+    """Destroy a sandbox runtime row."""
+    return await _mutate_runtime_action(runtime_id, "destroy", provider)

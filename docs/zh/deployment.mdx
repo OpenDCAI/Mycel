@@ -54,30 +54,13 @@ keywords: [部署, 安装, 生产, Docker, 配置, 故障排查]
 
 ## 配置
 
-### 用户配置目录
+### 运行时配置
 
-Mycel 配置存储在 `~/.leon/`：
-
-```
-~/.leon/
-├── config.env          # API Key 和 Base URL
-├── runtime.json        # 运行时行为
-├── models.json         # LLM 提供商和模型映射
-├── observation.json    # 追踪配置（Langfuse / LangSmith）
-├── sandboxes/          # 沙箱提供商配置
-│   ├── docker.json
-│   ├── e2b.json
-│   └── daytona.json
-├── members/            # Agent Member 文件包
-├── skills/             # Skill 目录
-├── leon.db             # Thread 历史和 Agent 状态
-├── chat.db             # 社交层（聊天、Entity）
-└── sandbox.db          # 沙箱会话追踪
-```
+Mycel 服务配置来自进程环境变量和显式 server 配置。Agent config、Skill、thread、Library resource、用户 profile 都是产品状态，必须通过已配置的后端存储保存。
 
 ### 快速配置
 
-手动创建 `~/.leon/config.env`：
+在 shell 中导出变量，或用 `ENV_FILE` 指向一个明确的 env 文件：
 
 ```env
 ANTHROPIC_API_KEY=sk-ant-xxx
@@ -113,7 +96,7 @@ LEON_BACKEND_PORT=9000 uv run python -m backend.web.main
 
 ### Docker
 
-创建 `~/.leon/sandboxes/docker.json`：
+设置 `LEON_SANDBOXES_DIR` 指向沙箱提供商配置目录，然后在该目录下创建 `docker.json`：
 
 ```json
 {
@@ -226,16 +209,16 @@ Mycel 默认使用 SQLite。生产环境建议：
 
 ```bash
 # 定期备份
-cp ~/.leon/leon.db ~/.leon/leon.db.backup
+cp "$LEON_DB_PATH" "$LEON_DB_PATH.backup"
 ```
 
 多用户部署可能需要 PostgreSQL — 需要对存储层进行代码改动。
 
 ### 安全
 
-- API Key 存储在 `~/.leon/config.env`，不要写入代码或版本控制
+- API Key 存储在部署密钥系统或明确指定的 env 文件中，不要写入代码或版本控制
 - 在 JSON 配置文件中使用 `${VAR}` 引用而不是硬编码 Key
-- 限制文件权限：`chmod 600 ~/.leon/config.env`
+- 使用 env 文件时限制文件权限：`chmod 600 /path/to/mycel.env`
 - `block_dangerous_commands` 配置项（默认 `true`）可屏蔽 `rm -rf` 等危险命令
 
 ### 代理环境
@@ -264,7 +247,7 @@ env -u ALL_PROXY -u all_proxy uv run python -m backend.web.main
   </Accordion>
 
   <Accordion title="Docker 提供商卡住">
-    Docker CLI 继承了代理环境变量。Mycel 会自动清理这些变量，若问题仍然存在，检查 `~/.leon/sandboxes/docker.json` 中的 `docker_host` 配置。
+    Docker CLI 继承了代理环境变量。Mycel 会自动清理这些变量，若问题仍然存在，检查 `$LEON_SANDBOXES_DIR/docker.json` 中的 `docker_host` 配置。
   </Accordion>
 
   <Accordion title="Daytona PTY bootstrap 失败">

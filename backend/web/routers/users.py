@@ -1,0 +1,262 @@
+import logging
+import time
+from pathlib import Path
+from typing import Annotated, Any, TypedDict
+
+from fastapi import APIRouter, Depends, HTTPException, UploadFile
+from fastapi.responses import FileResponse
+
+from backend.chat.api.http.dependencies import get_contact_repo, get_relationship_service, get_thread_repo, get_user_repo
+from backend.identity.avatar.files import process_and_save_avatar
+from backend.identity.avatar.paths import avatars_dir
+from backend.identity.avatar.urls import avatar_url
+from backend.web.core.dependencies import get_app, get_current_user_id
+from messaging.social_access import active_contact_target_ids, can_chat_with_owner_scope
+from messaging.user_ownership import is_owned_by_viewer
+from storage.contracts import UserType
+
+logger = logging.getLogger(__name__)
+
+MAX_UPLOAD_BYTES = 5 * 1024 * 1024
+ALLOWED_CONTENT_TYPES = {"image/png", "image/jpeg", "image/webp", "image/gif"}
+
+
+users_router = APIRouter(prefix="/api/users", tags=["users"])
+
+
+class RelationshipCandidateMetadata(TypedDict):
+    id: str
+    state: str
+    is_requester: bool
+    message: str | None
+
+
+@users_router.get("")
+async def list_users(
+    user_id: Annotated[str, Depends(get_current_user_id)],
+    app: Annotated[Any, Depends(get_app)],
+):
+    """List all agent users for the user directory page."""
+    user_repo = app.state.user_repo
+
+    all_users = user_repo.list_all()
+    result = []
+    for user in all_users:
+        if user.type is not UserType.AGENT:
+            continue
+        owner = user_repo.get_by_id(user.owner_user_id) if user.owner_user_id else None
+        result.append(
+            {
+                "id": user.id,
+                "name": user.display_name,
+                "type": user.type.value,
+                "avatar_url": avatar_url(user.id, bool(user.avatar)),
+                "description": None,
+                "owner_name": owner.display_name if owner else None,
+                "is_mine": user.owner_user_id == user_id,
+                "created_at": user.created_at,
+            }
+        )
+    return result
+
+
+def _avatar_path(user_id: str) -> Path:
+    safe_id = Path(user_id).name
+    return avatars_dir() / f"{safe_id}.png"
+
+
+def _get_owned_avatar_user_or_404(user_id: str, current_user_id: str, user_repo: Any) -> Any:
+    user = user_repo.get_by_id(user_id)
+    if not user:
+        raise HTTPException(404, "User not found")
+    if is_owned_by_viewer(current_user_id, user):
+        return user
+    raise HTTPException(403, "Not authorized")
+
+
+@users_router.put("/{user_id}/avatar")
+async def upload_avatar(
+    user_id: str,
+    file: UploadFile,
+    current_user_id: Annotated[str, Depends(get_current_user_id)],
+    app: Annotated[Any, Depends(get_app)],
+) -> dict[str, str]:
+    """Upload/replace avatar image. Resizes to 256x256 PNG."""
+    repo = app.state.user_repo
+    _get_owned_avatar_user_or_404(user_id, current_user_id, repo)
+    ct = file.content_type or ""
+    if ct not in ALLOWED_CONTENT_TYPES:
+        raise HTTPException(400, f"Unsupported image type: {ct}")
+    data = await file.read()
+    if len(data) == 0:
+        raise HTTPException(400, "Empty file")
+    if len(data) > MAX_UPLOAD_BYTES:
+        raise HTTPException(400, f"File too large (max {MAX_UPLOAD_BYTES // 1024 // 1024}MB)")
+    try:
+        avatar_path = process_and_save_avatar(data, user_id)
+    except Exception as e:
+        logger.error(f"Avatar processing failed for {user_id}: {e}")
+        raise HTTPException(400, f"Invalid image: {e}")
+    repo.update(user_id, avatar=avatar_path, updated_at=time.time())
+    return {"status": "ok", "avatar": avatar_path}
+
+
+@users_router.get("/{user_id}/avatar")
+async def get_avatar(user_id: str) -> FileResponse:
+    """Serve avatar image. No auth (public). 300s browser cache."""
+    path = _avatar_path(user_id)
+    if not path.exists():
+        raise HTTPException(404, "No avatar")
+    return FileResponse(path, media_type="image/png", headers={"Cache-Control": "public, max-age=300"})
+
+
+@users_router.delete("/{user_id}/avatar")
+async def delete_avatar(
+    user_id: str,
+    current_user_id: Annotated[str, Depends(get_current_user_id)],
+    app: Annotated[Any, Depends(get_app)],
+) -> dict[str, str]:
+    """Delete avatar."""
+    repo = app.state.user_repo
+    _get_owned_avatar_user_or_404(user_id, current_user_id, repo)
+    path = _avatar_path(user_id)
+    if path.exists():
+        path.unlink()
+    repo.update(user_id, avatar=None, updated_at=time.time())
+    return {"status": "ok"}
+
+
+def _relationship_metadata_for_user(relationship_service: Any, user_id: str) -> dict[str, RelationshipCandidateMetadata]:
+    if relationship_service is None:
+        raise HTTPException(503, "chat bootstrap not attached: relationship_service")
+    relationships: dict[str, RelationshipCandidateMetadata] = {}
+    for row in relationship_service.list_for_user(user_id):
+        other_id = getattr(row, "other_user_id", None)
+        if other_id is None:
+            user_low = getattr(row, "user_low")
+            user_high = getattr(row, "user_high")
+            other_id = user_high if user_id == user_low else user_low
+        initiator_user_id = getattr(row, "initiator_user_id", None)
+        relationships[str(other_id)] = {
+            "id": str(getattr(row, "id")),
+            "state": str(getattr(row, "state")),
+            "is_requester": initiator_user_id == user_id,
+            "message": getattr(row, "message", None),
+        }
+    return relationships
+
+
+@users_router.get("/chat-candidates")
+async def list_chat_candidates(
+    user_id: Annotated[str, Depends(get_current_user_id)],
+    # @@@chat-candidate-http-di - keep these as HTTP dependency helpers so the
+    # route surface stays on FastAPI-aware dependency contracts instead of ad hoc
+    # app-state call sites.
+    user_repo: Annotated[Any, Depends(get_user_repo)],
+    relationship_service: Annotated[Any, Depends(get_relationship_service)],
+    contact_repo: Annotated[Any, Depends(get_contact_repo)],
+    thread_repo: Annotated[Any, Depends(get_thread_repo)],
+):
+    """List chattable users for discovery (New Chat picker). Excludes the current user."""
+    users = user_repo.list_all()
+    user_map = {user.id: user for user in users}
+    relationship_metadata = _relationship_metadata_for_user(relationship_service, user_id)
+    try:
+        if contact_repo is None:
+            raise RuntimeError("chat bootstrap not attached: contact_repo")
+        contact_targets = active_contact_target_ids(contact_repo, user_id)
+    except RuntimeError as exc:
+        raise HTTPException(503, str(exc)) from exc
+
+    items = []
+
+    for user in users:
+        if user.id == user_id:
+            continue
+        is_owned = is_owned_by_viewer(user_id, user)
+        is_owned_agent = user.type is UserType.AGENT and user.owner_user_id == user_id
+        if is_owned_agent and thread_repo is None:
+            # @@@owned-agent-thread-truth - owned agent candidates expose
+            # default_thread_id when available, so this consumer must fail loud
+            # when thread_repo is absent instead of silently pretending the
+            # owned agent has no thread truth.
+            raise HTTPException(503, "Thread repo unavailable")
+        relationship = relationship_metadata.get(user.id)
+        relationship_state = relationship["state"] if relationship else "none"
+        owner_user_id = str(user.owner_user_id) if user.type is UserType.AGENT and user.owner_user_id else None
+        owner_relationship_state = None
+        if owner_user_id:
+            owner_relationship = relationship_metadata.get(owner_user_id)
+            if owner_relationship:
+                owner_relationship_state = owner_relationship["state"]
+        can_chat = can_chat_with_owner_scope(
+            is_owned=is_owned,
+            relationship_state=relationship_state,
+            has_contact=user.id in contact_targets,
+            owner_relationship_state=owner_relationship_state,
+            owner_has_contact=owner_user_id in contact_targets if owner_user_id else False,
+        )
+        relationship_fields = {
+            "relationship_id": relationship["id"] if relationship else None,
+            "relationship_is_requester": relationship["is_requester"] if relationship else False,
+            "relationship_message": relationship["message"] if relationship else None,
+        }
+        if user.type is UserType.HUMAN:
+            items.append(
+                {
+                    "user_id": user.id,
+                    "name": user.display_name,
+                    "type": "human",
+                    "avatar_url": avatar_url(user.id, bool(user.avatar)),
+                    "owner_name": None,
+                    "agent_name": user.display_name,
+                    "is_owned": False,
+                    "relationship_state": relationship_state,
+                    **relationship_fields,
+                    "can_chat": can_chat,
+                }
+            )
+        else:
+            owner = user_map.get(user.owner_user_id) if user.owner_user_id else None
+            default_thread = thread_repo.get_default_thread(user.id) if is_owned_agent and thread_repo is not None else None
+            item = {
+                "user_id": user.id,
+                "name": user.display_name,
+                "type": user.type.value,
+                "avatar_url": avatar_url(user.id, bool(user.avatar)),
+                "owner_name": owner.display_name if owner else None,
+                "agent_name": user.display_name,
+                "is_owned": is_owned,
+                "relationship_state": relationship_state,
+                **relationship_fields,
+                "can_chat": can_chat,
+            }
+            if is_owned_agent:
+                item["default_thread_id"] = default_thread["id"] if default_thread else None
+            items.append(item)
+    return items
+
+
+@users_router.get("/{user_id}/profile")
+async def get_user_profile(
+    user_id: str,
+    app: Annotated[Any, Depends(get_app)],
+):
+    """Public agent profile. No auth required (frontend uses plain fetch)."""
+    user = _get_user_or_404(app, user_id)
+    if user.type is not UserType.AGENT:
+        raise HTTPException(404, "Profile not available for this user type")
+    return {
+        "id": user.id,
+        "name": user.display_name,
+        "type": user.type.value,
+        "avatar_url": avatar_url(user.id, bool(user.avatar)),
+        "description": None,
+    }
+
+
+def _get_user_or_404(app: Any, user_id: str) -> Any:
+    user = app.state.user_repo.get_by_id(user_id)
+    if not user:
+        raise HTTPException(404, "User not found")
+    return user

@@ -1,5 +1,3 @@
-"""Types for web operations."""
-
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -7,8 +5,6 @@ from dataclasses import dataclass, field
 
 @dataclass
 class FetchLimits:
-    """Limits for URL fetching to prevent excessive token usage."""
-
     max_chars: int = 100_000
     chunk_size: int = 4000
     max_chunks: int = 50
@@ -24,8 +20,6 @@ class FetchLimits:
 
 @dataclass
 class ContentChunk:
-    """A chunk of fetched content."""
-
     position: int
     content: str
     heading: str | None = None
@@ -33,8 +27,6 @@ class ContentChunk:
 
 @dataclass
 class FetchResult:
-    """Result of a URL fetch operation."""
-
     url: str
     title: str | None = None
     description: str | None = None
@@ -51,7 +43,6 @@ class FetchResult:
     error: str | None = None
 
     def format_output(self) -> str:
-        """Format result as string output for the agent."""
         if self.error:
             return self.error
 
@@ -77,7 +68,7 @@ class FetchResult:
                 parts.append(f"  ... and {len(self.chunks) - 5} more chunks")
 
             parts.append("")
-            parts.append("Use read_file tool with offset and limit to read specific sections.")
+            parts.append("Use Read with offset and limit to read specific sections.")
 
         if self.truncated:
             reason = self.truncation_reason or "limit reached"
@@ -86,7 +77,6 @@ class FetchResult:
         return "\n".join(parts)
 
     def get_chunk(self, position: int) -> str | None:
-        """Get content of a specific chunk by position."""
         for chunk in self.chunks:
             if chunk.position == position:
                 return chunk.content
@@ -95,15 +85,12 @@ class FetchResult:
 
 @dataclass
 class SearchResult:
-    """Result of a web search operation."""
-
     query: str
     results: list[SearchItem] = field(default_factory=list)
     total_results: int = 0
     error: str | None = None
 
     def format_output(self) -> str:
-        """Format result as string output for the agent."""
         if self.error:
             return self.error
 
@@ -120,15 +107,13 @@ class SearchResult:
             parts.append("---")
 
         parts.append("")
-        parts.append("Use Fetch tool with a Prompt to extract specific information from URLs.")
+        parts.append("Use WebFetch with a prompt to extract specific information from URLs.")
 
         return "\n".join(parts)
 
 
 @dataclass
 class SearchItem:
-    """A single search result item."""
-
     title: str
     url: str
     snippet: str | None = None
