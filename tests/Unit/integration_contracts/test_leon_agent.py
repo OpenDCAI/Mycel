@@ -78,7 +78,7 @@ class _SkillRepo:
             skill_id="fastapi",
             version="1.0.0",
             hash="sha256:fastapi",
-            skill_md="---\nname: FastAPI\ndescription: Build FastAPI services\n---\nAlways use APIRouter.",
+            skill_md="---\nname: FastAPI\ndescription: Build FastAPI services\nversion: 1.0.0\n---\nAlways use APIRouter.",
             files=self.files,
             created_at=datetime.fromisoformat("2026-04-25T00:00:00+00:00"),
         )
@@ -88,7 +88,7 @@ def _write_file_skill_dir(tmp_path, *, name: str, body: str, description: str = 
     skill_dir = tmp_path / "file-skills" / name
     skill_dir.mkdir(parents=True)
     (skill_dir / "SKILL.md").write_text(
-        f"---\nname: {name}\ndescription: {description}\n---\n{body}",
+        f"---\nname: {name}\ndescription: {description}\nversion: 1.0.0\n---\n{body}",
         encoding="utf-8",
     )
 

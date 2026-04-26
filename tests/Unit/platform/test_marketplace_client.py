@@ -75,8 +75,16 @@ def test_hub_api_preserves_hub_bad_request_detail(monkeypatch):
 # ── Helpers ──
 
 
+def _skill_content_with_version(content: str, version: str) -> str:
+    if "\nversion:" in content or "\ndescription:" not in content:
+        return content
+    return content.replace("\n---", f"\nversion: {version}\n---", 1)
+
+
 def _make_hub_response(item_type: str, slug: str, content: str = "# Hello", version: str = "1.0.0", publisher: str = "tester") -> dict:
     """Build a fake Hub /download response."""
+    if item_type == "skill":
+        content = _skill_content_with_version(content, version)
     return {
         "item": {
             "name": slug.replace("-", " ").title(),
@@ -146,7 +154,7 @@ class TestApplySkill:
         assert saved[0].name == "My Skill"
         assert not hasattr(saved[0], "content")
         assert packages[0].skill_id == "skill_generated123"
-        assert packages[0].skill_md == "---\nname: My Skill\ndescription: My Skill desc\n---\n# My Skill\nDo stuff"
+        assert packages[0].skill_md == "---\nname: My Skill\ndescription: My Skill desc\nversion: 1.0.0\n---\n# My Skill\nDo stuff"
         assert packages[0].manifest["files"][0]["path"] == "references/usage.md"
         assert selected == [("owner-1", "skill_generated123", packages[0].id)]
         assert result["package_id"] == packages[0].id
@@ -509,7 +517,7 @@ class TestApplySkill:
         }
         assert saved_skills[0].name == "FastAPI"
         assert saved_skills[0].description == "Build FastAPI APIs"
-        assert packages[0].skill_md == "---\nname: FastAPI\ndescription: Build FastAPI APIs\n---\nAlways use APIRouter."
+        assert packages[0].skill_md == "---\nname: FastAPI\ndescription: Build FastAPI APIs\nversion: 1.2.3\n---\nAlways use APIRouter."
         assert packages[0].manifest["files"][0]["path"] == "references/routing.md"
         assert selected == [("owner-1", saved_skills[0].id, packages[0].id)]
         assert saved == []
@@ -732,8 +740,8 @@ class TestApplyIdempotency:
         assert result["package_id"] == packages[1].id
         assert list(saved) == ["skill_idem123"]
         assert saved["skill_idem123"].source["source_version"] == "1.0.1"
-        assert packages[0].skill_md == "---\nname: Idem Skill\ndescription: Idempotent\n---\nV1"
-        assert packages[1].skill_md == "---\nname: Idem Skill\ndescription: Idempotent\n---\nV2"
+        assert packages[0].skill_md == "---\nname: Idem Skill\ndescription: Idempotent\nversion: 1.0.0\n---\nV1"
+        assert packages[1].skill_md == "---\nname: Idem Skill\ndescription: Idempotent\nversion: 1.0.1\n---\nV2"
         assert selected[-1] == ("owner-1", "skill_idem123", packages[1].id)
 
 
@@ -849,7 +857,7 @@ def test_publish_uses_repo_material_when_member_dir_is_absent(tmp_path, monkeypa
                 skill_id="search",
                 version="1.0.0",
                 hash="sha256:search",
-                skill_md="---\nname: Search\ndescription: Search repos\n---\nskill content",
+                skill_md="---\nname: Search\ndescription: Search repos\nversion: 1.0.0\n---\nskill content",
                 source={"name": "Search", "desc": "Repo Search"},
                 created_at=datetime(2026, 4, 25, tzinfo=UTC),
             )

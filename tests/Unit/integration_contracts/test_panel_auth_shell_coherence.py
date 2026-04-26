@@ -93,6 +93,8 @@ def _put_skill(
     files: dict[str, str] | None = None,
     version: str = "1.0.0",
 ) -> Skill:
+    if "\nversion:" not in content and "\ndescription:" in content:
+        content = content.replace("\n---", f"\nversion: {version}\n---", 1)
     timestamp = datetime(2026, 4, 24, tzinfo=UTC)
     skill = skill_repo.upsert(
         Skill(
@@ -998,7 +1000,7 @@ def test_select_agent_skill_rejects_package_for_another_skill() -> None:
         skill_id="other-skill",
         version="1.0.0",
         hash="sha256:wrong",
-        skill_md="---\nname: Other Skill\ndescription: Other\n---\nUse it.",
+        skill_md="---\nname: Other Skill\ndescription: Other\nversion: 1.0.0\n---\nUse it.",
         created_at=datetime(2026, 4, 24, tzinfo=UTC),
     )
     skill_repo.create_package(wrong_package)
@@ -1119,7 +1121,7 @@ def test_library_skill_content_rejects_selected_package_for_another_skill() -> N
         skill_id="other-skill",
         version="1.0.0",
         hash="sha256:wrong",
-        skill_md="---\nname: Other Skill\ndescription: Other\n---\nUse it.",
+        skill_md="---\nname: Other Skill\ndescription: Other\nversion: 1.0.0\n---\nUse it.",
         created_at=datetime(2026, 4, 24, tzinfo=UTC),
     )
     skill_repo.create_package(wrong_package)
@@ -2329,7 +2331,7 @@ def test_apply_snapshot_saves_one_agent_config_aggregate():
                         "id": "search-core",
                         "name": "Search",
                         "version": "1.0.0",
-                        "content": "---\nname: Search\ndescription: Search repos\n---\nbody",
+                        "content": "---\nname: Search\ndescription: Search repos\nversion: 1.0.0\n---\nbody",
                         "description": "Search repos",
                         "source": {"source_version": "snapshot-stale", "extra": "drop"},
                     }
@@ -2355,7 +2357,7 @@ def test_apply_snapshot_saves_one_agent_config_aggregate():
     assert skill_repo.get_by_id("user-1", "search-core") is None
     package = skill_repo.get_package("user-1", saved_configs[0].skills[0].package_id or "")
     assert package is not None
-    assert package.skill_md == "---\nname: Search\ndescription: Search repos\n---\nbody"
+    assert package.skill_md == "---\nname: Search\ndescription: Search repos\nversion: 1.0.0\n---\nbody"
     assert package.source == {
         "marketplace_item_id": "item-1",
         "snapshot_skill_id": "search-core",
@@ -2386,7 +2388,7 @@ def test_apply_snapshot_with_skills_requires_skill_repo():
                             "id": "search",
                             "name": "Search",
                             "version": "1.0.0",
-                            "content": "---\nname: Search\ndescription: Search repos\n---\nbody",
+                            "content": "---\nname: Search\ndescription: Search repos\nversion: 1.0.0\n---\nbody",
                         }
                     ],
                 },
@@ -2415,7 +2417,7 @@ def test_apply_snapshot_skill_requires_frontmatter_description() -> None:
                             "name": "Search",
                             "version": "1.0.0",
                             "description": "Snapshot desc",
-                            "content": "---\nname: Search\n---\nbody",
+                            "content": "---\nname: Search\nversion: 1.0.0\n---\nbody",
                         }
                     ],
                 },
@@ -2452,7 +2454,7 @@ def test_apply_snapshot_requires_source_identity(field: str, value: object, mess
                         "id": "search",
                         "name": "Search",
                         "version": "1.0.0",
-                        "content": "---\nname: Search\ndescription: Search repos\n---\nbody",
+                        "content": "---\nname: Search\ndescription: Search repos\nversion: 1.0.0\n---\nbody",
                     }
                 ],
             },
@@ -2523,13 +2525,13 @@ def test_apply_snapshot_rejects_duplicate_skill_ids_before_library_write():
                             "id": "search",
                             "name": "Search One",
                             "version": "1.0.0",
-                            "content": "---\nname: Search One\ndescription: Search one\n---\none",
+                            "content": "---\nname: Search One\ndescription: Search one\nversion: 1.0.0\n---\none",
                         },
                         {
                             "id": "search",
                             "name": "Search Two",
                             "version": "1.0.0",
-                            "content": "---\nname: Search Two\ndescription: Search two\n---\ntwo",
+                            "content": "---\nname: Search Two\ndescription: Search two\nversion: 1.0.0\n---\ntwo",
                         },
                     ],
                 },
@@ -2563,7 +2565,7 @@ def test_apply_snapshot_treats_snapshot_skill_id_as_source_metadata(monkeypatch:
                         "id": "nested/search",
                         "name": "Search",
                         "version": "1.0.0",
-                        "content": "---\nname: Search\ndescription: Search repos\n---\nbody",
+                        "content": "---\nname: Search\ndescription: Search repos\nversion: 1.0.0\n---\nbody",
                     }
                 ],
             },
@@ -2617,7 +2619,7 @@ def test_apply_snapshot_reuses_existing_skill_by_snapshot_source(monkeypatch: py
                         "id": "search-core",
                         "name": "Search",
                         "version": "1.0.1",
-                        "content": "---\nname: Search\ndescription: Search repos\n---\nnew",
+                        "content": "---\nname: Search\ndescription: Search repos\nversion: 1.0.1\n---\nnew",
                     }
                 ],
             },
@@ -2663,7 +2665,7 @@ def test_apply_snapshot_fails_when_generated_skill_id_exists(monkeypatch: pytest
                             "id": "search-core",
                             "name": "Search",
                             "version": "1.0.0",
-                            "content": "---\nname: Search\ndescription: Search repos\n---\nbody",
+                            "content": "---\nname: Search\ndescription: Search repos\nversion: 1.0.0\n---\nbody",
                         }
                     ],
                 },
@@ -2703,7 +2705,7 @@ def test_apply_snapshot_rejects_existing_same_name_without_snapshot_source(monke
                             "id": "search-core",
                             "name": "Search",
                             "version": "1.0.0",
-                            "content": "---\nname: Search\ndescription: Search repos\n---\nbody",
+                            "content": "---\nname: Search\ndescription: Search repos\nversion: 1.0.0\n---\nbody",
                         }
                     ],
                 },
@@ -2734,13 +2736,13 @@ def test_apply_snapshot_rejects_duplicate_skill_names_before_library_write():
                             "id": "search-one",
                             "name": "Search",
                             "version": "1.0.0",
-                            "content": "---\nname: Search\ndescription: Search repos\n---\none",
+                            "content": "---\nname: Search\ndescription: Search repos\nversion: 1.0.0\n---\none",
                         },
                         {
                             "id": "search-two",
                             "name": "Search",
                             "version": "1.0.0",
-                            "content": "---\nname: Search\ndescription: Search repos\n---\ntwo",
+                            "content": "---\nname: Search\ndescription: Search repos\nversion: 1.0.0\n---\ntwo",
                         },
                     ],
                 },

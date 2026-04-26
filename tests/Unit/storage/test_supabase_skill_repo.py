@@ -81,7 +81,7 @@ def _row(skill_id: str = "skill-1") -> dict:
         "name": "github",
         "description": "GitHub guidance",
         "version": "1.0.0",
-        "content": "---\nname: github\ndescription: GitHub guidance\n---\n",
+        "content": "---\nname: github\ndescription: GitHub guidance\nversion: 1.0.0\n---\n",
         "files_json": {"references/query.md": "Prefer precise queries."},
         "source_json": {"source_version": "1.0.0"},
         "created_at": "2026-04-24T00:00:00+00:00",
@@ -97,7 +97,7 @@ def _package_row(package_id: str = "package-1") -> dict:
         "version": "1.0.0",
         "hash": "sha256:abc",
         "manifest_json": {"files": [{"path": "references/query.md", "sha256": "def"}]},
-        "skill_md": "---\nname: github\ndescription: GitHub guidance\n---\n",
+        "skill_md": "---\nname: github\ndescription: GitHub guidance\nversion: 1.0.0\n---\n",
         "files_json": {"references/query.md": "Prefer precise queries."},
         "source_json": {"source_version": "1.0.0"},
         "created_at": "2026-04-24T00:00:00+00:00",
@@ -199,7 +199,7 @@ def test_create_package_writes_immutable_skill_package() -> None:
             version="1.0.0",
             hash="sha256:abc",
             manifest={"files": [{"path": "references/query.md", "sha256": "def"}]},
-            skill_md="---\nname: github\ndescription: GitHub guidance\n---\n",
+            skill_md="---\nname: github\ndescription: GitHub guidance\nversion: 1.0.0\n---\n",
             files={"references/query.md": "Prefer precise queries."},
             source={"source_version": "1.0.0"},
             created_at=timestamp,
@@ -208,7 +208,7 @@ def test_create_package_writes_immutable_skill_package() -> None:
 
     payload = client.table_queries["library.skill_packages"][0].upsert_payload
     assert payload is not None
-    assert payload["skill_md"] == "---\nname: github\ndescription: GitHub guidance\n---\n"
+    assert payload["skill_md"] == "---\nname: github\ndescription: GitHub guidance\nversion: 1.0.0\n---\n"
     assert payload["files_json"] == {"references/query.md": "Prefer precise queries."}
     assert payload["manifest_json"] == {"files": [{"path": "references/query.md", "sha256": "def"}]}
     assert payload["source_json"] == {"source_version": "1.0.0"}

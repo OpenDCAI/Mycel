@@ -595,7 +595,7 @@ async def test_get_or_create_agent_resolves_skill_packages_before_runtime_startu
                 skill_id="fastapi",
                 version="1.0.0",
                 hash="sha256:fastapi",
-                skill_md="---\nname: FastAPI\ndescription: Build FastAPI routes\n---\nUse APIRouter.",
+                skill_md="---\nname: FastAPI\ndescription: Build FastAPI routes\nversion: 1.0.0\n---\nUse APIRouter.",
                 created_at=datetime.fromisoformat("2026-04-26T00:00:00+00:00"),
             )
 

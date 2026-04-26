@@ -30,7 +30,7 @@ def test_snapshot_contains_resolved_agent_config_only():
                     skill_id="github",
                     version="1.0.0",
                     hash="sha256:github",
-                    skill_md="---\nname: github\ndescription: Query GitHub precisely\n---\n\n# GitHub\n",
+                    skill_md="---\nname: github\ndescription: Query GitHub precisely\nversion: 1.0.0\n---\n\n# GitHub\n",
                     files={"references/query.md": "Prefer precise queries."},
                     created_at=datetime.fromisoformat("2026-04-25T00:00:00+00:00"),
                 )
@@ -75,7 +75,7 @@ def test_snapshot_preserves_skill_id_when_name_changes():
                     skill_id="github-core",
                     version="1.0.0",
                     hash="sha256:github-core",
-                    skill_md="---\nname: GitHub\ndescription: Query GitHub precisely\n---\n\n# GitHub\n",
+                    skill_md="---\nname: GitHub\ndescription: Query GitHub precisely\nversion: 1.0.0\n---\n\n# GitHub\n",
                     created_at=datetime.fromisoformat("2026-04-25T00:00:00+00:00"),
                 )
             },
