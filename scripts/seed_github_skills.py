@@ -65,9 +65,12 @@ def parse_skill_md(skill_md: Path) -> dict | None:
     if len(content.strip()) < 50:
         return None
 
-    document = parse_skill_document(content, label="SKILL.md")
+    document = parse_skill_document(content, label="SKILL.md", require_description=True, require_version=True)
     name = document.name
     description = document.description
+    version = document.version
+    if version is None:
+        raise RuntimeError("SKILL.md version was not parsed")
     tags = []
     meta = document.frontmatter.get("metadata", {})
     if isinstance(meta, dict):
@@ -78,16 +81,10 @@ def parse_skill_md(skill_md: Path) -> dict | None:
         if isinstance(triggers, str):
             tags.extend([t.strip() for t in triggers.split(",")[:5] if t.strip()])
 
-    if not description:
-        for line in document.body.split("\n"):
-            stripped = line.strip()
-            if stripped and not stripped.startswith("#"):
-                description = stripped[:200]
-                break
-
     return {
         "name": name,
         "description": description,
+        "version": version,
         "tags": sorted({t for t in tags if t})[:10],
         "content": content,
     }
