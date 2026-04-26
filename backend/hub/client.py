@@ -257,6 +257,14 @@ def apply_item(
         item_slug = item.get("slug")
         if isinstance(item_slug, str) and item_slug.strip():
             source["marketplace_slug"] = item_slug.strip()
+        package = build_skill_package(
+            owner_user_id=owner_user_id,
+            skill_id=skill_id,
+            skill_md=content,
+            files=skill_files,
+            source=source,
+            created_at=timestamp,
+        )
         skill = skill_repo.upsert(
             Skill(
                 id=skill_id,
@@ -268,16 +276,7 @@ def apply_item(
                 updated_at=timestamp,
             )
         )
-        package = skill_repo.create_package(
-            build_skill_package(
-                owner_user_id=owner_user_id,
-                skill_id=skill.id,
-                skill_md=content,
-                files=skill_files,
-                source=source,
-                created_at=timestamp,
-            )
-        )
+        package = skill_repo.create_package(package)
         skill_repo.select_package(owner_user_id, skill.id, package.id)
 
         return {"resource_id": skill.id, "package_id": package.id, "type": "skill", "version": package.version}

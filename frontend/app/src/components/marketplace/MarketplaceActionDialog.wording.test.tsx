@@ -4,6 +4,8 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import type { MarketplaceItemDetail } from "@/store/marketplace-store";
+
 import MarketplaceActionDialog from "./MarketplaceActionDialog";
 
 const mocks = vi.hoisted(() => ({
@@ -49,6 +51,41 @@ vi.mock("sonner", () => ({
   },
 }));
 
+function marketItem(overrides: Partial<MarketplaceItemDetail> = {}): MarketplaceItemDetail {
+  return {
+    id: "pkg-1",
+    slug: "pack-one",
+    description: "desc",
+    avatar_url: null,
+    publisher_user_id: "user-1",
+    name: "Pack One",
+    type: "member",
+    publisher_username: "tester",
+    parent_id: null,
+    download_count: 0,
+    visibility: "public",
+    tags: [],
+    created_at: "2026-04-08T00:00:00Z",
+    updated_at: "2026-04-08T00:00:00Z",
+    versions: [{ id: "ver-1", version: "1.0.0", release_notes: null, created_at: "2026-04-08T00:00:00Z" }],
+    parent: null,
+    ...overrides,
+  };
+}
+
+function skillItem(): MarketplaceItemDetail {
+  return marketItem({
+    id: "skill-1",
+    slug: "fastapi",
+    name: "FastAPI",
+    type: "skill",
+  });
+}
+
+function renderDialog(item: MarketplaceItemDetail = marketItem()) {
+  return render(<MarketplaceActionDialog open onOpenChange={vi.fn()} item={item} />);
+}
+
 afterEach(() => {
   mocks.applyItem.mockReset();
   mocks.applying = false;
@@ -63,30 +100,7 @@ afterEach(() => {
 
 describe("MarketplaceActionDialog wording contract", () => {
   it("uses Agent wording for Hub agent-user actions", () => {
-    render(
-      <MarketplaceActionDialog
-        open
-        onOpenChange={vi.fn()}
-        item={{
-          id: "pkg-1",
-          slug: "pack-one",
-          description: "desc",
-          avatar_url: null,
-          publisher_user_id: "user-1",
-          name: "Pack One",
-          type: "member",
-          publisher_username: "tester",
-          parent_id: null,
-          download_count: 0,
-          visibility: "public",
-          tags: [],
-          created_at: "2026-04-08T00:00:00Z",
-          updated_at: "2026-04-08T00:00:00Z",
-          versions: [{ id: "ver-1", version: "1.0.0", release_notes: null, created_at: "2026-04-08T00:00:00Z" }],
-          parent: null,
-        }}
-      />,
-    );
+    renderDialog();
 
     expect(document.body.textContent).toContain("添加 Pack One");
     expect(screen.getByText("这将把该 Agent 添加到你的 Agent 列表。")).toBeTruthy();
@@ -101,30 +115,7 @@ describe("MarketplaceActionDialog wording contract", () => {
       version: "1.0.0",
     });
 
-    render(
-      <MarketplaceActionDialog
-        open
-        onOpenChange={vi.fn()}
-        item={{
-          id: "pkg-1",
-          slug: "pack-one",
-          description: "desc",
-          avatar_url: null,
-          publisher_user_id: "user-1",
-          name: "Pack One",
-          type: "member",
-          publisher_username: "tester",
-          parent_id: null,
-          download_count: 0,
-          visibility: "public",
-          tags: [],
-          created_at: "2026-04-08T00:00:00Z",
-          updated_at: "2026-04-08T00:00:00Z",
-          versions: [{ id: "ver-1", version: "1.0.0", release_notes: null, created_at: "2026-04-08T00:00:00Z" }],
-          parent: null,
-        }}
-      />,
-    );
+    renderDialog();
 
     fireEvent.click(screen.getByText("添加 Agent"));
 
@@ -139,30 +130,7 @@ describe("MarketplaceActionDialog wording contract", () => {
   it("uses add wording while a Hub agent-user action is in progress", () => {
     mocks.applying = true;
 
-    render(
-      <MarketplaceActionDialog
-        open
-        onOpenChange={vi.fn()}
-        item={{
-          id: "pkg-1",
-          slug: "pack-one",
-          description: "desc",
-          avatar_url: null,
-          publisher_user_id: "user-1",
-          name: "Pack One",
-          type: "member",
-          publisher_username: "tester",
-          parent_id: null,
-          download_count: 0,
-          visibility: "public",
-          tags: [],
-          created_at: "2026-04-08T00:00:00Z",
-          updated_at: "2026-04-08T00:00:00Z",
-          versions: [{ id: "ver-1", version: "1.0.0", release_notes: null, created_at: "2026-04-08T00:00:00Z" }],
-          parent: null,
-        }}
-      />,
-    );
+    renderDialog();
 
     expect(screen.getByText("添加中...")).toBeTruthy();
   });
@@ -170,31 +138,7 @@ describe("MarketplaceActionDialog wording contract", () => {
   it("uses add failure wording for Hub agent-user errors", async () => {
     mocks.applyItem.mockRejectedValue(new Error("boom"));
 
-    render(
-      <MarketplaceActionDialog
-        open
-        onOpenChange={vi.fn()}
-        item={{
-          id: "pkg-1",
-          slug: "pack-one",
-          description: "desc",
-          avatar_url: null,
-          publisher_user_id: "user-1",
-          name: "Pack One",
-          type: "member",
-          publisher_username: "tester",
-          parent_id: null,
-          download_count: 0,
-          visibility: "public",
-          tags: [],
-          created_at: "2026-04-08T00:00:00Z",
-          updated_at: "2026-04-08T00:00:00Z",
-          versions: [{ id: "ver-1", version: "1.0.0", release_notes: null, created_at: "2026-04-08T00:00:00Z" }],
-          parent: null,
-        }}
-      />,
-    );
-
+    renderDialog();
     fireEvent.click(screen.getByText("添加 Agent"));
 
     await waitFor(() => {
@@ -203,30 +147,7 @@ describe("MarketplaceActionDialog wording contract", () => {
   });
 
   it("defaults Skill saves to Library and keeps Agent assignment optional", () => {
-    render(
-      <MarketplaceActionDialog
-        open
-        onOpenChange={vi.fn()}
-        item={{
-          id: "skill-1",
-          slug: "fastapi",
-          description: "desc",
-          avatar_url: null,
-          publisher_user_id: "user-1",
-          name: "FastAPI",
-          type: "skill",
-          publisher_username: "tester",
-          parent_id: null,
-          download_count: 0,
-          visibility: "public",
-          tags: [],
-          created_at: "2026-04-08T00:00:00Z",
-          updated_at: "2026-04-08T00:00:00Z",
-          versions: [{ id: "ver-1", version: "1.0.0", release_notes: null, created_at: "2026-04-08T00:00:00Z" }],
-          parent: null,
-        }}
-      />,
-    );
+    renderDialog(skillItem());
 
     expect(screen.getByText("这将把该 Skill 保存到 Library，之后可以在 Agent 配置页中添加使用。")).toBeTruthy();
     expect(document.body.textContent).toContain("保存 FastAPI");
@@ -248,31 +169,7 @@ describe("MarketplaceActionDialog wording contract", () => {
       version: "1.0.0",
     });
 
-    render(
-      <MarketplaceActionDialog
-        open
-        onOpenChange={vi.fn()}
-        item={{
-          id: "skill-1",
-          slug: "fastapi",
-          description: "desc",
-          avatar_url: null,
-          publisher_user_id: "user-1",
-          name: "FastAPI",
-          type: "skill",
-          publisher_username: "tester",
-          parent_id: null,
-          download_count: 0,
-          visibility: "public",
-          tags: [],
-          created_at: "2026-04-08T00:00:00Z",
-          updated_at: "2026-04-08T00:00:00Z",
-          versions: [{ id: "ver-1", version: "1.0.0", release_notes: null, created_at: "2026-04-08T00:00:00Z" }],
-          parent: null,
-        }}
-      />,
-    );
-
+    renderDialog(skillItem());
     fireEvent.click(screen.getByText("保存到 Library"));
 
     await waitFor(() => {
@@ -290,31 +187,7 @@ describe("MarketplaceActionDialog wording contract", () => {
       agent_user_id: "agent-1",
     });
 
-    render(
-      <MarketplaceActionDialog
-        open
-        onOpenChange={vi.fn()}
-        item={{
-          id: "skill-1",
-          slug: "fastapi",
-          description: "desc",
-          avatar_url: null,
-          publisher_user_id: "user-1",
-          name: "FastAPI",
-          type: "skill",
-          publisher_username: "tester",
-          parent_id: null,
-          download_count: 0,
-          visibility: "public",
-          tags: [],
-          created_at: "2026-04-08T00:00:00Z",
-          updated_at: "2026-04-08T00:00:00Z",
-          versions: [{ id: "ver-1", version: "1.0.0", release_notes: null, created_at: "2026-04-08T00:00:00Z" }],
-          parent: null,
-        }}
-      />,
-    );
-
+    renderDialog(skillItem());
     fireEvent.click(screen.getByLabelText("保存到 Library 后赋给 Agent"));
     fireEvent.click(screen.getByText("保存到 Library 并赋给 Agent"));
 
