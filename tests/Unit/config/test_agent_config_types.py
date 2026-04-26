@@ -11,7 +11,7 @@ def test_resolved_skill_model_normalizes_file_paths() -> None:
         name="query-helper",
         description="Build precise queries",
         version="1.0.0",
-        content="---\nname: query-helper\n---\nUse exact terms.",
+        content="---\nname: query-helper\ndescription: Build precise queries\nversion: 1.0.0\n---\nUse exact terms.",
         files={"references\\query.md": "Prefer precise queries."},
     )
 
@@ -20,7 +20,9 @@ def test_resolved_skill_model_normalizes_file_paths() -> None:
 
 def test_resolved_skill_model_rejects_duplicate_file_paths_after_normalization() -> None:
     common = {
-        "content": "---\nname: query-helper\n---\nUse exact terms.",
+        "content": "---\nname: query-helper\ndescription: Build precise queries\nversion: 1.0.0\n---\nUse exact terms.",
+        "description": "Build precise queries",
+        "version": "1.0.0",
         "files": {
             "references\\query.md": "Windows-shaped key.",
             "references/query.md": "POSIX-shaped key.",
@@ -38,7 +40,78 @@ def test_resolved_skill_model_rejects_blank_version() -> None:
             name="query-helper",
             description="Build precise queries",
             version=" ",
-            content="---\nname: query-helper\n---\nUse exact terms.",
+            content="---\nname: query-helper\ndescription: Build precise queries\nversion: 1.0.0\n---\nUse exact terms.",
+        )
+
+
+def test_resolved_skill_model_rejects_blank_description() -> None:
+    with pytest.raises(ValueError, match="resolved_skill.description must not be blank"):
+        ResolvedSkill(
+            id="query-helper",
+            name="query-helper",
+            description=" ",
+            version="1.0.0",
+            content="---\nname: query-helper\ndescription: Build precise queries\nversion: 1.0.0\n---\nUse exact terms.",
+        )
+
+
+def test_resolved_skill_model_requires_skill_md_frontmatter() -> None:
+    with pytest.raises(ValueError, match="resolved_skill.content must be a SKILL.md document with frontmatter"):
+        ResolvedSkill(
+            id="query-helper",
+            name="query-helper",
+            description="Build precise queries",
+            version="1.0.0",
+            content="Use exact terms.",
+        )
+
+
+def test_resolved_skill_model_requires_content_description_and_version() -> None:
+    with pytest.raises(ValueError, match="resolved_skill.content frontmatter must include description"):
+        ResolvedSkill(
+            id="query-helper",
+            name="query-helper",
+            description="Build precise queries",
+            version="1.0.0",
+            content="---\nname: query-helper\nversion: 1.0.0\n---\nUse exact terms.",
+        )
+
+    with pytest.raises(ValueError, match="resolved_skill.content frontmatter must include version"):
+        ResolvedSkill(
+            id="query-helper",
+            name="query-helper",
+            description="Build precise queries",
+            version="1.0.0",
+            content="---\nname: query-helper\ndescription: Build precise queries\n---\nUse exact terms.",
+        )
+
+
+def test_resolved_skill_model_requires_content_identity_to_match_fields() -> None:
+    with pytest.raises(ValueError, match="resolved_skill.content frontmatter name must match resolved_skill.name"):
+        ResolvedSkill(
+            id="query-helper",
+            name="query-helper",
+            description="Build precise queries",
+            version="1.0.0",
+            content="---\nname: other-helper\ndescription: Build precise queries\nversion: 1.0.0\n---\nUse exact terms.",
+        )
+
+    with pytest.raises(ValueError, match="resolved_skill.content frontmatter description must match resolved_skill.description"):
+        ResolvedSkill(
+            id="query-helper",
+            name="query-helper",
+            description="Build precise queries",
+            version="1.0.0",
+            content="---\nname: query-helper\ndescription: Different text\nversion: 1.0.0\n---\nUse exact terms.",
+        )
+
+    with pytest.raises(ValueError, match="resolved_skill.content frontmatter version must match resolved_skill.version"):
+        ResolvedSkill(
+            id="query-helper",
+            name="query-helper",
+            description="Build precise queries",
+            version="1.0.0",
+            content="---\nname: query-helper\ndescription: Build precise queries\nversion: 2.0.0\n---\nUse exact terms.",
         )
 
 
@@ -63,7 +136,7 @@ def test_resolved_skill_model_rejects_blank_id() -> None:
             name="query-helper",
             description="Build precise queries",
             version="1.0.0",
-            content="---\nname: query-helper\n---\nUse exact terms.",
+            content="---\nname: query-helper\ndescription: Build precise queries\nversion: 1.0.0\n---\nUse exact terms.",
         )
 
 
