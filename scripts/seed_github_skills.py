@@ -148,7 +148,7 @@ def build_skill_payload(
         "type": "skill",
         "name": package["name"],
         "description": package["description"],
-        "version": "1.0.0",
+        "version": package["version"],
         "release_notes": "Initial release",
         "tags": package["tags"],
         "visibility": "public",
