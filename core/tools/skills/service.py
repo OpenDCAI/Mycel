@@ -24,10 +24,6 @@ class SkillsService:
             if not isinstance(skill, ResolvedSkill):
                 raise TypeError("SkillsService requires ResolvedSkill items")
             document = parse_skill_document(skill.content, label="Skill content", require_description=True, require_version=True)
-            if document.name != skill.name:
-                raise ValueError("Skill frontmatter name must match ResolvedSkill.name")
-            if document.version != skill.version:
-                raise ValueError("Skill frontmatter version must match ResolvedSkill.version")
             self._skill_bodies[skill.name] = document.body
             self._skill_descriptions[skill.name] = document.description
             self._skill_files[skill.name] = skill.files
