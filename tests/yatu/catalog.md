@@ -17,6 +17,9 @@ maintained prompts.
 ## Relationship And Join
 
 - `relationship-and-chat-join.md`
+- Latest current-merged proof:
+  - `~/share/yatu/current-merged-relationship-join-cli-20260426T1235/summary.md`
+  - `~/share/yatu/current-merged-frontend-social-20260426T1240/summary.md`
 - Historical notes:
   - `$MYCEL_WORKSPACE/notes/2026-04-26-relationship-and-chat-join-design.html`
   - `$MYCEL_WORKSPACE/notes/2026-04-26-social-relationship-chat-join-current-design.html`
@@ -29,6 +32,8 @@ maintained prompts.
 ## Frontend
 
 - `frontend-social-flows.md`
+- Latest current-merged proof:
+  - `~/share/yatu/current-merged-frontend-social-20260426T1240/summary.md`
 - Historical artifacts:
   - `~/share/yatu/mycel-relationship-frontend-20260425T214005`
   - `~/share/yatu/frontend-join-request-ui-20260425T183836Z`

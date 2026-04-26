@@ -66,6 +66,8 @@ Approving one must not secretly approve the other.
 
 ## Historical Seeds
 
+- `~/share/yatu/current-merged-relationship-join-cli-20260426T1235`
+- `~/share/yatu/current-merged-frontend-social-20260426T1240`
 - `$MYCEL_WORKSPACE/notes/2026-04-26-relationship-and-chat-join-design.html`
 - `$MYCEL_WORKSPACE/notes/2026-04-26-social-relationship-chat-join-current-design.html`
 - `~/share/yatu/managed-agent-relationship-cli-20260426T011838`
