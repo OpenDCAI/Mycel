@@ -1040,7 +1040,7 @@ def test_panel_library_skill_routes_use_skill_repo_without_recipe_repo() -> None
     with TestClient(app) as client:
         created = client.post(
             "/api/panel/library/skill",
-            json={"name": "Loadable Skill", "desc": "Use this skill", "content": _editable_skill_md()},
+            json={"name": "Loadable Skill", "content": _editable_skill_md()},
         )
         assert created.status_code == 200
         created_id = created.json()["id"]
