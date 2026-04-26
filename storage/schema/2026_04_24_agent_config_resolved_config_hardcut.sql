@@ -31,16 +31,22 @@ create table if not exists library.skill_packages (
     source_json jsonb not null default '{}'::jsonb,
     created_at timestamptz not null default now(),
     unique (owner_user_id, skill_id, hash),
+    unique (owner_user_id, skill_id, id),
     foreign key (owner_user_id, skill_id)
         references library.skills(owner_user_id, id)
         on delete cascade
 );
 
+alter table library.skill_packages
+    drop constraint if exists skill_packages_owner_user_id_skill_id_id_key,
+    add constraint skill_packages_owner_user_id_skill_id_id_key
+        unique (owner_user_id, skill_id, id);
+
 alter table library.skills
     drop constraint if exists skills_package_fk,
     add constraint skills_package_fk
-        foreign key (package_id)
-        references library.skill_packages(id);
+        foreign key (owner_user_id, id, package_id)
+        references library.skill_packages(owner_user_id, skill_id, id);
 
 alter table if exists library.skills
     alter column description drop default;
@@ -205,6 +211,12 @@ begin
         drop constraint if exists skill_packages_version_required_ck,
         add constraint skill_packages_version_required_ck
             check (version is not null and btrim(version) <> ''),
+        drop constraint if exists skill_packages_hash_format_ck,
+        add constraint skill_packages_hash_format_ck
+            check (hash like 'sha256:%'),
+        drop constraint if exists skill_packages_id_not_hash_ck,
+        add constraint skill_packages_id_not_hash_ck
+            check (id <> substring(hash from 8)),
         drop constraint if exists skill_packages_manifest_json_object_ck,
         add constraint skill_packages_manifest_json_object_ck
             check (jsonb_typeof(manifest_json) = 'object'),

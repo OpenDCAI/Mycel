@@ -19,6 +19,9 @@ def test_agent_config_schema_uses_library_package_storage() -> None:
     assert "manifest_json jsonb not null default '{}'::jsonb" in sql
     assert "artifact_uri" not in sql
     assert "references library.skill_packages(id)" in sql
+    assert "skills_package_fk" in sql
+    assert "foreign key (owner_user_id, id, package_id)" in sql
+    assert "references library.skill_packages(owner_user_id, skill_id, id)" in sql
     assert "agent_config.skills child.skill_id is required" in sql
     assert "agent_config.skills child.package_id is required" in sql
     assert "agent_skill.package_id does not belong to owner" in sql
@@ -27,6 +30,16 @@ def test_agent_config_schema_uses_library_package_storage() -> None:
     assert "insert into agent.agent_skills" not in sql
     assert "agent.agent_skills.content" not in sql
     assert "agent.agent_skills.files_json" not in sql
+
+
+def test_skill_package_schema_separates_row_id_from_content_hash() -> None:
+    sql = Path("storage/schema/2026_04_24_agent_config_resolved_config_hardcut.sql").read_text(encoding="utf-8")
+
+    assert "skill_packages_hash_format_ck" in sql
+    assert "hash like 'sha256:%'" in sql
+    assert "skill_packages_id_not_hash_ck" in sql
+    assert "id <> substring(hash from 8)" in sql
+    assert "unique (owner_user_id, skill_id, id)" in sql
 
 
 def test_agent_skill_binding_package_fk_does_not_silently_delete_agent_selection() -> None:
