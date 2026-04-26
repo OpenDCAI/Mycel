@@ -42,6 +42,20 @@ def test_skill_package_schema_separates_row_id_from_content_hash() -> None:
     assert "unique (skill_id, id)" in sql
 
 
+def test_skill_package_unique_constraints_are_added_without_breaking_dependents() -> None:
+    sql = Path("storage/schema/2026_04_24_agent_config_resolved_config_hardcut.sql").read_text(encoding="utf-8")
+
+    package_backfill = re.search(
+        r"if not exists \(.*?skill_packages_owner_user_id_skill_id_id_key.*?end if;.*?"
+        r"if not exists \(.*?skill_packages_skill_id_id_key.*?end if;",
+        sql,
+        flags=re.DOTALL,
+    )
+    assert package_backfill is not None
+    assert "drop constraint if exists skill_packages_owner_user_id_skill_id_id_key" not in sql
+    assert "drop constraint if exists skill_packages_skill_id_id_key" not in sql
+
+
 def test_agent_skill_binding_package_fk_does_not_silently_delete_agent_selection() -> None:
     sql = Path("storage/schema/2026_04_24_agent_config_resolved_config_hardcut.sql").read_text(encoding="utf-8")
 
