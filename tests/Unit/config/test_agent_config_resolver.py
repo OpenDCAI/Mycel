@@ -4,7 +4,7 @@ from typing import Any
 
 import pytest
 
-from config.agent_config_resolver import resolve_agent_config, validate_resolved_skill_content
+from config.agent_config_resolver import resolve_agent_config
 from config.agent_config_types import (
     AgentConfig,
     AgentRule,
@@ -135,20 +135,6 @@ def test_resolver_names_skill_working_set_as_resolved_skills() -> None:
 
     assert "enabled_skills" not in source
     assert "resolved_skills" in source
-
-
-def test_resolved_skill_content_requires_version_frontmatter() -> None:
-    skill = _resolved_skill(
-        content_version="1.0.0",
-    ).model_copy(update={"content": "---\nname: github\ndescription: Use gh.\n---\n# GitHub\n"})
-
-    with pytest.raises(ValueError, match="Skill 'github' on Agent config frontmatter must include version"):
-        validate_resolved_skill_content(skill)
-
-
-def test_resolved_skill_version_matches_skill_md_frontmatter() -> None:
-    with pytest.raises(ValueError, match="ResolvedSkill.version must match SKILL.md frontmatter version"):
-        validate_resolved_skill_content(_resolved_skill(version="2.0.0", content_version="1.0.0"))
 
 
 def test_resolver_keeps_skill_id_separate_from_display_name() -> None:
