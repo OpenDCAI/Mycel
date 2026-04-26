@@ -105,33 +105,54 @@ def test_dispatcher_same_owner_group_delivers_without_relationship() -> None:
 
 
 def test_dispatcher_open_sender_scope_wakes_all_default_agents() -> None:
-    delivered: list[tuple[str, bool]] = []
+    delivered: list[str] = []
     dispatcher = ChatDeliveryDispatcher(
         chat_member_repo=_member_repo(["human-user-1", "agent-user-1", "agent-user-2"]),
         user_repo=_user_repo(),
         avatar_url_builder=lambda _user_id, _has_avatar: None,
         unread_counter=lambda _chat_id, _user_id: 0,
-        delivery_fn=lambda request: delivered.append((request.recipient_id, request.wake)),
+        delivery_fn=lambda request: delivered.append(request.recipient_id),
     )
 
     dispatcher.dispatch("chat-1", "human-user-1", "hello", [])
 
-    assert delivered == [("agent-user-1", True), ("agent-user-2", True)]
+    assert delivered == ["agent-user-1", "agent-user-2"]
 
 
-def test_dispatcher_explicit_mentions_queue_unmentioned_default_agents() -> None:
-    delivered: list[tuple[str, bool]] = []
+def test_dispatcher_explicit_mentions_deliver_only_to_mentioned_default_agents() -> None:
+    delivered: list[str] = []
     dispatcher = ChatDeliveryDispatcher(
         chat_member_repo=_member_repo(["human-user-1", "agent-user-1", "agent-user-2"]),
         user_repo=_user_repo(),
         avatar_url_builder=lambda _user_id, _has_avatar: None,
         unread_counter=lambda _chat_id, _user_id: 0,
-        delivery_fn=lambda request: delivered.append((request.recipient_id, request.wake)),
+        delivery_fn=lambda request: delivered.append(request.recipient_id),
     )
 
     dispatcher.dispatch("chat-1", "human-user-1", "hello", ["agent-user-2"])
 
-    assert delivered == [("agent-user-1", False), ("agent-user-2", True)]
+    assert delivered == ["agent-user-2"]
+
+
+def test_dispatcher_keeps_no_wake_recipients_out_of_runtime_queue() -> None:
+    delivered: list[str] = []
+    dispatcher = ChatDeliveryDispatcher(
+        chat_member_repo=SimpleNamespace(
+            list_members=lambda _chat_id: [
+                {"user_id": "human-user-1", "muted": False},
+                {"user_id": "agent-user-1", "muted": False},
+                {"user_id": "agent-user-2", "muted": True},
+            ]
+        ),
+        user_repo=_user_repo(),
+        avatar_url_builder=lambda _user_id, _has_avatar: None,
+        unread_counter=lambda _chat_id, _user_id: 0,
+        delivery_fn=lambda request: delivered.append(request.recipient_id),
+    )
+
+    dispatcher.dispatch("chat-1", "human-user-1", "explicit mention", ["agent-user-1"])
+
+    assert delivered == ["agent-user-1"]
 
 
 def test_dispatcher_agent_turn_delivers_only_to_sibling_agent() -> None:
@@ -168,20 +189,20 @@ def test_dispatcher_does_not_runtime_deliver_to_external_users() -> None:
     assert delivered == []
 
 
-def test_dispatcher_queues_notify_policy_without_waking() -> None:
-    delivered: list[tuple[str, bool]] = []
+def test_dispatcher_keeps_notify_policy_out_of_runtime_queue() -> None:
+    delivered: list[str] = []
     dispatcher = ChatDeliveryDispatcher(
         chat_member_repo=_member_repo(["outside-human-user", "agent-user-1"]),
         user_repo=_user_repo(),
         avatar_url_builder=lambda _user_id, _has_avatar: None,
         unread_counter=lambda _chat_id, _user_id: 0,
         delivery_resolver=SimpleNamespace(resolve=lambda *_args, **_kwargs: DeliveryAction.NOTIFY),
-        delivery_fn=lambda request: delivered.append((request.recipient_id, request.wake)),
+        delivery_fn=lambda request: delivered.append(request.recipient_id),
     )
 
     dispatcher.dispatch("chat-1", "outside-human-user", "hello", [])
 
-    assert delivered == [("agent-user-1", False)]
+    assert delivered == []
 
 
 def test_dispatcher_respects_drop_policy() -> None:

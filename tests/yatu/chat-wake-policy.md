@@ -24,6 +24,16 @@ agents. Everyone still receives the persisted chat message.
 
 ## User Loop
 
+Open-scope baseline:
+
+1. Unmute all managed-agent members.
+2. Mark the group chat read as the owner.
+3. Send one ordinary group message with no `--mention`.
+4. Wait long enough for managed-agent runtime replies.
+5. Read the transcript as the owner.
+
+Targeted/no-wake flow:
+
 1. Mark the group chat read as the owner.
 2. Send a natural-language message mentioning only Agent 1 and Agent 2 by
    passing `--mention <agent-1-id>` and `--mention <agent-2-id>`.
@@ -35,6 +45,10 @@ agents. Everyone still receives the persisted chat message.
 
 ## Pass Bar
 
+- In the open-scope baseline, the owner send has `mentioned_ids: []`.
+- In the open-scope baseline, default managed agents can wake and interact
+  naturally from one group message; a simple 成语接龙 prompt should not require
+  the user to coordinate every word.
 - The first send stores `mentioned_ids` for only Agent 1 and Agent 2.
 - Before the second send, only Agent 1 and Agent 2 reply.
 - Agent 3 remains quiet before the open-scope message.
@@ -50,8 +64,3 @@ agents. Everyone still receives the persisted chat message.
 - Do not inspect runtime queue internals to decide pass/fail.
 - Do not treat duplicate follow-up chatter by already-woken agents as a
   wake-scope failure unless an unmentioned quiet agent speaks before it should.
-
-## Historical Seeds
-
-- `$MYCEL_WORKSPACE/notes/2026-04-26-chat-wake-policy-postmerge-yatu.html`
-- `~/share/yatu/mention-wake-postmerge-20260426T031323Z`

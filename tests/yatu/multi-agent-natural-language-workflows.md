@@ -45,6 +45,20 @@ Pass bar:
 - Chair can compute from visible messages only.
 - The workflow remains short enough that SDK/CLI friction is obvious.
 
+## Workflow C: Open-Scope Chengyu Chain
+
+1. Create or choose a group chat with multiple live managed agents.
+2. Send one ordinary natural-language message asking the group to play 成语接龙.
+3. Do not mention or individually coordinate agents.
+4. Wait for the group to respond through ordinary chat.
+
+Pass bar:
+
+- The owner message has no mentions.
+- At least two managed agents reply from that single group message.
+- Follow-up interaction can continue without the owner spelling out every word.
+- The transcript is readable from normal chat history.
+
 ## Pitfalls
 
 - Do not mute everyone and then expect mention to wake muted agents. Mute is
@@ -52,12 +66,3 @@ Pass bar:
 - Do not add workflow-specific backend concepts for tournament or average
   games.
 - If orchestration requires long glue code, improve base chat/SDK primitives.
-
-## Historical Seeds
-
-- `~/share/yatu/debate-tournament-cli-20260426T-fanout-race-fix-v4/summary.md`
-- `$MYCEL_WORKSPACE/notes/2026-04-25-sdk-yatu-16-agent-debate-tournament-plan.html`
-- `$MYCEL_WORKSPACE/notes/2026-04-26-16-agent-debate-yatu-findings.html`
-- `~/share/yatu/sdk-guess-average-workflow-20260425T230405Z/summary.md`
-- `~/share/yatu/debate-tournament-cli-20260426T0333/summary.md`
-- `~/share/yatu/debate-tournament-cli-20260426T200308-mute-control/summary.md`

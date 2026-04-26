@@ -18,7 +18,6 @@ class ChatDeliveryRequest:
     sender_avatar_url: str | None
     unread_count: int
     signal: str | None
-    wake: bool = True
 
 
 class ChatDeliveryFn(Protocol):

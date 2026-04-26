@@ -26,7 +26,7 @@ def test_default_receiver_wakes_for_open_sender_scope() -> None:
     assert action is WakeAction.WAKE_NOW
 
 
-def test_default_receiver_queues_when_targeted_but_unmentioned() -> None:
+def test_default_receiver_does_not_wake_when_targeted_but_unmentioned() -> None:
     action = compose_wake_action(
         safety=WakeSafety.ALLOWED,
         sender_scope=SenderWakeScope.TARGETED,
@@ -34,7 +34,7 @@ def test_default_receiver_queues_when_targeted_but_unmentioned() -> None:
         recipient_is_mentioned=False,
     )
 
-    assert action is WakeAction.QUEUE_ONLY
+    assert action is WakeAction.NO_WAKE
 
 
 def test_default_receiver_wakes_when_targeted_and_mentioned() -> None:
@@ -48,7 +48,7 @@ def test_default_receiver_wakes_when_targeted_and_mentioned() -> None:
     assert action is WakeAction.WAKE_NOW
 
 
-def test_quiet_receiver_queues_even_when_mentioned() -> None:
+def test_quiet_receiver_does_not_wake_even_when_mentioned() -> None:
     action = compose_wake_action(
         safety=WakeSafety.ALLOWED,
         sender_scope=SenderWakeScope.TARGETED,
@@ -56,7 +56,7 @@ def test_quiet_receiver_queues_even_when_mentioned() -> None:
         recipient_is_mentioned=True,
     )
 
-    assert action is WakeAction.QUEUE_ONLY
+    assert action is WakeAction.NO_WAKE
 
 
 def test_always_wake_receiver_wakes_even_when_unmentioned() -> None:

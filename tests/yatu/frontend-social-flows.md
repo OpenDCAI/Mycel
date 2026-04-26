@@ -48,11 +48,3 @@ without knowing backend vocabulary.
   frontend YATU.
 - Do not use Playwright MCP as the product proof surface.
 - Do not hide network or console errors when the browser looks visually fine.
-
-## Historical Seeds
-
-- `~/share/yatu/current-merged-frontend-social-20260426T1240`
-- `~/share/yatu/mycel-relationship-frontend-20260425T214005`
-- `~/share/yatu/frontend-relationship-join-currentdev-20260426T`
-- `~/share/yatu/frontend-social-discovery-20260426T0542`
-- `~/share/yatu/frontend-join-request-ui-20260425T183836Z`
