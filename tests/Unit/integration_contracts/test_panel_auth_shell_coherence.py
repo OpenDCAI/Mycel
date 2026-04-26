@@ -1284,6 +1284,57 @@ def test_library_skill_description_comes_from_skill_md_frontmatter() -> None:
     assert stored.description == "Frontmatter desc"
 
 
+def test_library_skill_create_rejects_separate_description() -> None:
+    skill_repo = _MemorySkillRepo()
+
+    with pytest.raises(ValueError, match="Skill description must be declared in SKILL.md frontmatter"):
+        library_service.create_resource(
+            "skill",
+            "Loadable Skill",
+            "Caller desc",
+            owner_user_id="owner-1",
+            skill_repo=skill_repo,
+            content=_editable_skill_md(description="Frontmatter desc"),
+        )
+
+    assert skill_repo.skills == {}
+    assert skill_repo.packages == {}
+
+
+def test_library_skill_create_rejects_blank_separate_description() -> None:
+    skill_repo = _MemorySkillRepo()
+
+    with pytest.raises(ValueError, match="Skill description must be declared in SKILL.md frontmatter"):
+        library_service.create_resource(
+            "skill",
+            "Loadable Skill",
+            "   ",
+            owner_user_id="owner-1",
+            skill_repo=skill_repo,
+            content=_editable_skill_md(description="Frontmatter desc"),
+        )
+
+    assert skill_repo.skills == {}
+    assert skill_repo.packages == {}
+
+
+def test_library_skill_create_rejects_matching_separate_description() -> None:
+    skill_repo = _MemorySkillRepo()
+
+    with pytest.raises(ValueError, match="Skill description must be declared in SKILL.md frontmatter"):
+        library_service.create_resource(
+            "skill",
+            "Loadable Skill",
+            "Frontmatter desc",
+            owner_user_id="owner-1",
+            skill_repo=skill_repo,
+            content=_editable_skill_md(description="Frontmatter desc"),
+        )
+
+    assert skill_repo.skills == {}
+    assert skill_repo.packages == {}
+
+
 def test_library_skill_content_update_refreshes_description_from_skill_md() -> None:
     skill_repo = _MemorySkillRepo()
     created = library_service.create_resource(
