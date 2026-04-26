@@ -247,6 +247,7 @@ def create_resource(
     if resource_type == "skill":
         owner_user_id = _require_skill_owner(owner_user_id)
         skill_repo = _require_skill_repo(skill_repo)
+        _reject_skill_description_argument(desc)
         if not content or not content.strip():
             raise ValueError("Skill creation requires SKILL.md content")
         document = _skill_document_from_content(content, require_version=True)
