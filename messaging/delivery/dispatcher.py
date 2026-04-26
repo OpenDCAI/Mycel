@@ -97,6 +97,8 @@ class ChatDeliveryDispatcher:
             if wake_action is WakeAction.DROP_RUNTIME:
                 logger.info("[messaging] POLICY %s for %s", action.value, uid[:15])
                 continue
+            if wake_action is WakeAction.NO_WAKE:
+                continue
 
             self._deliver(
                 uid,
@@ -109,7 +111,6 @@ class ChatDeliveryDispatcher:
                 sender_avatar_url,
                 unread_count=self._count_unread(chat_id, uid),
                 signal=signal,
-                wake=wake_action is WakeAction.WAKE_NOW,
             )
 
     def _resolve_display_user(self, social_user_id: str) -> Any | None:
@@ -147,7 +148,6 @@ class ChatDeliveryDispatcher:
         unread_count: int,
         *,
         signal: str | None,
-        wake: bool,
     ) -> None:
         if not self._delivery_fn:
             raise RuntimeError("Chat delivery function is not configured")
@@ -163,7 +163,6 @@ class ChatDeliveryDispatcher:
                 sender_avatar_url=sender_avatar_url,
                 unread_count=unread_count,
                 signal=signal,
-                wake=wake,
             )
         )
 

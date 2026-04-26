@@ -3058,8 +3058,8 @@ def test_same_owner_agent_turn_delivers_to_sibling_user_without_relationship() -
     assert delivered == [("agent-user-2", "agent-user-2")]
 
 
-def test_same_owner_group_delivery_queues_muted_recipients_even_when_mentioned() -> None:
-    delivered: list[tuple[str, bool]] = []
+def test_same_owner_group_delivery_keeps_muted_recipients_out_of_runtime_queue() -> None:
+    delivered: list[str] = []
     dispatcher = ChatDeliveryDispatcher(
         chat_member_repo=SimpleNamespace(
             list_members=lambda _chat_id: [
@@ -3081,18 +3081,13 @@ def test_same_owner_group_delivery_queues_muted_recipients_even_when_mentioned()
         ),
         unread_counter=lambda _chat_id, _user_id: 0,
         delivery_resolver=SimpleNamespace(resolve=lambda *_args, **_kwargs: DeliveryAction.DELIVER),
-        delivery_fn=lambda request: delivered.append((request.recipient_id, request.wake)),
+        delivery_fn=lambda request: delivered.append(request.recipient_id),
     )
 
     dispatcher.dispatch("chat-1", "human-user-1", "plain update", [])
     dispatcher.dispatch("chat-1", "human-user-1", "explicit mention", ["agent-user-2"])
 
-    assert delivered == [
-        ("agent-user-1", True),
-        ("agent-user-2", False),
-        ("agent-user-1", False),
-        ("agent-user-2", False),
-    ]
+    assert delivered == ["agent-user-1"]
 
 
 @pytest.mark.asyncio
