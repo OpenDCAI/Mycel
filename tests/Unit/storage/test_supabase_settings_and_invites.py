@@ -109,3 +109,46 @@ def test_invite_code_repo_uses_identity_schema_for_reads_and_writes() -> None:
     ]
     assert tables["identity.invite_codes"][0]["created_by"] == "user-1"
     assert "invite_codes" not in tables
+
+
+def test_invite_code_use_is_idempotent_for_same_user() -> None:
+    tables = {
+        "identity.invite_codes": [
+            {
+                "code": "INVITE-1",
+                "used_by": None,
+                "used_at": None,
+                "expires_at": None,
+            }
+        ]
+    }
+    repo = SupabaseInviteCodeRepo(FakeSupabaseClient(tables=tables))
+
+    first = repo.use("INVITE-1", "user-1")
+    replay = repo.use("INVITE-1", "user-1")
+
+    assert first is not None
+    assert replay is not None
+    assert first["used_by"] == "user-1"
+    assert replay["used_by"] == "user-1"
+
+
+def test_invite_code_can_only_be_replayed_by_consumer() -> None:
+    repo = SupabaseInviteCodeRepo(
+        FakeSupabaseClient(
+            tables={
+                "identity.invite_codes": [
+                    {
+                        "code": "INVITE-1",
+                        "used_by": "user-1",
+                        "used_at": "2026-04-27T00:00:00+00:00",
+                        "expires_at": None,
+                    }
+                ]
+            }
+        )
+    )
+
+    assert repo.is_usable_by("INVITE-1", "user-1") is True
+    assert repo.is_usable_by("INVITE-1", "user-2") is False
+    assert repo.use("INVITE-1", "user-2") is None

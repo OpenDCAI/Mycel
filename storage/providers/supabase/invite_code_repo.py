@@ -87,10 +87,9 @@ class SupabaseInviteCodeRepo:
         )
         updated = resp.data or []
         if not updated:
-            # Either code doesn't exist, already used, or expired — check which
             existing = self.get(code)
-            if existing is None or existing.get("used_by") or _is_expired(existing):
-                return None
+            if existing is not None and existing.get("used_by") == user_id and not _is_expired(existing):
+                return existing
             return None
         return dict(updated[0])
 
@@ -101,6 +100,13 @@ class SupabaseInviteCodeRepo:
         if existing.get("used_by"):
             return False
         return not _is_expired(existing)
+
+    def is_usable_by(self, code: str, user_id: str) -> bool:
+        existing = self.get(code)
+        if not existing or _is_expired(existing):
+            return False
+        used_by = existing.get("used_by")
+        return used_by is None or used_by == user_id
 
     def revoke(self, code: str) -> bool:
         resp = self._table().delete().eq("code", code).execute()

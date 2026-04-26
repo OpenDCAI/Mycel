@@ -61,6 +61,10 @@ class FakeSupabaseQuery:
         self._filters.append((column, "gte", value))
         return self
 
+    def is_(self, column: str, value: object):
+        self._filters.append((column, "is", value))
+        return self
+
     def order(self, column: str, desc: bool = False):
         self._order_by = (column, desc)
         return self
@@ -79,6 +83,8 @@ class FakeSupabaseQuery:
             if op == "gt" and not (cell is not None and cell > value):
                 return False
             if op == "gte" and not (cell is not None and cell >= value):
+                return False
+            if op == "is" and cell is not value:
                 return False
         if self._in_filter is not None:
             column, values = self._in_filter
