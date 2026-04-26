@@ -48,6 +48,9 @@ alter table if exists library.skills
 alter table if exists library.skill_packages
     alter column version drop default;
 
+alter table if exists agent.agent_configs
+    alter column mcp_json set default '[]'::jsonb;
+
 create table if not exists agent.skill_bindings (
     id uuid primary key default gen_random_uuid(),
     agent_config_id text not null,
@@ -177,7 +180,10 @@ begin
     alter table library.skills
         drop constraint if exists skills_description_required_ck,
         add constraint skills_description_required_ck
-            check (description is not null and btrim(description) <> '');
+            check (description is not null and btrim(description) <> ''),
+        drop constraint if exists skills_source_json_object_ck,
+        add constraint skills_source_json_object_ck
+            check (jsonb_typeof(source_json) = 'object');
 
     if exists (
         select 1
@@ -198,7 +204,16 @@ begin
     alter table library.skill_packages
         drop constraint if exists skill_packages_version_required_ck,
         add constraint skill_packages_version_required_ck
-            check (version is not null and btrim(version) <> '');
+            check (version is not null and btrim(version) <> ''),
+        drop constraint if exists skill_packages_manifest_json_object_ck,
+        add constraint skill_packages_manifest_json_object_ck
+            check (jsonb_typeof(manifest_json) = 'object'),
+        drop constraint if exists skill_packages_files_json_object_ck,
+        add constraint skill_packages_files_json_object_ck
+            check (jsonb_typeof(files_json) = 'object'),
+        drop constraint if exists skill_packages_source_json_object_ck,
+        add constraint skill_packages_source_json_object_ck
+            check (jsonb_typeof(source_json) = 'object');
 
     if exists (
         select 1
@@ -279,6 +294,23 @@ begin
     ) then
         raise exception 'agent.agent_configs.mcp_json must be a JSON array before hard cut';
     end if;
+
+    alter table agent.agent_configs
+        drop constraint if exists agent_configs_tools_json_array_ck,
+        add constraint agent_configs_tools_json_array_ck
+            check (jsonb_typeof(tools_json) = 'array'),
+        drop constraint if exists agent_configs_runtime_json_object_ck,
+        add constraint agent_configs_runtime_json_object_ck
+            check (jsonb_typeof(runtime_json) = 'object'),
+        drop constraint if exists agent_configs_compact_json_object_ck,
+        add constraint agent_configs_compact_json_object_ck
+            check (jsonb_typeof(compact_json) = 'object'),
+        drop constraint if exists agent_configs_meta_json_object_ck,
+        add constraint agent_configs_meta_json_object_ck
+            check (jsonb_typeof(meta_json) = 'object'),
+        drop constraint if exists agent_configs_mcp_json_array_ck,
+        add constraint agent_configs_mcp_json_array_ck
+            check (jsonb_typeof(mcp_json) = 'array');
 end $$;
 
 create or replace function agent.save_agent_config(payload jsonb)

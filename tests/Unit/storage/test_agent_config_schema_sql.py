@@ -90,6 +90,9 @@ def test_agent_config_schema_does_not_convert_object_mcp_json() -> None:
     sql = Path("storage/schema/2026_04_24_agent_config_resolved_config_hardcut.sql").read_text(encoding="utf-8")
 
     assert "agent.agent_configs.mcp_json must be a JSON array before hard cut" in sql
+    assert "alter column mcp_json set default '[]'::jsonb" in sql
+    assert "agent_configs_mcp_json_array_ck" in sql
+    assert "check (jsonb_typeof(mcp_json) = 'array')" in sql
     assert "jsonb_typeof(mcp_json) not in ('array', 'object')" not in sql
     assert "jsonb_each(c.mcp_json)" not in sql
     assert "(item.value - 'disabled')" not in sql
@@ -115,10 +118,18 @@ def test_agent_config_schema_constrains_root_identity_fields() -> None:
     assert "library.skill_packages.files_json values must be strings before hard cut" in sql
     assert "library.skill_packages.files_json keys must be package-relative paths before hard cut" in sql
     assert "library.skill_packages.source_json must be a JSON object before hard cut" in sql
+    assert "skills_source_json_object_ck" in sql
+    assert "skill_packages_manifest_json_object_ck" in sql
+    assert "skill_packages_files_json_object_ck" in sql
+    assert "skill_packages_source_json_object_ck" in sql
     assert "agent.agent_configs.tools_json must be a JSON array before hard cut" in sql
     assert "agent.agent_configs.runtime_json must be a JSON object before hard cut" in sql
     assert "agent.agent_configs.compact_json must be a JSON object before hard cut" in sql
     assert "agent.agent_configs.meta_json must be a JSON object before hard cut" in sql
+    assert "agent_configs_tools_json_array_ck" in sql
+    assert "agent_configs_runtime_json_object_ck" in sql
+    assert "agent_configs_compact_json_object_ck" in sql
+    assert "agent_configs_meta_json_object_ck" in sql
     assert "agent_configs_owner_user_id_required_ck" in sql
     assert "agent_configs_agent_user_id_required_ck" in sql
     assert "agent_configs_name_required_ck" in sql
