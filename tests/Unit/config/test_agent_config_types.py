@@ -9,6 +9,7 @@ def test_resolved_skill_model_normalizes_file_paths() -> None:
     resolved_skill = ResolvedSkill(
         id="query-helper",
         name="query-helper",
+        description="Build precise queries",
         version="1.0.0",
         content="---\nname: query-helper\n---\nUse exact terms.",
         files={"references\\query.md": "Prefer precise queries."},
@@ -35,6 +36,7 @@ def test_resolved_skill_model_rejects_blank_version() -> None:
         ResolvedSkill(
             id="query-helper",
             name="query-helper",
+            description="Build precise queries",
             version=" ",
             content="---\nname: query-helper\n---\nUse exact terms.",
         )
@@ -45,6 +47,7 @@ def test_resolved_skill_model_requires_id() -> None:
         ResolvedSkill.model_validate(
             {
                 "name": "query-helper",
+                "description": "Build precise queries",
                 "version": "1.0.0",
                 "content": "---\nname: query-helper\n---\nUse exact terms.",
             }

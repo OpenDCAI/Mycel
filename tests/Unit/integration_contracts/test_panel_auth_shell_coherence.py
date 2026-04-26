@@ -2142,45 +2142,6 @@ def test_panel_agents_http_surface_does_not_expose_query_app_param(monkeypatch: 
     assert delete.json() == {"success": True}
 
 
-def test_get_agent_user_preserves_explicit_empty_repo_skill_desc():
-    skill_repo = _MemorySkillRepo()
-    _put_skill(
-        skill_repo,
-        owner_user_id="user-1",
-        skill_id="search",
-        name="Search",
-        description="",
-        content="---\nname: Search\ndescription: Search repos\n---\nBody",
-    )
-    agent = UserRow(
-        id="agent-1",
-        type=UserType.AGENT,
-        display_name="Toad",
-        owner_user_id="user-1",
-        agent_config_id="cfg-1",
-        created_at=1.0,
-    )
-
-    class _AgentConfigRepo:
-        def get_agent_config(self, agent_config_id: str):
-            assert agent_config_id == "cfg-1"
-            return _agent_config(
-                description="probe",
-                model="leon:large",
-                system_prompt="",
-                skills=[AgentSkill(skill_id="search", package_id="search-package")],
-            )
-
-    result = agent_user_service.get_agent_user(
-        "agent-1",
-        user_repo=SimpleNamespace(get_by_id=lambda user_id: agent if user_id == "agent-1" else None),
-        agent_config_repo=_AgentConfigRepo(),
-        skill_repo=skill_repo,
-    )
-
-    assert result["config"]["skills"] == [{"id": "search", "name": "Search", "enabled": True, "desc": ""}]
-
-
 def test_apply_snapshot_saves_one_agent_config_aggregate():
     import backend.hub.snapshot_apply as snapshot_apply
 

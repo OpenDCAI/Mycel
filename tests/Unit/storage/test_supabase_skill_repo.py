@@ -81,7 +81,7 @@ def _row(skill_id: str = "skill-1") -> dict:
         "name": "github",
         "description": "GitHub guidance",
         "version": "1.0.0",
-        "content": "---\nname: github\n---\n",
+        "content": "---\nname: github\ndescription: GitHub guidance\n---\n",
         "files_json": {"references/query.md": "Prefer precise queries."},
         "source_json": {"source_version": "1.0.0"},
         "created_at": "2026-04-24T00:00:00+00:00",
