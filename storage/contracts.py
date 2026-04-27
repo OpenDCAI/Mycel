@@ -7,7 +7,7 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 
 from config.agent_config_types import AgentConfig, Skill, SkillPackage
 
-NotificationType = Literal["steer", "command", "agent", "chat", "relationship"]
+NotificationType = Literal["steer", "command", "agent", "chat", "relationship", "chat_join"]
 
 
 # Sandbox — repo protocols
