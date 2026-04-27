@@ -7,7 +7,13 @@ from typing import Any
 from backend.identity.avatar.urls import avatar_url
 from backend.threads.chat_adapters.port import get_agent_runtime_gateway
 from messaging.delivery.runtime_thread_selector import select_runtime_thread_for_recipient
-from protocols.agent_runtime import AgentRuntimeActor, AgentRuntimeMessage, AgentThreadInputEnvelope
+from protocols.agent_runtime import (
+    AgentChatRecipient,
+    AgentRuntimeActor,
+    AgentRuntimeMessage,
+    AgentRuntimeNotificationEnvelope,
+    AgentThreadInputEnvelope,
+)
 
 
 def make_chat_join_rejection_notification_fn(app: Any, *, activity_reader: Any, thread_repo: Any, user_repo: Any):
@@ -21,7 +27,33 @@ def make_chat_join_rejection_notification_fn(app: Any, *, activity_reader: Any, 
         chat_id = _required_str(row, "chat_id")
         requester = _require_user(user_repo, requester_id, "requester")
         decider = _require_user(user_repo, decider_id, "decider")
-        if _user_type(requester, requester_id) != "agent":
+        requester_type = _user_type(requester, requester_id)
+        content = f"{_display_name(decider, decider_id)} rejected your request to join chat {chat_id}."
+        metadata = {
+            "chat_join_request_id": _required_str(row, "id"),
+            "chat_id": chat_id,
+            "state": "rejected",
+        }
+
+        if requester_type == "external":
+            await get_agent_runtime_gateway(app).dispatch_notification(
+                AgentRuntimeNotificationEnvelope(
+                    event_type="chat.join.rejected",
+                    recipient=AgentChatRecipient(agent_user_id=requester_id, runtime_source="external"),
+                    sender=AgentRuntimeActor(
+                        user_id=decider_id,
+                        user_type=_user_type(decider, decider_id),
+                        display_name=_display_name(decider, decider_id),
+                        avatar_url=avatar_url(decider_id, bool(getattr(decider, "avatar", None))),
+                        source="chat_join",
+                    ),
+                    message=AgentRuntimeMessage(content=content, metadata=metadata),
+                    notification_type="chat_join",
+                )
+            )
+            return
+
+        if requester_type != "agent":
             return
 
         thread_id = select_runtime_thread_for_recipient(
@@ -43,12 +75,8 @@ def make_chat_join_rejection_notification_fn(app: Any, *, activity_reader: Any, 
                     source="chat_join",
                 ),
                 message=AgentRuntimeMessage(
-                    content=f"{_display_name(decider, decider_id)} rejected your request to join chat {chat_id}.",
-                    metadata={
-                        "chat_join_request_id": _required_str(row, "id"),
-                        "chat_id": chat_id,
-                        "state": "rejected",
-                    },
+                    content=content,
+                    metadata=metadata,
                 ),
             )
         )
