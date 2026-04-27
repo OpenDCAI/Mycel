@@ -60,6 +60,19 @@ class AgentChatDeliveryEnvelope:
 
 
 @dataclass(frozen=True)
+class AgentRuntimeNotificationEnvelope:
+    event_type: str
+    recipient: AgentChatRecipient
+    sender: AgentRuntimeActor
+    message: AgentRuntimeMessage
+    notification_type: str
+    wake: bool = True
+    transport: AgentRuntimeTransport = AgentRuntimeTransport()
+    protocol_version: Literal["agent.runtime.notification.v1"] = "agent.runtime.notification.v1"
+    extensions: dict[str, Any] | None = None
+
+
+@dataclass(frozen=True)
 class AgentThreadInputEnvelope:
     thread_id: str
     sender: AgentRuntimeActor
@@ -72,6 +85,12 @@ class AgentThreadInputEnvelope:
 
 @dataclass(frozen=True)
 class AgentChatDeliveryResult:
+    status: Literal["accepted"]
+    thread_id: str
+
+
+@dataclass(frozen=True)
+class AgentRuntimeNotificationResult:
     status: Literal["accepted"]
     thread_id: str
 
