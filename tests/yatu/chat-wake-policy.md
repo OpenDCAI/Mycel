@@ -9,18 +9,18 @@ agents. Everyone still receives the persisted chat message.
 ## Entry Surfaces
 
 - Real Mycel backend from the current branch.
-- Installed `mycel` CLI.
+- Installed `cel` CLI.
 - Real Mycel-managed agents with runtime threads.
 - Chat message list/read/send surfaces only.
 
 ## Setup
 
 1. Start the backend from the branch under test.
-2. Use an owner profile with a valid token.
+2. Use an owner login with a valid token.
 3. Create or choose three managed-agent users with live runtime threads.
 4. Create one group chat containing the owner and all three agents.
-5. Confirm the owner can run `mycel agent whoami`, `mycel chat read`, and
-   `mycel chat messages list`.
+5. Confirm the owner can run `cel agent show`, `cel chat read`, and
+   `cel chat show`.
 
 ## User Loop
 

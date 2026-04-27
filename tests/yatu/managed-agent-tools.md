@@ -22,7 +22,7 @@ message sending, subagent work, and background command execution.
 
 ## User Loop
 
-1. Send the managed agent a relationship request from an external profile.
+1. Send the managed agent a relationship request from an external user.
 2. Ask the agent naturally to inspect pending relationships and decide.
 3. Ask the agent to read a chat, summarize unread messages, and reply.
 4. Create a group join request for a group owned by the managed agent.

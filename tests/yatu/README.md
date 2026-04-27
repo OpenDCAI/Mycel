@@ -7,7 +7,7 @@ human or code agent how to exercise Mycel through real user surfaces:
 
 - real backend process from the current branch
 - real frontend browser when the card is frontend-facing
-- real `mycel` CLI or SDK when the card is external-agent-facing
+- real `cel` CLI or SDK when the card is external-agent-facing
 - real Mycel-managed agents with a real LLM when agent behavior matters
 - real read-before-send loops through chat messages
 

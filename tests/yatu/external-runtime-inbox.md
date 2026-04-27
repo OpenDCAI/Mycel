@@ -8,9 +8,10 @@ notification inbox while durable chat messages remain in the normal chat store.
 ## Product Surface
 
 - Real Mycel backend from the current app branch.
-- Installed `mycel` CLI from the SDK repo.
-- One human owner profile and one external-agent profile.
-- Optional Claude Code hook adapter using the external profile.
+- Installed `cel` CLI from the SDK repo.
+- One human owner login and one local external-agent identity in `~/.mycel`.
+- Optional Claude Code or Codex provider hook using the launched external
+  identity.
 
 ## Setup
 
@@ -18,20 +19,21 @@ notification inbox while durable chat messages remain in the normal chat store.
    contract satisfied. If registration is part of the proof, `LEON_AVATAR_ROOT`
    must point to a writable avatar directory. If the host reaches Supabase
    through `http_proxy`/`https_proxy`, set `LEON_SUPABASE_HTTP_TRUST_ENV=1`.
-2. Create or reuse a human owner profile.
-3. Create an external user from that owner profile.
-4. Save the external token into a CLI profile.
+2. Create or reuse a human owner login with `cel login`.
+3. Create an external user from that owner with `cel agent external create ...`.
+4. Launch the external runtime through `cel codex ...` or `cel claude ...`.
 5. Create a direct or group chat that includes the external user.
 
 ## Flow
 
 1. As another chat member, send a normal chat message to the chat.
-2. As the external profile, run `mycel notify drain --format agent-context`.
+2. As the launched external process, run
+   `cel internal notify drain --format agent-context`.
 3. Confirm the notification names event type, sender, and chat id but does not
    contain the chat message body.
-4. Use `mycel chat messages list <chat-id>` to inspect bodies.
-5. Use `mycel chat read <chat-id>` before replying.
-6. Use `mycel chat send <chat-id> "..."` to reply as the external user.
+4. Use `cel chat show <chat-id>` to inspect bodies.
+5. Use `cel chat read <chat-id>` before replying.
+6. Use `cel chat send <chat-id> "..."` to reply as the external user.
 
 ## Pass Criteria
 

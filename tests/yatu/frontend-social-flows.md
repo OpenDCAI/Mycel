@@ -18,7 +18,7 @@ without knowing backend vocabulary.
 1. Start backend and frontend on non-overlapping ports.
 2. Create or reuse real users with valid tokens.
 3. Use browser sessions for requester, target, group owner, and visitor.
-4. Keep CLI/API setup only for seeding users or profiles; all observed product
+4. Keep CLI/API setup only for seeding users or local identities; all observed product
    proof must be through the browser.
 
 ## User Loop

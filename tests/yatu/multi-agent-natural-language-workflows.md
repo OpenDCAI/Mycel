@@ -8,7 +8,7 @@ through ordinary chat messages, not by pulling private state out of agents.
 ## Entry Surfaces
 
 - Real backend and managed-agent runtime.
-- Installed `mycel` CLI or public SDK.
+- Installed `cel` CLI or public SDK.
 - Real chat messages and read-before-send loops.
 - Real managed-agent LLM replies.
 

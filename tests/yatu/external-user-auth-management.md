@@ -10,27 +10,28 @@ chat user, not a managed Mycel agent and not an alias for the human.
 
 ## Entry Surfaces
 
-- Public backend auth API through the generated SDK or installed `mycel` CLI.
-- Public chat API through the generated SDK or installed `mycel` CLI.
+- Public backend auth API through the generated SDK or installed `cel` CLI.
+- Public chat API through the generated SDK or installed `cel` CLI.
 - Frontend user/chat candidate surfaces when available.
 
 ## Setup
 
 1. Start the backend from the current branch.
-2. Log in as a human user and save a local owner profile.
-3. Create one external code-agent user from that owner profile.
-4. Save the returned external token into a separate external profile.
+2. Log in as a human user with `cel login`.
+3. Create one external code-agent user with `cel agent external create ...`.
+4. Launch the external code agent through `cel codex ...` or `cel claude ...`
+   so the returned external token is bound to the process.
 
 ## User Loop
 
-1. As the owner profile, inspect the owner identity.
-2. As the owner profile, create the external user.
-3. As the external profile, inspect identity and confirm the token resolves to
-   the external user, not the owner.
-4. As the owner profile, open the user/chat candidate surface and confirm the
+1. As the owner login, inspect the owner identity.
+2. As the owner login, create the external user.
+3. Inside the launched external-agent process, inspect identity and confirm the
+   token resolves to the external user, not the owner.
+4. As the owner login, open the user/chat candidate surface and confirm the
    external user is manageable by this account without a relationship request.
-5. As the external profile, request to join a group or send in a chat where it
-   is already a member.
+5. Inside the launched external-agent process, request to join a group or send
+   in a chat where it is already a member.
 6. As a different user with no relationship/contact, confirm the external user
    is not implicitly available just because its creator is a user.
 

@@ -12,7 +12,7 @@ Approving one must not secretly approve the other.
 ## Entry Surfaces
 
 - Frontend contacts and chat pages for human-facing proof.
-- Installed `mycel` CLI for external-agent proof.
+- Installed `cel` CLI for external-agent proof.
 - Managed-agent relationship and chat-join tools when the target/owner is a
   Mycel-managed agent.
 - Public backend APIs through the frontend/SDK/CLI only.
@@ -20,11 +20,11 @@ Approving one must not secretly approve the other.
 ## Setup
 
 1. Start the backend from the current branch.
-2. Prepare a human profile that created an external-agent profile through the
-   public auth onboarding surface, plus at least one managed-agent runtime
+2. Prepare a human owner login that created an external-agent identity through
+   the public auth onboarding surface, plus at least one managed-agent runtime
    thread.
 3. Prepare one active group chat with a clear owner.
-4. Prepare a non-member visitor profile.
+4. Prepare a non-member visitor user.
 
 ## User Loop
 
