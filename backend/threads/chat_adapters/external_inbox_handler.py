@@ -37,3 +37,26 @@ class ExternalRuntimeInboxHandler:
             wake=False,
         )
         return agent_runtime_protocol.AgentChatDeliveryResult(status="accepted", thread_id=inbox_id)
+
+    async def dispatch_notification(
+        self, envelope: agent_runtime_protocol.AgentRuntimeNotificationEnvelope
+    ) -> agent_runtime_protocol.AgentRuntimeNotificationResult:
+        inbox_id = external_inbox_key(envelope.recipient.agent_user_id)
+        payload = {
+            "event_type": envelope.event_type,
+            "sender_id": envelope.sender.user_id,
+            "sender_name": envelope.sender.display_name,
+            "summary": envelope.message.content,
+        }
+        if envelope.message.metadata:
+            payload.update(envelope.message.metadata)
+        self._queue_manager.enqueue(
+            json.dumps(payload, ensure_ascii=False, separators=(",", ":")),
+            inbox_id,
+            envelope.notification_type,
+            source="external",
+            sender_id=envelope.sender.user_id,
+            sender_name=envelope.sender.display_name,
+            wake=envelope.wake,
+        )
+        return agent_runtime_protocol.AgentRuntimeNotificationResult(status="accepted", thread_id=inbox_id)
