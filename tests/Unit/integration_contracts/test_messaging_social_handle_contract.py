@@ -772,8 +772,8 @@ def test_messaging_service_resolves_sender_name_from_agent_user_id() -> None:
     published: list[dict[str, object]] = []
     service = MessagingService(
         chat_repo=SimpleNamespace(),
-        chat_member_repo=SimpleNamespace(list_members=lambda _chat_id: []),
-        messages_repo=SimpleNamespace(create=lambda row: row),
+        chat_member_repo=SimpleNamespace(list_members=lambda _chat_id: [], update_last_read=lambda _chat_id, _user_id, _seq: None),
+        messages_repo=SimpleNamespace(create=lambda row: {**row, "seq": 1}),
         user_repo=SimpleNamespace(
             get_by_id=lambda uid: (
                 SimpleNamespace(id=uid, display_name="Human", type="human", avatar=None)
@@ -797,8 +797,8 @@ def test_messaging_service_event_bus_message_uses_service_owned_projection() -> 
     published: list[dict[str, object]] = []
     service = MessagingService(
         chat_repo=SimpleNamespace(),
-        chat_member_repo=SimpleNamespace(list_members=lambda _chat_id: []),
-        messages_repo=SimpleNamespace(create=lambda row: row),
+        chat_member_repo=SimpleNamespace(list_members=lambda _chat_id: [], update_last_read=lambda _chat_id, _user_id, _seq: None),
+        messages_repo=SimpleNamespace(create=lambda row: {**row, "seq": 1}),
         user_repo=SimpleNamespace(
             get_by_id=lambda uid: (
                 SimpleNamespace(id=uid, display_name="Human", type="human", avatar=None)
@@ -825,9 +825,12 @@ def test_messaging_service_notification_mentions_dispatch_to_agent_recipients() 
 
     service = MessagingService(
         chat_repo=SimpleNamespace(),
-        chat_member_repo=SimpleNamespace(list_members=lambda _chat_id: [{"user_id": "managed-owner-1"}]),
+        chat_member_repo=SimpleNamespace(
+            list_members=lambda _chat_id: [{"user_id": "managed-owner-1"}],
+            update_last_read=lambda _chat_id, _user_id, _seq: None,
+        ),
         messages_repo=SimpleNamespace(
-            create=lambda row: row,
+            create=lambda row: {**row, "seq": 1},
             count_unread=lambda _chat_id, _user_id: 1,
         ),
         user_repo=SimpleNamespace(
@@ -966,6 +969,9 @@ def test_messaging_service_agent_send_passes_expected_read_seq_to_messages_repo(
             assert user_id == "agent-user-1"
             return 7
 
+        def update_last_read(self, _chat_id: str, _user_id: str, _last_read_seq: int) -> None:
+            pass
+
     class _MessagesRepo:
         def create(self, row: dict[str, Any], expected_read_seq: int | None = None) -> dict[str, Any]:
             created_rows.append((row, expected_read_seq))
@@ -986,6 +992,60 @@ def test_messaging_service_agent_send_passes_expected_read_seq_to_messages_repo(
     row, expected_read_seq = created_rows[0]
     assert row["sender_user_id"] == "agent-user-1"
     assert expected_read_seq == 7
+
+
+def test_messaging_service_send_advances_sender_read_watermark_to_created_message() -> None:
+    read_updates: list[tuple[str, str, int]] = []
+
+    class _StatefulChatMemberRepo:
+        def list_members(self, _chat_id: str) -> list[dict[str, Any]]:
+            return []
+
+        def last_read_seq(self, chat_id: str, user_id: str) -> int:
+            assert chat_id == "chat-1"
+            assert user_id == "agent-user-1"
+            return 7
+
+        def update_last_read(self, chat_id: str, user_id: str, last_read_seq: int) -> None:
+            read_updates.append((chat_id, user_id, last_read_seq))
+
+    class _MessagesRepo:
+        def create(self, row: dict[str, Any], expected_read_seq: int | None = None) -> dict[str, Any]:
+            assert expected_read_seq == 7
+            return {**row, "seq": 8}
+
+    service = MessagingService(
+        chat_repo=SimpleNamespace(),
+        chat_member_repo=_StatefulChatMemberRepo(),
+        messages_repo=_MessagesRepo(),
+        user_repo=SimpleNamespace(
+            get_by_id=lambda uid: SimpleNamespace(id=uid, display_name="Toad", type="agent", avatar=None) if uid == "agent-user-1" else None
+        ),
+    )
+
+    service.send("chat-1", "agent-user-1", "hello", enforce_caught_up=True)
+
+    assert read_updates == [("chat-1", "agent-user-1", 8)]
+
+
+def test_messaging_service_plain_send_does_not_advance_sender_read_watermark() -> None:
+    read_updates: list[tuple[str, str, int]] = []
+
+    service = MessagingService(
+        chat_repo=SimpleNamespace(),
+        chat_member_repo=SimpleNamespace(
+            list_members=lambda _chat_id: [],
+            update_last_read=lambda chat_id, user_id, seq: read_updates.append((chat_id, user_id, seq)),
+        ),
+        messages_repo=SimpleNamespace(create=lambda row: {**row, "seq": 8}),
+        user_repo=SimpleNamespace(
+            get_by_id=lambda uid: SimpleNamespace(id=uid, display_name="Toad", type="agent", avatar=None) if uid == "agent-user-1" else None
+        ),
+    )
+
+    service.send("chat-1", "agent-user-1", "hello")
+
+    assert read_updates == []
 
 
 def test_messaging_service_agent_send_maps_storage_conflict_to_not_caught_up_error() -> None:
