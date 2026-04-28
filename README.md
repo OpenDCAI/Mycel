@@ -59,19 +59,28 @@ Sandbox provider SDKs are installed by default. Docker still requires Docker ins
 
 ### 3. Start the services
 
+The default ports are backend `8001` and frontend `5173`. A git worktree may
+override them with `worktree.ports.backend` and `worktree.ports.frontend`; the
+backend and Vite config read those values automatically.
+
+```bash
+git config --worktree --get worktree.ports.backend || echo 8001
+git config --worktree --get worktree.ports.frontend || echo 5173
+```
+
 ```bash
 # Terminal 1: Backend
 uv run python -m backend.web.main
-# → http://localhost:8001
+# → http://localhost:<backend-port>
 
 # Terminal 2: Frontend
 cd frontend/app && npm run dev
-# → http://localhost:5173
+# → http://localhost:<frontend-port>
 ```
 
 ### 4. Open and configure
 
-1. Open **http://localhost:5173** in your browser
+1. Open the frontend URL from the previous step in your browser
 2. **Register** an account
 3. Go to **Settings** → configure your LLM provider (API key, model)
 4. Start chatting with your first agent

@@ -55,19 +55,28 @@ cd frontend/app && npm install && cd ../..
 
 ### 3. 启动服务
 
+默认端口是后端 `8001`、前端 `5173`。某个 git worktree 可以用
+`worktree.ports.backend` 和 `worktree.ports.frontend` 覆盖端口；后端和
+Vite 配置会自动读取这些值。
+
+```bash
+git config --worktree --get worktree.ports.backend || echo 8001
+git config --worktree --get worktree.ports.frontend || echo 5173
+```
+
 ```bash
 # 终端 1：后端
 uv run python -m backend.web.main
-# → http://localhost:8001
+# → http://localhost:<backend-port>
 
 # 终端 2：前端
 cd frontend/app && npm run dev
-# → http://localhost:5173
+# → http://localhost:<frontend-port>
 ```
 
 ### 4. 打开并配置
 
-1. 浏览器打开 **http://localhost:5173**
+1. 浏览器打开上一步输出的前端地址
 2. **注册**账号
 3. 进入**设置** → 配置 LLM 提供商（API 密钥、模型）
 4. 开始和你的第一个 Agent 对话
