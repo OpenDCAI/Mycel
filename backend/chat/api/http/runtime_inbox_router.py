@@ -3,7 +3,6 @@ from __future__ import annotations
 import asyncio
 import json
 import threading
-from collections.abc import Callable
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -14,9 +13,12 @@ from backend.threads.chat_adapters.external_inbox_handler import external_inbox_
 router = APIRouter(prefix="/api/runtime", tags=["runtime"])
 
 
-def chat_runtime_notifications(user_id: str, messaging_service: Any) -> list[dict[str, Any]]:
+def chat_runtime_notifications(user_id: str, messaging_service: Any, *, chat_ids: set[str] | None = None) -> list[dict[str, Any]]:
     notifications: list[dict[str, Any]] = []
     for chat in messaging_service.list_chats_for_user(user_id):
+        chat_id = str(chat.get("id") or "")
+        if chat_ids is not None and chat_id not in chat_ids:
+            continue
         unread_count = chat.get("unread_count")
         if type(unread_count) is not int or unread_count <= 0:
             continue
@@ -26,7 +28,7 @@ def chat_runtime_notifications(user_id: str, messaging_service: Any) -> list[dic
             {
                 "event_type": "chat.message",
                 "notification_type": "chat",
-                "chat_id": chat["id"],
+                "chat_id": chat_id,
                 "sender_name": sender_name,
                 "unread_count": unread_count,
             }
@@ -38,10 +40,11 @@ def drain_runtime_inbox_items(
     user_id: str,
     queue_manager: Any,
     *,
-    chat_notifications: list[dict[str, Any]] | None = None,
+    messaging_service: Any | None = None,
 ) -> list[dict[str, Any]]:
     items = queue_manager.drain_all(external_inbox_key(user_id))
     drained: list[dict[str, Any]] = []
+    chat_ids: set[str] = set()
     for item in items:
         try:
             payload = json.loads(item.content)
@@ -54,9 +57,13 @@ def drain_runtime_inbox_items(
         payload["sender_id"] = item.sender_id
         payload["sender_name"] = item.sender_name
         if payload["notification_type"] == "chat":
+            chat_id = payload.get("chat_id")
+            if isinstance(chat_id, str) and chat_id:
+                chat_ids.add(chat_id)
             continue
         drained.append(payload)
-    drained.extend(chat_notifications or [])
+    if messaging_service is not None and chat_ids:
+        drained.extend(chat_runtime_notifications(user_id, messaging_service, chat_ids=chat_ids))
     return drained
 
 
@@ -65,7 +72,7 @@ def wait_runtime_inbox_items(
     queue_manager: Any,
     *,
     timeout_seconds: float,
-    chat_notifications: Callable[[], list[dict[str, Any]]] | None = None,
+    messaging_service: Any | None = None,
 ) -> list[dict[str, Any]]:
     key = external_inbox_key(user_id)
     event = threading.Event()
@@ -74,7 +81,7 @@ def wait_runtime_inbox_items(
         items = drain_runtime_inbox_items(
             user_id,
             queue_manager,
-            chat_notifications=chat_notifications() if chat_notifications else None,
+            messaging_service=messaging_service,
         )
         if items:
             return items
@@ -82,7 +89,7 @@ def wait_runtime_inbox_items(
         return drain_runtime_inbox_items(
             user_id,
             queue_manager,
-            chat_notifications=chat_notifications() if chat_notifications else None,
+            messaging_service=messaging_service,
         )
     finally:
         queue_manager.unregister_wake(key)
@@ -111,7 +118,7 @@ async def drain_runtime_inbox(
             drain_runtime_inbox_items,
             user_id,
             queue_manager,
-            chat_notifications=chat_runtime_notifications(user_id, messaging_service),
+            messaging_service=messaging_service,
         )
     except RuntimeError as exc:
         raise HTTPException(500, str(exc)) from exc
@@ -131,7 +138,7 @@ async def wait_runtime_inbox(
             user_id,
             queue_manager,
             timeout_seconds=timeout_seconds,
-            chat_notifications=lambda: chat_runtime_notifications(user_id, messaging_service),
+            messaging_service=messaging_service,
         )
     except RuntimeError as exc:
         raise HTTPException(500, str(exc)) from exc

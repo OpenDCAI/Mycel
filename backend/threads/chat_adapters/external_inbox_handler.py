@@ -20,13 +20,17 @@ class ExternalRuntimeInboxHandler:
     async def dispatch(self, envelope: agent_runtime_protocol.AgentChatDeliveryEnvelope) -> agent_runtime_protocol.AgentChatDeliveryResult:
         inbox_id = external_inbox_key(envelope.recipient.agent_user_id)
         self._queue_manager.enqueue(
-            json.dumps({"event_type": "chat.wake"}, ensure_ascii=False, separators=(",", ":")),
+            json.dumps(
+                {"event_type": "chat.message", "chat_id": envelope.chat.chat_id},
+                ensure_ascii=False,
+                separators=(",", ":"),
+            ),
             inbox_id,
             "chat",
             source="external",
             sender_id=envelope.sender.user_id,
             sender_name=envelope.sender.display_name,
-            wake=False,
+            wake=True,
         )
         return agent_runtime_protocol.AgentChatDeliveryResult(status="accepted", thread_id=inbox_id)
 

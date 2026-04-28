@@ -46,7 +46,8 @@ async def test_external_runtime_inbox_handler_queues_chat_wake_token_only() -> N
     assert meta["source"] == "external"
     assert meta["sender_id"] == "human-user-1"
     assert meta["sender_name"] == "Human"
-    assert payload == {"event_type": "chat.wake"}
+    assert meta["wake"] is True
+    assert payload == {"event_type": "chat.message", "chat_id": "chat-1"}
     assert "managed runtime prompt must not leak" not in content
 
 

@@ -46,30 +46,33 @@ def test_drain_runtime_inbox_items_returns_non_chat_metadata_and_clears_external
 
 
 def test_drain_runtime_inbox_items_replaces_queued_chat_tokens_with_unread_projection() -> None:
-    queue_manager = SimpleNamespace(
-        drain_all=lambda _key: [
-            SimpleNamespace(
-                content='{"event_type":"chat.message","chat_id":"old-chat","summary":"stale token"}',
-                notification_type="chat",
-                source="external",
-                sender_id="human-user-1",
-                sender_name="Human",
-            )
-        ]
-    )
+    queued = [
+        SimpleNamespace(
+            content='{"event_type":"chat.message","chat_id":"chat-2","summary":"stale token"}',
+            notification_type="chat",
+            source="external",
+            sender_id="human-user-1",
+            sender_name="Human",
+        )
+    ]
+
+    def _drain_all(_key: str) -> list[SimpleNamespace]:
+        items = list(queued)
+        queued.clear()
+        return items
 
     result = drain_runtime_inbox_items(
         "external-user-1",
-        queue_manager,
-        chat_notifications=[
-            {
-                "event_type": "chat.message",
-                "notification_type": "chat",
-                "chat_id": "chat-2",
-                "sender_name": "Human",
-                "unread_count": 1,
-            }
-        ],
+        SimpleNamespace(drain_all=_drain_all),
+        messaging_service=SimpleNamespace(
+            list_chats_for_user=lambda _user_id: [
+                {
+                    "id": "chat-2",
+                    "unread_count": 1,
+                    "last_message": {"sender_name": "Human", "content": "must not leak"},
+                }
+            ]
+        ),
     )
 
     assert result == [
@@ -81,6 +84,44 @@ def test_drain_runtime_inbox_items_replaces_queued_chat_tokens_with_unread_proje
             "unread_count": 1,
         }
     ]
+    assert (
+        drain_runtime_inbox_items(
+            "external-user-1",
+            SimpleNamespace(drain_all=_drain_all),
+            messaging_service=SimpleNamespace(list_chats_for_user=lambda _user_id: []),
+        )
+        == []
+    )
+
+
+def test_drain_runtime_inbox_items_drops_chat_token_when_chat_is_already_read() -> None:
+    queue_manager = SimpleNamespace(
+        drain_all=lambda _key: [
+            SimpleNamespace(
+                content='{"event_type":"chat.message","chat_id":"chat-2"}',
+                notification_type="chat",
+                source="external",
+                sender_id="human-user-1",
+                sender_name="Human",
+            )
+        ]
+    )
+
+    result = drain_runtime_inbox_items(
+        "external-user-1",
+        queue_manager,
+        messaging_service=SimpleNamespace(
+            list_chats_for_user=lambda _user_id: [
+                {
+                    "id": "chat-2",
+                    "unread_count": 0,
+                    "last_message": {"sender_name": "Human", "content": "must not leak"},
+                }
+            ]
+        ),
+    )
+
+    assert result == []
 
 
 def test_chat_runtime_notifications_derive_from_unread_chat_projection() -> None:
@@ -100,6 +141,7 @@ def test_chat_runtime_notifications_derive_from_unread_chat_projection() -> None
                 },
             ]
         ),
+        chat_ids={"chat-2"},
     )
 
     assert notifications == [
@@ -189,15 +231,6 @@ def test_wait_runtime_inbox_items_returns_after_external_queue_wake() -> None:
 def test_wait_runtime_inbox_items_returns_derived_chat_notification_after_wake() -> None:
     queued: list[SimpleNamespace] = []
     registered: dict[str, object] = {}
-    projected = [
-        {
-            "event_type": "chat.message",
-            "notification_type": "chat",
-            "chat_id": "chat-2",
-            "sender_name": "Human",
-            "unread_count": 1,
-        }
-    ]
 
     def _drain_all(_key: str) -> list[SimpleNamespace]:
         items = list(queued)
@@ -216,7 +249,15 @@ def test_wait_runtime_inbox_items_returns_derived_chat_notification_after_wake()
                 "external-user-1",
                 queue_manager,
                 timeout_seconds=1.0,
-                chat_notifications=lambda: projected if "woken" in registered else [],
+                messaging_service=SimpleNamespace(
+                    list_chats_for_user=lambda _user_id: [
+                        {
+                            "id": "chat-2",
+                            "unread_count": 1,
+                            "last_message": {"sender_name": "Human", "content": "must not leak"},
+                        }
+                    ]
+                ),
             )
         )
     )
@@ -237,7 +278,15 @@ def test_wait_runtime_inbox_items_returns_derived_chat_notification_after_wake()
     registered["handler"](queued[0])
     worker.join(timeout=1.0)
 
-    assert result_holder["items"] == projected
+    assert result_holder["items"] == [
+        {
+            "event_type": "chat.message",
+            "notification_type": "chat",
+            "chat_id": "chat-2",
+            "sender_name": "Human",
+            "unread_count": 1,
+        }
+    ]
     assert registered["unregistered"] is True
 
 
