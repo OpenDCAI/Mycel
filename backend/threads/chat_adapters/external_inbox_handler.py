@@ -19,16 +19,8 @@ class ExternalRuntimeInboxHandler:
 
     async def dispatch(self, envelope: agent_runtime_protocol.AgentChatDeliveryEnvelope) -> agent_runtime_protocol.AgentChatDeliveryResult:
         inbox_id = external_inbox_key(envelope.recipient.agent_user_id)
-        sender_name = envelope.sender.display_name or envelope.sender.user_id
-        payload = {
-            "event_type": envelope.event_type,
-            "chat_id": envelope.chat.chat_id,
-            "sender_id": envelope.sender.user_id,
-            "sender_name": envelope.sender.display_name,
-            "summary": f"New chat message from {sender_name}.",
-        }
         self._queue_manager.enqueue(
-            json.dumps(payload, ensure_ascii=False, separators=(",", ":")),
+            json.dumps({"event_type": "chat.wake"}, ensure_ascii=False, separators=(",", ":")),
             inbox_id,
             "chat",
             source="external",

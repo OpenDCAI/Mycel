@@ -26,7 +26,7 @@ def _envelope() -> AgentChatDeliveryEnvelope:
 
 
 @pytest.mark.asyncio
-async def test_external_runtime_inbox_handler_queues_metadata_only_notification() -> None:
+async def test_external_runtime_inbox_handler_queues_chat_wake_token_only() -> None:
     enqueued: list[tuple[str, str, str, dict]] = []
     handler = ExternalRuntimeInboxHandler(
         queue_manager=SimpleNamespace(
@@ -46,13 +46,8 @@ async def test_external_runtime_inbox_handler_queues_metadata_only_notification(
     assert meta["source"] == "external"
     assert meta["sender_id"] == "human-user-1"
     assert meta["sender_name"] == "Human"
-    assert payload == {
-        "event_type": "chat.message",
-        "chat_id": "chat-1",
-        "sender_id": "human-user-1",
-        "sender_name": "Human",
-        "summary": "New chat message from Human.",
-    }
+    assert payload == {"event_type": "chat.wake"}
+    assert "managed runtime prompt must not leak" not in content
 
 
 @pytest.mark.asyncio
