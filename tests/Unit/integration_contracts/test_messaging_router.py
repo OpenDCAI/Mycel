@@ -710,7 +710,7 @@ def test_send_message_maps_caught_up_conflict_to_409() -> None:
     messaging_service = SimpleNamespace(
         resolve_display_user=lambda uid: SimpleNamespace(id=uid, owner_user_id=None),
         is_chat_member=lambda _chat_id, _user_id: True,
-        send=lambda *_args, **_kwargs: (_ for _ in ()).throw(ChatNotCaughtUpError("read unread messages first")),
+        send=lambda *_args, **_kwargs: (_ for _ in ()).throw(ChatNotCaughtUpError("Call read_messages(chat_id='chat-1') first.")),
     )
 
     with pytest.raises(HTTPException) as exc_info:
@@ -722,7 +722,7 @@ def test_send_message_maps_caught_up_conflict_to_409() -> None:
         )
 
     assert exc_info.value.status_code == 409
-    assert "read unread" in str(exc_info.value.detail)
+    assert exc_info.value.detail == "Read unread messages before sending."
 
 
 def test_list_unread_messages_uses_authenticated_user_membership() -> None:
@@ -741,6 +741,37 @@ def test_list_unread_messages_uses_authenticated_user_membership() -> None:
 
     assert seen == [("chat-1", "external-user-1")]
     assert result == [{"id": "msg-1", "chat_id": "chat-1", "sender_id": "human-1"}]
+
+
+def test_read_unread_messages_returns_messages_before_marking_read() -> None:
+    calls: list[tuple[str, str, str]] = []
+
+    def _project(msg: dict[str, str]) -> dict[str, str]:
+        calls.append(("project", msg["chat_id"], msg["id"]))
+        return {"id": msg["id"], "chat_id": msg["chat_id"], "sender_id": msg["sender_id"]}
+
+    messaging_service = SimpleNamespace(
+        is_chat_member=lambda chat_id, user_id: calls.append(("member", chat_id, user_id)) or True,
+        list_unread=lambda chat_id, user_id: (
+            calls.append(("unread", chat_id, user_id)) or [{"id": "msg-1", "chat_id": chat_id, "sender_id": "human-1"}]
+        ),
+        project_message_response=_project,
+        mark_read=lambda chat_id, user_id: calls.append(("read", chat_id, user_id)),
+    )
+
+    result = chats_router.read_unread_messages(
+        "chat-1",
+        user_id="external-user-1",
+        messaging_service=messaging_service,
+    )
+
+    assert result == [{"id": "msg-1", "chat_id": "chat-1", "sender_id": "human-1"}]
+    assert calls == [
+        ("member", "chat-1", "external-user-1"),
+        ("unread", "chat-1", "external-user-1"),
+        ("project", "chat-1", "msg-1"),
+        ("read", "chat-1", "external-user-1"),
+    ]
 
 
 def test_mark_read_rejects_non_member_user() -> None:

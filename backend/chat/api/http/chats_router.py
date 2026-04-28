@@ -270,7 +270,7 @@ def send_message(
             enforce_caught_up=body.enforce_caught_up,
         )
     except ChatNotCaughtUpError as exc:
-        raise HTTPException(409, str(exc)) from exc
+        raise HTTPException(409, "Read unread messages before sending.") from exc
     return messaging_service.project_message_response(msg)
 
 
@@ -283,6 +283,20 @@ def list_unread_messages(
     if not messaging_service.is_chat_member(chat_id, user_id):
         raise HTTPException(403, "Not a participant of this chat")
     return [messaging_service.project_message_response(msg) for msg in messaging_service.list_unread(chat_id, user_id)]
+
+
+@router.post("/{chat_id}/messages/read")
+def read_unread_messages(
+    chat_id: str,
+    user_id: Annotated[str, Depends(get_current_user_id)],
+    messaging_service: Annotated[Any, Depends(get_messaging_service)],
+):
+    if not messaging_service.is_chat_member(chat_id, user_id):
+        raise HTTPException(403, "Not a participant of this chat")
+    unread_messages = [messaging_service.project_message_response(msg) for msg in messaging_service.list_unread(chat_id, user_id)]
+    if unread_messages:
+        messaging_service.mark_read(chat_id, user_id)
+    return unread_messages
 
 
 @router.post("/{chat_id}/messages/{message_id}/retract")
