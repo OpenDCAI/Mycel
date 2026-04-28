@@ -258,6 +258,11 @@ class MessagingService:
         else:
             created_row = self._messages.create(row)
         created = self._normalize_message_row(created_row)
+        created_seq = created.get("seq")
+        if type(created_seq) is not int:
+            raise RuntimeError("Created chat message row is missing seq")
+        if enforce_caught_up:
+            self._chat_members_repo.update_last_read(chat_id, sender_id, created_seq)
         logger.debug("[messaging] send chat=%s sender=%s msg=%s type=%s", chat_id[:8], sender_id[:15], msg_id[:8], message_type)
 
         # Publish to event bus (SSE / realtime transport)
