@@ -1883,6 +1883,33 @@ def test_messaging_service_mark_read_resets_unread_count_via_last_read_seq_water
     assert after[0]["unread_count"] == 0
 
 
+def test_messaging_service_read_unread_consumes_messages_before_marking_latest_seq() -> None:
+    calls: list[tuple[str, str, str]] = []
+    service = MessagingService(
+        chat_repo=SimpleNamespace(),
+        chat_member_repo=SimpleNamespace(update_last_read=lambda _chat_id, user_id, seq: calls.append(("read", user_id, str(seq)))),
+        messages_repo=SimpleNamespace(
+            list_unread=lambda chat_id, user_id: calls.append(("unread", chat_id, user_id)) or [],
+            list_by_chat=lambda chat_id, limit=50, viewer_id=None: calls.append(("latest", chat_id, viewer_id or "")) or [{"seq": 9}],
+        ),
+        user_repo=SimpleNamespace(get_by_id=lambda _uid: None),
+    )
+
+    result = service.read_unread(
+        "chat-1",
+        "external-user-1",
+        lambda messages: calls.append(("consume", "messages", str(len(messages)))) or [],
+    )
+
+    assert result == []
+    assert calls == [
+        ("unread", "chat-1", "external-user-1"),
+        ("consume", "messages", "0"),
+        ("latest", "chat-1", "external-user-1"),
+        ("read", "external-user-1", "9"),
+    ]
+
+
 def test_messaging_service_group_chat_creation_requires_social_access_collaborators() -> None:
     created: list[Any] = []
     service = MessagingService(
@@ -2034,12 +2061,17 @@ def test_read_messages_fails_before_mark_read_on_invalid_history_collection() ->
 def test_read_messages_fails_before_mark_read_on_invalid_unread_collection() -> None:
     registry = ToolRegistry()
     marked: list[tuple[str, str]] = []
+
+    def _read_unread(chat_id: str, user_id: str, consume):
+        result = consume({"sender_id": "agent-user-1"})
+        marked.append((chat_id, user_id))
+        return result
+
     ChatToolService(
         registry=registry,
         chat_identity_id="human-user-1",
         messaging_service=_messaging_display_service(
-            list_unread=lambda _chat_id, _user_id: {"sender_id": "agent-user-1"},
-            mark_read=lambda chat_id, user_id: marked.append((chat_id, user_id)),
+            read_unread=_read_unread,
         ),
     )
 
