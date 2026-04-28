@@ -743,20 +743,14 @@ def test_list_unread_messages_uses_authenticated_user_membership() -> None:
     assert result == [{"id": "msg-1", "chat_id": "chat-1", "sender_id": "human-1"}]
 
 
-def test_read_unread_messages_returns_messages_before_marking_read() -> None:
+def test_read_unread_messages_delegates_to_messaging_service_read_action() -> None:
     calls: list[tuple[str, str, str]] = []
-
-    def _project(msg: dict[str, str]) -> dict[str, str]:
-        calls.append(("project", msg["chat_id"], msg["id"]))
-        return {"id": msg["id"], "chat_id": msg["chat_id"], "sender_id": msg["sender_id"]}
 
     messaging_service = SimpleNamespace(
         is_chat_member=lambda chat_id, user_id: calls.append(("member", chat_id, user_id)) or True,
-        list_unread=lambda chat_id, user_id: (
-            calls.append(("unread", chat_id, user_id)) or [{"id": "msg-1", "chat_id": chat_id, "sender_id": "human-1"}]
+        read_unread_message_responses=lambda chat_id, user_id: (
+            calls.append(("read_unread", chat_id, user_id)) or [{"id": "msg-1", "chat_id": chat_id, "sender_id": "human-1"}]
         ),
-        project_message_response=_project,
-        mark_read=lambda chat_id, user_id: calls.append(("read", chat_id, user_id)),
     )
 
     result = chats_router.read_unread_messages(
@@ -768,9 +762,7 @@ def test_read_unread_messages_returns_messages_before_marking_read() -> None:
     assert result == [{"id": "msg-1", "chat_id": "chat-1", "sender_id": "human-1"}]
     assert calls == [
         ("member", "chat-1", "external-user-1"),
-        ("unread", "chat-1", "external-user-1"),
-        ("project", "chat-1", "msg-1"),
-        ("read", "chat-1", "external-user-1"),
+        ("read_unread", "chat-1", "external-user-1"),
     ]
 
 

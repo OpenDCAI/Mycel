@@ -346,10 +346,8 @@ class ChatToolService:
                 self._messaging.mark_read(chat_id, eid)
                 return rendered
 
-            msgs = self._messaging.list_unread(chat_id, eid)
-            if msgs:
-                rendered = self._format_msgs(msgs, eid)
-                self._messaging.mark_read(chat_id, eid)
+            rendered = self._messaging.read_unread(chat_id, eid, lambda msgs: self._format_msgs(msgs, eid) if msgs else "")
+            if rendered:
                 return rendered
 
             return (

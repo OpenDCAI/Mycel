@@ -12,7 +12,7 @@ from __future__ import annotations
 import logging
 import time
 import uuid
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
@@ -317,6 +317,15 @@ class MessagingService:
             viewer_id=viewer_id,
         )
         return [self._project_message_response(row) for row in rows]
+
+    def read_unread(self, chat_id: str, user_id: str, consume: Callable[[list[dict[str, Any]]], Any]) -> Any:
+        messages = self.list_unread(chat_id, user_id)
+        result = consume(messages)
+        self.mark_read(chat_id, user_id)
+        return result
+
+    def read_unread_message_responses(self, chat_id: str, user_id: str) -> list[dict[str, Any]]:
+        return self.read_unread(chat_id, user_id, lambda rows: [self._project_message_response(row) for row in rows])
 
     def list_unread(self, chat_id: str, user_id: str) -> list[dict[str, Any]]:
         return [self._normalize_message_row(row) for row in self._messages.list_unread(chat_id, user_id)]
