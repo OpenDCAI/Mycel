@@ -57,6 +57,48 @@ def test_supabase_chat_stack_uses_chat_schema_for_root_tables() -> None:
     assert "messages" not in tables
 
 
+def test_supabase_find_chat_between_only_returns_direct_chat() -> None:
+    tables: dict[str, list[dict]] = {
+        "chat.chats": [
+            {
+                "id": "group-1",
+                "type": "group",
+                "created_by_user_id": "user-1",
+                "title": "Group",
+                "status": "active",
+                "next_message_seq": 0,
+                "created_at": 1.0,
+            },
+            {
+                "id": "direct-1",
+                "type": "direct",
+                "created_by_user_id": "user-1",
+                "title": None,
+                "status": "active",
+                "next_message_seq": 0,
+                "created_at": 1.0,
+            },
+        ],
+        "chat.chat_members": [
+            {"chat_id": "group-1", "user_id": "user-1", "last_read_seq": 0},
+            {"chat_id": "group-1", "user_id": "user-2", "last_read_seq": 0},
+            {"chat_id": "direct-1", "user_id": "user-1", "last_read_seq": 0},
+            {"chat_id": "direct-1", "user_id": "user-2", "last_read_seq": 0},
+        ],
+    }
+    client = FakeSupabaseClient(tables=tables)
+
+    assert SupabaseChatMemberRepo(client).find_chat_between("user-1", "user-2") == "direct-1"
+
+    group_only_client = FakeSupabaseClient(
+        tables={
+            "chat.chats": [tables["chat.chats"][0]],
+            "chat.chat_members": tables["chat.chat_members"][:2],
+        }
+    )
+    assert SupabaseChatMemberRepo(group_only_client).find_chat_between("user-1", "user-2") is None
+
+
 def test_supabase_contact_and_relationship_repos_use_chat_schema() -> None:
     tables: dict[str, list[dict]] = {"chat.contacts": [], "chat.relationships": []}
     client = FakeSupabaseClient(tables=tables)

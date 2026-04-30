@@ -2034,6 +2034,66 @@ def test_messaging_service_group_chat_creation_accepts_active_relationships() ->
     ]
 
 
+def test_messaging_service_group_chat_creation_accepts_two_members() -> None:
+    created: list[Any] = []
+    members: list[tuple[str, str]] = []
+    service = MessagingService(
+        chat_repo=SimpleNamespace(create=lambda row: created.append(row)),
+        chat_member_repo=SimpleNamespace(add_member=lambda chat_id, user_id: members.append((chat_id, user_id))),
+        messages_repo=SimpleNamespace(),
+        user_repo=SimpleNamespace(
+            get_by_id=lambda uid: SimpleNamespace(id=uid, owner_user_id=None, display_name=uid, type="human", avatar=None)
+        ),
+        contact_repo=SimpleNamespace(get=lambda _owner_id, _target_id: None),
+        relationship_service=SimpleNamespace(get_state=lambda _viewer_id, _target_id: "visit"),
+    )
+
+    chat = service.create_group_chat(["agent-user-1", "human-user-1"], title="two-person group")
+
+    assert chat["title"] == "two-person group"
+    assert len(created) == 1
+    assert created[0].type == "group"
+    assert members == [(chat["id"], "agent-user-1"), (chat["id"], "human-user-1")]
+
+
+def test_messaging_service_group_chat_creation_accepts_same_owner_external_users() -> None:
+    created: list[Any] = []
+    members: list[tuple[str, str]] = []
+    users = {
+        "external-a": SimpleNamespace(
+            id="external-a",
+            owner_user_id=None,
+            created_by_user_id="owner-user-1",
+            display_name="External A",
+            type="external",
+            avatar=None,
+        ),
+        "external-b": SimpleNamespace(
+            id="external-b",
+            owner_user_id=None,
+            created_by_user_id="owner-user-1",
+            display_name="External B",
+            type="external",
+            avatar=None,
+        ),
+    }
+    service = MessagingService(
+        chat_repo=SimpleNamespace(create=lambda row: created.append(row)),
+        chat_member_repo=SimpleNamespace(add_member=lambda chat_id, user_id: members.append((chat_id, user_id))),
+        messages_repo=SimpleNamespace(),
+        user_repo=SimpleNamespace(get_by_id=lambda uid: users.get(uid)),
+        contact_repo=SimpleNamespace(get=lambda _owner_id, _target_id: None),
+        relationship_service=SimpleNamespace(get_state=lambda _viewer_id, _target_id: "none"),
+    )
+
+    chat = service.create_group_chat(["external-a", "external-b"], title="same owner external group")
+
+    assert chat["title"] == "same owner external group"
+    assert len(created) == 1
+    assert created[0].type == "group"
+    assert members == [(chat["id"], "external-a"), (chat["id"], "external-b")]
+
+
 def test_chat_tool_formats_agent_user_id_sender_as_agent_name() -> None:
     registry = ToolRegistry()
     service = ChatToolService(
