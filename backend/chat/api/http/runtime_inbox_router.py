@@ -73,10 +73,14 @@ def wait_runtime_inbox_items(
     *,
     timeout_seconds: float,
     messaging_service: Any | None = None,
+    wake_bus: Any | None = None,
 ) -> list[dict[str, Any]]:
     key = external_inbox_key(user_id)
     event = threading.Event()
-    queue_manager.register_wake(key, lambda _item: event.set())
+    if wake_bus is None:
+        queue_manager.register_wake(key, lambda _item: event.set())
+    else:
+        wake_bus.register(key, event.set)
     try:
         items = drain_runtime_inbox_items(
             user_id,
@@ -92,19 +96,25 @@ def wait_runtime_inbox_items(
             messaging_service=messaging_service,
         )
     finally:
-        queue_manager.unregister_wake(key)
+        if wake_bus is None:
+            queue_manager.unregister_wake(key)
+        else:
+            wake_bus.unregister(key)
 
 
-def _runtime_inbox_parts(app: Any) -> tuple[Any, Any]:
+def _runtime_inbox_parts(app: Any) -> tuple[Any, Any, Any]:
     runtime_state = getattr(app.state, "threads_runtime_state", None)
     queue_manager = getattr(runtime_state, "queue_manager", None)
     if queue_manager is None:
         raise HTTPException(500, "Runtime queue manager unavailable")
+    wake_bus = getattr(runtime_state, "runtime_inbox_wake_bus", None)
+    if wake_bus is None:
+        raise HTTPException(500, "Runtime inbox wake bus unavailable")
     chat_runtime = getattr(app.state, "chat_runtime_state", None)
     messaging_service = getattr(chat_runtime, "messaging_service", None)
     if messaging_service is None:
         raise HTTPException(500, "Messaging service unavailable")
-    return queue_manager, messaging_service
+    return queue_manager, messaging_service, wake_bus
 
 
 @router.post("/inbox/drain")
@@ -112,7 +122,7 @@ async def drain_runtime_inbox(
     app: Annotated[Any, Depends(get_app)],
     user_id: Annotated[str, Depends(get_current_user_id)],
 ) -> dict[str, Any]:
-    queue_manager, messaging_service = _runtime_inbox_parts(app)
+    queue_manager, messaging_service, _wake_bus = _runtime_inbox_parts(app)
     try:
         items = await asyncio.to_thread(
             drain_runtime_inbox_items,
@@ -131,7 +141,7 @@ async def wait_runtime_inbox(
     user_id: Annotated[str, Depends(get_current_user_id)],
     timeout_seconds: Annotated[float, Query(ge=0.0, le=30.0)] = 25.0,
 ) -> dict[str, Any]:
-    queue_manager, messaging_service = _runtime_inbox_parts(app)
+    queue_manager, messaging_service, wake_bus = _runtime_inbox_parts(app)
     try:
         items = await asyncio.to_thread(
             wait_runtime_inbox_items,
@@ -139,6 +149,7 @@ async def wait_runtime_inbox(
             queue_manager,
             timeout_seconds=timeout_seconds,
             messaging_service=messaging_service,
+            wake_bus=wake_bus,
         )
     except RuntimeError as exc:
         raise HTTPException(500, str(exc)) from exc
