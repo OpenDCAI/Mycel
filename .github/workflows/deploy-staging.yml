@@ -58,6 +58,7 @@ jobs:
         run: |
           set -euo pipefail
           grep -F "leon-home:/root/.leon" docker-compose.yml >/dev/null
+          grep -F "LEON_LOCAL_WORKSPACE_ROOT: /root/.leon/workspaces" docker-compose.yml >/dev/null
           grep -F "volumes:" docker-compose.yml >/dev/null
 
       - name: Update staging stack branch
@@ -109,7 +110,9 @@ jobs:
           echo "$body" | jq '{uuid,git_branch,docker_compose_location}'
           printf '%s' "$body" | jq -e --arg ref "${{ steps.ref.outputs.ref }}" '.git_branch == $ref' >/dev/null
           printf '%s' "$body" | jq -e '.docker_compose_raw | contains("leon-home:/root/.leon")' >/dev/null
+          printf '%s' "$body" | jq -e '.docker_compose_raw | contains("LEON_LOCAL_WORKSPACE_ROOT: /root/.leon/workspaces")' >/dev/null
           printf '%s' "$body" | jq -e --arg volume "${STAGING_STACK_UUID}_leon-home:/root/.leon" '.docker_compose | contains($volume)' >/dev/null
+          printf '%s' "$body" | jq -e '.docker_compose | contains("LEON_LOCAL_WORKSPACE_ROOT=/root/.leon/workspaces") or contains("LEON_LOCAL_WORKSPACE_ROOT: /root/.leon/workspaces")' >/dev/null
           printf '%s' "$body" | jq -e --arg sha "${{ steps.target.outputs.sha }}" '.docker_compose | contains($sha)' >/dev/null
 
       - name: Verify staging API contract
