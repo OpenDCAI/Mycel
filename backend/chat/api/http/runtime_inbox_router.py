@@ -46,7 +46,6 @@ def drain_runtime_inbox_items(
 ) -> list[dict[str, Any]]:
     items = queue_manager.drain_all(external_inbox_key(user_id))
     drained: list[dict[str, Any]] = []
-    chat_ids: set[str] = set()
     for item in items:
         try:
             payload = json.loads(item.content)
@@ -59,13 +58,10 @@ def drain_runtime_inbox_items(
         payload["sender_id"] = item.sender_id
         payload["sender_name"] = item.sender_name
         if payload["notification_type"] == "chat":
-            chat_id = payload.get("chat_id")
-            if isinstance(chat_id, str) and chat_id:
-                chat_ids.add(chat_id)
             continue
         drained.append(payload)
-    if messaging_service is not None and chat_ids:
-        drained.extend(chat_runtime_notifications(user_id, messaging_service, chat_ids=chat_ids))
+    if messaging_service is not None:
+        drained.extend(chat_runtime_notifications(user_id, messaging_service))
     return drained
 
 
