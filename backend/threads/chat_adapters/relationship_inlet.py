@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 from enum import Enum
 from typing import Any
 
@@ -20,6 +21,8 @@ _DECISION_VERBS: dict[RelationshipEvent, str] = {
     "approve": "approved",
     "reject": "rejected",
 }
+
+logger = logging.getLogger(__name__)
 
 
 def make_relationship_request_notification_fn(app: Any, *, activity_reader: Any, thread_repo: Any, user_repo: Any):
@@ -63,7 +66,8 @@ def make_relationship_request_notification_fn(app: Any, *, activity_reader: Any,
             activity_reader=activity_reader,
         )
         if thread_id is None:
-            raise RuntimeError(f"Relationship request target agent has no runtime thread: {target_id}")
+            logger.info("Skipped relationship request wake for agent without runtime thread: %s", target_id)
+            return
 
         await get_agent_runtime_gateway(app).dispatch_thread_input(
             AgentThreadInputEnvelope(
@@ -134,7 +138,8 @@ def make_relationship_decision_notification_fn(app: Any, *, activity_reader: Any
             activity_reader=activity_reader,
         )
         if thread_id is None:
-            raise RuntimeError(f"Relationship decision requester agent has no runtime thread: {requester_id}")
+            logger.info("Skipped relationship decision wake for agent without runtime thread: %s", requester_id)
+            return
 
         await get_agent_runtime_gateway(app).dispatch_thread_input(
             AgentThreadInputEnvelope(

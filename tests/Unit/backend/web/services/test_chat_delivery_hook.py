@@ -93,6 +93,44 @@ async def test_chat_delivery_hook_uses_request_sender_type() -> None:
 
 
 @pytest.mark.asyncio
+async def test_chat_delivery_hook_skips_agent_wake_when_no_runtime_thread() -> None:
+    class RecordingGateway:
+        called = False
+
+        async def dispatch_chat(self, _envelope):
+            self.called = True
+
+    gateway = RecordingGateway()
+    app = SimpleNamespace(
+        state=SimpleNamespace(
+            threads_runtime_state=SimpleNamespace(agent_runtime_gateway=gateway),
+            thread_repo=SimpleNamespace(get_by_user_id=lambda _uid: None, list_by_agent_user=lambda _uid: []),
+        )
+    )
+    deliver = owner_chat_inlet.make_chat_delivery_fn(
+        app,
+        activity_reader=SimpleNamespace(list_active_threads_for_agent=lambda _agent_user_id: []),
+        thread_repo=app.state.thread_repo,
+    )
+    request = ChatDeliveryRequest(
+        recipient_id="agent-user-1",
+        recipient_user=SimpleNamespace(id="agent-user-1", type="agent"),
+        content="hello",
+        sender_name="Human",
+        sender_type="human",
+        chat_id="chat-1",
+        sender_id="human-user-1",
+        sender_avatar_url=None,
+        unread_count=3,
+        signal=None,
+    )
+
+    await asyncio.to_thread(deliver, request)
+
+    assert gateway.called is False
+
+
+@pytest.mark.asyncio
 async def test_chat_delivery_hook_routes_external_user_to_external_runtime_without_thread() -> None:
     class RecordingGateway:
         envelope = None

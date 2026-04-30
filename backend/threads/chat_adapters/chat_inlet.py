@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from enum import Enum
 from typing import Any
 
@@ -14,6 +15,8 @@ from protocols.agent_runtime import (
     AgentRuntimeActor,
     AgentRuntimeMessage,
 )
+
+logger = logging.getLogger(__name__)
 
 
 def make_chat_delivery_fn(app: Any, *, activity_reader: Any, thread_repo: Any):
@@ -50,7 +53,8 @@ def make_chat_delivery_fn(app: Any, *, activity_reader: Any, thread_repo: Any):
                 activity_reader=activity_reader,
             )
             if thread_id is None:
-                raise RuntimeError(f"Agent chat recipient has no runtime thread: {request.recipient_id}")
+                logger.info("Skipped chat wake for agent without runtime thread: %s", request.recipient_id)
+                return
         else:
             raise RuntimeError(f"Chat delivery recipient type is not runtime-addressable: {recipient_type}")
         envelope = AgentChatDeliveryEnvelope(

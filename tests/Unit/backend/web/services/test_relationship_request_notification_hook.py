@@ -175,7 +175,7 @@ async def test_relationship_request_notification_does_not_dispatch_to_non_agent_
 
 
 @pytest.mark.asyncio
-async def test_relationship_request_notification_fails_when_agent_target_has_no_runtime_thread() -> None:
+async def test_relationship_request_notification_skips_agent_wake_when_no_runtime_thread() -> None:
     class RecordingGateway:
         called = False
 
@@ -196,8 +196,7 @@ async def test_relationship_request_notification_fails_when_agent_target_has_no_
         user_repo=user_repo,
     )
 
-    with pytest.raises(RuntimeError, match="Relationship request target agent has no runtime thread: agent-user-1"):
-        await asyncio.to_thread(notify, _relationship_row())
+    await asyncio.to_thread(notify, _relationship_row())
 
     assert gateway.called is False
 
@@ -324,6 +323,42 @@ async def test_relationship_decision_notification_ignores_non_agent_requester() 
         notify,
         _relationship_row(user_low="human-user-1", user_high="human-user-2", initiator_user_id="human-user-1"),
         "reject",
+    )
+
+    assert gateway.called is False
+
+
+@pytest.mark.asyncio
+async def test_relationship_decision_notification_skips_agent_wake_when_no_runtime_thread() -> None:
+    class RecordingGateway:
+        called = False
+
+        async def dispatch_thread_input(self, _envelope):
+            self.called = True
+
+    gateway = RecordingGateway()
+    user_repo = SimpleNamespace(
+        get_by_id=lambda uid: {
+            "human-user-1": SimpleNamespace(id="human-user-1", type="human", display_name="Human", avatar=None),
+            "agent-user-1": SimpleNamespace(id="agent-user-1", type="agent", display_name="Toad", avatar=None),
+        }.get(uid)
+    )
+    notify = relationship_inlet.make_relationship_decision_notification_fn(
+        _hook_app(gateway),
+        activity_reader=SimpleNamespace(list_active_threads_for_agent=lambda _agent_user_id: []),
+        thread_repo=SimpleNamespace(get_by_user_id=lambda _uid: None, list_by_agent_user=lambda _uid: []),
+        user_repo=user_repo,
+    )
+
+    await asyncio.to_thread(
+        notify,
+        _relationship_row(
+            user_low="agent-user-1",
+            user_high="human-user-1",
+            initiator_user_id="agent-user-1",
+            state="visit",
+        ),
+        "approve",
     )
 
     assert gateway.called is False
