@@ -41,16 +41,25 @@ notification inbox while durable chat messages remain in the normal chat store.
 7. Send several messages from the same sender in the same chat, reading between
    them, and confirm each fresh message still produces a fresh hook
    notification.
+8. Stop the local runtime while a long-poll wait may still be in flight, send a
+   new chat message to the external user, start the runtime again, then trigger
+   the provider hook. The hook should surface the unread chat notification
+   before the user calls `cel chat read`.
 
 ## Pass Criteria
 
 - The external inbox item is produced by backend runtime delivery, not by a CLI
   polling shortcut.
+- Chat notifications are recoverable from the user's unread chat projection.
+  Queue entries are wake tokens, not the only durable source of truth for chat
+  notification metadata.
 - The hook drain is authenticated as the external user and only drains that
   user's local runtime inbox.
 - The notification is metadata-only; chat bodies are read through chat APIs.
 - Consecutive chat notifications are distinguished by stable message identity,
   not only by summary fields such as sender name or unread count.
+- A daemon restart does not lose a chat notification just because an old wait
+  request consumed a wake token while the local daemon was stopping.
 - The reply appears as a normal chat message from the external user's identity.
 
 ## Failure Signals
@@ -58,5 +67,7 @@ notification inbox while durable chat messages remain in the normal chat store.
 - The backend emits Claude-specific branches instead of a general external
   runtime inbox.
 - Notification drain includes raw chat bodies or managed-agent prompt text.
+- A stopped or crashing local daemon can make an unread chat permanently
+  invisible to the next runtime drain.
 - The external user can send as another user by passing sender ids.
 - The test proves success through queue internals instead of product surfaces.
