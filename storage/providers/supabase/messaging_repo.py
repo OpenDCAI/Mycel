@@ -57,9 +57,15 @@ class SupabaseChatMemberRepo:
         common = chats_a & chats_b
         for chat_id in common:
             members = self.list_members(chat_id)
-            if len(members) == 2:
+            if len(members) == 2 and self._chat_type(chat_id) == "direct":
                 return chat_id
         return None
+
+    def _chat_type(self, chat_id: str) -> str | None:
+        res = q.schema_table(self._client, _SCHEMA, "chats", "chat member repo").select("type").eq("id", chat_id).limit(1).execute()
+        if not res.data:
+            return None
+        return str(res.data[0].get("type") or "")
 
     def update_last_read(self, chat_id: str, user_id: str, last_read_seq: int) -> None:
         self._t().update({"last_read_seq": last_read_seq}).eq("chat_id", chat_id).eq("user_id", user_id).execute()

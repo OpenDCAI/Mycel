@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 from datetime import UTC, datetime
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, ConfigDict, Field
@@ -29,6 +29,7 @@ class CreateChatBody(BaseModel):
         description="Other participant user ids. Do not include the authenticated user; the backend adds it from the bearer token.",
     )
     title: str | None = None
+    kind: Literal["auto", "direct", "group"] = "auto"
 
 
 class SendMessageBody(BaseModel):
@@ -142,7 +143,11 @@ def create_chat(
 ):
     try:
         participant_ids = _chat_participant_ids_for_request(user_repo, thread_repo, body.user_ids, user_id)
-        if len(participant_ids) >= 3:
+        if body.kind == "group":
+            chat = messaging_service.create_group_chat(participant_ids, body.title)
+        elif body.kind == "direct":
+            chat = messaging_service.find_or_create_chat(participant_ids, body.title)
+        elif len(participant_ids) >= 3:
             chat = messaging_service.create_group_chat(participant_ids, body.title)
         else:
             chat = messaging_service.find_or_create_chat(participant_ids, body.title)

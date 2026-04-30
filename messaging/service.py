@@ -22,7 +22,7 @@ from messaging.delivery.dispatcher import ChatDeliveryDispatcher, ChatDeliveryFn
 from messaging.display_user import resolve_messaging_display_user
 from messaging.errors import ChatNotCaughtUpError
 from messaging.social_access import can_group_chat_with_participant
-from messaging.user_ownership import is_owned_by_viewer
+from messaging.user_ownership import is_owned_by_viewer, shares_ownership_scope
 from storage.errors import StorageConflictError
 
 logger = logging.getLogger(__name__)
@@ -152,8 +152,8 @@ class MessagingService:
         return self._create_chat(user_ids, chat_type="direct", title=title)
 
     def create_group_chat(self, user_ids: list[str], title: str | None = None) -> dict[str, Any]:
-        if len(user_ids) < 3:
-            raise ValueError("Group chat requires 3+ users")
+        if len(user_ids) < 2:
+            raise ValueError("Group chat requires 2+ users")
         self._require_resolvable_chat_users(user_ids)
         self._require_group_chat_access(user_ids)
         return self._create_chat(user_ids, chat_type="group", title=title)
@@ -168,6 +168,7 @@ class MessagingService:
 
     def _require_group_chat_access(self, user_ids: list[str]) -> None:
         requester_user_id = user_ids[0]
+        requester_user = self._resolve_display_user(requester_user_id)
         if self._contact_repo is None:
             raise RuntimeError("contact_repo is required for social access checks")
         if self._relationship_service is None:
@@ -177,6 +178,8 @@ class MessagingService:
                 continue
             participant_user = self._resolve_display_user(participant_id)
             if is_owned_by_viewer(requester_user_id, participant_user):
+                continue
+            if shares_ownership_scope(requester_user, participant_user):
                 continue
             if can_group_chat_with_participant(
                 viewer_user_id=requester_user_id,

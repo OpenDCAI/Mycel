@@ -825,6 +825,27 @@ def test_create_chat_accepts_agent_user_id_for_direct_participant() -> None:
     assert result["id"] == "chat-1"
 
 
+def test_create_chat_can_explicitly_create_two_person_group_chat() -> None:
+    state, called = _create_chat_route_state(
+        users={"agent-user-1": SimpleNamespace(id="agent-user-1", type="agent", owner_user_id="human-user-1")},
+        thread_user_ids={"owned-agent-1"},
+        group_route=True,
+    )
+    app = SimpleNamespace(state=state)
+
+    result = _create_chat(
+        app,
+        chats_router.CreateChatBody(
+            user_ids=["agent-user-1"],
+            title="cel group bridge",
+            kind="group",
+        ),
+    )
+
+    assert called == [(["human-user-1", "agent-user-1"], "cel group bridge")]
+    assert result["id"] == "chat-1"
+
+
 def test_create_chat_accepts_human_and_thread_social_user_ids_for_group_participants() -> None:
     state, called = _create_chat_route_state(thread_user_ids={"thread-user-1", "thread-user-2"})
     app = SimpleNamespace(state=state)
