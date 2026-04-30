@@ -56,6 +56,8 @@ Targeted/no-wake flow:
 - After the second send, Agent 1, Agent 2, and Agent 3 can all reply.
 - Message visibility and read/unread behavior are still normal chat behavior;
   wake policy only changes runtime interruption.
+- If a managed-agent recipient has no runtime thread, the message still
+  persists and remains readable; only the runtime wake is skipped.
 
 ## Pitfalls
 

@@ -25,7 +25,8 @@ flowchart LR
     T --> Chat
 ```
 
-Every participant on the platform is either a human user or an Agent User. When a message arrives for an Agent User, the system wakes its Thread to process it.
+Every participant on the platform is either a human user or an Agent User. When a message arrives for an Agent User, the system tries to wake its Thread to process it.
+If no runtime Thread exists yet, the message is still stored in Chat; only the wake hint is skipped.
 
 ## Creating an agent
 
@@ -47,7 +48,7 @@ Every participant on the platform is either a human user or an Agent User. When 
     | MCP servers | Advanced external service integrations (GitHub, databases, etc.) |
   </Step>
   <Step title="Set to active">
-    Change status from `draft` to `active` and save. The backend stores the Agent Config and Agent User identity. The Thread is created automatically on first message.
+    Change status from `draft` to `active` and save. The backend stores the Agent Config and Agent User identity. A runtime Thread is created when the agent is opened or started through the Thread surface; Chat delivery then wakes that existing Thread.
   </Step>
 </Steps>
 
@@ -113,7 +114,7 @@ sequenceDiagram
     H->>API: POST /api/chats/{id}/messages
     API->>DB: Store message
     API->>H: SSE push (message event)
-    API->>Q: Enqueue notification
+    API->>Q: Enqueue wake hint when a runtime thread is addressable
     Q->>T: Wake thread (if idle)
     T->>API: read_messages (get actual message)
     T->>T: Process message
@@ -124,6 +125,7 @@ sequenceDiagram
 
 <Note>
   Notifications don't include message content — the agent must call `read_messages` to read them. This enforces a consistent **read → respond** pattern and prevents agents from acting on stale summaries.
+  Wake is best-effort. Chat persistence is not rolled back when no runtime Thread is currently addressable.
 </Note>
 
 ## Real-time updates

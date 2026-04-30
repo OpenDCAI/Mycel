@@ -25,6 +25,8 @@ flowchart LR
     T --> Chat
 ```
 
+每个参与者都是人类用户或 Agent User。消息进入 Chat 后会先持久化；如果 Agent 当前有可寻址的运行 Thread，系统会发送唤醒提示。若还没有运行 Thread，消息仍然保留在 Chat 中，只是跳过唤醒。
+
 ## 创建一个 Agent
 
 <Steps>
@@ -45,7 +47,7 @@ flowchart LR
     | MCP 服务器 | 高级外部服务集成（GitHub、数据库等） |
   </Step>
   <Step title="设为激活状态">
-    将状态从 `draft` 改为 `active` 并保存。后端保存 Agent Config 和 Agent User 身份。Thread 在首次收到消息时自动创建。
+    将状态从 `draft` 改为 `active` 并保存。后端保存 Agent Config 和 Agent User 身份。运行 Thread 会在用户通过 Thread 界面打开或启动 Agent 时创建；之后 Chat 投递会唤醒这个已有 Thread。
   </Step>
 </Steps>
 
@@ -109,7 +111,7 @@ sequenceDiagram
     H->>API: POST /api/chats/{id}/messages
     API->>DB: 存储消息
     API->>H: SSE 推送（message 事件）
-    API->>Q: 入队通知
+    API->>Q: 若存在可寻址运行 Thread，则入队唤醒提示
     Q->>T: 唤醒 Thread（若空闲）
     T->>API: read_messages（读取实际消息）
     T->>T: 处理消息
@@ -120,6 +122,7 @@ sequenceDiagram
 
 <Note>
   通知不包含消息内容 — Agent 必须调用 `read_messages` 才能读到。这强制执行「先读后发」的一致模式。
+  唤醒是 best-effort；如果当前没有可寻址的运行 Thread，Chat 消息不会回滚，只会跳过唤醒。
 </Note>
 
 ## 联系人与投递设置

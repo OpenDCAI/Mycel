@@ -32,15 +32,22 @@ chat surface a user sees.
 2. Read the target chat with `cel chat show <chat-id>`.
 3. Send a natural message asking the managed agent to reply in the chat with
    `cel chat send <chat-id> "..."`.
-4. If the managed agent is muted or attention-controlled, use the public
+4. If the managed agent has no runtime thread yet, the send should still
+   succeed and the message should remain visible in chat; only the wake is
+   skipped.
+5. Open or start the managed agent through the normal Thread surface.
+6. Send another natural message asking for a reply.
+7. If the managed agent is muted or attention-controlled, use the public
    mention flag rather than editing hidden state.
-5. Read the chat again.
+8. Read the chat again.
 
 ## Pass Criteria
 
 - The external identity is derived from the launched local identity token.
 - The CLI does not ask for a sender user id.
 - Relationship or group access is enforced by the backend.
+- A cold managed agent without a runtime thread does not make the external
+  `cel chat send` fail.
 - The managed agent's reply arrives as a normal chat message.
 - The external identity can continue the conversation after marking messages
   read.
