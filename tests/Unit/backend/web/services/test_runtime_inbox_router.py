@@ -114,6 +114,65 @@ def test_drain_runtime_inbox_items_replaces_queued_chat_tokens_with_unread_proje
     )
 
 
+def test_drain_runtime_inbox_items_projects_unread_chat_after_wake_token_is_gone() -> None:
+    queued = [
+        SimpleNamespace(
+            content='{"event_type":"chat.message","chat_id":"chat-2"}',
+            notification_type="chat",
+            source="external",
+            sender_id="human-user-1",
+            sender_name="Human",
+        )
+    ]
+
+    def _drain_all(_key: str) -> list[SimpleNamespace]:
+        items = list(queued)
+        queued.clear()
+        return items
+
+    messaging_service = SimpleNamespace(
+        list_chats_for_user=lambda _user_id: [
+            {
+                "id": "chat-2",
+                "unread_count": 1,
+                "last_message": {
+                    "id": "msg-2",
+                    "seq": 8,
+                    "sender_name": "Human",
+                    "content": "must not leak",
+                },
+            }
+        ]
+    )
+
+    first = drain_runtime_inbox_items(
+        "external-user-1",
+        SimpleNamespace(drain_all=_drain_all),
+        messaging_service=messaging_service,
+    )
+    second = drain_runtime_inbox_items(
+        "external-user-1",
+        SimpleNamespace(drain_all=_drain_all),
+        messaging_service=messaging_service,
+    )
+
+    assert (
+        first
+        == second
+        == [
+            {
+                "event_type": "chat.message",
+                "notification_type": "chat",
+                "chat_id": "chat-2",
+                "message_id": "msg-2",
+                "message_seq": 8,
+                "sender_name": "Human",
+                "unread_count": 1,
+            }
+        ]
+    )
+
+
 def test_drain_runtime_inbox_items_drops_chat_token_when_chat_is_already_read() -> None:
     queue_manager = SimpleNamespace(
         drain_all=lambda _key: [
