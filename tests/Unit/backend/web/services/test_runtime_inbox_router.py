@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import threading
+import time
 from types import SimpleNamespace
 
 import pytest
@@ -11,6 +12,23 @@ from backend.chat.api.http.runtime_inbox_router import (
     wait_runtime_inbox,
     wait_runtime_inbox_items,
 )
+from core.runtime.middleware.queue.manager import MessageQueueManager
+
+
+class _SharedRuntimeInboxWakeBus:
+    def __init__(self) -> None:
+        self.handlers = {}
+
+    def register(self, inbox_id, handler) -> None:
+        self.handlers[inbox_id] = handler
+
+    def unregister(self, inbox_id) -> None:
+        self.handlers.pop(inbox_id, None)
+
+    def publish(self, inbox_id) -> None:
+        handler = self.handlers.get(inbox_id)
+        if handler:
+            handler()
 
 
 def test_drain_runtime_inbox_items_returns_non_chat_metadata_and_clears_external_queue() -> None:
@@ -290,16 +308,69 @@ def test_wait_runtime_inbox_items_returns_derived_chat_notification_after_wake()
     assert registered["unregistered"] is True
 
 
+def test_wait_runtime_inbox_items_uses_signal_bus_and_drains_durable_queue(tmp_path) -> None:
+    db_path = str(tmp_path / "queue.db")
+    waiter_queue = MessageQueueManager(db_path=db_path)
+    sender_queue = MessageQueueManager(db_path=db_path)
+    wake_bus = _SharedRuntimeInboxWakeBus()
+    result_holder: dict[str, list[dict[str, object]]] = {}
+    worker = threading.Thread(
+        target=lambda: result_holder.update(
+            items=wait_runtime_inbox_items(
+                "external-user-1",
+                waiter_queue,
+                timeout_seconds=1.0,
+                wake_bus=wake_bus,
+            )
+        )
+    )
+
+    worker.start()
+    deadline = time.monotonic() + 1.0
+    while "external:external-user-1" not in wake_bus.handlers and time.monotonic() < deadline:
+        time.sleep(0.001)
+    assert "external:external-user-1" in wake_bus.handlers
+    sender_queue.enqueue(
+        '{"event_type":"relationship.requested","summary":"Human requested contact."}',
+        "external:external-user-1",
+        notification_type="relationship",
+        source="external",
+        sender_id="human-user-1",
+        sender_name="Human",
+        wake=False,
+    )
+    wake_bus.publish("external:external-user-1")
+    worker.join(timeout=1.0)
+
+    assert not worker.is_alive()
+    assert result_holder["items"] == [
+        {
+            "event_type": "relationship.requested",
+            "summary": "Human requested contact.",
+            "notification_type": "relationship",
+            "source": "external",
+            "sender_id": "human-user-1",
+            "sender_name": "Human",
+        }
+    ]
+    assert wake_bus.handlers == {}
+
+
 @pytest.mark.asyncio
 async def test_wait_runtime_inbox_endpoint_returns_count_and_notifications() -> None:
     queue_manager = SimpleNamespace(
         drain_all=lambda _key: [],
-        register_wake=lambda _key, _handler: None,
-        unregister_wake=lambda _key: None,
+        register_wake=lambda _key, _handler: (_ for _ in ()).throw(AssertionError("runtime inbox endpoint should use wake bus")),
+        unregister_wake=lambda _key: (_ for _ in ()).throw(AssertionError("runtime inbox endpoint should use wake bus")),
+    )
+    wake_events: list[tuple[str, str]] = []
+    wake_bus = SimpleNamespace(
+        register=lambda key, _handler: wake_events.append(("register", key)),
+        unregister=lambda key: wake_events.append(("unregister", key)),
     )
     app = SimpleNamespace(
         state=SimpleNamespace(
-            threads_runtime_state=SimpleNamespace(queue_manager=queue_manager),
+            threads_runtime_state=SimpleNamespace(queue_manager=queue_manager, runtime_inbox_wake_bus=wake_bus),
             chat_runtime_state=SimpleNamespace(messaging_service=SimpleNamespace(list_chats_for_user=lambda _user_id: [])),
         )
     )
@@ -311,3 +382,7 @@ async def test_wait_runtime_inbox_endpoint_returns_count_and_notifications() -> 
     )
 
     assert result == {"count": 0, "notifications": []}
+    assert wake_events == [
+        ("register", "external:external-user-1"),
+        ("unregister", "external:external-user-1"),
+    ]

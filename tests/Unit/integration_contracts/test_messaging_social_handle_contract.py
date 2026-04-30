@@ -3262,6 +3262,7 @@ async def test_recipient_thread_resolution_requires_current_thread_repo_contract
                 get_by_id=lambda thread_id: {"id": thread_id, "agent_user_id": "agent-user-1"} if thread_id == "thread-1" else None,
             ),
             agent_pool={},
+            runtime_inbox_wake_bus=object(),
             queue_manager=SimpleNamespace(enqueue=lambda *_args, **_kwargs: None),
             thread_cwd={},
             thread_sandbox={},
@@ -3332,6 +3333,7 @@ async def _run_chat_delivery(
                 get_by_id=lambda thread_id: next((row for row in thread_rows if row["id"] == thread_id), None),
             ),
             agent_pool=pool or {},
+            runtime_inbox_wake_bus=object(),
             queue_manager=SimpleNamespace(
                 enqueue=lambda content, thread_id, notification_type, **meta: enqueued.append(
                     (content, thread_id, meta.get("sender_id"), meta.get("sender_name"))

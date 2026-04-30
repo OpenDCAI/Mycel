@@ -35,6 +35,7 @@ def _app(
                 get_by_id=lambda thread_id: next((row for row in thread_rows if row["id"] == thread_id), None),
             ),
             agent_pool=pool or {},
+            runtime_inbox_wake_bus=object(),
             queue_manager=SimpleNamespace(
                 enqueue=lambda content, thread_id, notification_type, **meta: enqueued.append(
                     (content, thread_id, meta.get("sender_id"), meta.get("sender_name"), meta.get("wake"))

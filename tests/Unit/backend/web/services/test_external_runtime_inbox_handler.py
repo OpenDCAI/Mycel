@@ -16,6 +16,14 @@ from protocols.agent_runtime import (
 )
 
 
+class _RecordingWakeBus:
+    def __init__(self) -> None:
+        self.published: list[str] = []
+
+    def publish(self, inbox_id: str) -> None:
+        self.published.append(inbox_id)
+
+
 def _envelope() -> AgentChatDeliveryEnvelope:
     return AgentChatDeliveryEnvelope(
         chat=AgentChatContext(chat_id="chat-1"),
@@ -28,10 +36,12 @@ def _envelope() -> AgentChatDeliveryEnvelope:
 @pytest.mark.asyncio
 async def test_external_runtime_inbox_handler_queues_chat_wake_token_only() -> None:
     enqueued: list[tuple[str, str, str, dict]] = []
+    wake_bus = _RecordingWakeBus()
     handler = ExternalRuntimeInboxHandler(
+        wake_bus=wake_bus,
         queue_manager=SimpleNamespace(
             enqueue=lambda content, thread_id, notification_type, **meta: enqueued.append((content, thread_id, notification_type, meta))
-        )
+        ),
     )
 
     result = await handler.dispatch(_envelope())
@@ -46,18 +56,21 @@ async def test_external_runtime_inbox_handler_queues_chat_wake_token_only() -> N
     assert meta["source"] == "external"
     assert meta["sender_id"] == "human-user-1"
     assert meta["sender_name"] == "Human"
-    assert meta["wake"] is True
+    assert meta["wake"] is False
     assert payload == {"event_type": "chat.message", "chat_id": "chat-1"}
+    assert wake_bus.published == ["external:external-user-1"]
     assert "managed runtime prompt must not leak" not in content
 
 
 @pytest.mark.asyncio
 async def test_external_runtime_inbox_handler_queues_generic_runtime_notification() -> None:
     enqueued: list[tuple[str, str, str, dict]] = []
+    wake_bus = _RecordingWakeBus()
     handler = ExternalRuntimeInboxHandler(
+        wake_bus=wake_bus,
         queue_manager=SimpleNamespace(
             enqueue=lambda content, thread_id, notification_type, **meta: enqueued.append((content, thread_id, notification_type, meta))
-        )
+        ),
     )
     envelope = AgentRuntimeNotificationEnvelope(
         event_type="relationship.requested",
@@ -81,6 +94,8 @@ async def test_external_runtime_inbox_handler_queues_generic_runtime_notificatio
     assert meta["source"] == "external"
     assert meta["sender_id"] == "human-user-1"
     assert meta["sender_name"] == "Human"
+    assert meta["wake"] is False
+    assert wake_bus.published == ["external:external-user-1"]
     assert payload == {
         "event_type": "relationship.requested",
         "sender_id": "human-user-1",

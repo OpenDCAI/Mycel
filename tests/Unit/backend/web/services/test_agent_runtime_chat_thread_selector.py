@@ -37,6 +37,7 @@ async def test_gateway_chat_delivery_uses_preselected_thread_id_from_envelope(mo
                 ),
             ),
             agent_pool={},
+            runtime_inbox_wake_bus=object(),
             queue_manager=SimpleNamespace(
                 enqueue=lambda content, thread_id, _notification_type, **_meta: enqueued.append((content, thread_id))
             ),

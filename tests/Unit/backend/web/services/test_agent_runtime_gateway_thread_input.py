@@ -39,6 +39,7 @@ def _fake_app() -> SimpleNamespace:
                 list_by_agent_user=lambda _uid: [],
             ),
             agent_pool={},
+            runtime_inbox_wake_bus=object(),
             queue_manager=_FakeQueueManager(),
             thread_cwd={},
             thread_sandbox={},

@@ -535,6 +535,7 @@ def _make_streaming_app(
         thread_event_buffers={},
         subagent_buffers={},
         queue_manager=queue_manager,
+        runtime_inbox_wake_bus=object(),
         thread_last_active={},
     )
     event_loop = None
@@ -1445,6 +1446,7 @@ async def test_route_message_cancelled_during_startup_does_not_start_run(monkeyp
             thread_locks={},
             thread_locks_guard=asyncio.Lock(),
             queue_manager=queue_manager,
+            runtime_inbox_wake_bus=object(),
             typing_tracker=SimpleNamespace(start_chat=lambda *_args, **_kwargs: None),
         )
     )
