@@ -87,7 +87,7 @@ def test_drain_runtime_inbox_items_replaces_queued_chat_tokens_with_unread_proje
                 {
                     "id": "chat-2",
                     "unread_count": 1,
-                    "last_message": {"sender_name": "Human", "content": "must not leak"},
+                    "last_message": {"id": "msg-2", "seq": 7, "sender_name": "Human", "content": "must not leak"},
                 }
             ]
         ),
@@ -98,6 +98,8 @@ def test_drain_runtime_inbox_items_replaces_queued_chat_tokens_with_unread_proje
             "event_type": "chat.message",
             "notification_type": "chat",
             "chat_id": "chat-2",
+            "message_id": "msg-2",
+            "message_seq": 7,
             "sender_name": "Human",
             "unread_count": 1,
         }
@@ -155,7 +157,7 @@ def test_chat_runtime_notifications_derive_from_unread_chat_projection() -> None
                 {
                     "id": "chat-2",
                     "unread_count": 2,
-                    "last_message": {"sender_name": "Unread Sender", "content": "must not leak"},
+                    "last_message": {"id": "msg-2", "seq": 9, "sender_name": "Unread Sender", "content": "must not leak"},
                 },
             ]
         ),
@@ -167,6 +169,8 @@ def test_chat_runtime_notifications_derive_from_unread_chat_projection() -> None
             "event_type": "chat.message",
             "notification_type": "chat",
             "chat_id": "chat-2",
+            "message_id": "msg-2",
+            "message_seq": 9,
             "sender_name": "Unread Sender",
             "unread_count": 2,
         }
@@ -272,7 +276,7 @@ def test_wait_runtime_inbox_items_returns_derived_chat_notification_after_wake()
                         {
                             "id": "chat-2",
                             "unread_count": 1,
-                            "last_message": {"sender_name": "Human", "content": "must not leak"},
+                            "last_message": {"id": "msg-2", "seq": 8, "sender_name": "Human", "content": "must not leak"},
                         }
                     ]
                 ),
@@ -301,6 +305,8 @@ def test_wait_runtime_inbox_items_returns_derived_chat_notification_after_wake()
             "event_type": "chat.message",
             "notification_type": "chat",
             "chat_id": "chat-2",
+            "message_id": "msg-2",
+            "message_seq": 8,
             "sender_name": "Human",
             "unread_count": 1,
         }
