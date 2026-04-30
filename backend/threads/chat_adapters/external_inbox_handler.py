@@ -14,8 +14,9 @@ def external_inbox_key(user_id: str) -> str:
 
 
 class ExternalRuntimeInboxHandler:
-    def __init__(self, *, queue_manager: Any) -> None:
+    def __init__(self, *, queue_manager: Any, wake_bus: Any | None = None) -> None:
         self._queue_manager = queue_manager
+        self._wake_bus = wake_bus
 
     async def dispatch(self, envelope: agent_runtime_protocol.AgentChatDeliveryEnvelope) -> agent_runtime_protocol.AgentChatDeliveryResult:
         inbox_id = external_inbox_key(envelope.recipient.agent_user_id)
@@ -30,8 +31,10 @@ class ExternalRuntimeInboxHandler:
             source="external",
             sender_id=envelope.sender.user_id,
             sender_name=envelope.sender.display_name,
-            wake=True,
+            wake=self._wake_bus is None and envelope.wake,
         )
+        if self._wake_bus is not None and envelope.wake:
+            self._wake_bus.publish(inbox_id)
         return agent_runtime_protocol.AgentChatDeliveryResult(status="accepted", thread_id=inbox_id)
 
     async def dispatch_notification(
@@ -53,6 +56,8 @@ class ExternalRuntimeInboxHandler:
             source="external",
             sender_id=envelope.sender.user_id,
             sender_name=envelope.sender.display_name,
-            wake=envelope.wake,
+            wake=self._wake_bus is None and envelope.wake,
         )
+        if self._wake_bus is not None and envelope.wake:
+            self._wake_bus.publish(inbox_id)
         return agent_runtime_protocol.AgentRuntimeNotificationResult(status="accepted", thread_id=inbox_id)

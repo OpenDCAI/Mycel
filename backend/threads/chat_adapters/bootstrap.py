@@ -26,7 +26,10 @@ def build_agent_runtime_state(app: Any, *, typing_tracker: Any) -> AgentRuntimeG
         thread_repo=app.state.thread_repo,
         agent_pool=app.state.agent_pool,
     )
-    external_runtime_handler = ExternalRuntimeInboxHandler(queue_manager=app.state.queue_manager)
+    external_runtime_handler = ExternalRuntimeInboxHandler(
+        queue_manager=app.state.queue_manager,
+        wake_bus=app.state.runtime_inbox_wake_bus,
+    )
     gateway = NativeAgentRuntimeGateway(
         chat_handlers={
             "mycel": NativeAgentChatDeliveryHandler(
