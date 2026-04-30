@@ -547,8 +547,10 @@ class MessagingService:
         if not isinstance(message["content"], str):
             raise RuntimeError(f"Latest message {message.get('id') or '<missing>'} has invalid content")
         return {
+            "id": message.get("id"),
             "content": message["content"],
             "sender_name": sender.display_name,
+            "seq": message.get("seq"),
             "created_at": message.get("created_at"),
         }
 

@@ -29,6 +29,8 @@ def chat_runtime_notifications(user_id: str, messaging_service: Any, *, chat_ids
                 "event_type": "chat.message",
                 "notification_type": "chat",
                 "chat_id": chat_id,
+                "message_id": last_message.get("id"),
+                "message_seq": last_message.get("seq"),
                 "sender_name": sender_name,
                 "unread_count": unread_count,
             }
