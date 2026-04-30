@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 from enum import Enum
 from typing import Any
 
@@ -14,6 +15,8 @@ from protocols.agent_runtime import (
     AgentRuntimeNotificationEnvelope,
     AgentThreadInputEnvelope,
 )
+
+logger = logging.getLogger(__name__)
 
 
 def make_chat_join_rejection_notification_fn(app: Any, *, activity_reader: Any, thread_repo: Any, user_repo: Any):
@@ -62,7 +65,8 @@ def make_chat_join_rejection_notification_fn(app: Any, *, activity_reader: Any, 
             activity_reader=activity_reader,
         )
         if thread_id is None:
-            raise RuntimeError(f"Chat join request requester agent has no runtime thread: {requester_id}")
+            logger.info("Skipped chat join wake for agent without runtime thread: %s", requester_id)
+            return
 
         await get_agent_runtime_gateway(app).dispatch_thread_input(
             AgentThreadInputEnvelope(

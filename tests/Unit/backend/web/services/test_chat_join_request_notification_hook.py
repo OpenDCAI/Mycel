@@ -121,6 +121,42 @@ async def test_chat_join_rejection_notification_dispatches_runtime_notification_
 
 
 @pytest.mark.asyncio
+async def test_chat_join_rejection_notification_skips_agent_wake_when_no_runtime_thread() -> None:
+    class RecordingGateway:
+        called = False
+
+        async def dispatch_thread_input(self, _envelope):
+            self.called = True
+
+    gateway = RecordingGateway()
+    user_repo = SimpleNamespace(
+        get_by_id=lambda uid: {
+            "owner-1": SimpleNamespace(id="owner-1", type="human", display_name="Owner", avatar=None),
+            "agent-user-1": SimpleNamespace(id="agent-user-1", type="agent", display_name="Toad", avatar=None),
+        }.get(uid)
+    )
+    notify = chat_join_inlet.make_chat_join_rejection_notification_fn(
+        _hook_app(gateway),
+        activity_reader=SimpleNamespace(list_active_threads_for_agent=lambda _agent_user_id: []),
+        thread_repo=SimpleNamespace(get_by_user_id=lambda _uid: None, list_by_agent_user=lambda _uid: []),
+        user_repo=user_repo,
+    )
+
+    await asyncio.to_thread(
+        notify,
+        {
+            "id": "chat_join:chat-1:agent-user-1",
+            "chat_id": "chat-1",
+            "requester_user_id": "agent-user-1",
+            "state": "rejected",
+            "decided_by_user_id": "owner-1",
+        },
+    )
+
+    assert gateway.called is False
+
+
+@pytest.mark.asyncio
 async def test_chat_join_rejection_notification_ignores_human_requester() -> None:
     class RecordingGateway:
         called = False
