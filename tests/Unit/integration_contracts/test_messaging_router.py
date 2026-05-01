@@ -297,8 +297,9 @@ def test_chat_task_routes_use_chat_access_helper(monkeypatch: pytest.MonkeyPatch
         return chat
 
     chat_task_service = SimpleNamespace(
-        create_task=lambda chat_id, **kwargs: seen.append(("create_task", (chat_id, kwargs)))
-        or {"id": "1", "subject": kwargs["subject"], "owner": kwargs.get("owner")}
+        create_task=lambda chat_id, **kwargs: (
+            seen.append(("create_task", (chat_id, kwargs))) or {"id": "1", "subject": kwargs["subject"], "owner": kwargs.get("owner")}
+        )
     )
     monkeypatch.setattr(chat_workflow_router, "get_accessible_chat_or_404", fake_helper)
 
