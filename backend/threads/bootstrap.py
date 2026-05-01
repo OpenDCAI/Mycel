@@ -5,6 +5,7 @@ import os
 from dataclasses import dataclass
 from typing import Any
 
+from backend.chat.runtime_inbox_stream import RuntimeInboxStreamState
 from backend.chat.runtime_inbox_wake import PostgresRuntimeInboxWakeBus, RuntimeInboxWakeBus
 from backend.threads.chat_adapters.bootstrap import build_agent_runtime_state
 from core.runtime.middleware.queue import MessageQueueManager
@@ -14,6 +15,7 @@ from core.runtime.middleware.queue import MessageQueueManager
 class ThreadsRuntimeState:
     queue_manager: Any
     runtime_inbox_wake_bus: Any
+    runtime_inbox_stream: Any
     agent_runtime_gateway: Any
     activity_reader: Any
     messaging_service: Any | None = None
@@ -36,6 +38,7 @@ def attach_threads_runtime(
 ) -> ThreadsRuntimeState:
     app.state.queue_manager = MessageQueueManager(repo=storage_container.queue_repo())
     app.state.runtime_inbox_wake_bus = build_runtime_inbox_wake_bus()
+    app.state.runtime_inbox_stream = RuntimeInboxStreamState()
     app.state.agent_pool = {}
     app.state.thread_sandbox = {}
     app.state.thread_cwd = {}
@@ -56,6 +59,7 @@ def attach_threads_runtime(
     state = ThreadsRuntimeState(
         queue_manager=app.state.queue_manager,
         runtime_inbox_wake_bus=app.state.runtime_inbox_wake_bus,
+        runtime_inbox_stream=app.state.runtime_inbox_stream,
         agent_runtime_gateway=runtime_state.gateway,
         activity_reader=runtime_state.activity_reader,
         messaging_service=messaging_service,

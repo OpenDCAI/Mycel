@@ -5,13 +5,20 @@ import time
 from types import SimpleNamespace
 
 import pytest
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
 
 from backend.chat.api.http.runtime_inbox_router import (
     chat_runtime_notifications,
+    drain_runtime_inbox,
     drain_runtime_inbox_items,
     wait_runtime_inbox,
     wait_runtime_inbox_items,
 )
+from backend.chat.api.http.runtime_inbox_router import (
+    router as runtime_inbox_router,
+)
+from backend.chat.runtime_inbox_stream import RuntimeInboxStreamState
 from core.runtime.middleware.queue.manager import MessageQueueManager
 
 
@@ -435,7 +442,11 @@ async def test_wait_runtime_inbox_endpoint_returns_count_and_notifications() -> 
     )
     app = SimpleNamespace(
         state=SimpleNamespace(
-            threads_runtime_state=SimpleNamespace(queue_manager=queue_manager, runtime_inbox_wake_bus=wake_bus),
+            threads_runtime_state=SimpleNamespace(
+                queue_manager=queue_manager,
+                runtime_inbox_wake_bus=wake_bus,
+                runtime_inbox_stream=RuntimeInboxStreamState(),
+            ),
             chat_runtime_state=SimpleNamespace(messaging_service=SimpleNamespace(list_chats_for_user=lambda _user_id: [])),
         )
     )
@@ -451,3 +462,143 @@ async def test_wait_runtime_inbox_endpoint_returns_count_and_notifications() -> 
         ("register", "external:external-user-1"),
         ("unregister", "external:external-user-1"),
     ]
+
+
+@pytest.mark.asyncio
+async def test_drain_runtime_inbox_endpoint_assigns_monotonic_seq() -> None:
+    queue_manager = SimpleNamespace(
+        drain_all=lambda _key: [
+            SimpleNamespace(
+                content='{"event_type":"relationship.requested","summary":"Human requested contact."}',
+                notification_type="relationship",
+                source="external",
+                sender_id="human-user-1",
+                sender_name="Human",
+            )
+        ]
+    )
+    app = SimpleNamespace(
+        state=SimpleNamespace(
+            threads_runtime_state=SimpleNamespace(
+                queue_manager=queue_manager,
+                runtime_inbox_wake_bus=SimpleNamespace(),
+                runtime_inbox_stream=RuntimeInboxStreamState(),
+            ),
+            chat_runtime_state=SimpleNamespace(messaging_service=SimpleNamespace(list_chats_for_user=lambda _user_id: [])),
+        )
+    )
+
+    result = await drain_runtime_inbox(app, "external-user-1")
+
+    assert result["notifications"] == [
+        {
+            "seq": 1,
+            "event_type": "relationship.requested",
+            "summary": "Human requested contact.",
+            "notification_type": "relationship",
+            "source": "external",
+            "sender_id": "human-user-1",
+            "sender_name": "Human",
+        }
+    ]
+
+
+def test_runtime_inbox_websocket_streams_metadata_frame_after_wake(tmp_path) -> None:
+    app, queue_manager, wake_bus = _runtime_ws_test_app("external-user-1", tmp_path)
+
+    with TestClient(app) as client:
+        with client.websocket_connect("/api/runtime/inbox/subscribe", subprotocols=["bearer.tok-1"]) as websocket:
+            _wait_for_wake_handler(wake_bus, "external:external-user-1")
+            queue_manager.enqueue(
+                '{"event_type":"relationship.requested","summary":"Human requested contact."}',
+                "external:external-user-1",
+                notification_type="relationship",
+                source="external",
+                sender_id="human-user-1",
+                sender_name="Human",
+                wake=False,
+            )
+            wake_bus.publish("external:external-user-1")
+
+            frame = websocket.receive_json()
+
+    assert frame == {
+        "type": "notify",
+        "seq": 1,
+        "fingerprint": frame["fingerprint"],
+        "ts": frame["ts"],
+        "metadata": {
+            "event_type": "relationship.requested",
+            "summary": "Human requested contact.",
+            "notification_type": "relationship",
+            "source": "external",
+            "sender_id": "human-user-1",
+            "sender_name": "Human",
+        },
+    }
+    assert "content" not in str(frame).lower()
+
+
+def test_runtime_inbox_websocket_replays_after_resume(tmp_path) -> None:
+    app, queue_manager, wake_bus = _runtime_ws_test_app("external-user-1", tmp_path)
+
+    with TestClient(app) as client:
+        with client.websocket_connect("/api/runtime/inbox/subscribe", subprotocols=["bearer.tok-1"]) as websocket:
+            _wait_for_wake_handler(wake_bus, "external:external-user-1")
+            queue_manager.enqueue(
+                '{"event_type":"relationship.requested","summary":"Human requested contact."}',
+                "external:external-user-1",
+                notification_type="relationship",
+                source="external",
+                sender_id="human-user-1",
+                sender_name="Human",
+                wake=False,
+            )
+            wake_bus.publish("external:external-user-1")
+            first = websocket.receive_json()
+
+        with client.websocket_connect("/api/runtime/inbox/subscribe", subprotocols=["bearer.tok-1"]) as websocket:
+            websocket.send_json({"type": "resume", "since_seq": 0})
+            replay = websocket.receive_json()
+
+    assert replay == first
+
+
+def test_runtime_inbox_stream_reports_replay_overflow() -> None:
+    stream = RuntimeInboxStreamState(replay_limit=1)
+
+    stream.assign("external-user-1", [{"event_type": "relationship.one"}])
+    stream.assign("external-user-1", [{"event_type": "relationship.two"}])
+
+    assert stream.replay_since("external-user-1", 0) == [
+        {
+            "type": "replay_overflow",
+            "since_seq": 0,
+            "oldest_seq": 2,
+        }
+    ]
+
+
+def _runtime_ws_test_app(user_id: str, tmp_path) -> tuple[FastAPI, MessageQueueManager, _SharedRuntimeInboxWakeBus]:
+    app = FastAPI()
+    queue_manager = MessageQueueManager(db_path=str(tmp_path / "queue.db"))
+    wake_bus = _SharedRuntimeInboxWakeBus()
+    app.state.auth_runtime_state = SimpleNamespace(
+        auth_service=SimpleNamespace(verify_token=lambda token: {"user_id": user_id} if token == "tok-1" else None)
+    )
+    app.state.user_repo = SimpleNamespace(get_by_id=lambda seen: object() if seen == user_id else None)
+    app.state.threads_runtime_state = SimpleNamespace(
+        queue_manager=queue_manager,
+        runtime_inbox_wake_bus=wake_bus,
+        runtime_inbox_stream=RuntimeInboxStreamState(),
+    )
+    app.state.chat_runtime_state = SimpleNamespace(messaging_service=SimpleNamespace(list_chats_for_user=lambda _user_id: []))
+    app.include_router(runtime_inbox_router)
+    return app, queue_manager, wake_bus
+
+
+def _wait_for_wake_handler(wake_bus: _SharedRuntimeInboxWakeBus, inbox_id: str) -> None:
+    deadline = time.monotonic() + 1.0
+    while inbox_id not in wake_bus.handlers and time.monotonic() < deadline:
+        time.sleep(0.001)
+    assert inbox_id in wake_bus.handlers
