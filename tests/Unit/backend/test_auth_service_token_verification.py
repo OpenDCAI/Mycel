@@ -155,6 +155,52 @@ def test_verify_token_accepts_supabase_iat_clock_boundary(monkeypatch: pytest.Mo
     assert payload == {"user_id": "user-local"}
 
 
+def test_complete_register_accepts_supabase_iat_clock_boundary(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setenv("SUPABASE_JWT_SECRET", "secret-1")
+    monkeypatch.setattr("backend.sandboxes.recipe_bootstrap.available_sandbox_types", lambda: [])
+    token = jwt.encode(
+        {
+            "sub": "owner-1",
+            "email": "fresh@example.com",
+            "iat": int(time.time()) + 30,
+        },
+        "secret-1",
+        algorithm="HS256",
+    )
+    existing_user = SimpleNamespace(
+        id="owner-1",
+        display_name="fresh",
+        mycel_id=10001,
+        email="fresh@example.com",
+        avatar=None,
+    )
+    owned_agent = SimpleNamespace(
+        id="agent-1",
+        display_name="Toad",
+        type=UserType.AGENT,
+        avatar="avatars/agent-1.png",
+    )
+    user_repo = SimpleNamespace(
+        get_by_id=lambda user_id: existing_user if user_id == "owner-1" else None,
+        list_by_owner_user_id=lambda _user_id: [owned_agent],
+    )
+    invite_codes = SimpleNamespace(
+        is_usable_by=lambda code, user_id: code == "invite-1" and user_id == "owner-1",
+        use=lambda code, user_id: {"code": code, "used_by": user_id},
+    )
+    recipe_repo = SimpleNamespace(get=lambda _owner_user_id, _recipe_id: None, upsert=lambda **_payload: None)
+
+    result = _service(
+        supabase_client=SimpleNamespace(),
+        user_repo=user_repo,
+        invite_codes=invite_codes,
+        recipe_repo=recipe_repo,
+    ).complete_register(token, "invite-1")
+
+    assert result["user"]["id"] == "owner-1"
+    assert result["agent"] == {"id": "agent-1", "name": "Toad", "type": "agent", "avatar": "avatars/agent-1.png"}
+
+
 def test_create_external_user_token_creates_external_user_and_signed_token(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setenv("SUPABASE_JWT_SECRET", "secret-1")
     created_rows: list[Any] = []
