@@ -33,6 +33,8 @@ class CreateChatTaskBody(BaseModel):
     status: str = "pending"
     active_form: str | None = None
     owner: str | None = None
+    blocks: list[str] = Field(default_factory=list)
+    blocked_by: list[str] = Field(default_factory=list)
     metadata: dict[str, Any] = Field(default_factory=dict)
 
 
@@ -44,6 +46,8 @@ class UpdateChatTaskBody(BaseModel):
     description: str | None = None
     active_form: str | None = None
     owner: str | None = None
+    blocks: list[str] | None = None
+    blocked_by: list[str] | None = None
     metadata: dict[str, Any] | None = None
 
 
@@ -123,6 +127,8 @@ def create_chat_task(
         status=body.status,
         active_form=body.active_form,
         owner=body.owner,
+        blocks=body.blocks,
+        blocked_by=body.blocked_by,
         metadata=body.metadata,
     )
 
@@ -162,6 +168,8 @@ def update_chat_task(
         description=body.description,
         active_form=body.active_form,
         owner=body.owner,
+        blocks=body.blocks,
+        blocked_by=body.blocked_by,
         metadata=body.metadata,
     )
     if task is None:
