@@ -21,9 +21,9 @@ class SupabaseToolTaskRepo:
     def _table(self) -> Any:
         return q.schema_table(self._client, _SCHEMA, _TABLE, _REPO)
 
-    def next_id(self, thread_id: str) -> str:
+    def next_id(self, scope_id: str) -> str:
         rows = q.rows(
-            self._table().select("task_id", count="exact").eq("thread_id", thread_id).execute(),
+            self._table().select("task_id", count="exact").eq("thread_id", scope_id).execute(),
             _REPO,
             "next_id",
         )
@@ -31,18 +31,18 @@ class SupabaseToolTaskRepo:
             return "1"
         return str(max(int(str(row["task_id"])) for row in rows) + 1)
 
-    def get(self, thread_id: str, task_id: str) -> Task | None:
+    def get(self, scope_id: str, item_id: str) -> Task | None:
         rows = q.rows(
-            self._table().select("*").eq("thread_id", thread_id).eq("task_id", task_id).execute(),
+            self._table().select("*").eq("thread_id", scope_id).eq("task_id", item_id).execute(),
             _REPO,
             "get",
         )
         return self._row_to_task(rows[0]) if rows else None
 
-    def list_all(self, thread_id: str) -> list[Task]:
+    def list_all(self, scope_id: str) -> list[Task]:
         rows = q.rows(
             q.order(
-                self._table().select("*").eq("thread_id", thread_id),
+                self._table().select("*").eq("thread_id", scope_id),
                 "task_id",
                 desc=False,
                 repo=_REPO,
@@ -53,38 +53,38 @@ class SupabaseToolTaskRepo:
         )
         return [self._row_to_task(r) for r in rows]
 
-    def insert(self, thread_id: str, task: Task) -> None:
+    def insert(self, scope_id: str, item: Task) -> None:
         self._table().insert(
             {
-                "thread_id": thread_id,
-                "task_id": task.id,
-                "subject": task.subject,
-                "description": task.description,
-                "status": task.status.value,
-                "active_form": task.active_form,
-                "owner": task.owner,
-                "blocks": task.blocks,
-                "blocked_by": task.blocked_by,
-                "metadata": task.metadata,
+                "thread_id": scope_id,
+                "task_id": item.id,
+                "subject": item.subject,
+                "description": item.description,
+                "status": item.status.value,
+                "active_form": item.active_form,
+                "owner": item.owner,
+                "blocks": item.blocks,
+                "blocked_by": item.blocked_by,
+                "metadata": item.metadata,
             }
         ).execute()
 
-    def update(self, thread_id: str, task: Task) -> None:
+    def update(self, scope_id: str, item: Task) -> None:
         self._table().update(
             {
-                "subject": task.subject,
-                "description": task.description,
-                "status": task.status.value,
-                "active_form": task.active_form,
-                "owner": task.owner,
-                "blocks": task.blocks,
-                "blocked_by": task.blocked_by,
-                "metadata": task.metadata,
+                "subject": item.subject,
+                "description": item.description,
+                "status": item.status.value,
+                "active_form": item.active_form,
+                "owner": item.owner,
+                "blocks": item.blocks,
+                "blocked_by": item.blocked_by,
+                "metadata": item.metadata,
             }
-        ).eq("thread_id", thread_id).eq("task_id", task.id).execute()
+        ).eq("thread_id", scope_id).eq("task_id", item.id).execute()
 
-    def delete(self, thread_id: str, task_id: str) -> None:
-        self._table().delete().eq("thread_id", thread_id).eq("task_id", task_id).execute()
+    def delete(self, scope_id: str, item_id: str) -> None:
+        self._table().delete().eq("thread_id", scope_id).eq("task_id", item_id).execute()
 
     @staticmethod
     def _row_to_task(row: dict[str, Any]) -> Task:
