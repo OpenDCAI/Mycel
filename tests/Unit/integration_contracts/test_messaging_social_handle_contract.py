@@ -2056,6 +2056,29 @@ def test_messaging_service_group_chat_creation_accepts_two_members() -> None:
     assert members == [(chat["id"], "agent-user-1"), (chat["id"], "human-user-1")]
 
 
+def test_messaging_service_group_chat_creation_accepts_owner_only_group() -> None:
+    created: list[Any] = []
+    members: list[tuple[str, str]] = []
+    service = MessagingService(
+        chat_repo=SimpleNamespace(create=lambda row: created.append(row)),
+        chat_member_repo=SimpleNamespace(add_member=lambda chat_id, user_id: members.append((chat_id, user_id))),
+        messages_repo=SimpleNamespace(),
+        user_repo=SimpleNamespace(
+            get_by_id=lambda uid: SimpleNamespace(id=uid, owner_user_id=None, display_name=uid, type="human", avatar=None)
+        ),
+        contact_repo=SimpleNamespace(get=lambda _owner_id, _target_id: None),
+        relationship_service=SimpleNamespace(get_state=lambda _viewer_id, _target_id: "none"),
+    )
+
+    chat = service.create_group_chat(["agent-user-1"], title="owner-only group")
+
+    assert chat["title"] == "owner-only group"
+    assert len(created) == 1
+    assert created[0].type == "group"
+    assert created[0].created_by_user_id == "agent-user-1"
+    assert members == [(chat["id"], "agent-user-1")]
+
+
 def test_messaging_service_group_chat_creation_accepts_same_owner_external_users() -> None:
     created: list[Any] = []
     members: list[tuple[str, str]] = []

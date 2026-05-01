@@ -26,7 +26,7 @@ router = APIRouter(prefix="/api/chats", tags=["chats"])
 
 class CreateChatBody(BaseModel):
     user_ids: list[str] = Field(
-        min_length=1,
+        default_factory=list,
         description="Other participant user ids. Do not include the authenticated user; the backend adds it from the bearer token.",
     )
     title: str | None = None
@@ -114,9 +114,10 @@ def _chat_participant_ids_for_request(
     thread_repo: Any,
     participant_ids: list[str],
     requester_user_id: str,
+    kind: str,
 ) -> list[str]:
     other_participants = _validate_chat_participant_ids(user_repo, thread_repo, participant_ids, requester_user_id)
-    if not other_participants:
+    if not other_participants and kind != "group":
         raise ValueError("Chat must include at least one other participant")
     return list(dict.fromkeys([requester_user_id, *other_participants]))
 
@@ -138,7 +139,7 @@ def create_chat(
     thread_repo: Annotated[Any, Depends(get_thread_repo)],
 ):
     try:
-        participant_ids = _chat_participant_ids_for_request(user_repo, thread_repo, body.user_ids, user_id)
+        participant_ids = _chat_participant_ids_for_request(user_repo, thread_repo, body.user_ids, user_id, body.kind)
         if body.kind == "group":
             chat = messaging_service.create_group_chat(participant_ids, body.title)
         elif body.kind == "direct":
