@@ -308,6 +308,7 @@ def test_chat_task_routes_use_chat_access_helper(monkeypatch: pytest.MonkeyPatch
         chat_workflow_router.CreateChatTaskBody(
             subject="Review worker patch",
             description="Check the result.",
+            status="proposed",
             owner="reviewer-user",
         ),
         user_id="user-1",
@@ -326,6 +327,7 @@ def test_chat_task_routes_use_chat_access_helper(monkeypatch: pytest.MonkeyPatch
                 {
                     "subject": "Review worker patch",
                     "description": "Check the result.",
+                    "status": "proposed",
                     "active_form": None,
                     "owner": "reviewer-user",
                     "metadata": {},
