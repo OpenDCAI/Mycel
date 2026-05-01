@@ -88,6 +88,7 @@ def test_chat_task_service_keeps_tasks_scoped_to_chat_id() -> None:
         "chat-1",
         subject="Review worker patch",
         description="Read the worker result and decide next step.",
+        status="proposed",
         owner="reviewer-user",
     )
     other = service.create_task(
@@ -97,6 +98,7 @@ def test_chat_task_service_keeps_tasks_scoped_to_chat_id() -> None:
     )
 
     assert task["id"] == "1"
+    assert task["status"] == "proposed"
     assert other["id"] == "1"
     assert [row["subject"] for row in service.list_tasks("chat-1")] == ["Review worker patch"]
     assert [row["subject"] for row in service.list_tasks("chat-2")] == ["Separate room task"]

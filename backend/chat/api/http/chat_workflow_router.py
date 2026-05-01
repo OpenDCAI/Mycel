@@ -30,6 +30,7 @@ class CreateChatTaskBody(BaseModel):
 
     subject: str
     description: str
+    status: str = "pending"
     active_form: str | None = None
     owner: str | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)
@@ -119,6 +120,7 @@ def create_chat_task(
         chat_id,
         subject=body.subject,
         description=body.description,
+        status=body.status,
         active_form=body.active_form,
         owner=body.owner,
         metadata=body.metadata,
