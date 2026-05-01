@@ -86,6 +86,8 @@ packages = [
     "core.runtime.middleware.queue",
     "core.runtime.middleware.spill_buffer",
     "core.tools",
+    "core.work_item",
+    "core.work_item.chat_workflow",
     "core.tools.command",
     "core.tools.command.bash",
     "core.tools.command.zsh",
