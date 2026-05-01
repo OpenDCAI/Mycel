@@ -5,6 +5,7 @@ from typing import Any
 
 from core.runtime.registry import ToolEntry, ToolMode, ToolRegistry, make_tool_schema
 from core.tools.task.types import Task, TaskStatus
+from storage.contracts import WorkItemRepo
 from storage.runtime import build_tool_task_repo
 
 TASK_CREATE_SCHEMA = make_tool_schema(
@@ -110,7 +111,7 @@ class TaskService:
         self,
         registry: ToolRegistry,
         thread_id: str | None = None,
-        repo: Any | None = None,
+        repo: WorkItemRepo | None = None,
     ):
         self._repo = repo or build_tool_task_repo()
         self._default_thread_id = thread_id  # override for tests / single-agent TUI

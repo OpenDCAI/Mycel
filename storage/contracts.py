@@ -273,6 +273,23 @@ class ChatJoinRequestRow(BaseModel):
         return value
 
 
+class ChatWorkflowRow(BaseModel):
+    chat_id: str
+    kind: str
+    state: str = "active"
+    config: dict[str, Any] = Field(default_factory=dict)
+    updated_by_user_id: str | None = None
+    created_at: float
+    updated_at: float | None = None
+
+    @field_validator("chat_id", "kind", "state")
+    @classmethod
+    def _validate_chat_workflow_identity_fields(cls, value: str, info: Any) -> str:
+        if not value.strip():
+            raise ValueError(f"chat_workflow.{info.field_name} must not be blank")
+        return value
+
+
 class MessageRow(BaseModel):
     id: str
     chat_id: str
@@ -457,14 +474,37 @@ class SkillRepo(Protocol):
     def delete(self, owner_user_id: str, skill_id: str) -> None: ...
 
 
-class ToolTaskRepo(Protocol):
+class WorkItemRepo(Protocol):
     def close(self) -> None: ...
-    def next_id(self, thread_id: str) -> str: ...
-    def get(self, thread_id: str, task_id: str) -> Any | None: ...
-    def list_all(self, thread_id: str) -> list[Any]: ...
-    def insert(self, thread_id: str, task: Any) -> None: ...
-    def update(self, thread_id: str, task: Any) -> None: ...
-    def delete(self, thread_id: str, task_id: str) -> None: ...
+    def next_id(self, scope_id: str) -> str: ...
+    def get(self, scope_id: str, item_id: str) -> Any | None: ...
+    def list_all(self, scope_id: str) -> list[Any]: ...
+    def insert(self, scope_id: str, item: Any) -> None: ...
+    def update(self, scope_id: str, item: Any) -> None: ...
+    def delete(self, scope_id: str, item_id: str) -> None: ...
+
+
+class ToolTaskRepo(WorkItemRepo, Protocol):
+    pass
+
+
+class ChatWorkflowRepo(Protocol):
+    def close(self) -> None: ...
+    def get(self, chat_id: str) -> ChatWorkflowRow | None: ...
+    def upsert(
+        self,
+        chat_id: str,
+        *,
+        kind: str,
+        state: str,
+        config: dict[str, Any],
+        updated_by_user_id: str | None = None,
+    ) -> ChatWorkflowRow: ...
+    def delete(self, chat_id: str) -> None: ...
+
+
+class ChatTaskRepo(WorkItemRepo, Protocol):
+    pass
 
 
 class ResourceSnapshotRepo(Protocol):
