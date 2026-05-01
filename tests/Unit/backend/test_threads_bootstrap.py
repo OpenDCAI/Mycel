@@ -11,6 +11,7 @@ def test_attach_threads_runtime_wires_runtime_dependencies(monkeypatch):
     queue_manager = object()
     gateway = object()
     activity_reader = object()
+    runtime_inbox_stream = object()
     typing_tracker = object()
     messaging_service = object()
     relationship_service = object()
@@ -34,6 +35,11 @@ def test_attach_threads_runtime_wires_runtime_dependencies(monkeypatch):
     )
     monkeypatch.setattr(
         threads_bootstrap,
+        "RuntimeInboxStreamState",
+        lambda: seen.append(("runtime_inbox_stream", app)) or runtime_inbox_stream,
+    )
+    monkeypatch.setattr(
+        threads_bootstrap,
         "build_agent_runtime_state",
         lambda target_app, *, typing_tracker: (
             seen.append(("runtime_state", target_app))
@@ -53,6 +59,7 @@ def test_attach_threads_runtime_wires_runtime_dependencies(monkeypatch):
 
     assert app.state.queue_manager is queue_manager
     assert app.state.runtime_inbox_wake_bus is runtime_inbox_wake_bus
+    assert app.state.runtime_inbox_stream is runtime_inbox_stream
     assert app.state.agent_pool == {}
     assert app.state.thread_sandbox == {}
     assert app.state.thread_cwd == {}
@@ -63,6 +70,7 @@ def test_attach_threads_runtime_wires_runtime_dependencies(monkeypatch):
     assert app.state.threads_runtime_state is state
     assert state.queue_manager is queue_manager
     assert state.runtime_inbox_wake_bus is runtime_inbox_wake_bus
+    assert state.runtime_inbox_stream is runtime_inbox_stream
     assert state.agent_runtime_gateway is gateway
     assert state.activity_reader is activity_reader
     assert state.messaging_service is messaging_service
@@ -75,6 +83,7 @@ def test_attach_threads_runtime_wires_runtime_dependencies(monkeypatch):
     assert seen == [
         ("queue_manager", queue_repo),
         ("runtime_inbox_wake_bus", app),
+        ("runtime_inbox_stream", app),
         ("runtime_state", app),
         ("typing_tracker", typing_tracker),
     ]
