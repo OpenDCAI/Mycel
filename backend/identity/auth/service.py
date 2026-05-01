@@ -17,6 +17,7 @@ from storage.providers.supabase import _query as q
 logger = logging.getLogger(__name__)
 
 SUPABASE_JWT_ALGORITHM = "HS256"
+SUPABASE_JWT_LEEWAY_SECONDS = 60
 
 
 class ExternalUserAlreadyExistsError(ValueError):
@@ -82,7 +83,13 @@ class AuthService:
         if not jwt_secret:
             raise RuntimeError("SUPABASE_JWT_SECRET not set.")
         try:
-            payload = jwt.decode(temp_token, jwt_secret, algorithms=[SUPABASE_JWT_ALGORITHM], options={"verify_aud": False})
+            payload = jwt.decode(
+                temp_token,
+                jwt_secret,
+                algorithms=[SUPABASE_JWT_ALGORITHM],
+                leeway=SUPABASE_JWT_LEEWAY_SECONDS,
+                options={"verify_aud": False},
+            )
         except jwt.InvalidTokenError as e:
             raise ValueError("会话已过期，请重新验证邮箱") from e
         auth_user_id = payload["sub"]
@@ -175,7 +182,7 @@ class AuthService:
                 token,
                 jwt_secret,
                 algorithms=[SUPABASE_JWT_ALGORITHM],
-                leeway=60,
+                leeway=SUPABASE_JWT_LEEWAY_SECONDS,
                 options={"verify_aud": False},
             )
             return {"user_id": payload["sub"]}
