@@ -19,6 +19,9 @@ def test_chat_app_router_mounts_chat_relationship_and_conversation_routes() -> N
     assert "/api/chats/{chat_id}/join-requests" in paths
     assert "/api/chats/{chat_id}/join-target" in paths
     assert "/api/chats/{chat_id}/join-requests/{request_id}/approve" in paths
+    assert "/api/chats/{chat_id}/workflow" in paths
+    assert "/api/chats/{chat_id}/tasks" in paths
+    assert "/api/chats/{chat_id}/tasks/{task_id}" in paths
     assert "/api/relationships" in paths
     assert "/api/conversations" in paths
 

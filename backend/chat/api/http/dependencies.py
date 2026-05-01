@@ -38,6 +38,16 @@ def get_chat_join_request_service(app: Annotated[Any, Depends(get_app)]) -> Any:
     return runtime_state.chat_join_request_service
 
 
+def get_chat_workflow_service(app: Annotated[Any, Depends(get_app)]) -> Any:
+    runtime_state = _require_state_attr(app, "chat_runtime_state", "Chat workflow service unavailable")
+    return runtime_state.chat_workflow_service
+
+
+def get_chat_task_service(app: Annotated[Any, Depends(get_app)]) -> Any:
+    runtime_state = _require_state_attr(app, "chat_runtime_state", "Chat task service unavailable")
+    return runtime_state.chat_task_service
+
+
 def get_user_repo(app: Annotated[Any, Depends(get_app)]) -> Any:
     return _require_state_attr(app, "user_repo", "User repo unavailable")
 
@@ -59,6 +69,15 @@ def get_chat_repo(app: Annotated[Any, Depends(get_app)]) -> Any:
 def get_chat_event_bus(app: Annotated[Any, Depends(get_app)]) -> Any:
     runtime_state = _require_state_attr(app, "chat_runtime_state", "Chat event bus unavailable")
     return runtime_state.chat_event_bus
+
+
+def get_accessible_chat_or_404(chat_repo: Any, messaging_service: Any, chat_id: str, user_id: str) -> Any:
+    chat = chat_repo.get_by_id(chat_id)
+    if not chat:
+        raise HTTPException(404, "Chat not found")
+    if not messaging_service.is_chat_member(chat_id, user_id):
+        raise HTTPException(403, "Not a participant of this chat")
+    return chat
 
 
 def get_runtime_thread_activity_reader(app: Annotated[Any, Depends(get_app)]) -> Any:

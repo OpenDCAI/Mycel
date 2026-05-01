@@ -10,6 +10,7 @@ from backend.threads.chat_adapters.relationship_inlet import (
     make_relationship_decision_notification_fn,
     make_relationship_request_notification_fn,
 )
+from core.work_item.chat_workflow.service import ChatTaskService, ChatWorkflowService
 from messaging.delivery.resolver import HireVisitDeliveryResolver
 from messaging.join_requests import ChatJoinRequestService
 from messaging.realtime.events import ChatEventBus
@@ -26,6 +27,8 @@ class ChatRuntimeState:
     typing_tracker: Any
     relationship_service: Any
     chat_join_request_service: Any
+    chat_workflow_service: Any
+    chat_task_service: Any
     messaging_service: Any
 
 
@@ -42,6 +45,8 @@ def attach_chat_runtime(
     messages_repo = storage_container.messages_repo()
     relationship_repo = storage_container.relationship_repo()
     chat_join_request_repo = storage_container.chat_join_request_repo()
+    chat_workflow_repo = storage_container.chat_workflow_repo()
+    chat_task_repo = storage_container.chat_task_repo()
     chat_event_bus = ChatEventBus()
     typing_tracker = TypingTracker(chat_event_bus)
     relationship_service = RelationshipService(relationship_repo)
@@ -70,6 +75,8 @@ def attach_chat_runtime(
         chat_join_request_repo=chat_join_request_repo,
         messaging_service=messaging_service,
     )
+    chat_workflow_service = ChatWorkflowService(workflow_repo=chat_workflow_repo)
+    chat_task_service = ChatTaskService(task_repo=chat_task_repo)
 
     # @@@chat-bootstrap-borrowable-state - chat bootstrap now keeps its owned
     # runtime objects inside the returned chat_runtime_state so the app
@@ -81,6 +88,8 @@ def attach_chat_runtime(
         typing_tracker=typing_tracker,
         relationship_service=relationship_service,
         chat_join_request_service=chat_join_request_service,
+        chat_workflow_service=chat_workflow_service,
+        chat_task_service=chat_task_service,
         messaging_service=messaging_service,
     )
     app.state.chat_runtime_state = state

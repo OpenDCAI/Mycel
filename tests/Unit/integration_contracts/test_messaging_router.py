@@ -8,7 +8,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
 
-from backend.chat.api.http import chats_router, relationships_router
+from backend.chat.api.http import chat_workflow_router, chats_router, relationships_router
 from backend.identity.avatar.urls import avatar_url
 from backend.web.core.dependencies import get_current_user_id
 from storage.contracts import ContactEdgeRow
@@ -254,6 +254,84 @@ def test_get_accessible_chat_or_404_raises_403_for_non_member():
 
     assert exc_info.value.status_code == 403
     assert exc_info.value.detail == "Not a participant of this chat"
+
+
+def test_chat_workflow_routes_use_chat_access_helper(monkeypatch: pytest.MonkeyPatch) -> None:
+    seen: list[tuple[str, object]] = []
+    chat = _chat("chat-1")
+    chat_repo = SimpleNamespace(name="chat-repo")
+    messaging_service = SimpleNamespace(name="messaging")
+
+    def fake_helper(chat_repo, messaging_service, chat_id: str, user_id: str):
+        seen.append(("helper", (chat_repo, messaging_service, chat_id, user_id)))
+        return chat
+
+    workflow_service = SimpleNamespace(
+        get_workflow=lambda chat_id: seen.append(("get_workflow", chat_id)) or {"chat_id": chat_id, "kind": "keep", "state": "active"}
+    )
+    monkeypatch.setattr(chat_workflow_router, "get_accessible_chat_or_404", fake_helper)
+
+    result = chat_workflow_router.get_chat_workflow(
+        "chat-1",
+        user_id="user-1",
+        chat_repo=chat_repo,
+        messaging_service=messaging_service,
+        chat_workflow_service=workflow_service,
+    )
+
+    assert result == {"chat_id": "chat-1", "kind": "keep", "state": "active"}
+    assert seen == [
+        ("helper", (chat_repo, messaging_service, "chat-1", "user-1")),
+        ("get_workflow", "chat-1"),
+    ]
+
+
+def test_chat_task_routes_use_chat_access_helper(monkeypatch: pytest.MonkeyPatch) -> None:
+    seen: list[tuple[str, object]] = []
+    chat = _chat("chat-1")
+    chat_repo = SimpleNamespace(name="chat-repo")
+    messaging_service = SimpleNamespace(name="messaging")
+
+    def fake_helper(chat_repo_arg, messaging_service_arg, chat_id: str, user_id: str):
+        seen.append(("helper", (chat_repo_arg, messaging_service_arg, chat_id, user_id)))
+        return chat
+
+    chat_task_service = SimpleNamespace(
+        create_task=lambda chat_id, **kwargs: seen.append(("create_task", (chat_id, kwargs)))
+        or {"id": "1", "subject": kwargs["subject"], "owner": kwargs.get("owner")}
+    )
+    monkeypatch.setattr(chat_workflow_router, "get_accessible_chat_or_404", fake_helper)
+
+    result = chat_workflow_router.create_chat_task(
+        "chat-1",
+        chat_workflow_router.CreateChatTaskBody(
+            subject="Review worker patch",
+            description="Check the result.",
+            owner="reviewer-user",
+        ),
+        user_id="user-1",
+        chat_repo=chat_repo,
+        messaging_service=messaging_service,
+        chat_task_service=chat_task_service,
+    )
+
+    assert result == {"id": "1", "subject": "Review worker patch", "owner": "reviewer-user"}
+    assert seen == [
+        ("helper", (chat_repo, messaging_service, "chat-1", "user-1")),
+        (
+            "create_task",
+            (
+                "chat-1",
+                {
+                    "subject": "Review worker patch",
+                    "description": "Check the result.",
+                    "active_form": None,
+                    "owner": "reviewer-user",
+                    "metadata": {},
+                },
+            ),
+        ),
+    ]
 
 
 def test_resolve_display_user_delegates_to_messaging_service(monkeypatch: pytest.MonkeyPatch) -> None:
