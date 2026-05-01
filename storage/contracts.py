@@ -484,10 +484,6 @@ class WorkItemRepo(Protocol):
     def delete(self, scope_id: str, item_id: str) -> None: ...
 
 
-class ToolTaskRepo(WorkItemRepo, Protocol):
-    pass
-
-
 class ChatWorkflowRepo(Protocol):
     def close(self) -> None: ...
     def get(self, chat_id: str) -> ChatWorkflowRow | None: ...

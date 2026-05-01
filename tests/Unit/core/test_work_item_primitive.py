@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import storage.contracts as storage_contracts
 from core.tools.task.types import Task, TaskStatus
 from core.work_item.types import WorkItem
 from storage.contracts import WorkItemRepo
@@ -40,3 +41,7 @@ def test_agent_task_repo_conforms_to_work_item_repo_protocol() -> None:
     repo: WorkItemRepo = SupabaseToolTaskRepo(FakeSupabaseClient(tables={}))
 
     assert repo.next_id("thread-scope") == "1"
+
+
+def test_tool_task_repo_protocol_name_is_not_public_alias() -> None:
+    assert not hasattr(storage_contracts, "ToolTaskRepo")
