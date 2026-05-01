@@ -46,6 +46,20 @@ notification inbox while durable chat messages remain in the normal chat store.
    the provider hook. The hook should surface the unread chat notification
    before the user calls `cel chat read`.
 
+## WebSocket Stream Variant
+
+1. Open `/api/runtime/inbox/subscribe` with the external user's token carried as
+   `Sec-WebSocket-Protocol: bearer.<token>`.
+2. Send a chat or relationship notification to that external user from another
+   real user.
+3. Confirm the socket receives a `notify` frame with a monotonic `seq`,
+   `fingerprint`, timestamp, and metadata only.
+4. Close the socket, send another notification, reconnect, and send
+   `{"type":"resume","since_seq":<last-seen-seq>}`.
+5. Confirm replay returns the missed frame in order. If replay retention is
+   exceeded, confirm the socket reports `replay_overflow` and the local daemon
+   falls back to authenticated HTTP drain for catch-up.
+
 ## Pass Criteria
 
 - The external inbox item is produced by backend runtime delivery, not by a CLI
@@ -58,6 +72,8 @@ notification inbox while durable chat messages remain in the normal chat store.
 - The notification is metadata-only; chat bodies are read through chat APIs.
 - Consecutive chat notifications are distinguished by stable message identity,
   not only by summary fields such as sender name or unread count.
+- WebSocket steady-state delivery and HTTP drain catch-up share the same
+  metadata projection and monotonic sequence source.
 - A daemon restart does not lose a chat notification just because an old wait
   request consumed a wake token while the local daemon was stopping.
 - The reply appears as a normal chat message from the external user's identity.
