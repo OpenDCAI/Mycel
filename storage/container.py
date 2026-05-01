@@ -26,9 +26,9 @@ from .contracts import (
     SkillRepo,
     SummaryRepo,
     ThreadRepo,
-    ToolTaskRepo,
     UserRepo,
     UserSettingsRepo,
+    WorkItemRepo,
     WorkspaceRepo,
 )
 
@@ -119,7 +119,7 @@ class StorageContainer:
     def chat_session_repo(self) -> Any:
         return self._build("chat_session_repo")
 
-    def tool_task_repo(self) -> ToolTaskRepo:
+    def tool_task_repo(self) -> WorkItemRepo:
         return self._build("tool_task_repo")
 
     def resource_snapshot_repo(self) -> ResourceSnapshotRepo:
