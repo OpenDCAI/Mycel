@@ -9,6 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, ConfigDict, Field
 
 from backend.chat.api.http.dependencies import (
+    get_accessible_chat_or_404,
     get_chat_event_bus,
     get_chat_join_request_service,
     get_chat_repo,
@@ -80,12 +81,7 @@ def _verify_user_ownership(messaging_service: Any, sender_id: str, user_id: str)
 
 
 def _get_accessible_chat_or_404(chat_repo: Any, messaging_service: Any, chat_id: str, user_id: str) -> Any:
-    chat = chat_repo.get_by_id(chat_id)
-    if not chat:
-        raise HTTPException(404, "Chat not found")
-    if not messaging_service.is_chat_member(chat_id, user_id):
-        raise HTTPException(403, "Not a participant of this chat")
-    return chat
+    return get_accessible_chat_or_404(chat_repo, messaging_service, chat_id, user_id)
 
 
 def _resolve_display_user(messaging_service: Any, social_user_id: str) -> Any | None:
