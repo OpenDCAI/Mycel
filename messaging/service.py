@@ -152,8 +152,8 @@ class MessagingService:
         return self._create_chat(user_ids, chat_type="direct", title=title)
 
     def create_group_chat(self, user_ids: list[str], title: str | None = None) -> dict[str, Any]:
-        if len(user_ids) < 2:
-            raise ValueError("Group chat requires 2+ users")
+        if not user_ids:
+            raise ValueError("Group chat requires at least one user")
         self._require_resolvable_chat_users(user_ids)
         self._require_group_chat_access(user_ids)
         return self._create_chat(user_ids, chat_type="group", title=title)

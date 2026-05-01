@@ -27,6 +27,7 @@ def test_validate_chat_participant_ids_accepts_external_user() -> None:
         SimpleNamespace(get_by_user_id=lambda _user_id: None),
         participant_ids=["external-1"],
         requester_user_id="human-1",
+        kind="auto",
     )
 
     assert result == ["human-1", "external-1"]

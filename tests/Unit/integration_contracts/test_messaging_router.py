@@ -925,6 +925,23 @@ def test_create_chat_can_explicitly_create_two_person_group_chat() -> None:
     assert result["id"] == "chat-1"
 
 
+def test_create_chat_can_explicitly_create_owner_only_group_chat() -> None:
+    state, called = _create_chat_route_state(group_route=True)
+    app = SimpleNamespace(state=state)
+
+    result = _create_chat(
+        app,
+        chats_router.CreateChatBody(
+            user_ids=[],
+            title="cel group",
+            kind="group",
+        ),
+    )
+
+    assert called == [(["human-user-1"], "cel group")]
+    assert result["id"] == "chat-1"
+
+
 def test_create_chat_accepts_human_and_thread_social_user_ids_for_group_participants() -> None:
     state, called = _create_chat_route_state(thread_user_ids={"thread-user-1", "thread-user-2"})
     app = SimpleNamespace(state=state)
@@ -964,11 +981,19 @@ def test_create_chat_rejects_explicit_authenticated_user_id() -> None:
     assert called == []
 
 
-def test_create_chat_rejects_empty_other_participants() -> None:
-    with pytest.raises(ValidationError) as exc_info:
-        chats_router.CreateChatBody(user_ids=[], title="empty-group")
+def test_create_chat_rejects_empty_other_participants_for_auto_chat() -> None:
+    state, called = _create_chat_route_state()
+    app = SimpleNamespace(state=state)
 
-    assert "at least 1 item" in str(exc_info.value)
+    with pytest.raises(HTTPException) as exc_info:
+        _create_chat(
+            app,
+            chats_router.CreateChatBody(user_ids=[], title="empty-chat"),
+        )
+
+    assert exc_info.value.status_code == 400
+    assert "participant" in str(exc_info.value.detail).lower()
+    assert called == []
 
 
 def test_create_group_chat_rejects_external_participant_without_active_relationship() -> None:
