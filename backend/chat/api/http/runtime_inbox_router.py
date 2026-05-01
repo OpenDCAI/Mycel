@@ -5,9 +5,10 @@ import json
 import threading
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, WebSocket, WebSocketDisconnect
 
 from backend.chat.api.http.dependencies import get_app, get_current_user_id
+from backend.chat.runtime_inbox_stream import RuntimeInboxStreamState
 from backend.threads.chat_adapters.external_inbox_handler import external_inbox_key
 
 router = APIRouter(prefix="/api/runtime", tags=["runtime"])
@@ -100,7 +101,7 @@ def wait_runtime_inbox_items(
             wake_bus.unregister(key)
 
 
-def _runtime_inbox_parts(app: Any) -> tuple[Any, Any, Any]:
+def _runtime_inbox_parts(app: Any) -> tuple[Any, Any, Any, RuntimeInboxStreamState]:
     runtime_state = getattr(app.state, "threads_runtime_state", None)
     queue_manager = getattr(runtime_state, "queue_manager", None)
     if queue_manager is None:
@@ -112,7 +113,60 @@ def _runtime_inbox_parts(app: Any) -> tuple[Any, Any, Any]:
     messaging_service = getattr(chat_runtime, "messaging_service", None)
     if messaging_service is None:
         raise HTTPException(500, "Messaging service unavailable")
-    return queue_manager, messaging_service, wake_bus
+    stream = getattr(runtime_state, "runtime_inbox_stream", None)
+    if stream is None:
+        raise HTTPException(500, "Runtime inbox stream unavailable")
+    return queue_manager, messaging_service, wake_bus, stream
+
+
+def _runtime_inbox_parts_for_websocket(websocket: WebSocket) -> tuple[Any, Any, Any, RuntimeInboxStreamState]:
+    try:
+        return _runtime_inbox_parts(websocket.app)
+    except HTTPException as exc:
+        raise RuntimeError(str(exc.detail)) from exc
+
+
+async def _websocket_user_id(websocket: WebSocket) -> str:
+    protocol = str(websocket.headers.get("sec-websocket-protocol") or "")
+    token = _bearer_subprotocol_token(protocol)
+    if not token:
+        raise RuntimeError("Missing runtime inbox websocket bearer subprotocol")
+    auth_service = getattr(getattr(websocket.app.state, "auth_runtime_state", None), "auth_service", None)
+    if auth_service is None:
+        raise RuntimeError("Auth service not initialized")
+    payload = auth_service.verify_token(token)
+    if not isinstance(payload, dict) or not payload.get("user_id"):
+        raise RuntimeError("Invalid runtime inbox websocket token")
+    user_id = str(payload["user_id"])
+    user_repo = getattr(websocket.app.state, "user_repo", None)
+    if user_repo is not None:
+        user = await asyncio.to_thread(user_repo.get_by_id, user_id)
+        if user is None:
+            raise RuntimeError("User no longer exists — please re-login")
+    return user_id
+
+
+def _bearer_subprotocol_token(protocol: str) -> str | None:
+    for item in (part.strip() for part in protocol.split(",")):
+        if item.startswith("bearer."):
+            return item.removeprefix("bearer.")
+    return None
+
+
+def _resume_since_from_payload(payload: Any) -> int | None:
+    if not isinstance(payload, dict) or payload.get("type") != "resume":
+        return None
+    return int(payload.get("since_seq") or 0)
+
+
+def _sequence_notifications(
+    user_id: str,
+    notifications: list[dict[str, Any]],
+    stream: RuntimeInboxStreamState,
+) -> list[dict[str, Any]]:
+    if not notifications:
+        return []
+    return stream.assign(user_id, notifications)
 
 
 @router.post("/inbox/drain")
@@ -120,7 +174,7 @@ async def drain_runtime_inbox(
     app: Annotated[Any, Depends(get_app)],
     user_id: Annotated[str, Depends(get_current_user_id)],
 ) -> dict[str, Any]:
-    queue_manager, messaging_service, _wake_bus = _runtime_inbox_parts(app)
+    queue_manager, messaging_service, _wake_bus, stream = _runtime_inbox_parts(app)
     try:
         items = await asyncio.to_thread(
             drain_runtime_inbox_items,
@@ -130,6 +184,7 @@ async def drain_runtime_inbox(
         )
     except RuntimeError as exc:
         raise HTTPException(500, str(exc)) from exc
+    items = _sequence_notifications(user_id, items, stream)
     return {"count": len(items), "notifications": items}
 
 
@@ -139,7 +194,7 @@ async def wait_runtime_inbox(
     user_id: Annotated[str, Depends(get_current_user_id)],
     timeout_seconds: Annotated[float, Query(ge=0.0, le=30.0)] = 25.0,
 ) -> dict[str, Any]:
-    queue_manager, messaging_service, wake_bus = _runtime_inbox_parts(app)
+    queue_manager, messaging_service, wake_bus, stream = _runtime_inbox_parts(app)
     try:
         items = await asyncio.to_thread(
             wait_runtime_inbox_items,
@@ -151,4 +206,66 @@ async def wait_runtime_inbox(
         )
     except RuntimeError as exc:
         raise HTTPException(500, str(exc)) from exc
+    items = _sequence_notifications(user_id, items, stream)
     return {"count": len(items), "notifications": items}
+
+
+@router.websocket("/inbox/subscribe")
+async def subscribe_runtime_inbox(websocket: WebSocket) -> None:
+    try:
+        user_id = await _websocket_user_id(websocket)
+        queue_manager, messaging_service, wake_bus, stream = _runtime_inbox_parts_for_websocket(websocket)
+    except RuntimeError:
+        await websocket.close(code=1008)
+        return
+    await websocket.accept()
+    inbox_id = external_inbox_key(user_id)
+    signal: asyncio.Queue[None] = asyncio.Queue()
+    loop = asyncio.get_running_loop()
+
+    def _wake() -> None:
+        loop.call_soon_threadsafe(signal.put_nowait, None)
+
+    async def _send_live_notifications() -> bool:
+        try:
+            items = await asyncio.to_thread(
+                drain_runtime_inbox_items,
+                user_id,
+                queue_manager,
+                messaging_service=messaging_service,
+            )
+        except RuntimeError as exc:
+            await websocket.close(code=1011, reason=str(exc))
+            return False
+        sequenced = stream.assign(user_id, items)
+        if not sequenced:
+            return True
+        since_seq = int(sequenced[0]["seq"]) - 1
+        last_seq = int(sequenced[-1]["seq"])
+        for frame in stream.frames_between(user_id, after_seq=since_seq, through_seq=last_seq):
+            await websocket.send_json(frame)
+        return True
+
+    wake_bus.register(inbox_id, _wake)
+    try:
+        resume_task = asyncio.create_task(websocket.receive_json())
+        signal_task = asyncio.create_task(signal.get())
+        done, pending = await asyncio.wait({resume_task, signal_task}, return_when=asyncio.FIRST_COMPLETED)
+        for task in pending:
+            task.cancel()
+        if resume_task in done:
+            since_seq = _resume_since_from_payload(resume_task.result())
+            if since_seq is not None:
+                for frame in stream.replay_since(user_id, since_seq):
+                    await websocket.send_json(frame)
+        else:
+            if not await _send_live_notifications():
+                return
+        while True:
+            await signal.get()
+            if not await _send_live_notifications():
+                return
+    except WebSocketDisconnect:
+        return
+    finally:
+        wake_bus.unregister(inbox_id)
