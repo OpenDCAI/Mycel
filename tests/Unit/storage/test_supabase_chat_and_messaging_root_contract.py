@@ -4,9 +4,11 @@ from pathlib import Path
 
 import pytest
 
+from core.work_item.types import WorkItem
 from storage.contracts import ChatRow, ContactEdgeRow
 from storage.errors import StorageConflictError
 from storage.providers.supabase.chat_repo import SupabaseChatRepo
+from storage.providers.supabase.chat_workflow_repo import SupabaseChatTaskRepo, SupabaseChatWorkflowRepo
 from storage.providers.supabase.contact_repo import SupabaseContactRepo
 from storage.providers.supabase.messaging_repo import (
     SupabaseChatJoinRequestRepo,
@@ -55,6 +57,53 @@ def test_supabase_chat_stack_uses_chat_schema_for_root_tables() -> None:
     assert "chats" not in tables
     assert "chat_members" not in tables
     assert "messages" not in tables
+
+
+def test_supabase_chat_workflow_repo_uses_chat_schema_sibling_table() -> None:
+    tables: dict[str, list[dict]] = {"chat.workflow_state": []}
+    client = FakeSupabaseClient(tables=tables)
+    repo = SupabaseChatWorkflowRepo(client)
+
+    workflow = repo.upsert(
+        "chat-1",
+        kind="keep",
+        state="active",
+        config={"reviewer": "reviewer-user"},
+        updated_by_user_id="human-user-1",
+    )
+
+    assert workflow.chat_id == "chat-1"
+    assert workflow.kind == "keep"
+    assert workflow.config == {"reviewer": "reviewer-user"}
+    assert tables["chat.workflow_state"][0]["chat_id"] == "chat-1"
+    assert "workflow_state" not in tables
+
+
+def test_supabase_chat_task_repo_uses_work_item_shape_in_chat_schema() -> None:
+    tables: dict[str, list[dict]] = {"chat.tasks": []}
+    client = FakeSupabaseClient(tables=tables)
+    repo = SupabaseChatTaskRepo(client)
+    task_id = repo.next_id("chat-1")
+
+    repo.insert(
+        "chat-1",
+        WorkItem(
+            id=task_id,
+            subject="Review worker patch",
+            description="Check the worker result and decide next step.",
+            status="pending",
+            owner="reviewer-user",
+            metadata={"source": "group"},
+        ),
+    )
+    task = repo.get("chat-1", task_id)
+
+    assert task is not None
+    assert task.to_summary()["id"] == "1"
+    assert task.to_summary()["owner"] == "reviewer-user"
+    assert tables["chat.tasks"][0]["chat_id"] == "chat-1"
+    assert tables["chat.tasks"][0]["subject"] == "Review worker patch"
+    assert "tasks" not in tables
 
 
 def test_supabase_find_chat_between_only_returns_direct_chat() -> None:

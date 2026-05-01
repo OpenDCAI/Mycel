@@ -6,6 +6,8 @@ from typing import Any
 from .contracts import (
     AgentConfigRepo,
     ChatRepo,
+    ChatTaskRepo,
+    ChatWorkflowRepo,
     CheckpointRepo,
     ContactRepo,
     EvalRepo,
@@ -55,6 +57,8 @@ _REPO_REGISTRY: dict[str, tuple[str, str]] = {
     "chat_repo": ("storage.providers.supabase.chat_repo", "SupabaseChatRepo"),
     "chat_member_repo": ("storage.providers.supabase.messaging_repo", "SupabaseChatMemberRepo"),
     "chat_join_request_repo": ("storage.providers.supabase.messaging_repo", "SupabaseChatJoinRequestRepo"),
+    "chat_workflow_repo": ("storage.providers.supabase.chat_workflow_repo", "SupabaseChatWorkflowRepo"),
+    "chat_task_repo": ("storage.providers.supabase.chat_workflow_repo", "SupabaseChatTaskRepo"),
     "messages_repo": ("storage.providers.supabase.messaging_repo", "SupabaseMessagesRepo"),
     "relationship_repo": ("storage.providers.supabase.messaging_repo", "SupabaseRelationshipRepo"),
     "invite_code_repo": ("storage.providers.supabase.invite_code_repo", "SupabaseInviteCodeRepo"),
@@ -147,6 +151,12 @@ class StorageContainer:
 
     def chat_join_request_repo(self) -> Any:
         return self._build("chat_join_request_repo")
+
+    def chat_workflow_repo(self) -> ChatWorkflowRepo:
+        return self._build("chat_workflow_repo")
+
+    def chat_task_repo(self) -> ChatTaskRepo:
+        return self._build("chat_task_repo")
 
     def messages_repo(self) -> Any:
         return self._build("messages_repo")
