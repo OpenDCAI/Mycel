@@ -90,6 +90,8 @@ def test_chat_task_service_keeps_tasks_scoped_to_chat_id() -> None:
         description="Read the worker result and decide next step.",
         status="proposed",
         owner="reviewer-user",
+        blocks=["2"],
+        blocked_by=["0"],
     )
     other = service.create_task(
         "chat-2",
@@ -99,6 +101,12 @@ def test_chat_task_service_keeps_tasks_scoped_to_chat_id() -> None:
 
     assert task["id"] == "1"
     assert task["status"] == "proposed"
+    assert task["blocks"] == ["2"]
+    assert task["blockedBy"] == ["0"]
+    updated = service.update_task("chat-1", "1", blocks=["3"], blocked_by=[])
+    assert updated is not None
+    assert updated["blocks"] == ["3"]
+    assert updated["blockedBy"] == []
     assert other["id"] == "1"
     assert [row["subject"] for row in service.list_tasks("chat-1")] == ["Review worker patch"]
     assert [row["subject"] for row in service.list_tasks("chat-2")] == ["Separate room task"]

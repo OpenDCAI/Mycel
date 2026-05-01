@@ -56,6 +56,8 @@ class ChatTaskService:
         status: str = "pending",
         active_form: str | None = None,
         owner: str | None = None,
+        blocks: list[str] | None = None,
+        blocked_by: list[str] | None = None,
         metadata: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         item = WorkItem(
@@ -65,6 +67,8 @@ class ChatTaskService:
             status=status,
             active_form=active_form,
             owner=owner,
+            blocks=blocks or [],
+            blocked_by=blocked_by or [],
             metadata=metadata or {},
         )
         self._repo.insert(chat_id, item)
@@ -80,6 +84,8 @@ class ChatTaskService:
         description: str | None = None,
         active_form: str | None = None,
         owner: str | None = None,
+        blocks: list[str] | None = None,
+        blocked_by: list[str] | None = None,
         metadata: dict[str, Any] | None = None,
     ) -> dict[str, Any] | None:
         item = self._repo.get(chat_id, task_id)
@@ -95,6 +101,10 @@ class ChatTaskService:
             item.active_form = active_form
         if owner is not None:
             item.owner = owner
+        if blocks is not None:
+            item.blocks = list(blocks)
+        if blocked_by is not None:
+            item.blocked_by = list(blocked_by)
         if metadata is not None:
             item.metadata = dict(metadata)
         self._repo.update(chat_id, item)
