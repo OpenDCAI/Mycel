@@ -38,6 +38,8 @@ class SendMessageBody(BaseModel):
 
     content: str
     mentioned_ids: list[str] | None = None
+    delivery_scope: Literal["broadcast", "addressed"] = "broadcast"
+    addressed_to_user_ids: list[str] | None = None
     reply_to: str | None = None
     enforce_caught_up: bool = False
 
@@ -269,10 +271,14 @@ def send_message(
             signal=None,
             message_type="human",
             reply_to=body.reply_to,
+            delivery_scope=body.delivery_scope,
+            addressed_to_user_ids=body.addressed_to_user_ids,
             enforce_caught_up=body.enforce_caught_up,
         )
     except ChatNotCaughtUpError as exc:
         raise HTTPException(409, "Read unread messages before sending.") from exc
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
     return messaging_service.project_message_response(msg)
 
 
