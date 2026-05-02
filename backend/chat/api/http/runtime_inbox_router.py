@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import threading
 from typing import Annotated, Any
 
@@ -12,6 +13,7 @@ from backend.chat.runtime_inbox_stream import RuntimeInboxStreamState
 from backend.threads.chat_adapters.external_inbox_handler import external_inbox_key
 
 router = APIRouter(prefix="/api/runtime", tags=["runtime"])
+logger = logging.getLogger(__name__)
 
 
 def chat_runtime_notifications(user_id: str, messaging_service: Any, *, chat_ids: set[str] | None = None) -> list[dict[str, Any]]:
@@ -127,10 +129,10 @@ def _runtime_inbox_parts_for_websocket(websocket: WebSocket) -> tuple[Any, Any, 
 
 
 async def _websocket_user_id(websocket: WebSocket) -> str:
-    protocol = str(websocket.headers.get("sec-websocket-protocol") or "")
-    token = _bearer_subprotocol_token(protocol)
+    authorization = str(websocket.headers.get("authorization") or "")
+    token = _authorization_bearer_token(authorization)
     if not token:
-        raise RuntimeError("Missing runtime inbox websocket bearer subprotocol")
+        raise RuntimeError("Missing runtime inbox websocket bearer token")
     auth_service = getattr(getattr(websocket.app.state, "auth_runtime_state", None), "auth_service", None)
     if auth_service is None:
         raise RuntimeError("Auth service not initialized")
@@ -146,10 +148,10 @@ async def _websocket_user_id(websocket: WebSocket) -> str:
     return user_id
 
 
-def _bearer_subprotocol_token(protocol: str) -> str | None:
-    for item in (part.strip() for part in protocol.split(",")):
-        if item.startswith("bearer."):
-            return item.removeprefix("bearer.")
+def _authorization_bearer_token(authorization: str) -> str | None:
+    scheme, _, token = authorization.partition(" ")
+    if scheme.lower() == "bearer" and token:
+        return token
     return None
 
 
@@ -215,7 +217,8 @@ async def subscribe_runtime_inbox(websocket: WebSocket) -> None:
     try:
         user_id = await _websocket_user_id(websocket)
         queue_manager, messaging_service, wake_bus, stream = _runtime_inbox_parts_for_websocket(websocket)
-    except RuntimeError:
+    except RuntimeError as exc:
+        logger.warning("Runtime inbox websocket rejected: %s", exc)
         await websocket.close(code=1008)
         return
     await websocket.accept()
