@@ -507,7 +507,10 @@ def test_runtime_inbox_websocket_streams_metadata_frame_after_wake(tmp_path) -> 
     app, queue_manager, wake_bus = _runtime_ws_test_app("external-user-1", tmp_path)
 
     with TestClient(app) as client:
-        with client.websocket_connect("/api/runtime/inbox/subscribe", subprotocols=["bearer.tok-1"]) as websocket:
+        with client.websocket_connect(
+            "/api/runtime/inbox/subscribe",
+            headers={"authorization": "Bearer tok-1"},
+        ) as websocket:
             _wait_for_wake_handler(wake_bus, "external:external-user-1")
             queue_manager.enqueue(
                 '{"event_type":"relationship.requested","summary":"Human requested contact."}',
@@ -543,7 +546,10 @@ def test_runtime_inbox_websocket_replays_after_resume(tmp_path) -> None:
     app, queue_manager, wake_bus = _runtime_ws_test_app("external-user-1", tmp_path)
 
     with TestClient(app) as client:
-        with client.websocket_connect("/api/runtime/inbox/subscribe", subprotocols=["bearer.tok-1"]) as websocket:
+        with client.websocket_connect(
+            "/api/runtime/inbox/subscribe",
+            headers={"authorization": "Bearer tok-1"},
+        ) as websocket:
             _wait_for_wake_handler(wake_bus, "external:external-user-1")
             queue_manager.enqueue(
                 '{"event_type":"relationship.requested","summary":"Human requested contact."}',
@@ -557,7 +563,10 @@ def test_runtime_inbox_websocket_replays_after_resume(tmp_path) -> None:
             wake_bus.publish("external:external-user-1")
             first = websocket.receive_json()
 
-        with client.websocket_connect("/api/runtime/inbox/subscribe", subprotocols=["bearer.tok-1"]) as websocket:
+        with client.websocket_connect(
+            "/api/runtime/inbox/subscribe",
+            headers={"authorization": "Bearer tok-1"},
+        ) as websocket:
             websocket.send_json({"type": "resume", "since_seq": 0})
             replay = websocket.receive_json()
 
