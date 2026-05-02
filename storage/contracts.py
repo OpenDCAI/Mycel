@@ -323,6 +323,8 @@ class MessageRow(BaseModel):
     message_type: str = "text"
     signal: str | None = None
     mentions: list[str] = Field(default_factory=list)
+    delivery_scope: Literal["broadcast", "addressed"] = "broadcast"
+    addressed_to_user_ids: list[str] = Field(default_factory=list)
     reply_to_message_id: str | None = None
     ai_metadata: dict[str, Any] = Field(default_factory=dict)
     created_at: float
