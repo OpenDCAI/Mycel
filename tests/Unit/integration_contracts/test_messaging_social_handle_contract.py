@@ -1115,9 +1115,7 @@ def test_messaging_service_addressed_send_rejects_non_member_recipient() -> None
         ),
         messages_repo=SimpleNamespace(create=lambda row: {**row, "seq": 1}),
         user_repo=SimpleNamespace(
-            get_by_id=lambda uid: SimpleNamespace(id=uid, display_name=uid, type="agent", avatar=None)
-            if uid == "agent-user-1"
-            else None
+            get_by_id=lambda uid: SimpleNamespace(id=uid, display_name=uid, type="agent", avatar=None) if uid == "agent-user-1" else None
         ),
     )
 
