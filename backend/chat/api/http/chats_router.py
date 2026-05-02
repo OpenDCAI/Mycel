@@ -61,6 +61,12 @@ class ChatJoinRequestActionBody(BaseModel):
     pass
 
 
+class ChatMemberAddBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    user_id: str
+
+
 def _map_chat_join_error(exc: Exception) -> HTTPException:
     if isinstance(exc, LookupError):
         return HTTPException(404, str(exc))
@@ -245,6 +251,24 @@ def reject_chat_join(
 ):
     try:
         return chat_join_request_service.reject(chat_id, request_id, user_id)
+    except Exception as exc:
+        raise _map_chat_join_error(exc) from exc
+
+
+@router.post("/{chat_id}/members")
+def add_chat_member(
+    chat_id: str,
+    body: ChatMemberAddBody,
+    user_id: Annotated[str, Depends(get_current_user_id)],
+    chat_join_request_service: Annotated[Any, Depends(get_chat_join_request_service)],
+    user_repo: Annotated[Any, Depends(get_user_repo)],
+    thread_repo: Annotated[Any, Depends(get_thread_repo)],
+):
+    try:
+        [target_user_id] = _validate_chat_participant_ids(user_repo, thread_repo, [body.user_id], user_id)
+        return chat_join_request_service.add_member(chat_id, target_user_id, user_id)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
     except Exception as exc:
         raise _map_chat_join_error(exc) from exc
 

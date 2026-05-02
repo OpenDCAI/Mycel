@@ -196,6 +196,23 @@ def test_chat_join_approve_requires_owner_and_adds_member_before_notification() 
     )
 
 
+def test_chat_owner_can_add_member_without_join_request() -> None:
+    service, members, _requests, messaging = _service()
+
+    row = service.add_member("chat-1", "visitor-1", "owner-1")
+
+    assert row == {"chat_id": "chat-1", "user_id": "visitor-1", "state": "member"}
+    assert members.added == [("chat-1", "visitor-1")]
+    assert messaging.sent == []
+
+
+def test_chat_owner_add_member_rejects_non_owner() -> None:
+    service, _members, _requests, _messaging = _service()
+
+    with pytest.raises(PermissionError):
+        service.add_member("chat-1", "visitor-1", "visitor-1")
+
+
 def test_chat_join_reject_mentions_requester_in_notification() -> None:
     service, _members, _requests, messaging = _service()
     pending = service.request("chat-1", "visitor-1", "please add me")

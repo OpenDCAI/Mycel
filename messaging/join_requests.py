@@ -57,6 +57,13 @@ class ChatJoinRequestService:
         self._require_chat_owner(chat_id, viewer_user_id)
         return [self._project_request(row) for row in self._requests.list_for_chat(chat_id)]
 
+    def add_member(self, chat_id: str, target_user_id: str, owner_user_id: str) -> dict[str, Any]:
+        self._require_chat_owner(chat_id, owner_user_id)
+        if self._members.is_member(chat_id, target_user_id):
+            return {"chat_id": chat_id, "user_id": target_user_id, "state": "member"}
+        self._members.add_member(chat_id, target_user_id)
+        return {"chat_id": chat_id, "user_id": target_user_id, "state": "member"}
+
     def approve(self, chat_id: str, request_id: str, approver_user_id: str) -> dict[str, Any]:
         self._require_chat_owner(chat_id, approver_user_id)
         request = self._require_pending_request(chat_id, request_id)
