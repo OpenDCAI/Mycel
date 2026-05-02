@@ -23,15 +23,18 @@ from messaging.display_user import resolve_messaging_display_user
 from messaging.errors import ChatNotCaughtUpError
 from messaging.social_access import can_group_chat_with_participant
 from messaging.user_ownership import is_owned_by_viewer, shares_ownership_scope
-from storage.errors import StorageConflictError
 
 logger = logging.getLogger(__name__)
 
 
-def _should_dispatch_chat_delivery(message_type: MessageType, mentions: list[str] | None) -> bool:
+def _should_dispatch_chat_delivery(
+    message_type: MessageType,
+    mentions: list[str] | None,
+    addressed_to_user_ids: list[str] | None = None,
+) -> bool:
     # @@@notification-mention-delivery - request notifications are durable chat messages,
     # but mentioned managed agents still need a runtime wakeup to inspect them.
-    return message_type in {"human", "ai"} or (message_type == "notification" and bool(mentions))
+    return message_type in {"human", "ai"} or (message_type == "notification" and (bool(mentions) or bool(addressed_to_user_ids)))
 
 
 class MessagingService:
@@ -76,6 +79,8 @@ class MessagingService:
             **row,
             "sender_id": row.get("sender_id") or row.get("sender_user_id"),
             "mentioned_ids": row.get("mentioned_ids") or row.get("mentions") or row.get("mentions_json") or [],
+            "delivery_scope": row.get("delivery_scope") or "broadcast",
+            "addressed_to_user_ids": row.get("addressed_to_user_ids") or row.get("addressed_to_user_ids_json") or [],
             "reply_to": row.get("reply_to") or row.get("reply_to_message_id"),
             "ai_metadata": row.get("ai_metadata") or row.get("ai_metadata_json") or {},
         }
@@ -96,6 +101,8 @@ class MessagingService:
             "content": message["content"],
             "message_type": message.get("message_type", "human"),
             "mentioned_ids": message.get("mentioned_ids") or [],
+            "delivery_scope": message.get("delivery_scope") or "broadcast",
+            "addressed_to_user_ids": message.get("addressed_to_user_ids") or [],
             "seq": message.get("seq"),
             "signal": message.get("signal"),
             "retracted_at": message.get("retracted_at"),
@@ -226,10 +233,18 @@ class MessagingService:
         signal: str | None = None,
         reply_to: str | None = None,
         ai_metadata: dict[str, Any] | None = None,
+        delivery_scope: str = "broadcast",
+        addressed_to_user_ids: list[str] | None = None,
         enforce_caught_up: bool = False,
     ) -> dict[str, Any]:
         if self._resolve_display_user(sender_id) is None:
             raise RuntimeError(f"Chat message sender identity not found: {sender_id}")
+        normalized_delivery_scope, normalized_addressed_to = self._normalize_delivery_scope(
+            chat_id,
+            sender_id,
+            delivery_scope,
+            addressed_to_user_ids,
+        )
 
         msg_id = str(uuid.uuid4())
 
@@ -241,6 +256,8 @@ class MessagingService:
             "content_type": content_type,
             "message_type": message_type,
             "mentions_json": mentions or [],
+            "delivery_scope": normalized_delivery_scope,
+            "addressed_to_user_ids_json": normalized_addressed_to,
             "created_at": time.time(),
         }
         if signal in ("open", "yield", "close"):
@@ -251,13 +268,12 @@ class MessagingService:
             row["ai_metadata_json"] = ai_metadata
 
         if enforce_caught_up:
-            last_read_seq = getattr(self._chat_members_repo, "last_read_seq", None)
-            if last_read_seq is None:
-                raise RuntimeError("chat_member_repo must expose last_read_seq for caught-up sends")
-            try:
-                created_row = self._messages.create(row, expected_read_seq=int(last_read_seq(chat_id, sender_id)))
-            except StorageConflictError as exc:
-                raise ChatNotCaughtUpError(str(exc)) from exc
+            unread_count = self._messages.count_unread(chat_id, sender_id)
+            if type(unread_count) is not int:
+                raise RuntimeError("messages_repo.count_unread must return an int for caught-up sends")
+            if unread_count > 0:
+                raise ChatNotCaughtUpError(f"Read {unread_count} unread messages before sending.")
+            created_row = self._messages.create(row)
         else:
             created_row = self._messages.create(row)
         created = self._normalize_message_row(created_row)
@@ -279,10 +295,39 @@ class MessagingService:
             )
 
         # Deliver to agent recipients
-        if _should_dispatch_chat_delivery(message_type, mentions):
-            self._delivery_dispatcher.dispatch(chat_id, sender_id, content, mentions or [], signal=signal)
+        if _should_dispatch_chat_delivery(message_type, mentions, normalized_addressed_to):
+            self._delivery_dispatcher.dispatch(
+                chat_id,
+                sender_id,
+                content,
+                mentions or [],
+                signal=signal,
+                addressed_to_user_ids=normalized_addressed_to,
+            )
 
         return created
+
+    def _normalize_delivery_scope(
+        self,
+        chat_id: str,
+        sender_id: str,
+        delivery_scope: str,
+        addressed_to_user_ids: list[str] | None,
+    ) -> tuple[str, list[str]]:
+        addressed_to = [str(uid) for uid in dict.fromkeys(addressed_to_user_ids or []) if str(uid)]
+        if delivery_scope not in {"broadcast", "addressed"}:
+            raise ValueError("delivery_scope must be 'broadcast' or 'addressed'")
+        if delivery_scope == "broadcast":
+            if addressed_to:
+                raise ValueError("broadcast messages must not include addressed_to_user_ids")
+            return "broadcast", []
+        addressed_to = [uid for uid in addressed_to if uid != sender_id]
+        if not addressed_to:
+            raise ValueError("addressed messages require at least one recipient other than the sender")
+        for uid in addressed_to:
+            if not self._chat_members_repo.is_member(chat_id, uid):
+                raise ValueError(f"Addressed recipient is not a chat member: {uid}")
+        return "addressed", addressed_to
 
     # ------------------------------------------------------------------
     # Lifecycle operations
@@ -381,7 +426,7 @@ class MessagingService:
         """List all active chats for user with summary info."""
         chat_rows, members_by_chat, users_by_id, unread_by_chat = self._chat_projection_inputs(user_id)
         chat_ids = [chat.id for chat in chat_rows]
-        latest_messages = self._messages.list_latest_by_chat_ids(chat_ids)
+        latest_messages = self._messages.list_latest_by_chat_ids(chat_ids, viewer_id=user_id)
         if not isinstance(latest_messages, Mapping):
             raise RuntimeError("Latest message collection is invalid")
         chat_id_set = set(chat_ids)
