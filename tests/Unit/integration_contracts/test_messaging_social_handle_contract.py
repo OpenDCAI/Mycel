@@ -924,6 +924,8 @@ def test_messaging_service_list_message_responses_projects_sender_name_from_agen
             "content": "hello",
             "message_type": "human",
             "mentioned_ids": [],
+            "delivery_scope": "broadcast",
+            "addressed_to_user_ids": [],
             "seq": 42,
             "signal": None,
             "retracted_at": None,
@@ -957,22 +959,22 @@ def test_messaging_service_list_message_responses_fails_on_unknown_sender() -> N
     assert str(excinfo.value) == "Chat message sender identity not found: missing-user"
 
 
-def test_messaging_service_agent_send_passes_expected_read_seq_to_messages_repo() -> None:
+def test_messaging_service_agent_send_checks_visible_unread_before_caught_up_send() -> None:
     created_rows: list[tuple[dict[str, Any], int | None]] = []
+    unread_checks: list[tuple[str, str]] = []
 
     class _StatefulChatMemberRepo:
         def list_members(self, _chat_id: str) -> list[dict[str, Any]]:
             return []
 
-        def last_read_seq(self, chat_id: str, user_id: str) -> int:
-            assert chat_id == "chat-1"
-            assert user_id == "agent-user-1"
-            return 7
-
         def update_last_read(self, _chat_id: str, _user_id: str, _last_read_seq: int) -> None:
             pass
 
     class _MessagesRepo:
+        def count_unread(self, chat_id: str, user_id: str) -> int:
+            unread_checks.append((chat_id, user_id))
+            return 0
+
         def create(self, row: dict[str, Any], expected_read_seq: int | None = None) -> dict[str, Any]:
             created_rows.append((row, expected_read_seq))
             return {**row, "seq": 8}
@@ -991,7 +993,10 @@ def test_messaging_service_agent_send_passes_expected_read_seq_to_messages_repo(
     assert len(created_rows) == 1
     row, expected_read_seq = created_rows[0]
     assert row["sender_user_id"] == "agent-user-1"
-    assert expected_read_seq == 7
+    assert row["delivery_scope"] == "broadcast"
+    assert row["addressed_to_user_ids_json"] == []
+    assert expected_read_seq is None
+    assert unread_checks == [("chat-1", "agent-user-1")]
 
 
 def test_messaging_service_send_advances_sender_read_watermark_to_created_message() -> None:
@@ -1010,8 +1015,11 @@ def test_messaging_service_send_advances_sender_read_watermark_to_created_messag
             read_updates.append((chat_id, user_id, last_read_seq))
 
     class _MessagesRepo:
+        def count_unread(self, _chat_id: str, _user_id: str) -> int:
+            return 0
+
         def create(self, row: dict[str, Any], expected_read_seq: int | None = None) -> dict[str, Any]:
-            assert expected_read_seq == 7
+            assert expected_read_seq is None
             return {**row, "seq": 8}
 
     service = MessagingService(
@@ -1048,22 +1056,94 @@ def test_messaging_service_plain_send_does_not_advance_sender_read_watermark() -
     assert read_updates == []
 
 
-def test_messaging_service_agent_send_maps_storage_conflict_to_not_caught_up_error() -> None:
+def test_messaging_service_addressed_send_writes_scope_and_dispatches_only_recipient() -> None:
+    created_rows: list[dict[str, Any]] = []
+    delivered: list[str] = []
+
+    class _ChatMemberRepo:
+        def list_members(self, _chat_id: str) -> list[dict[str, Any]]:
+            return [{"user_id": "agent-user-1"}, {"user_id": "agent-user-2"}, {"user_id": "agent-user-3"}]
+
+        def is_member(self, _chat_id: str, user_id: str) -> bool:
+            return user_id in {"agent-user-1", "agent-user-2", "agent-user-3"}
+
+    class _MessagesRepo:
+        def create(self, row: dict[str, Any], expected_read_seq: int | None = None) -> dict[str, Any]:
+            assert expected_read_seq is None
+            created_rows.append(row)
+            return {**row, "seq": 1}
+
+        def count_unread(self, _chat_id: str, _user_id: str) -> int:
+            return 1
+
+    service = MessagingService(
+        chat_repo=SimpleNamespace(),
+        chat_member_repo=_ChatMemberRepo(),
+        messages_repo=_MessagesRepo(),
+        user_repo=SimpleNamespace(
+            get_by_id=lambda uid: SimpleNamespace(
+                id=uid,
+                display_name=uid,
+                type="agent",
+                avatar=None,
+                owner_user_id="human-user-1",
+            )
+        ),
+        avatar_url_builder=lambda _user_id, _has_avatar: None,
+        delivery_fn=lambda request: delivered.append(request.recipient_id),
+    )
+
+    service.send(
+        "chat-1",
+        "agent-user-1",
+        "worker only",
+        delivery_scope="addressed",
+        addressed_to_user_ids=["agent-user-2"],
+    )
+
+    assert created_rows[0]["delivery_scope"] == "addressed"
+    assert created_rows[0]["addressed_to_user_ids_json"] == ["agent-user-2"]
+    assert delivered == ["agent-user-2"]
+
+
+def test_messaging_service_addressed_send_rejects_non_member_recipient() -> None:
+    service = MessagingService(
+        chat_repo=SimpleNamespace(),
+        chat_member_repo=SimpleNamespace(
+            list_members=lambda _chat_id: [],
+            is_member=lambda _chat_id, _user_id: False,
+        ),
+        messages_repo=SimpleNamespace(create=lambda row: {**row, "seq": 1}),
+        user_repo=SimpleNamespace(
+            get_by_id=lambda uid: SimpleNamespace(id=uid, display_name=uid, type="agent", avatar=None)
+            if uid == "agent-user-1"
+            else None
+        ),
+    )
+
+    with pytest.raises(ValueError, match="Addressed recipient is not a chat member: missing-user"):
+        service.send(
+            "chat-1",
+            "agent-user-1",
+            "hello",
+            delivery_scope="addressed",
+            addressed_to_user_ids=["missing-user"],
+        )
+
+
+def test_messaging_service_agent_send_maps_visible_unread_to_not_caught_up_error() -> None:
     from messaging.errors import ChatNotCaughtUpError
-    from storage.errors import StorageConflictError
 
     class _StatefulChatMemberRepo:
         def list_members(self, _chat_id: str) -> list[dict[str, Any]]:
             return []
 
-        def last_read_seq(self, chat_id: str, user_id: str) -> int:
-            assert chat_id == "chat-1"
-            assert user_id == "agent-user-1"
-            return 7
-
     class _MessagesRepo:
-        def create(self, row: dict[str, Any], expected_read_seq: int | None = None) -> dict[str, Any]:
-            raise StorageConflictError("Chat advanced after your last read.")
+        def count_unread(self, _chat_id: str, _user_id: str) -> int:
+            return 2
+
+        def create(self, _row: dict[str, Any], expected_read_seq: int | None = None) -> dict[str, Any]:
+            raise AssertionError("caught-up send should not create while visible unread exists")
 
     service = MessagingService(
         chat_repo=SimpleNamespace(),
@@ -1077,7 +1157,7 @@ def test_messaging_service_agent_send_maps_storage_conflict_to_not_caught_up_err
     with pytest.raises(ChatNotCaughtUpError) as excinfo:
         service.send("chat-1", "agent-user-1", "hello", enforce_caught_up=True)
 
-    assert str(excinfo.value) == "Chat advanced after your last read."
+    assert str(excinfo.value) == "Read 2 unread messages before sending."
 
 
 def test_messaging_service_list_chats_exposes_agent_user_participant_id() -> None:
@@ -1104,7 +1184,7 @@ def test_messaging_service_list_chats_exposes_agent_user_participant_id() -> Non
             list_members=lambda _chat_id: (_ for _ in ()).throw(AssertionError("chat list should not fetch members one by one")),
         ),
         messages_repo=SimpleNamespace(
-            list_latest_by_chat_ids=lambda _chat_ids: {},
+            list_latest_by_chat_ids=lambda _chat_ids, **_kwargs: {},
             count_unread_by_chat_ids=lambda _user_id, _last_read_by_chat: {"chat-1": 0},
             list_by_chat=lambda _chat_id, limit=1: (_ for _ in ()).throw(
                 AssertionError("chat list should not fetch messages one chat at a time")
@@ -1225,7 +1305,7 @@ def test_messaging_service_list_chats_ignores_blank_other_names_in_title_default
             ],
         ),
         messages_repo=SimpleNamespace(
-            list_latest_by_chat_ids=lambda _chat_ids: {},
+            list_latest_by_chat_ids=lambda _chat_ids, **_kwargs: {},
             count_unread_by_chat_ids=lambda _user_id, _last_read_by_chat: {"chat-1": 0},
         ),
         user_repo=SimpleNamespace(
@@ -1548,7 +1628,7 @@ def test_messaging_service_list_chats_fail_on_unrequested_latest_message_chat_id
         ),
         messages_repo=SimpleNamespace(
             count_unread_by_chat_ids=lambda _user_id, _last_read_by_chat: {},
-            list_latest_by_chat_ids=lambda _chat_ids: {
+            list_latest_by_chat_ids=lambda _chat_ids, **_kwargs: {
                 "chat-extra": {
                     "id": "msg-1",
                     "chat_id": "chat-extra",
@@ -1578,7 +1658,7 @@ def test_messaging_service_list_chats_fails_on_latest_message_missing_content() 
         ),
         messages_repo=SimpleNamespace(
             count_unread_by_chat_ids=lambda _user_id, _last_read_by_chat: {},
-            list_latest_by_chat_ids=lambda _chat_ids: {
+            list_latest_by_chat_ids=lambda _chat_ids, **_kwargs: {
                 "chat-1": {
                     "id": "msg-1",
                     "chat_id": "chat-1",
@@ -1607,7 +1687,7 @@ def test_messaging_service_list_chats_fails_on_latest_message_invalid_content() 
         ),
         messages_repo=SimpleNamespace(
             count_unread_by_chat_ids=lambda _user_id, _last_read_by_chat: {},
-            list_latest_by_chat_ids=lambda _chat_ids: {
+            list_latest_by_chat_ids=lambda _chat_ids, **_kwargs: {
                 "chat-1": {
                     "id": "msg-1",
                     "chat_id": "chat-1",
@@ -1637,7 +1717,7 @@ def test_messaging_service_list_chats_fails_on_invalid_latest_message_collection
         ),
         messages_repo=SimpleNamespace(
             count_unread_by_chat_ids=lambda _user_id, _last_read_by_chat: {},
-            list_latest_by_chat_ids=lambda _chat_ids: ["chat-1"],
+            list_latest_by_chat_ids=lambda _chat_ids, **_kwargs: ["chat-1"],
         ),
         user_repo=SimpleNamespace(
             list_by_ids=lambda _user_ids: [SimpleNamespace(id="human-user-1", display_name="Human", type="human", avatar=None)],
@@ -1659,7 +1739,7 @@ def test_messaging_service_list_chats_fails_on_invalid_latest_message_row() -> N
         ),
         messages_repo=SimpleNamespace(
             count_unread_by_chat_ids=lambda _user_id, _last_read_by_chat: {},
-            list_latest_by_chat_ids=lambda _chat_ids: {"chat-1": "msg-1"},
+            list_latest_by_chat_ids=lambda _chat_ids, **_kwargs: {"chat-1": "msg-1"},
         ),
         user_repo=SimpleNamespace(
             list_by_ids=lambda _user_ids: [SimpleNamespace(id="human-user-1", display_name="Human", type="human", avatar=None)],
@@ -1892,7 +1972,7 @@ def test_messaging_service_mark_read_resets_unread_count_via_last_read_seq_water
                 },
             ]
 
-        def list_latest_by_chat_ids(self, _chat_ids: list[str]) -> dict[str, dict[str, Any]]:
+        def list_latest_by_chat_ids(self, _chat_ids: list[str], **_kwargs) -> dict[str, dict[str, Any]]:
             return {"chat-1": self._rows[-1]}
 
         def list_by_chat(self, _chat_id: str, limit: int = 50, viewer_id: str | None = None) -> list[dict[str, Any]]:

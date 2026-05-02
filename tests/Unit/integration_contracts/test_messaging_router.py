@@ -778,6 +778,8 @@ def test_send_message_ignores_external_sender_authority_by_contract() -> None:
             "signal": None,
             "message_type": "human",
             "reply_to": None,
+            "delivery_scope": "broadcast",
+            "addressed_to_user_ids": None,
             "enforce_caught_up": True,
         }
     ]
@@ -837,9 +839,45 @@ def test_send_message_can_enforce_authenticated_user_caught_up_state() -> None:
             "signal": None,
             "message_type": "human",
             "reply_to": "msg-0",
+            "delivery_scope": "broadcast",
+            "addressed_to_user_ids": None,
             "enforce_caught_up": True,
         }
     ]
+
+
+def test_send_message_passes_addressed_delivery_scope_to_messaging_service() -> None:
+    seen: list[dict[str, object]] = []
+    messaging_service = SimpleNamespace(
+        resolve_display_user=lambda uid: SimpleNamespace(id=uid, owner_user_id=None),
+        is_chat_member=lambda _chat_id, _user_id: True,
+        send=lambda chat_id, sender_id, content, **kwargs: (
+            seen.append({"chat_id": chat_id, "sender_id": sender_id, "content": content, **kwargs})
+            or {
+                "id": "msg-1",
+                "chat_id": chat_id,
+                "sender_id": sender_id,
+                "content": content,
+                "message_type": "human",
+                "created_at": "2026-04-07T00:00:00Z",
+            }
+        ),
+        project_message_response=lambda msg: msg,
+    )
+
+    chats_router.send_message(
+        "chat-1",
+        chats_router.SendMessageBody(
+            content="worker only",
+            delivery_scope="addressed",
+            addressed_to_user_ids=["agent-user-2"],
+        ),
+        user_id="external-user-1",
+        messaging_service=messaging_service,
+    )
+
+    assert seen[0]["delivery_scope"] == "addressed"
+    assert seen[0]["addressed_to_user_ids"] == ["agent-user-2"]
 
 
 def test_send_message_maps_caught_up_conflict_to_409() -> None:
