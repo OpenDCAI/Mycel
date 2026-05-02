@@ -4,12 +4,13 @@ import time
 from typing import Any
 
 from core.work_item.types import WorkItem
-from storage.contracts import ChatWorkflowRow
+from storage.contracts import ChatWorkflowEventRow, ChatWorkflowRow
 from storage.providers.supabase import _query as q
 
 _SCHEMA = "chat"
 _WORKFLOW_REPO = "chat workflow repo"
 _TASK_REPO = "chat task repo"
+_EVENT_REPO = "chat workflow event repo"
 
 
 class SupabaseChatWorkflowRepo:
@@ -107,6 +108,56 @@ class SupabaseChatTaskRepo:
         return q.schema_table(self._client, _SCHEMA, "tasks", _TASK_REPO)
 
 
+class SupabaseChatWorkflowEventRepo:
+    def __init__(self, client: Any) -> None:
+        self._client = q.validate_client(client, _EVENT_REPO)
+
+    def close(self) -> None:
+        return None
+
+    def next_id(self, scope_id: str) -> str:
+        rows = q.rows(self._t().select("event_id").eq("chat_id", scope_id).execute(), _EVENT_REPO, "next_id")
+        if not rows:
+            return "1"
+        return str(max(int(str(row["event_id"])) for row in rows) + 1)
+
+    def get(self, scope_id: str, event_id: str) -> ChatWorkflowEventRow | None:
+        rows = q.rows(
+            self._t().select("*").eq("chat_id", scope_id).eq("event_id", event_id).limit(1).execute(),
+            _EVENT_REPO,
+            "get",
+        )
+        return _row_to_workflow_event(rows[0]) if rows else None
+
+    def list_all(self, scope_id: str) -> list[ChatWorkflowEventRow]:
+        rows = q.rows(
+            q.order(
+                self._t().select("*").eq("chat_id", scope_id),
+                "event_id",
+                desc=False,
+                repo=_EVENT_REPO,
+                operation="list_all",
+            ).execute(),
+            _EVENT_REPO,
+            "list_all",
+        )
+        return [_row_to_workflow_event(row) for row in rows]
+
+    def insert(self, scope_id: str, event: ChatWorkflowEventRow) -> None:
+        self._t().insert(_workflow_event_payload(scope_id, event)).execute()
+
+    def update(self, scope_id: str, event: ChatWorkflowEventRow) -> None:
+        payload = _workflow_event_payload(scope_id, event)
+        payload.pop("created_at", None)
+        self._t().update(payload).eq("chat_id", scope_id).eq("event_id", event.event_id).execute()
+
+    def delete(self, scope_id: str, event_id: str) -> None:
+        self._t().delete().eq("chat_id", scope_id).eq("event_id", event_id).execute()
+
+    def _t(self) -> Any:
+        return q.schema_table(self._client, _SCHEMA, "workflow_events", _EVENT_REPO)
+
+
 def _row_to_workflow(row: dict[str, Any]) -> ChatWorkflowRow:
     return ChatWorkflowRow(
         chat_id=str(row["chat_id"]),
@@ -133,6 +184,24 @@ def _row_to_work_item(row: dict[str, Any]) -> WorkItem:
     )
 
 
+def _row_to_workflow_event(row: dict[str, Any]) -> ChatWorkflowEventRow:
+    return ChatWorkflowEventRow(
+        chat_id=str(row["chat_id"]),
+        event_id=str(row["event_id"]),
+        kind=str(row["kind"]),
+        state=str(row.get("state") or "open"),
+        resource_refs=list(row.get("resource_refs_json") or row.get("resource_refs") or []),
+        requested_by_user_id=row.get("requested_by_user_id"),
+        decision_states=dict(row.get("decision_states_json") or row.get("decision_states") or {}),
+        rationales=dict(row.get("rationales_json") or row.get("rationales") or {}),
+        final_state=dict(row.get("final_state_json") or row.get("final_state") or {}),
+        metadata=dict(row.get("metadata_json") or row.get("metadata") or {}),
+        created_at=float(row["created_at"]),
+        updated_at=float(row["updated_at"]) if row.get("updated_at") is not None else None,
+        settled_at=float(row["settled_at"]) if row.get("settled_at") is not None else None,
+    )
+
+
 def _work_item_payload(scope_id: str, item: WorkItem) -> dict[str, Any]:
     now = time.time()
     status = item.status.value if hasattr(item.status, "value") else str(item.status)
@@ -149,4 +218,23 @@ def _work_item_payload(scope_id: str, item: WorkItem) -> dict[str, Any]:
         "metadata_json": dict(item.metadata),
         "created_at": now,
         "updated_at": now,
+    }
+
+
+def _workflow_event_payload(scope_id: str, event: ChatWorkflowEventRow) -> dict[str, Any]:
+    now = time.time()
+    return {
+        "chat_id": scope_id,
+        "event_id": event.event_id,
+        "kind": event.kind,
+        "state": event.state,
+        "resource_refs_json": list(event.resource_refs),
+        "requested_by_user_id": event.requested_by_user_id,
+        "decision_states_json": dict(event.decision_states),
+        "rationales_json": dict(event.rationales),
+        "final_state_json": dict(event.final_state),
+        "metadata_json": dict(event.metadata),
+        "created_at": event.created_at,
+        "updated_at": now,
+        "settled_at": event.settled_at,
     }
