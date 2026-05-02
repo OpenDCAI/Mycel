@@ -290,6 +290,29 @@ class ChatWorkflowRow(BaseModel):
         return value
 
 
+class ChatWorkflowEventRow(BaseModel):
+    chat_id: str
+    event_id: str
+    kind: str
+    state: str = "open"
+    resource_refs: list[dict[str, Any]] = Field(default_factory=list)
+    requested_by_user_id: str | None = None
+    decision_states: dict[str, dict[str, str]] = Field(default_factory=dict)
+    rationales: dict[str, Any] = Field(default_factory=dict)
+    final_state: dict[str, Any] = Field(default_factory=dict)
+    metadata: dict[str, Any] = Field(default_factory=dict)
+    created_at: float
+    updated_at: float | None = None
+    settled_at: float | None = None
+
+    @field_validator("chat_id", "event_id", "kind", "state")
+    @classmethod
+    def _validate_chat_workflow_event_identity_fields(cls, value: str, info: Any) -> str:
+        if not value.strip():
+            raise ValueError(f"chat_workflow_event.{info.field_name} must not be blank")
+        return value
+
+
 class MessageRow(BaseModel):
     id: str
     chat_id: str
@@ -501,6 +524,16 @@ class ChatWorkflowRepo(Protocol):
 
 class ChatTaskRepo(WorkItemRepo, Protocol):
     pass
+
+
+class ChatWorkflowEventRepo(Protocol):
+    def close(self) -> None: ...
+    def next_id(self, scope_id: str) -> str: ...
+    def get(self, scope_id: str, event_id: str) -> ChatWorkflowEventRow | None: ...
+    def list_all(self, scope_id: str) -> list[ChatWorkflowEventRow]: ...
+    def insert(self, scope_id: str, event: ChatWorkflowEventRow) -> None: ...
+    def update(self, scope_id: str, event: ChatWorkflowEventRow) -> None: ...
+    def delete(self, scope_id: str, event_id: str) -> None: ...
 
 
 class ResourceSnapshotRepo(Protocol):
