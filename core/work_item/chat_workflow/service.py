@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import time
 from typing import Any
 
 from core.work_item.types import WorkItem
+from storage.contracts import ChatWorkflowEventRow
 
 
 class ChatWorkflowService:
@@ -114,6 +116,79 @@ class ChatTaskService:
         self._repo.delete(chat_id, task_id)
 
 
+class ChatWorkflowEventService:
+    def __init__(self, event_repo: Any) -> None:
+        self._repo = event_repo
+
+    def list_events(self, chat_id: str) -> list[dict[str, Any]]:
+        return [_event_response(event) for event in self._repo.list_all(chat_id)]
+
+    def get_event(self, chat_id: str, event_id: str) -> dict[str, Any] | None:
+        event = self._repo.get(chat_id, event_id)
+        return _event_response(event) if event is not None else None
+
+    def create_event(
+        self,
+        chat_id: str,
+        *,
+        kind: str,
+        resource_refs: list[dict[str, Any]] | None = None,
+        requested_by_user_id: str | None = None,
+        decision_states: dict[str, dict[str, str]] | None = None,
+        rationales: dict[str, Any] | None = None,
+        final_state: dict[str, Any] | None = None,
+        metadata: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        event = ChatWorkflowEventRow(
+            chat_id=chat_id,
+            event_id=self._repo.next_id(chat_id),
+            kind=kind,
+            state="open",
+            resource_refs=resource_refs or [],
+            requested_by_user_id=requested_by_user_id,
+            decision_states=decision_states or {},
+            rationales=rationales or {},
+            final_state=final_state or {},
+            metadata=metadata or {},
+            created_at=time.time(),
+        )
+        self._repo.insert(chat_id, event)
+        return _event_response(event)
+
+    def update_event(
+        self,
+        chat_id: str,
+        event_id: str,
+        *,
+        state: str | None = None,
+        decision_states: dict[str, dict[str, str]] | None = None,
+        rationales: dict[str, Any] | None = None,
+        final_state: dict[str, Any] | None = None,
+        metadata: dict[str, Any] | None = None,
+        settled_at: float | None = None,
+    ) -> dict[str, Any] | None:
+        event = self._repo.get(chat_id, event_id)
+        if event is None:
+            return None
+        if state is not None:
+            event.state = state
+        if decision_states is not None:
+            event.decision_states = dict(decision_states)
+        if rationales is not None:
+            event.rationales = dict(rationales)
+        if final_state is not None:
+            event.final_state = dict(final_state)
+        if metadata is not None:
+            event.metadata = dict(metadata)
+        if settled_at is not None:
+            event.settled_at = settled_at
+        self._repo.update(chat_id, event)
+        return _event_response(event)
+
+    def delete_event(self, chat_id: str, event_id: str) -> None:
+        self._repo.delete(chat_id, event_id)
+
+
 def _workflow_response(row: Any) -> dict[str, Any]:
     return {
         "chat_id": row.chat_id,
@@ -130,3 +205,21 @@ def _task_response(item: WorkItem) -> dict[str, Any]:
     payload = item.to_detail()
     payload["status"] = item.status.value if hasattr(item.status, "value") else str(item.status)
     return payload
+
+
+def _event_response(event: ChatWorkflowEventRow) -> dict[str, Any]:
+    return {
+        "chat_id": event.chat_id,
+        "event_id": event.event_id,
+        "kind": event.kind,
+        "state": event.state,
+        "resource_refs": [dict(ref) for ref in event.resource_refs],
+        "requested_by_user_id": event.requested_by_user_id,
+        "decision_states": {user_id: dict(states) for user_id, states in event.decision_states.items()},
+        "rationales": dict(event.rationales),
+        "final_state": dict(event.final_state),
+        "metadata": dict(event.metadata),
+        "created_at": event.created_at,
+        "updated_at": event.updated_at,
+        "settled_at": event.settled_at,
+    }
