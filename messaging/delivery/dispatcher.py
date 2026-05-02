@@ -51,9 +51,12 @@ class ChatDeliveryDispatcher:
         content: str,
         mentions: list[str],
         signal: str | None = None,
+        addressed_to_user_ids: list[str] | None = None,
     ) -> None:
         mention_set = set(mentions)
-        sender_scope = SenderWakeScope.from_mentions(mentions)
+        addressed_set = set(addressed_to_user_ids or [])
+        target_set = addressed_set or mention_set
+        sender_scope = SenderWakeScope.TARGETED if target_set else SenderWakeScope.OPEN
         members = self._chat_members_repo.list_members(chat_id)
         sender_user = self._resolve_display_user(sender_id)
         if sender_user is None:
@@ -72,6 +75,8 @@ class ChatDeliveryDispatcher:
                 raise RuntimeError(f"Chat delivery member row is missing user_id in chat {chat_id}")
             if uid == sender_id:
                 continue
+            if addressed_set and uid not in addressed_set:
+                continue
             recipient = self._resolve_display_user(uid)
             if not recipient:
                 raise RuntimeError(f"Chat delivery recipient identity not found: {uid}")
@@ -85,14 +90,14 @@ class ChatDeliveryDispatcher:
             # is already enough access for runtime delivery; resolver policy is only needed
             # across ownership boundaries.
             if self._needs_access_resolver(sender_owner_id, recipient) and self._delivery_resolver:
-                is_mentioned = uid in mention_set
+                is_mentioned = uid in target_set
                 action = self._delivery_resolver.resolve(uid, chat_id, sender_id, is_mentioned=is_mentioned)
 
             wake_action = compose_wake_action(
                 safety=self._wake_safety(action),
                 sender_scope=sender_scope,
                 receiver_preference=self._receiver_preference(member, action),
-                recipient_is_mentioned=uid in mention_set,
+                recipient_is_mentioned=uid in target_set,
             )
             if wake_action is WakeAction.DROP_RUNTIME:
                 logger.info("[messaging] POLICY %s for %s", action.value, uid[:15])
