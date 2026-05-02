@@ -190,14 +190,17 @@ class SupabaseMessagesRepo:
         q = self._t().select("*").eq("chat_id", chat_id).is_("deleted_at", "null")
         if before:
             q = q.lt("seq", int(before))
-        res = q.order("seq", desc=True).limit(limit).execute()
+        q = q.order("seq", desc=True)
+        if viewer_id is None:
+            q = q.limit(limit)
+        res = q.execute()
         rows = list(reversed(res.data or []))
-        # Filter soft-deleted for viewer
         if viewer_id:
-            rows = [r for r in rows if viewer_id not in (r.get("deleted_for") or [])]
+            rows = [r for r in rows if self._is_visible_to(r, viewer_id) and viewer_id not in (r.get("deleted_for") or [])]
+            rows = rows[-limit:]
         return rows
 
-    def list_latest_by_chat_ids(self, chat_ids: list[str]) -> dict[str, dict[str, Any]]:
+    def list_latest_by_chat_ids(self, chat_ids: list[str], *, viewer_id: str | None = None) -> dict[str, dict[str, Any]]:
         if not chat_ids:
             return {}
         latest_by_chat: dict[str, dict[str, Any]] = {}
@@ -216,6 +219,8 @@ class SupabaseMessagesRepo:
         )
         for row in rows:
             chat_id = str(row.get("chat_id") or "")
+            if viewer_id and (not self._is_visible_to(row, viewer_id) or viewer_id in (row.get("deleted_for") or [])):
+                continue
             if chat_id and chat_id not in latest_by_chat:
                 latest_by_chat[chat_id] = row
         return latest_by_chat
@@ -228,16 +233,10 @@ class SupabaseMessagesRepo:
             q = q.gt("seq", last_read_seq)
         res = q.order("seq", desc=False).execute()
         rows = res.data or []
-        return [r for r in rows if user_id not in (r.get("deleted_for") or [])]
+        return [r for r in rows if self._is_visible_to(r, user_id) and user_id not in (r.get("deleted_for") or [])]
 
     def count_unread(self, chat_id: str, user_id: str) -> int:
-        last_read_seq = self._last_read_seq(chat_id, user_id)
-
-        q = self._t().select("id", count="exact").eq("chat_id", chat_id).neq("sender_user_id", user_id).is_("deleted_at", "null")
-        if last_read_seq > 0:
-            q = q.gt("seq", last_read_seq)
-        res = q.execute()
-        return res.count or 0
+        return len(self.list_unread(chat_id, user_id))
 
     def count_unread_by_chat_ids(self, user_id: str, last_read_by_chat: dict[str, int]) -> dict[str, int]:
         if not last_read_by_chat:
@@ -246,7 +245,7 @@ class SupabaseMessagesRepo:
         min_last_read_seq = min(last_read_by_chat.values())
 
         def unread_query():
-            query = self._t().select("chat_id,seq").neq("sender_user_id", user_id).is_("deleted_at", "null")
+            query = self._t().select("*").neq("sender_user_id", user_id).is_("deleted_at", "null")
             if min_last_read_seq > 0:
                 query = query.gt("seq", min_last_read_seq)
             return query
@@ -255,8 +254,30 @@ class SupabaseMessagesRepo:
             chat_id = str(row.get("chat_id") or "")
             if int(row.get("seq") or 0) <= last_read_by_chat.get(chat_id, 0):
                 continue
+            if not self._is_visible_to(row, user_id):
+                continue
+            if user_id in (row.get("deleted_for") or []):
+                continue
             counts[chat_id] += 1
         return counts
+
+    def _is_visible_to(self, row: dict[str, Any], user_id: str) -> bool:
+        scope = str(row.get("delivery_scope") or "broadcast")
+        if scope != "addressed":
+            return True
+        if row.get("sender_user_id") == user_id:
+            return True
+        return user_id in self._addressed_to_user_ids(row)
+
+    def _addressed_to_user_ids(self, row: dict[str, Any]) -> list[str]:
+        value = row.get("addressed_to_user_ids_json")
+        if value is None:
+            value = row.get("addressed_to_user_ids")
+        if value is None:
+            return []
+        if not isinstance(value, list):
+            raise RuntimeError(f"Message {row.get('id') or '<missing>'} has invalid addressed recipient list")
+        return [str(item) for item in value]
 
     def _last_read_seq(self, chat_id: str, user_id: str) -> int:
         member_res = self._members_t().select("last_read_seq").eq("chat_id", chat_id).eq("user_id", user_id).limit(1).execute()
