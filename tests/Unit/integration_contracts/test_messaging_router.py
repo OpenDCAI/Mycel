@@ -109,6 +109,7 @@ def test_messaging_crud_routes_are_sync_threadpool_boundaries() -> None:
         chats_router.create_chat,
         chats_router.get_chat,
         chats_router.list_messages,
+        chats_router.add_chat_member,
         chats_router.send_message,
         chats_router.retract_message,
         chats_router.delete_message_for_self,
@@ -146,6 +147,16 @@ def test_chat_join_request_bodies_do_not_accept_identity_fields() -> None:
         chats_router.ChatJoinRequestActionBody.model_validate({"requester_user_id": "user-1"})
     with pytest.raises(ValidationError):
         chats_router.ChatJoinRequestBody.model_validate({"message": "please add me", "actor_" + "user_id": "user-1"})
+
+
+def test_chat_member_add_body_does_not_accept_identity_fields() -> None:
+    body = chats_router.ChatMemberAddBody(user_id="external-1")
+
+    assert body.user_id == "external-1"
+    with pytest.raises(ValidationError):
+        chats_router.ChatMemberAddBody.model_validate({"user_id": "external-1", "owner_user_id": "user-1"})
+    with pytest.raises(ValidationError):
+        chats_router.ChatMemberAddBody.model_validate({"user_id": "external-1", "actor_" + "user_id": "user-1"})
 
 
 def test_request_chat_join_uses_current_token_user() -> None:
@@ -222,6 +233,46 @@ def test_approve_chat_join_uses_current_token_user() -> None:
 
     assert seen == [("chat-1", "join-request-1", "human-user-1")]
     assert result == expected
+
+
+def test_add_chat_member_uses_current_token_user_and_validates_target() -> None:
+    seen: list[tuple[str, str, str]] = []
+    expected = {"chat_id": "chat-1", "user_id": "external-1", "state": "member"}
+    chat_join_request_service = SimpleNamespace(
+        add_member=lambda chat_id, target_user_id, owner_user_id: seen.append((chat_id, target_user_id, owner_user_id)) or expected
+    )
+    user_repo = SimpleNamespace(get_by_id=lambda uid: SimpleNamespace(id=uid) if uid == "external-1" else None)
+    thread_repo = SimpleNamespace(get_by_user_id=lambda _uid: None)
+
+    result = chats_router.add_chat_member(
+        "chat-1",
+        chats_router.ChatMemberAddBody(user_id="external-1"),
+        user_id="human-user-1",
+        chat_join_request_service=chat_join_request_service,
+        user_repo=user_repo,
+        thread_repo=thread_repo,
+    )
+
+    assert seen == [("chat-1", "external-1", "human-user-1")]
+    assert result == expected
+
+
+def test_add_chat_member_rejects_unknown_target() -> None:
+    chat_join_request_service = SimpleNamespace(add_member=lambda *_args: None)
+    user_repo = SimpleNamespace(get_by_id=lambda _uid: None)
+    thread_repo = SimpleNamespace(get_by_user_id=lambda _uid: None)
+
+    with pytest.raises(HTTPException) as exc_info:
+        chats_router.add_chat_member(
+            "chat-1",
+            chats_router.ChatMemberAddBody(user_id="missing-user"),
+            user_id="human-user-1",
+            chat_join_request_service=chat_join_request_service,
+            user_repo=user_repo,
+            thread_repo=thread_repo,
+        )
+
+    assert exc_info.value.status_code == 400
 
 
 def test_get_accessible_chat_or_404_returns_chat():
