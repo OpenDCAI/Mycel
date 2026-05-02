@@ -48,6 +48,11 @@ def get_chat_task_service(app: Annotated[Any, Depends(get_app)]) -> Any:
     return runtime_state.chat_task_service
 
 
+def get_chat_workflow_event_service(app: Annotated[Any, Depends(get_app)]) -> Any:
+    runtime_state = _require_state_attr(app, "chat_runtime_state", "Chat workflow event service unavailable")
+    return runtime_state.chat_workflow_event_service
+
+
 def get_user_repo(app: Annotated[Any, Depends(get_app)]) -> Any:
     return _require_state_attr(app, "user_repo", "User repo unavailable")
 

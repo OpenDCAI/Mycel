@@ -9,6 +9,7 @@ from backend.chat.api.http.dependencies import (
     get_accessible_chat_or_404,
     get_chat_repo,
     get_chat_task_service,
+    get_chat_workflow_event_service,
     get_chat_workflow_service,
     get_current_user_id,
     get_messaging_service,
@@ -49,6 +50,29 @@ class UpdateChatTaskBody(BaseModel):
     blocks: list[str] | None = None
     blocked_by: list[str] | None = None
     metadata: dict[str, Any] | None = None
+
+
+class CreateChatWorkflowEventBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    kind: str
+    resource_refs: list[dict[str, Any]] = Field(default_factory=list)
+    requested_by_user_id: str | None = None
+    decision_states: dict[str, dict[str, str]] = Field(default_factory=dict)
+    rationales: dict[str, Any] = Field(default_factory=dict)
+    final_state: dict[str, Any] = Field(default_factory=dict)
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class UpdateChatWorkflowEventBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    state: str | None = None
+    decision_states: dict[str, dict[str, str]] | None = None
+    rationales: dict[str, Any] | None = None
+    final_state: dict[str, Any] | None = None
+    metadata: dict[str, Any] | None = None
+    settled_at: float | None = None
 
 
 @router.get("/{chat_id}/workflow")
@@ -95,6 +119,96 @@ def delete_chat_workflow(
 ):
     get_accessible_chat_or_404(chat_repo, messaging_service, chat_id, user_id)
     chat_workflow_service.delete_workflow(chat_id)
+    return {"status": "deleted"}
+
+
+@router.get("/{chat_id}/workflow/events")
+def list_chat_workflow_events(
+    chat_id: str,
+    user_id: Annotated[str, Depends(get_current_user_id)],
+    chat_repo: Annotated[Any, Depends(get_chat_repo)],
+    messaging_service: Annotated[Any, Depends(get_messaging_service)],
+    chat_workflow_event_service: Annotated[Any, Depends(get_chat_workflow_event_service)],
+):
+    get_accessible_chat_or_404(chat_repo, messaging_service, chat_id, user_id)
+    return chat_workflow_event_service.list_events(chat_id)
+
+
+@router.post("/{chat_id}/workflow/events")
+def create_chat_workflow_event(
+    chat_id: str,
+    body: CreateChatWorkflowEventBody,
+    user_id: Annotated[str, Depends(get_current_user_id)],
+    chat_repo: Annotated[Any, Depends(get_chat_repo)],
+    messaging_service: Annotated[Any, Depends(get_messaging_service)],
+    chat_workflow_event_service: Annotated[Any, Depends(get_chat_workflow_event_service)],
+):
+    get_accessible_chat_or_404(chat_repo, messaging_service, chat_id, user_id)
+    return chat_workflow_event_service.create_event(
+        chat_id,
+        kind=body.kind,
+        resource_refs=body.resource_refs,
+        requested_by_user_id=body.requested_by_user_id,
+        decision_states=body.decision_states,
+        rationales=body.rationales,
+        final_state=body.final_state,
+        metadata=body.metadata,
+    )
+
+
+@router.get("/{chat_id}/workflow/events/{event_id}")
+def get_chat_workflow_event(
+    chat_id: str,
+    event_id: str,
+    user_id: Annotated[str, Depends(get_current_user_id)],
+    chat_repo: Annotated[Any, Depends(get_chat_repo)],
+    messaging_service: Annotated[Any, Depends(get_messaging_service)],
+    chat_workflow_event_service: Annotated[Any, Depends(get_chat_workflow_event_service)],
+):
+    get_accessible_chat_or_404(chat_repo, messaging_service, chat_id, user_id)
+    event = chat_workflow_event_service.get_event(chat_id, event_id)
+    if event is None:
+        raise HTTPException(404, "Chat workflow event not found")
+    return event
+
+
+@router.patch("/{chat_id}/workflow/events/{event_id}")
+def update_chat_workflow_event(
+    chat_id: str,
+    event_id: str,
+    body: UpdateChatWorkflowEventBody,
+    user_id: Annotated[str, Depends(get_current_user_id)],
+    chat_repo: Annotated[Any, Depends(get_chat_repo)],
+    messaging_service: Annotated[Any, Depends(get_messaging_service)],
+    chat_workflow_event_service: Annotated[Any, Depends(get_chat_workflow_event_service)],
+):
+    get_accessible_chat_or_404(chat_repo, messaging_service, chat_id, user_id)
+    event = chat_workflow_event_service.update_event(
+        chat_id,
+        event_id,
+        state=body.state,
+        decision_states=body.decision_states,
+        rationales=body.rationales,
+        final_state=body.final_state,
+        metadata=body.metadata,
+        settled_at=body.settled_at,
+    )
+    if event is None:
+        raise HTTPException(404, "Chat workflow event not found")
+    return event
+
+
+@router.delete("/{chat_id}/workflow/events/{event_id}")
+def delete_chat_workflow_event(
+    chat_id: str,
+    event_id: str,
+    user_id: Annotated[str, Depends(get_current_user_id)],
+    chat_repo: Annotated[Any, Depends(get_chat_repo)],
+    messaging_service: Annotated[Any, Depends(get_messaging_service)],
+    chat_workflow_event_service: Annotated[Any, Depends(get_chat_workflow_event_service)],
+):
+    get_accessible_chat_or_404(chat_repo, messaging_service, chat_id, user_id)
+    chat_workflow_event_service.delete_event(chat_id, event_id)
     return {"status": "deleted"}
 
 
