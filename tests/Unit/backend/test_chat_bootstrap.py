@@ -12,6 +12,7 @@ def test_attach_chat_runtime_wires_chat_state(monkeypatch):
     chat_join_request_repo = object()
     chat_workflow_repo = object()
     chat_task_repo = object()
+    chat_workflow_event_repo = object()
 
     storage_container = SimpleNamespace(
         chat_repo=lambda: chat_repo,
@@ -22,6 +23,7 @@ def test_attach_chat_runtime_wires_chat_state(monkeypatch):
         chat_join_request_repo=lambda: chat_join_request_repo,
         chat_workflow_repo=lambda: chat_workflow_repo,
         chat_task_repo=lambda: chat_task_repo,
+        chat_workflow_event_repo=lambda: chat_workflow_event_repo,
     )
 
     class _EventBus:
@@ -55,6 +57,10 @@ def test_attach_chat_runtime_wires_chat_state(monkeypatch):
         def __init__(self, **kwargs):
             self.kwargs = kwargs
 
+    class _ChatWorkflowEventService:
+        def __init__(self, **kwargs):
+            self.kwargs = kwargs
+
     event_bus = _EventBus()
 
     monkeypatch.setattr(chat_bootstrap, "ChatEventBus", lambda: event_bus)
@@ -65,6 +71,7 @@ def test_attach_chat_runtime_wires_chat_state(monkeypatch):
     monkeypatch.setattr(chat_bootstrap, "ChatJoinRequestService", _ChatJoinRequestService)
     monkeypatch.setattr(chat_bootstrap, "ChatWorkflowService", _ChatWorkflowService)
     monkeypatch.setattr(chat_bootstrap, "ChatTaskService", _ChatTaskService)
+    monkeypatch.setattr(chat_bootstrap, "ChatWorkflowEventService", _ChatWorkflowEventService)
     app = SimpleNamespace(
         state=SimpleNamespace(
             user_repo=object(),
@@ -91,6 +98,7 @@ def test_attach_chat_runtime_wires_chat_state(monkeypatch):
     assert state.chat_join_request_service.kwargs["messaging_service"] is state.messaging_service
     assert state.chat_workflow_service.kwargs["workflow_repo"] is chat_workflow_repo
     assert state.chat_task_service.kwargs["task_repo"] is chat_task_repo
+    assert state.chat_workflow_event_service.kwargs["event_repo"] is chat_workflow_event_repo
     assert state.messaging_service.kwargs["chat_repo"] is chat_repo
     assert state.messaging_service.kwargs["delivery_resolver"]["contact_repo"] is contact_repo
     assert state.messaging_service.kwargs["thread_repo"] is app.state.thread_repo
@@ -106,6 +114,9 @@ def test_attach_chat_runtime_requires_explicit_user_repo_and_thread_repo():
         messages_repo=lambda: object(),
         relationship_repo=lambda: object(),
         chat_join_request_repo=lambda: object(),
+        chat_workflow_repo=lambda: object(),
+        chat_task_repo=lambda: object(),
+        chat_workflow_event_repo=lambda: object(),
     )
 
     try:
