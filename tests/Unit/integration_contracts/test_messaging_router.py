@@ -341,6 +341,59 @@ def test_chat_task_routes_use_chat_access_helper(monkeypatch: pytest.MonkeyPatch
     ]
 
 
+def test_chat_workflow_event_routes_use_chat_access_helper(monkeypatch: pytest.MonkeyPatch) -> None:
+    seen: list[tuple[str, object]] = []
+    chat = _chat("chat-1")
+    chat_repo = SimpleNamespace(name="chat-repo")
+    messaging_service = SimpleNamespace(name="messaging")
+
+    def fake_helper(chat_repo_arg, messaging_service_arg, chat_id: str, user_id: str):
+        seen.append(("helper", (chat_repo_arg, messaging_service_arg, chat_id, user_id)))
+        return chat
+
+    event_service = SimpleNamespace(
+        create_event=lambda chat_id, **kwargs: (
+            seen.append(("create_event", (chat_id, kwargs)))
+            or {"event_id": "1", "kind": kwargs["kind"], "resource_refs": kwargs["resource_refs"]}
+        )
+    )
+    monkeypatch.setattr(chat_workflow_router, "get_accessible_chat_or_404", fake_helper)
+
+    result = chat_workflow_router.create_chat_workflow_event(
+        "chat-1",
+        chat_workflow_router.CreateChatWorkflowEventBody(
+            kind="task_proposed_review",
+            resource_refs=[{"type": "task", "id": "1"}],
+            requested_by_user_id="supervisor-user",
+            metadata={"rationale_ref": "msg-1"},
+        ),
+        user_id="user-1",
+        chat_repo=chat_repo,
+        messaging_service=messaging_service,
+        chat_workflow_event_service=event_service,
+    )
+
+    assert result == {"event_id": "1", "kind": "task_proposed_review", "resource_refs": [{"type": "task", "id": "1"}]}
+    assert seen == [
+        ("helper", (chat_repo, messaging_service, "chat-1", "user-1")),
+        (
+            "create_event",
+            (
+                "chat-1",
+                {
+                    "kind": "task_proposed_review",
+                    "resource_refs": [{"type": "task", "id": "1"}],
+                    "requested_by_user_id": "supervisor-user",
+                    "decision_states": {},
+                    "rationales": {},
+                    "final_state": {},
+                    "metadata": {"rationale_ref": "msg-1"},
+                },
+            ),
+        ),
+    ]
+
+
 def test_resolve_display_user_delegates_to_messaging_service(monkeypatch: pytest.MonkeyPatch) -> None:
     seen: list[tuple[str, str]] = []
     expected = SimpleNamespace(id="agent-user-1", display_name="Toad")

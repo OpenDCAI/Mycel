@@ -5,10 +5,14 @@ from pathlib import Path
 import pytest
 
 from core.work_item.types import WorkItem
-from storage.contracts import ChatRow, ContactEdgeRow
+from storage.contracts import ChatRow, ChatWorkflowEventRow, ContactEdgeRow
 from storage.errors import StorageConflictError
 from storage.providers.supabase.chat_repo import SupabaseChatRepo
-from storage.providers.supabase.chat_workflow_repo import SupabaseChatTaskRepo, SupabaseChatWorkflowRepo
+from storage.providers.supabase.chat_workflow_repo import (
+    SupabaseChatTaskRepo,
+    SupabaseChatWorkflowEventRepo,
+    SupabaseChatWorkflowRepo,
+)
 from storage.providers.supabase.contact_repo import SupabaseContactRepo
 from storage.providers.supabase.messaging_repo import (
     SupabaseChatJoinRequestRepo,
@@ -104,6 +108,38 @@ def test_supabase_chat_task_repo_uses_work_item_shape_in_chat_schema() -> None:
     assert tables["chat.tasks"][0]["chat_id"] == "chat-1"
     assert tables["chat.tasks"][0]["subject"] == "Review worker patch"
     assert "tasks" not in tables
+
+
+def test_supabase_chat_workflow_event_repo_uses_chat_schema_sibling_table() -> None:
+    tables: dict[str, list[dict]] = {"chat.workflow_events": []}
+    client = FakeSupabaseClient(tables=tables)
+    repo = SupabaseChatWorkflowEventRepo(client)
+    event_id = repo.next_id("chat-1")
+
+    repo.insert(
+        "chat-1",
+        ChatWorkflowEventRow(
+            chat_id="chat-1",
+            event_id=event_id,
+            kind="task_proposed_review",
+            state="open",
+            resource_refs=[{"type": "task", "id": "1"}],
+            requested_by_user_id="supervisor-user",
+            decision_states={},
+            rationales={},
+            final_state={},
+            metadata={"rationale_ref": "msg-1"},
+            created_at=123.0,
+        ),
+    )
+    event = repo.get("chat-1", event_id)
+
+    assert event is not None
+    assert event.event_id == "1"
+    assert event.kind == "task_proposed_review"
+    assert event.resource_refs == [{"type": "task", "id": "1"}]
+    assert tables["chat.workflow_events"][0]["chat_id"] == "chat-1"
+    assert "workflow_events" not in tables
 
 
 def test_supabase_find_chat_between_only_returns_direct_chat() -> None:
