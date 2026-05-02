@@ -134,6 +134,23 @@ def test_dispatcher_explicit_mentions_deliver_only_to_mentioned_default_agents()
     assert delivered == ["agent-user-2"]
 
 
+def test_dispatcher_addressed_delivery_only_wakes_addressed_runtime_recipients() -> None:
+    delivered: list[str] = []
+    unread_checks: list[str] = []
+    dispatcher = ChatDeliveryDispatcher(
+        chat_member_repo=_member_repo(["human-user-1", "agent-user-1", "agent-user-2"]),
+        user_repo=_user_repo(),
+        avatar_url_builder=lambda _user_id, _has_avatar: None,
+        unread_counter=lambda _chat_id, user_id: unread_checks.append(user_id) or 0,
+        delivery_fn=lambda request: delivered.append(request.recipient_id),
+    )
+
+    dispatcher.dispatch("chat-1", "human-user-1", "direct note", [], addressed_to_user_ids=["agent-user-2"])
+
+    assert delivered == ["agent-user-2"]
+    assert unread_checks == ["agent-user-2"]
+
+
 def test_dispatcher_keeps_no_wake_recipients_out_of_runtime_queue() -> None:
     delivered: list[str] = []
     dispatcher = ChatDeliveryDispatcher(

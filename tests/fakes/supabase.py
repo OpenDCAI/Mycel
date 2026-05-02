@@ -84,7 +84,9 @@ class FakeSupabaseQuery:
                 return False
             if op == "gte" and not (cell is not None and cell >= value):
                 return False
-            if op == "is" and cell is not value:
+            if op == "is" and value == "null" and cell is not None:
+                return False
+            if op == "is" and value != "null" and cell is not value:
                 return False
         if self._in_filter is not None:
             column, values = self._in_filter

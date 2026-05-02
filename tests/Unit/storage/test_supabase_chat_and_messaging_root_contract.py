@@ -665,7 +665,10 @@ def test_supabase_messages_repo_list_by_chat_uses_seq_ordering() -> None:
 def test_supabase_messages_repo_count_unread_uses_last_read_seq_and_sender_user_id() -> None:
     client = _FakeClient()
     client.schema("chat").table("chat_members").rows = [{"last_read_seq": 5}]
-    client.schema("chat").table("messages").count = 2
+    client.schema("chat").table("messages").rows = [
+        {"id": "msg-6", "chat_id": "chat-1", "seq": 6, "sender_user_id": "user-2"},
+        {"id": "msg-7", "chat_id": "chat-1", "seq": 7, "sender_user_id": "user-2"},
+    ]
     repo = SupabaseMessagesRepo(client)
 
     count = repo.count_unread("chat-1", "user-1")
@@ -675,3 +678,74 @@ def test_supabase_messages_repo_count_unread_uses_last_read_seq_and_sender_user_
     assert ("seq", 5) in client.tables["chat.messages"].gt_calls
     assert ("sender_user_id", "user-1") in client.tables["chat.messages"].neq_calls
     assert ("sender_id", "user-1") not in client.tables["chat.messages"].neq_calls
+
+
+def test_supabase_messages_repo_filters_addressed_messages_from_non_recipients() -> None:
+    tables: dict[str, list[dict]] = {
+        "chat.chat_members": [
+            {"chat_id": "chat-1", "user_id": "user-1", "last_read_seq": 0},
+            {"chat_id": "chat-1", "user_id": "user-2", "last_read_seq": 0},
+            {"chat_id": "chat-1", "user_id": "user-3", "last_read_seq": 0},
+        ],
+        "chat.messages": [
+            {
+                "id": "broadcast-1",
+                "chat_id": "chat-1",
+                "seq": 1,
+                "sender_user_id": "user-1",
+                "content": "everyone sees this",
+                "delivery_scope": "broadcast",
+                "addressed_to_user_ids_json": [],
+            },
+            {
+                "id": "addressed-1",
+                "chat_id": "chat-1",
+                "seq": 2,
+                "sender_user_id": "user-1",
+                "content": "only user-2 sees this",
+                "delivery_scope": "addressed",
+                "addressed_to_user_ids_json": ["user-2"],
+            },
+        ],
+    }
+    repo = SupabaseMessagesRepo(FakeSupabaseClient(tables=tables))
+
+    user_2_unread = repo.list_unread("chat-1", "user-2")
+    user_3_unread = repo.list_unread("chat-1", "user-3")
+    user_3_history = repo.list_by_chat("chat-1", viewer_id="user-3")
+
+    assert [row["id"] for row in user_2_unread] == ["broadcast-1", "addressed-1"]
+    assert [row["id"] for row in user_3_unread] == ["broadcast-1"]
+    assert [row["id"] for row in user_3_history] == ["broadcast-1"]
+    assert repo.count_unread("chat-1", "user-3") == 1
+    assert repo.count_unread_by_chat_ids("user-3", {"chat-1": 0}) == {"chat-1": 1}
+
+
+def test_supabase_messages_repo_latest_message_is_viewer_visible() -> None:
+    tables: dict[str, list[dict]] = {
+        "chat.messages": [
+            {
+                "id": "broadcast-1",
+                "chat_id": "chat-1",
+                "seq": 1,
+                "sender_user_id": "user-1",
+                "content": "visible latest for user-3",
+                "delivery_scope": "broadcast",
+                "addressed_to_user_ids_json": [],
+            },
+            {
+                "id": "addressed-1",
+                "chat_id": "chat-1",
+                "seq": 2,
+                "sender_user_id": "user-1",
+                "content": "hidden from user-3",
+                "delivery_scope": "addressed",
+                "addressed_to_user_ids_json": ["user-2"],
+            },
+        ]
+    }
+    repo = SupabaseMessagesRepo(FakeSupabaseClient(tables=tables))
+
+    latest = repo.list_latest_by_chat_ids(["chat-1"], viewer_id="user-3")
+
+    assert latest["chat-1"]["id"] == "broadcast-1"
