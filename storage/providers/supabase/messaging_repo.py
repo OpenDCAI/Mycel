@@ -54,18 +54,26 @@ class SupabaseChatMemberRepo:
     def find_chat_between(self, user_a: str, user_b: str) -> str | None:
         chats_a = set(self.list_chats_for_user(user_a))
         chats_b = set(self.list_chats_for_user(user_b))
-        common = chats_a & chats_b
-        for chat_id in common:
+        candidates: list[dict[str, Any]] = []
+        for chat_id in chats_a & chats_b:
             members = self.list_members(chat_id)
-            if len(members) == 2 and self._chat_type(chat_id) == "direct":
-                return chat_id
-        return None
-
-    def _chat_type(self, chat_id: str) -> str | None:
-        res = q.schema_table(self._client, _SCHEMA, "chats", "chat member repo").select("type").eq("id", chat_id).limit(1).execute()
-        if not res.data:
+            chat = self._chat_row(chat_id)
+            if len(members) == 2 and chat and chat.get("type") == "direct":
+                candidates.append(chat)
+        if not candidates:
             return None
-        return str(res.data[0].get("type") or "")
+        candidates.sort(key=lambda row: (float(row.get("created_at") or 0), str(row.get("id") or "")))
+        return str(candidates[0]["id"])
+
+    def _chat_row(self, chat_id: str) -> dict[str, Any] | None:
+        res = (
+            q.schema_table(self._client, _SCHEMA, "chats", "chat member repo")
+            .select("id,type,created_at")
+            .eq("id", chat_id)
+            .limit(1)
+            .execute()
+        )
+        return res.data[0] if res.data else None
 
     def update_last_read(self, chat_id: str, user_id: str, last_read_seq: int) -> None:
         self._t().update({"last_read_seq": last_read_seq}).eq("chat_id", chat_id).eq("user_id", user_id).execute()
