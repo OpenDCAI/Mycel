@@ -184,6 +184,40 @@ def test_supabase_find_chat_between_only_returns_direct_chat() -> None:
     assert SupabaseChatMemberRepo(group_only_client).find_chat_between("user-1", "user-2") is None
 
 
+def test_supabase_find_chat_between_uses_oldest_direct_chat_when_duplicates_exist() -> None:
+    tables: dict[str, list[dict]] = {
+        "chat.chats": [
+            {
+                "id": "direct-two-new",
+                "type": "direct",
+                "created_by_user_id": "user-1",
+                "title": None,
+                "status": "active",
+                "next_message_seq": 0,
+                "created_at": 2.0,
+            },
+            {
+                "id": "direct-one-old",
+                "type": "direct",
+                "created_by_user_id": "user-1",
+                "title": None,
+                "status": "active",
+                "next_message_seq": 0,
+                "created_at": 1.0,
+            },
+        ],
+        "chat.chat_members": [
+            {"chat_id": "direct-two-new", "user_id": "user-1", "last_read_seq": 0},
+            {"chat_id": "direct-two-new", "user_id": "user-2", "last_read_seq": 0},
+            {"chat_id": "direct-one-old", "user_id": "user-1", "last_read_seq": 0},
+            {"chat_id": "direct-one-old", "user_id": "user-2", "last_read_seq": 0},
+        ],
+    }
+    client = FakeSupabaseClient(tables=tables)
+
+    assert SupabaseChatMemberRepo(client).find_chat_between("user-1", "user-2") == "direct-one-old"
+
+
 def test_supabase_contact_and_relationship_repos_use_chat_schema() -> None:
     tables: dict[str, list[dict]] = {"chat.contacts": [], "chat.relationships": []}
     client = FakeSupabaseClient(tables=tables)
