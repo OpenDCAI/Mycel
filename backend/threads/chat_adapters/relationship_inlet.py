@@ -1,28 +1,24 @@
 from __future__ import annotations
 
 import asyncio
-import logging
 from enum import Enum
 from typing import Any
 
 from backend.identity.avatar.urls import avatar_url
 from backend.threads.chat_adapters.port import get_agent_runtime_gateway
+from backend.threads.chat_adapters.runtime_recipient import select_runtime_notification_recipient
 from messaging.contracts import RelationshipEvent, RelationshipRow
-from messaging.delivery.runtime_thread_selector import select_runtime_thread_for_recipient
 from protocols.agent_runtime import (
     AgentChatRecipient,
     AgentRuntimeActor,
     AgentRuntimeMessage,
     AgentRuntimeNotificationEnvelope,
-    AgentThreadInputEnvelope,
 )
 
 _DECISION_VERBS: dict[RelationshipEvent, str] = {
     "approve": "approved",
     "reject": "rejected",
 }
-
-logger = logging.getLogger(__name__)
 
 
 def make_relationship_request_notification_fn(app: Any, *, activity_reader: Any, thread_repo: Any, user_repo: Any):
@@ -36,57 +32,33 @@ def make_relationship_request_notification_fn(app: Any, *, activity_reader: Any,
         requester = _require_user(user_repo, requester_id, "requester")
         target = _require_user(user_repo, target_id, "target")
         target_type = _user_type(target, target_id)
-        if target_type == "external":
-            await _dispatch_external_notification(
-                app,
-                recipient_id=target_id,
-                sender=AgentRuntimeActor(
-                    user_id=requester_id,
-                    user_type=_user_type(requester, requester_id),
-                    display_name=_display_name(requester, requester_id),
-                    avatar_url=avatar_url(requester_id, bool(getattr(requester, "avatar", None))),
-                    source="relationship",
-                ),
-                message=AgentRuntimeMessage(
-                    content=_notification_content(
-                        _display_name(requester, requester_id),
-                        row.message,
-                    ),
-                    metadata={"relationship_id": row.id},
-                ),
-                event_type="relationship.requested",
-            )
-            return
-        if target_type != "agent":
-            return
-
-        thread_id = select_runtime_thread_for_recipient(
+        recipient = select_runtime_notification_recipient(
             target_id,
+            target_type,
             thread_repo=thread_repo,
             activity_reader=activity_reader,
+            context="relationship request",
         )
-        if thread_id is None:
-            logger.info("Skipped relationship request wake for agent without runtime thread: %s", target_id)
+        if recipient is None:
             return
-
-        await get_agent_runtime_gateway(app).dispatch_thread_input(
-            AgentThreadInputEnvelope(
-                thread_id=thread_id,
-                sender=AgentRuntimeActor(
-                    user_id=requester_id,
-                    user_type=_user_type(requester, requester_id),
-                    display_name=_display_name(requester, requester_id),
-                    avatar_url=avatar_url(requester_id, bool(getattr(requester, "avatar", None))),
-                    source="relationship",
+        await _dispatch_notification(
+            app,
+            recipient=recipient,
+            sender=AgentRuntimeActor(
+                user_id=requester_id,
+                user_type=_user_type(requester, requester_id),
+                display_name=_display_name(requester, requester_id),
+                avatar_url=avatar_url(requester_id, bool(getattr(requester, "avatar", None))),
+                source="relationship",
+            ),
+            message=AgentRuntimeMessage(
+                content=_notification_content(
+                    _display_name(requester, requester_id),
+                    row.message,
                 ),
-                message=AgentRuntimeMessage(
-                    content=_notification_content(
-                        _display_name(requester, requester_id),
-                        row.message,
-                    ),
-                    metadata={"relationship_id": row.id},
-                ),
-            )
+                metadata={"relationship_id": row.id},
+            ),
+            event_type="relationship.requested",
         )
 
     def _notify(row: RelationshipRow) -> None:
@@ -107,59 +79,34 @@ def make_relationship_decision_notification_fn(app: Any, *, activity_reader: Any
         requester = _require_user(user_repo, requester_id, "requester")
         decider = _require_user(user_repo, decider_id, "decider")
         requester_type = _user_type(requester, requester_id)
-        if requester_type == "external":
-            await _dispatch_external_notification(
-                app,
-                recipient_id=requester_id,
-                sender=AgentRuntimeActor(
-                    user_id=decider_id,
-                    user_type=_user_type(decider, decider_id),
-                    display_name=_display_name(decider, decider_id),
-                    avatar_url=avatar_url(decider_id, bool(getattr(decider, "avatar", None))),
-                    source="relationship",
-                ),
-                message=AgentRuntimeMessage(
-                    content=f"{_display_name(decider, decider_id)} {_decision_verb(event)} your relationship request.",
-                    metadata={
-                        "relationship_id": row.id,
-                        "event": event,
-                        "state": row.state,
-                    },
-                ),
-                event_type=f"relationship.{_decision_verb(event)}",
-            )
-            return
-        if requester_type != "agent":
-            return
-
-        thread_id = select_runtime_thread_for_recipient(
+        recipient = select_runtime_notification_recipient(
             requester_id,
+            requester_type,
             thread_repo=thread_repo,
             activity_reader=activity_reader,
+            context="relationship decision",
         )
-        if thread_id is None:
-            logger.info("Skipped relationship decision wake for agent without runtime thread: %s", requester_id)
+        if recipient is None:
             return
-
-        await get_agent_runtime_gateway(app).dispatch_thread_input(
-            AgentThreadInputEnvelope(
-                thread_id=thread_id,
-                sender=AgentRuntimeActor(
-                    user_id=decider_id,
-                    user_type=_user_type(decider, decider_id),
-                    display_name=_display_name(decider, decider_id),
-                    avatar_url=avatar_url(decider_id, bool(getattr(decider, "avatar", None))),
-                    source="relationship",
-                ),
-                message=AgentRuntimeMessage(
-                    content=f"{_display_name(decider, decider_id)} {_decision_verb(event)} your relationship request.",
-                    metadata={
-                        "relationship_id": row.id,
-                        "event": event,
-                        "state": row.state,
-                    },
-                ),
-            )
+        await _dispatch_notification(
+            app,
+            recipient=recipient,
+            sender=AgentRuntimeActor(
+                user_id=decider_id,
+                user_type=_user_type(decider, decider_id),
+                display_name=_display_name(decider, decider_id),
+                avatar_url=avatar_url(decider_id, bool(getattr(decider, "avatar", None))),
+                source="relationship",
+            ),
+            message=AgentRuntimeMessage(
+                content=f"{_display_name(decider, decider_id)} {_decision_verb(event)} your relationship request.",
+                metadata={
+                    "relationship_id": row.id,
+                    "event": event,
+                    "state": row.state,
+                },
+            ),
+            event_type=f"relationship.{_decision_verb(event)}",
         )
 
     def _notify(row: RelationshipRow, event: RelationshipEvent) -> None:
@@ -169,10 +116,10 @@ def make_relationship_decision_notification_fn(app: Any, *, activity_reader: Any
     return _notify
 
 
-async def _dispatch_external_notification(
+async def _dispatch_notification(
     app: Any,
     *,
-    recipient_id: str,
+    recipient: AgentChatRecipient,
     sender: AgentRuntimeActor,
     message: AgentRuntimeMessage,
     event_type: str,
@@ -180,7 +127,7 @@ async def _dispatch_external_notification(
     await get_agent_runtime_gateway(app).dispatch_notification(
         AgentRuntimeNotificationEnvelope(
             event_type=event_type,
-            recipient=AgentChatRecipient(agent_user_id=recipient_id, runtime_source="external"),
+            recipient=recipient,
             sender=sender,
             message=message,
             notification_type="relationship",

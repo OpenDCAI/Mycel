@@ -10,6 +10,7 @@ from backend.threads.chat_adapters.chat_handler import NativeAgentChatDeliveryHa
 from backend.threads.chat_adapters.chat_runtime_services import AppAgentChatRuntimeServices
 from backend.threads.chat_adapters.external_inbox_handler import ExternalRuntimeInboxHandler
 from backend.threads.chat_adapters.gateway import NativeAgentRuntimeGateway
+from backend.threads.chat_adapters.notification_handler import NativeAgentNotificationHandler
 from backend.threads.chat_adapters.thread_handler import NativeAgentThreadInputHandler
 from backend.threads.sandbox_resolution import resolve_thread_sandbox
 from backend.threads.streaming import _ensure_thread_handlers, start_agent_run
@@ -30,6 +31,17 @@ def build_agent_runtime_state(app: Any, *, typing_tracker: Any) -> AgentRuntimeG
         queue_manager=app.state.queue_manager,
         wake_bus=app.state.runtime_inbox_wake_bus,
     )
+    thread_input_handler = NativeAgentThreadInputHandler(
+        app,
+        queue_manager=app.state.queue_manager,
+        thread_tasks=app.state.thread_tasks,
+        thread_locks=app.state.thread_locks,
+        thread_locks_guard=app.state.thread_locks_guard,
+        get_or_create_agent=get_or_create_agent,
+        resolve_thread_sandbox=resolve_thread_sandbox,
+        start_agent_run=start_agent_run,
+        clear_resource_overview_cache=clear_resource_overview_cache,
+    )
     gateway = NativeAgentRuntimeGateway(
         chat_handlers={
             "mycel": NativeAgentChatDeliveryHandler(
@@ -48,18 +60,11 @@ def build_agent_runtime_state(app: Any, *, typing_tracker: Any) -> AgentRuntimeG
             ),
             "external": external_runtime_handler,
         },
-        notification_handlers={"external": external_runtime_handler},
-        thread_input_handler=NativeAgentThreadInputHandler(
-            app,
-            queue_manager=app.state.queue_manager,
-            thread_tasks=app.state.thread_tasks,
-            thread_locks=app.state.thread_locks,
-            thread_locks_guard=app.state.thread_locks_guard,
-            get_or_create_agent=get_or_create_agent,
-            resolve_thread_sandbox=resolve_thread_sandbox,
-            start_agent_run=start_agent_run,
-            clear_resource_overview_cache=clear_resource_overview_cache,
-        ),
+        notification_handlers={
+            "mycel": NativeAgentNotificationHandler(thread_input_handler=thread_input_handler),
+            "external": external_runtime_handler,
+        },
+        thread_input_handler=thread_input_handler,
     )
     # @@@gateway-bootstrap-borrowable-state - gateway bootstrap now returns the
     # runtime handles without mirroring them onto loose app.state attrs, so

@@ -1,22 +1,17 @@
 from __future__ import annotations
 
 import asyncio
-import logging
 from enum import Enum
 from typing import Any
 
 from backend.identity.avatar.urls import avatar_url
 from backend.threads.chat_adapters.port import get_agent_runtime_gateway
-from messaging.delivery.runtime_thread_selector import select_runtime_thread_for_recipient
+from backend.threads.chat_adapters.runtime_recipient import select_runtime_notification_recipient
 from protocols.agent_runtime import (
-    AgentChatRecipient,
     AgentRuntimeActor,
     AgentRuntimeMessage,
     AgentRuntimeNotificationEnvelope,
-    AgentThreadInputEnvelope,
 )
-
-logger = logging.getLogger(__name__)
 
 
 def make_chat_join_rejection_notification_fn(app: Any, *, activity_reader: Any, thread_repo: Any, user_repo: Any):
@@ -37,40 +32,19 @@ def make_chat_join_rejection_notification_fn(app: Any, *, activity_reader: Any, 
             "chat_id": chat_id,
             "state": "rejected",
         }
-
-        if requester_type == "external":
-            await get_agent_runtime_gateway(app).dispatch_notification(
-                AgentRuntimeNotificationEnvelope(
-                    event_type="chat.join.rejected",
-                    recipient=AgentChatRecipient(agent_user_id=requester_id, runtime_source="external"),
-                    sender=AgentRuntimeActor(
-                        user_id=decider_id,
-                        user_type=_user_type(decider, decider_id),
-                        display_name=_display_name(decider, decider_id),
-                        avatar_url=avatar_url(decider_id, bool(getattr(decider, "avatar", None))),
-                        source="chat_join",
-                    ),
-                    message=AgentRuntimeMessage(content=content, metadata=metadata),
-                    notification_type="chat_join",
-                )
-            )
-            return
-
-        if requester_type != "agent":
-            return
-
-        thread_id = select_runtime_thread_for_recipient(
+        recipient = select_runtime_notification_recipient(
             requester_id,
+            requester_type,
             thread_repo=thread_repo,
             activity_reader=activity_reader,
+            context="chat join",
         )
-        if thread_id is None:
-            logger.info("Skipped chat join wake for agent without runtime thread: %s", requester_id)
+        if recipient is None:
             return
-
-        await get_agent_runtime_gateway(app).dispatch_thread_input(
-            AgentThreadInputEnvelope(
-                thread_id=thread_id,
+        await get_agent_runtime_gateway(app).dispatch_notification(
+            AgentRuntimeNotificationEnvelope(
+                event_type="chat.join.rejected",
+                recipient=recipient,
                 sender=AgentRuntimeActor(
                     user_id=decider_id,
                     user_type=_user_type(decider, decider_id),
@@ -82,6 +56,7 @@ def make_chat_join_rejection_notification_fn(app: Any, *, activity_reader: Any, 
                     content=content,
                     metadata=metadata,
                 ),
+                notification_type="chat_join",
             )
         )
 

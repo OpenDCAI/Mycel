@@ -6,7 +6,6 @@ from types import SimpleNamespace
 import pytest
 
 from backend.threads.chat_adapters import chat_join_inlet
-from protocols.agent_runtime import AgentThreadInputResult
 
 
 def _hook_app(gateway: object) -> SimpleNamespace:
@@ -22,13 +21,13 @@ def _thread_repo() -> SimpleNamespace:
 
 
 @pytest.mark.asyncio
-async def test_chat_join_rejection_notification_dispatches_to_agent_requester() -> None:
+async def test_chat_join_rejection_notification_dispatches_runtime_notification_to_agent_requester() -> None:
     class RecordingGateway:
         envelope = None
 
-        async def dispatch_thread_input(self, envelope):
+        async def dispatch_notification(self, envelope):
             self.envelope = envelope
-            return AgentThreadInputResult(status="injected", routing="steer", thread_id=envelope.thread_id)
+            return SimpleNamespace(status="accepted", thread_id=envelope.recipient.thread_id)
 
     gateway = RecordingGateway()
     user_repo = SimpleNamespace(
@@ -56,11 +55,15 @@ async def test_chat_join_rejection_notification_dispatches_to_agent_requester() 
     )
 
     assert gateway.envelope is not None
-    assert gateway.envelope.thread_id == "thread-main"
+    assert gateway.envelope.recipient.agent_user_id == "agent-user-1"
+    assert gateway.envelope.recipient.runtime_source == "mycel"
+    assert gateway.envelope.recipient.thread_id == "thread-main"
     assert gateway.envelope.sender.user_id == "owner-1"
     assert gateway.envelope.sender.user_type == "human"
     assert gateway.envelope.sender.display_name == "Owner"
     assert gateway.envelope.sender.source == "chat_join"
+    assert gateway.envelope.event_type == "chat.join.rejected"
+    assert gateway.envelope.notification_type == "chat_join"
     assert "Owner rejected your request to join chat chat-1." in gateway.envelope.message.content
     assert gateway.envelope.message.metadata == {
         "chat_join_request_id": "chat_join:chat-1:agent-user-1",
@@ -125,7 +128,7 @@ async def test_chat_join_rejection_notification_skips_agent_wake_when_no_runtime
     class RecordingGateway:
         called = False
 
-        async def dispatch_thread_input(self, _envelope):
+        async def dispatch_notification(self, _envelope):
             self.called = True
 
     gateway = RecordingGateway()

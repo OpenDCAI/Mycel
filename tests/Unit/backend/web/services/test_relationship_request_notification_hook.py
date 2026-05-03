@@ -8,7 +8,6 @@ import pytest
 
 from backend.threads.chat_adapters import relationship_inlet
 from messaging.contracts import RelationshipRow, RelationshipState
-from protocols.agent_runtime import AgentThreadInputResult
 
 
 def _relationship_row(
@@ -46,13 +45,13 @@ def _thread_repo() -> SimpleNamespace:
 
 
 @pytest.mark.asyncio
-async def test_relationship_request_notification_dispatches_thread_input_to_agent_target() -> None:
+async def test_relationship_request_notification_dispatches_runtime_notification_to_agent_target() -> None:
     class RecordingGateway:
         envelope = None
 
-        async def dispatch_thread_input(self, envelope):
+        async def dispatch_notification(self, envelope):
             self.envelope = envelope
-            return AgentThreadInputResult(status="injected", routing="steer", thread_id=envelope.thread_id)
+            return SimpleNamespace(status="accepted", thread_id=envelope.recipient.thread_id)
 
     gateway = RecordingGateway()
     user_repo = SimpleNamespace(
@@ -81,11 +80,15 @@ async def test_relationship_request_notification_dispatches_thread_input_to_agen
     await asyncio.to_thread(notify, _relationship_row(message="Please add me to the planning chat."))
 
     assert gateway.envelope is not None
-    assert gateway.envelope.thread_id == "thread-main"
+    assert gateway.envelope.recipient.agent_user_id == "agent-user-1"
+    assert gateway.envelope.recipient.runtime_source == "mycel"
+    assert gateway.envelope.recipient.thread_id == "thread-main"
     assert gateway.envelope.sender.user_id == "human-user-1"
     assert gateway.envelope.sender.user_type == "human"
     assert gateway.envelope.sender.display_name == "Human"
     assert gateway.envelope.sender.source == "relationship"
+    assert gateway.envelope.event_type == "relationship.requested"
+    assert gateway.envelope.notification_type == "relationship"
     assert "Human requested a relationship with you." in gateway.envelope.message.content
     assert "Please add me to the planning chat." in gateway.envelope.message.content
     assert gateway.envelope.message.metadata == {"relationship_id": "hire_visit:agent-user-1:human-user-1"}
@@ -149,7 +152,7 @@ async def test_relationship_request_notification_does_not_dispatch_to_non_agent_
     class RecordingGateway:
         called = False
 
-        async def dispatch_thread_input(self, _envelope):
+        async def dispatch_notification(self, _envelope):
             self.called = True
 
     gateway = RecordingGateway()
@@ -179,7 +182,7 @@ async def test_relationship_request_notification_skips_agent_wake_when_no_runtim
     class RecordingGateway:
         called = False
 
-        async def dispatch_thread_input(self, _envelope):
+        async def dispatch_notification(self, _envelope):
             self.called = True
 
     gateway = RecordingGateway()
@@ -202,13 +205,13 @@ async def test_relationship_request_notification_skips_agent_wake_when_no_runtim
 
 
 @pytest.mark.asyncio
-async def test_relationship_decision_notification_dispatches_to_agent_requester() -> None:
+async def test_relationship_decision_notification_dispatches_runtime_notification_to_agent_requester() -> None:
     class RecordingGateway:
         envelope = None
 
-        async def dispatch_thread_input(self, envelope):
+        async def dispatch_notification(self, envelope):
             self.envelope = envelope
-            return AgentThreadInputResult(status="injected", routing="steer", thread_id=envelope.thread_id)
+            return SimpleNamespace(status="accepted", thread_id=envelope.recipient.thread_id)
 
     gateway = RecordingGateway()
     user_repo = SimpleNamespace(
@@ -236,11 +239,15 @@ async def test_relationship_decision_notification_dispatches_to_agent_requester(
     )
 
     assert gateway.envelope is not None
-    assert gateway.envelope.thread_id == "thread-main"
+    assert gateway.envelope.recipient.agent_user_id == "agent-user-1"
+    assert gateway.envelope.recipient.runtime_source == "mycel"
+    assert gateway.envelope.recipient.thread_id == "thread-main"
     assert gateway.envelope.sender.user_id == "human-user-1"
     assert gateway.envelope.sender.user_type == "human"
     assert gateway.envelope.sender.display_name == "Human"
     assert gateway.envelope.sender.source == "relationship"
+    assert gateway.envelope.event_type == "relationship.approved"
+    assert gateway.envelope.notification_type == "relationship"
     assert "Human approved your relationship request." in gateway.envelope.message.content
     assert gateway.envelope.message.metadata == {
         "relationship_id": "hire_visit:agent-user-1:human-user-1",
@@ -302,7 +309,7 @@ async def test_relationship_decision_notification_ignores_non_agent_requester() 
     class RecordingGateway:
         called = False
 
-        async def dispatch_thread_input(self, _envelope):
+        async def dispatch_notification(self, _envelope):
             self.called = True
 
     gateway = RecordingGateway()
@@ -333,7 +340,7 @@ async def test_relationship_decision_notification_skips_agent_wake_when_no_runti
     class RecordingGateway:
         called = False
 
-        async def dispatch_thread_input(self, _envelope):
+        async def dispatch_notification(self, _envelope):
             self.called = True
 
     gateway = RecordingGateway()
