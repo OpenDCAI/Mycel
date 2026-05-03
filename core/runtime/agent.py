@@ -62,8 +62,6 @@ from core.runtime.middleware.memory import MemoryMiddleware  # noqa: E402
 from core.runtime.middleware.monitor import MonitorMiddleware, apply_usage_patches  # noqa: E402
 from core.runtime.middleware.prompt_caching import PromptCachingMiddleware  # noqa: E402
 from core.runtime.middleware.queue import MessageQueueManager, SteeringMiddleware  # noqa: E402
-
-# Middleware imports (migrated paths)
 from core.runtime.middleware.spill_buffer import SpillBufferMiddleware  # noqa: E402
 from core.runtime.registry import ToolRegistry  # noqa: E402
 from core.runtime.runner import ToolRunner  # noqa: E402
