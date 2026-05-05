@@ -37,6 +37,13 @@ def _should_dispatch_chat_delivery(
     return message_type in {"human", "ai"} or (message_type == "notification" and (bool(mentions) or bool(addressed_to_user_ids)))
 
 
+def _max_message_seq(messages: list[dict[str, Any]]) -> int:
+    seqs = [int(message.get("seq") or 0) for message in messages]
+    if not seqs or max(seqs) <= 0:
+        raise RuntimeError("Unread chat message rows must include positive seq")
+    return max(seqs)
+
+
 class MessagingService:
     """Core messaging operations backed by Supabase repos."""
 
@@ -339,11 +346,11 @@ class MessagingService:
     def delete_for(self, message_id: str, user_id: str) -> None:
         self._messages.delete_for(message_id, user_id)
 
-    def mark_read(self, chat_id: str, user_id: str) -> None:
-        """Mark all messages in a chat as read for user."""
-        msgs = self._messages.list_by_chat(chat_id, limit=1, viewer_id=user_id)
-        last_read_seq = int(msgs[-1].get("seq") or 0) if msgs else 0
-        self._chat_members_repo.update_last_read(chat_id, user_id, last_read_seq)
+    def mark_read(self, chat_id: str, user_id: str, up_to_seq: int) -> None:
+        """Mark messages consumed up to a concrete sequence watermark."""
+        if up_to_seq < 0:
+            raise ValueError("up_to_seq must be >= 0")
+        self._chat_members_repo.update_last_read(chat_id, user_id, up_to_seq)
 
     # ------------------------------------------------------------------
     # Queries
@@ -374,7 +381,8 @@ class MessagingService:
     def read_unread(self, chat_id: str, user_id: str, consume: Callable[[list[dict[str, Any]]], Any]) -> Any:
         messages = self.list_unread(chat_id, user_id)
         result = consume(messages)
-        self.mark_read(chat_id, user_id)
+        if messages:
+            self.mark_read(chat_id, user_id, _max_message_seq(messages))
         return result
 
     def read_unread_message_responses(self, chat_id: str, user_id: str) -> list[dict[str, Any]]:
