@@ -66,6 +66,16 @@ def _parse_time_endpoint(s: str, now: float) -> float | None:
     raise ValueError(f"Cannot parse time '{s}'. Use '-2h', '-1d', '-30m', or '2026-03-20'.")
 
 
+def _max_message_seq(messages: list[dict]) -> int:
+    seqs = []
+    for message in messages:
+        seq = message.get("seq")
+        if type(seq) is not int:
+            raise RuntimeError("Chat message row is missing integer seq")
+        seqs.append(seq)
+    return max(seqs)
+
+
 class ChatToolService:
     """Registers chat tools into ToolRegistry (messaging module version)."""
 
@@ -343,7 +353,7 @@ class ChatToolService:
                 if not msgs:
                     return "No messages in that range."
                 rendered = self._format_msgs(msgs, eid)
-                self._messaging.mark_read(chat_id, eid)
+                self._messaging.mark_read(chat_id, eid, _max_message_seq(msgs))
                 return rendered
 
             rendered = self._messaging.read_unread(chat_id, eid, lambda msgs: self._format_msgs(msgs, eid) if msgs else "")
