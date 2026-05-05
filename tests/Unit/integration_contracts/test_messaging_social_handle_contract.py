@@ -2014,20 +2014,26 @@ def test_messaging_service_mark_read_resets_unread_count_via_last_read_seq_water
 
     assert before[0]["unread_count"] == 1
 
-    service.mark_read("chat-1", "human-user-1")
+    service.mark_read("chat-1", "human-user-1", 2)
 
     after = service.list_chats_for_user("human-user-1")
 
     assert after[0]["unread_count"] == 0
 
 
-def test_messaging_service_read_unread_consumes_messages_before_marking_latest_seq() -> None:
+def test_messaging_service_read_unread_marks_only_returned_unread_batch() -> None:
     calls: list[tuple[str, str, str]] = []
     service = MessagingService(
         chat_repo=SimpleNamespace(),
         chat_member_repo=SimpleNamespace(update_last_read=lambda _chat_id, user_id, seq: calls.append(("read", user_id, str(seq)))),
         messages_repo=SimpleNamespace(
-            list_unread=lambda chat_id, user_id: calls.append(("unread", chat_id, user_id)) or [],
+            list_unread=lambda chat_id, user_id: (
+                calls.append(("unread", chat_id, user_id))
+                or [
+                    {"id": "msg-2", "seq": 2, "content": "returned"},
+                    {"id": "msg-4", "seq": 4, "content": "returned"},
+                ]
+            ),
             list_by_chat=lambda chat_id, limit=50, viewer_id=None: calls.append(("latest", chat_id, viewer_id or "")) or [{"seq": 9}],
         ),
         user_repo=SimpleNamespace(get_by_id=lambda _uid: None),
@@ -2042,9 +2048,31 @@ def test_messaging_service_read_unread_consumes_messages_before_marking_latest_s
     assert result == []
     assert calls == [
         ("unread", "chat-1", "external-user-1"),
+        ("consume", "messages", "2"),
+        ("read", "external-user-1", "4"),
+    ]
+
+
+def test_messaging_service_read_unread_does_not_advance_when_no_unread_batch() -> None:
+    calls: list[tuple[str, str, str]] = []
+    service = MessagingService(
+        chat_repo=SimpleNamespace(),
+        chat_member_repo=SimpleNamespace(update_last_read=lambda _chat_id, user_id, seq: calls.append(("read", user_id, str(seq)))),
+        messages_repo=SimpleNamespace(
+            list_unread=lambda chat_id, user_id: calls.append(("unread", chat_id, user_id)) or [],
+        ),
+        user_repo=SimpleNamespace(get_by_id=lambda _uid: None),
+    )
+
+    service.read_unread(
+        "chat-1",
+        "external-user-1",
+        lambda messages: calls.append(("consume", "messages", str(len(messages)))),
+    )
+
+    assert calls == [
+        ("unread", "chat-1", "external-user-1"),
         ("consume", "messages", "0"),
-        ("latest", "chat-1", "external-user-1"),
-        ("read", "external-user-1", "9"),
     ]
 
 
@@ -2210,18 +2238,19 @@ def test_chat_tool_formats_agent_user_id_sender_as_agent_name() -> None:
 
 def test_read_messages_fails_before_mark_read_on_unknown_message_sender() -> None:
     registry = ToolRegistry()
-    marked: list[tuple[str, str]] = []
+    marked: list[tuple[str, str, int]] = []
     ChatToolService(
         registry=registry,
         chat_identity_id="human-user-1",
         messaging_service=_messaging_display_service(
             list_messages_by_time_range=lambda _chat_id, *, after=None, before=None: [
                 {
+                    "seq": 2,
                     "sender_id": "missing-user",
                     "content": f"after={after};before={before}",
                 }
             ],
-            mark_read=lambda chat_id, user_id: marked.append((chat_id, user_id)),
+            mark_read=lambda chat_id, user_id, up_to_seq: marked.append((chat_id, user_id, up_to_seq)),
         ),
     )
 
@@ -2237,13 +2266,13 @@ def test_read_messages_fails_before_mark_read_on_unknown_message_sender() -> Non
 
 def test_read_messages_fails_before_mark_read_on_invalid_message_row() -> None:
     registry = ToolRegistry()
-    marked: list[tuple[str, str]] = []
+    marked: list[tuple[str, str, int]] = []
     ChatToolService(
         registry=registry,
         chat_identity_id="human-user-1",
         messaging_service=_messaging_display_service(
             list_messages_by_time_range=lambda _chat_id, *, after=None, before=None: ["message-1"],
-            mark_read=lambda chat_id, user_id: marked.append((chat_id, user_id)),
+            mark_read=lambda chat_id, user_id, up_to_seq: marked.append((chat_id, user_id, up_to_seq)),
         ),
     )
 
@@ -2259,13 +2288,13 @@ def test_read_messages_fails_before_mark_read_on_invalid_message_row() -> None:
 
 def test_read_messages_fails_before_mark_read_on_invalid_history_collection() -> None:
     registry = ToolRegistry()
-    marked: list[tuple[str, str]] = []
+    marked: list[tuple[str, str, int]] = []
     ChatToolService(
         registry=registry,
         chat_identity_id="human-user-1",
         messaging_service=_messaging_display_service(
             list_messages_by_time_range=lambda _chat_id, *, after=None, before=None: {"sender_id": "agent-user-1"},
-            mark_read=lambda chat_id, user_id: marked.append((chat_id, user_id)),
+            mark_read=lambda chat_id, user_id, up_to_seq: marked.append((chat_id, user_id, up_to_seq)),
         ),
     )
 
@@ -2308,17 +2337,18 @@ def test_read_messages_fails_before_mark_read_on_invalid_unread_collection() -> 
 
 def test_read_messages_fails_before_mark_read_on_missing_message_content() -> None:
     registry = ToolRegistry()
-    marked: list[tuple[str, str]] = []
+    marked: list[tuple[str, str, int]] = []
     ChatToolService(
         registry=registry,
         chat_identity_id="human-user-1",
         messaging_service=_messaging_display_service(
             list_messages_by_time_range=lambda _chat_id, *, after=None, before=None: [
                 {
+                    "seq": 2,
                     "sender_id": "agent-user-1",
                 }
             ],
-            mark_read=lambda chat_id, user_id: marked.append((chat_id, user_id)),
+            mark_read=lambda chat_id, user_id, up_to_seq: marked.append((chat_id, user_id, up_to_seq)),
         ),
     )
 
@@ -2334,18 +2364,19 @@ def test_read_messages_fails_before_mark_read_on_missing_message_content() -> No
 
 def test_read_messages_fails_before_mark_read_on_invalid_message_content() -> None:
     registry = ToolRegistry()
-    marked: list[tuple[str, str]] = []
+    marked: list[tuple[str, str, int]] = []
     ChatToolService(
         registry=registry,
         chat_identity_id="human-user-1",
         messaging_service=_messaging_display_service(
             list_messages_by_time_range=lambda _chat_id, *, after=None, before=None: [
                 {
+                    "seq": 2,
                     "sender_id": "agent-user-1",
                     "content": None,
                 }
             ],
-            mark_read=lambda chat_id, user_id: marked.append((chat_id, user_id)),
+            mark_read=lambda chat_id, user_id, up_to_seq: marked.append((chat_id, user_id, up_to_seq)),
         ),
     )
 
@@ -2849,17 +2880,19 @@ def test_read_messages_uses_messaging_service_direct_chat_lookup_without_member_
 
 def test_read_messages_uses_messaging_service_time_range_history_without_messages_repo() -> None:
     registry = ToolRegistry()
+    marked: list[tuple[str, str, int]] = []
     ChatToolService(
         registry=registry,
         chat_identity_id="human-user-1",
         messaging_service=_messaging_display_service(
             list_messages_by_time_range=lambda _chat_id, *, after=None, before=None: [
                 {
+                    "seq": 4,
                     "sender_id": "agent-user-1",
                     "content": f"after={after};before={before}",
                 }
             ],
-            mark_read=lambda *_args, **_kwargs: None,
+            mark_read=lambda chat_id, user_id, up_to_seq: marked.append((chat_id, user_id, up_to_seq)),
         ),
     )
 
@@ -2869,6 +2902,7 @@ def test_read_messages_uses_messaging_service_time_range_history_without_message
     result = read_messages.handler(chat_id="chat-1", range="-1h:")
 
     assert "[Toad]: after=" in result
+    assert marked == [("chat-1", "human-user-1", 4)]
 
 
 def test_chat_tool_search_requires_direct_chat_for_agent_user_target() -> None:
