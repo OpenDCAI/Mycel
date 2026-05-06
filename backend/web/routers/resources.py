@@ -5,8 +5,9 @@ from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 
+from backend.identity.capabilities import Capability
 from backend.monitor.infrastructure.web import gateway as monitor_gateway
-from backend.web.core.dependencies import get_current_user_id
+from backend.web.core.dependencies import get_current_user_id, require_capability
 
 router = APIRouter(prefix="/api/resources", tags=["resources"])
 
@@ -15,6 +16,8 @@ router = APIRouter(prefix="/api/resources", tags=["resources"])
 async def resources_overview(
     user_id: Annotated[str, Depends(get_current_user_id)],
     request: Request,
+    *,
+    _capability: Annotated[None, Depends(require_capability(Capability.INSPECT_RESOURCES))],
 ) -> dict[str, Any]:
     try:
         return await asyncio.to_thread(

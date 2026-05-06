@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+from types import SimpleNamespace
 
 import pytest
 from fastapi import FastAPI, HTTPException
@@ -12,8 +13,9 @@ from backend.monitor.api.http import global_router
 from backend.monitor.infrastructure.read_models import resource_read_service as monitor_resource_read_service
 from backend.monitor.infrastructure.web import gateway as monitor_gateway
 from backend.sandboxes.resources import common as resource_common
-from backend.web.core.dependencies import get_current_user_id
+from backend.web.core.dependencies import get_current_user, get_current_user_id
 from backend.web.routers import resources as resources_router
+from storage.contracts import UserType
 
 
 class _State:
@@ -114,6 +116,7 @@ def test_resources_overview_maps_runtime_error_to_500(monkeypatch) -> None:
             resources_router.resources_overview(
                 user_id="user-1",
                 request=request,
+                _capability=None,
             )
         )
 
@@ -139,6 +142,30 @@ def test_monitor_resources_route_stays_global(monkeypatch) -> None:
 
     assert response.status_code == 200
     assert response.json()["providers"][0]["id"] == "global-daytona"
+
+
+def test_external_user_cannot_get_resource_overview_over_http(monkeypatch) -> None:
+    monkeypatch.setattr(
+        monitor_gateway,
+        "list_user_resource_providers",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("capability gate should run before monitor read")),
+    )
+    app = FastAPI()
+    app.state.auth_runtime_state = SimpleNamespace(
+        auth_service=SimpleNamespace(verify_token=lambda token: {"user_id": "external-1"} if token == "tok-external" else None)
+    )
+    app.state.user_repo = SimpleNamespace(
+        get_by_id=lambda user_id: (
+            SimpleNamespace(id=user_id, type=UserType.EXTERNAL, display_name="Codex Local") if user_id == "external-1" else None
+        )
+    )
+    app.include_router(resources_router.router)
+
+    with TestClient(app) as client:
+        response = client.get("/api/resources/overview", headers={"Authorization": "Bearer tok-external"})
+
+    assert response.status_code == 403
+    assert response.json()["detail"] == "Capability required: inspect_resources"
 
 
 def test_user_resource_projection_groups_visible_sandboxes_into_provider_cards(monkeypatch) -> None:
@@ -376,6 +403,7 @@ def test_resources_overview_route_surfaces_actor_first_user_payload(monkeypatch)
     test_app.state = _State()
     test_app.include_router(resources_router.router)
     test_app.dependency_overrides[get_current_user_id] = lambda: "owner-1"
+    test_app.dependency_overrides[get_current_user] = lambda: SimpleNamespace(id="owner-1", type=UserType.HUMAN, display_name="Owner")
 
     monkeypatch.setattr(
         resource_provider_boundary_service,

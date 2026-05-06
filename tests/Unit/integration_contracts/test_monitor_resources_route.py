@@ -1,3 +1,5 @@
+from types import SimpleNamespace
+
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -6,7 +8,7 @@ from backend.monitor.api.http import global_router
 from backend.monitor.application.use_cases import resources as monitor_resources_impl
 from backend.monitor.infrastructure.io import resource_io_service as monitor_resource_io_service
 from backend.monitor.infrastructure.web import gateway as monitor_gateway_impl
-from backend.web.core.dependencies import get_current_user_id
+from backend.web.core.dependencies import get_current_user, get_current_user_id
 from backend.web.routers import monitor_threads as monitor_threads_router
 from backend.web.routers import resources
 
@@ -17,6 +19,7 @@ def _app(*, include_product_resources: bool = False) -> FastAPI:
     app.include_router(monitor_threads_router.router, prefix="/api/monitor")
     if include_product_resources:
         app.include_router(resources.router)
+        app.dependency_overrides[get_current_user] = lambda: SimpleNamespace(id="owner-1", type="human", owner_profile=None)
         app.dependency_overrides[get_current_user_id] = lambda: "owner-1"
     return app
 

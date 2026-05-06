@@ -4,6 +4,7 @@ from typing import Annotated, Any
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
 from backend.identity.avatar.urls import avatar_url
+from backend.identity.capabilities import Capability
 from backend.sandboxes import provider_availability as sandbox_provider_availability
 from backend.sandboxes import user_reads as user_sandbox_reads
 from backend.sandboxes.inventory import init_providers_and_managers
@@ -12,7 +13,7 @@ from backend.sandboxes.runtime import mutations as sandbox_runtime_mutations
 from backend.sandboxes.runtime.reads import find_runtime_and_manager, load_all_sandbox_runtimes
 from backend.threads.projection import canonical_owner_threads
 from backend.threads.virtual_threads import is_virtual_thread_id
-from backend.web.core.dependencies import get_current_user_id
+from backend.web.core.dependencies import get_current_user_id, require_capability
 from storage.runtime import build_sandbox_monitor_repo as make_sandbox_monitor_repo
 
 router = APIRouter(prefix="/api/sandbox", tags=["sandbox"])
@@ -45,7 +46,9 @@ def _public_runtime_payload(row: dict[str, Any]) -> dict[str, Any]:
 
 
 @router.get("/types")
-async def list_sandbox_types() -> dict[str, Any]:
+async def list_sandbox_types(
+    _capability: Annotated[None, Depends(require_capability(Capability.INSPECT_RESOURCES))],
+) -> dict[str, Any]:
     """List available sandbox types."""
     # @@@sandbox-type-availability - this route reflects the current process
     # inventory contract: configured providers are either instantiated and
@@ -55,7 +58,9 @@ async def list_sandbox_types() -> dict[str, Any]:
 
 
 @router.get("/runtimes")
-async def list_sandbox_runtimes() -> dict[str, Any]:
+async def list_sandbox_runtimes(
+    _capability: Annotated[None, Depends(require_capability(Capability.INSPECT_RESOURCES))],
+) -> dict[str, Any]:
     """List all sandbox runtime rows across providers."""
     _, managers = await asyncio.to_thread(init_providers_and_managers)
     runtime_rows = await asyncio.to_thread(load_all_sandbox_runtimes, managers)
@@ -66,6 +71,8 @@ async def list_sandbox_runtimes() -> dict[str, Any]:
 async def list_my_sandboxes(
     user_id: Annotated[str, Depends(get_current_user_id)],
     request: Request,
+    *,
+    _capability: Annotated[None, Depends(require_capability(Capability.INSPECT_RESOURCES))],
 ) -> dict[str, Any]:
     thread_repo = getattr(request.app.state, "thread_repo", None)
     user_repo = getattr(request.app.state, "user_repo", None)
@@ -83,7 +90,12 @@ async def list_my_sandboxes(
 
 
 @router.get("/runtimes/{runtime_id}/metrics")
-async def get_sandbox_runtime_metrics(runtime_id: str, provider: str | None = Query(default=None)) -> dict[str, Any]:
+async def get_sandbox_runtime_metrics(
+    runtime_id: str,
+    provider: str | None = Query(default=None),
+    *,
+    _capability: Annotated[None, Depends(require_capability(Capability.INSPECT_RESOURCES))],
+) -> dict[str, Any]:
     """Get metrics for a specific sandbox runtime row."""
     try:
         return await asyncio.to_thread(
@@ -99,18 +111,33 @@ async def get_sandbox_runtime_metrics(runtime_id: str, provider: str | None = Qu
 
 
 @router.post("/runtimes/{runtime_id}/pause")
-async def pause_sandbox_runtime(runtime_id: str, provider: str | None = Query(default=None)) -> dict[str, Any]:
+async def pause_sandbox_runtime(
+    runtime_id: str,
+    provider: str | None = Query(default=None),
+    *,
+    _capability: Annotated[None, Depends(require_capability(Capability.USE_SANDBOX))],
+) -> dict[str, Any]:
     """Pause a sandbox runtime row."""
     return await _mutate_runtime_action(runtime_id, "pause", provider)
 
 
 @router.post("/runtimes/{runtime_id}/resume")
-async def resume_sandbox_runtime(runtime_id: str, provider: str | None = Query(default=None)) -> dict[str, Any]:
+async def resume_sandbox_runtime(
+    runtime_id: str,
+    provider: str | None = Query(default=None),
+    *,
+    _capability: Annotated[None, Depends(require_capability(Capability.USE_SANDBOX))],
+) -> dict[str, Any]:
     """Resume a paused sandbox runtime row."""
     return await _mutate_runtime_action(runtime_id, "resume", provider)
 
 
 @router.delete("/runtimes/{runtime_id}")
-async def destroy_sandbox_runtime(runtime_id: str, provider: str | None = Query(default=None)) -> dict[str, Any]:
+async def destroy_sandbox_runtime(
+    runtime_id: str,
+    provider: str | None = Query(default=None),
+    *,
+    _capability: Annotated[None, Depends(require_capability(Capability.USE_SANDBOX))],
+) -> dict[str, Any]:
     """Destroy a sandbox runtime row."""
     return await _mutate_runtime_action(runtime_id, "destroy", provider)
