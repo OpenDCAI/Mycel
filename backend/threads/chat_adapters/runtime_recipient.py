@@ -21,6 +21,8 @@ def select_runtime_notification_recipient(
         return AgentChatRecipient(agent_user_id=user_id, runtime_source="external")
     if user_type != "agent":
         return None
+    if activity_reader is None:
+        raise RuntimeError(f"Managed agent runtime is unavailable for {context} wake: {user_id}")
     thread_id = select_runtime_thread_for_recipient(
         user_id,
         thread_repo=thread_repo,

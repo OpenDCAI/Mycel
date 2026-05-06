@@ -22,8 +22,6 @@ _DECISION_VERBS: dict[RelationshipEvent, str] = {
 
 
 def make_relationship_request_notification_fn(app: Any, *, activity_reader: Any, thread_repo: Any, user_repo: Any):
-    if activity_reader is None:
-        raise RuntimeError("Agent runtime thread activity reader is not configured")
     loop = asyncio.get_running_loop()
 
     async def notify_runtime(row: RelationshipRow) -> None:
@@ -69,8 +67,6 @@ def make_relationship_request_notification_fn(app: Any, *, activity_reader: Any,
 
 
 def make_relationship_decision_notification_fn(app: Any, *, activity_reader: Any, thread_repo: Any, user_repo: Any):
-    if activity_reader is None:
-        raise RuntimeError("Agent runtime thread activity reader is not configured")
     loop = asyncio.get_running_loop()
 
     async def notify_runtime(row: RelationshipRow, event: RelationshipEvent) -> None:
