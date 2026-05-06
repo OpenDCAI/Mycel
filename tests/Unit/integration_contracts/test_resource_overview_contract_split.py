@@ -133,6 +133,7 @@ def test_monitor_resources_route_stays_global(monkeypatch) -> None:
 
     test_app = FastAPI()
     test_app.include_router(global_router.router, prefix="/api/monitor")
+    test_app.dependency_overrides[get_current_user] = lambda: SimpleNamespace(id="user-1", type=UserType.HUMAN, owner_profile=None)
     test_app.dependency_overrides[get_current_user_id] = lambda: "user-1"
     try:
         with TestClient(test_app) as client:
