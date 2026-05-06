@@ -4,6 +4,7 @@ import logging
 import os
 import time
 from collections.abc import Callable
+from uuid import uuid4
 
 import jwt
 
@@ -11,7 +12,7 @@ from backend.identity.avatar.files import process_and_save_avatar
 from backend.identity.contact_bootstrap import ensure_owner_agent_contact
 from backend.sandboxes.recipe_bootstrap import seed_default_recipes
 from config.agent_config_types import AgentConfig
-from storage.contracts import InviteCodeRepo, UserRepo, UserRow, UserType
+from storage.contracts import InviteCodeRepo, OwnerProfile, UserRepo, UserRow, UserType
 from storage.providers.supabase import _query as q
 
 logger = logging.getLogger(__name__)
@@ -232,6 +233,48 @@ class AuthService:
                 "name": external_display_name,
                 "type": "external",
                 "created_by_user_id": created_by_user_id,
+            },
+        }
+
+    def create_guest_owner_token(self, *, display_name: str | None = None) -> dict:
+        jwt_secret = os.getenv("SUPABASE_JWT_SECRET")
+        if not jwt_secret:
+            raise RuntimeError("SUPABASE_JWT_SECRET env var required for guest owner token creation.")
+
+        guest_user_id = f"guest-{uuid4()}"
+        if self._users.get_by_id(guest_user_id) is not None:
+            raise ValueError("guest user id collision")
+        guest_display_name = (display_name or "").strip() or "Guest"
+        now = time.time()
+        self._users.create(
+            UserRow(
+                id=guest_user_id,
+                type=UserType.HUMAN,
+                display_name=guest_display_name,
+                owner_profile=OwnerProfile.GUEST,
+                created_at=now,
+            )
+        )
+        token = jwt.encode(
+            {
+                "sub": guest_user_id,
+                "iat": int(now),
+                "mycel_user_type": "human",
+                "mycel_owner_profile": OwnerProfile.GUEST.value,
+            },
+            jwt_secret,
+            algorithm=SUPABASE_JWT_ALGORITHM,
+        )
+        return {
+            "token": token,
+            "user": {
+                "id": guest_user_id,
+                "name": guest_display_name,
+                "type": "human",
+                "owner_profile": OwnerProfile.GUEST.value,
+                "email": None,
+                "mycel_id": None,
+                "avatar": None,
             },
         }
 

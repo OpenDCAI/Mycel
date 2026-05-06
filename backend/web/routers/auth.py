@@ -7,7 +7,13 @@ from pydantic import BaseModel
 
 from backend.identity.auth.dependencies import _get_auth_service
 from backend.identity.auth.service import ExternalUserAlreadyExistsError
-from backend.web.core.dependencies import get_app, get_current_user, get_current_user_id
+from backend.identity.capabilities import Capability
+from backend.web.core.dependencies import (
+    get_app,
+    get_current_user,
+    get_current_user_id,
+    require_capability,
+)
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
@@ -78,6 +84,19 @@ async def login(payload: LoginRequest, app: Annotated[Any, Depends(get_app)]) ->
     )
 
 
+class CreateGuestOwnerRequest(BaseModel):
+    display_name: str | None = None
+
+
+@router.post("/guest")
+async def create_guest_owner(payload: CreateGuestOwnerRequest, app: Annotated[Any, Depends(get_app)]) -> dict:
+    return await _call_auth_service(
+        app,
+        400,
+        lambda service: service.create_guest_owner_token(display_name=payload.display_name),
+    )
+
+
 class CreateExternalUserRequest(BaseModel):
     user_id: str
     display_name: str
@@ -86,12 +105,14 @@ class CreateExternalUserRequest(BaseModel):
 @router.get("/me")
 async def me(user: Annotated[Any, Depends(get_current_user)]) -> dict:
     user_type = getattr(user.type, "value", user.type)
+    owner_profile = getattr(user, "owner_profile", None)
     return {
         "id": user.id,
         "name": user.display_name,
         "type": user_type,
         "email": user.email,
         "mycel_id": user.mycel_id,
+        "owner_profile": getattr(owner_profile, "value", owner_profile),
         "avatar": user.avatar,
     }
 
@@ -101,6 +122,8 @@ async def create_external_user(
     payload: CreateExternalUserRequest,
     app: Annotated[Any, Depends(get_app)],
     current_user_id: Annotated[str, Depends(get_current_user_id)],
+    *,
+    _capability: Annotated[None, Depends(require_capability(Capability.CREATE_EXTERNAL_USER))],
 ) -> dict:
     try:
         return await asyncio.to_thread(
