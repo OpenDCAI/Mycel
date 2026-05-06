@@ -10,6 +10,7 @@ from backend.monitor.api.http import execution_target as monitor_execution_targe
 from backend.monitor.app import lifespan as monitor_app_lifespan
 from backend.monitor.app import main as monitor_app_main
 from backend.monitor.infrastructure.web import gateway as monitor_gateway
+from storage.contracts import UserType
 
 app = monitor_app_main.app
 
@@ -35,7 +36,7 @@ def test_monitor_app_mounts_only_global_monitor_routes(monkeypatch: pytest.Monke
 
 
 def test_monitor_app_accepts_evaluation_batch_create(monkeypatch: pytest.MonkeyPatch):
-    user_repo = SimpleNamespace(get_by_id=lambda user_id: {"user_id": user_id})
+    user_repo = SimpleNamespace(get_by_id=lambda user_id: SimpleNamespace(id=user_id, type=UserType.HUMAN, owner_profile=None))
     monitor_storage = SimpleNamespace(
         storage_container=SimpleNamespace(user_repo=lambda: user_repo, contact_repo=lambda: object()),
     )
@@ -101,7 +102,7 @@ def test_monitor_app_rejects_deleted_user_for_evaluation_batch_create(monkeypatc
 
 
 def test_monitor_app_accepts_evaluation_batch_start(monkeypatch: pytest.MonkeyPatch):
-    user_repo = SimpleNamespace(get_by_id=lambda user_id: {"user_id": user_id})
+    user_repo = SimpleNamespace(get_by_id=lambda user_id: SimpleNamespace(id=user_id, type=UserType.HUMAN, owner_profile=None))
     monitor_storage = SimpleNamespace(
         storage_container=SimpleNamespace(user_repo=lambda: user_repo, contact_repo=lambda: object()),
     )
@@ -143,7 +144,7 @@ def test_monitor_app_accepts_evaluation_batch_start(monkeypatch: pytest.MonkeyPa
 
 
 def test_monitor_app_maps_missing_remote_execution_target_to_503(monkeypatch: pytest.MonkeyPatch):
-    user_repo = SimpleNamespace(get_by_id=lambda user_id: {"user_id": user_id})
+    user_repo = SimpleNamespace(get_by_id=lambda user_id: SimpleNamespace(id=user_id, type=UserType.HUMAN, owner_profile=None))
     monitor_storage = SimpleNamespace(
         storage_container=SimpleNamespace(user_repo=lambda: user_repo, contact_repo=lambda: object()),
     )

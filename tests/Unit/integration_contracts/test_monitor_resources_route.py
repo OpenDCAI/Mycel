@@ -11,16 +11,17 @@ from backend.monitor.infrastructure.web import gateway as monitor_gateway_impl
 from backend.web.core.dependencies import get_current_user, get_current_user_id
 from backend.web.routers import monitor_threads as monitor_threads_router
 from backend.web.routers import resources
+from storage.contracts import UserType
 
 
 def _app(*, include_product_resources: bool = False) -> FastAPI:
     app = FastAPI()
     app.include_router(global_router.router, prefix="/api/monitor")
     app.include_router(monitor_threads_router.router, prefix="/api/monitor")
+    app.dependency_overrides[get_current_user] = lambda: SimpleNamespace(id="owner-1", type=UserType.HUMAN, owner_profile=None)
+    app.dependency_overrides[get_current_user_id] = lambda: "owner-1"
     if include_product_resources:
         app.include_router(resources.router)
-        app.dependency_overrides[get_current_user] = lambda: SimpleNamespace(id="owner-1", type="human", owner_profile=None)
-        app.dependency_overrides[get_current_user_id] = lambda: "owner-1"
     return app
 
 
@@ -145,6 +146,35 @@ def test_monitor_dashboard_uses_service_summaries(monkeypatch):
     }
 
 
+@pytest.mark.parametrize(
+    ("method", "path", "body", "detail"),
+    [
+        ("get", "/api/monitor/resources", None, "Capability required: inspect_resources"),
+        ("get", "/api/monitor/sandboxes", None, "Capability required: inspect_resources"),
+        ("get", "/api/monitor/dashboard", None, "Capability required: inspect_resources"),
+        ("post", "/api/monitor/resources/refresh", None, "Capability required: use_sandbox"),
+        ("post", "/api/monitor/sandboxes/sandbox-1/cleanup", None, "Capability required: use_sandbox"),
+        (
+            "post",
+            "/api/monitor/evaluation/batches",
+            {"agent_user_id": "agent-1", "scenario_ids": ["scenario-1"]},
+            "Capability required: use_sandbox",
+        ),
+    ],
+)
+def test_guest_owner_cannot_use_monitor_control_plane(method, path, body, detail):
+    app = FastAPI()
+    app.include_router(global_router.router, prefix="/api/monitor")
+    app.dependency_overrides[get_current_user] = lambda: SimpleNamespace(id="guest-1", type=UserType.HUMAN, owner_profile="guest")
+    app.dependency_overrides[get_current_user_id] = lambda: "guest-1"
+
+    with TestClient(app) as client:
+        response = getattr(client, method)(path, json=body) if body is not None else getattr(client, method)(path)
+
+    assert response.status_code == 403
+    assert response.json()["detail"] == detail
+
+
 def test_global_monitor_router_accepts_evaluation_batch_create(monkeypatch):
     monkeypatch.setattr(
         monitor_gateway_impl,
@@ -153,6 +183,7 @@ def test_global_monitor_router_accepts_evaluation_batch_create(monkeypatch):
     )
     app = FastAPI()
     app.include_router(global_router.router, prefix="/api/monitor")
+    app.dependency_overrides[get_current_user] = lambda: SimpleNamespace(id="owner-1", type=UserType.HUMAN, owner_profile=None)
     app.dependency_overrides[get_current_user_id] = lambda: "owner-1"
     try:
         with TestClient(app) as client:

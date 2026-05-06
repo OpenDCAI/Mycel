@@ -5,10 +5,15 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, R
 from pydantic import BaseModel, Field
 
 from backend.identity.auth.user_resolution import get_current_user_id
+from backend.identity.capabilities import Capability
 from backend.monitor.api.http.execution_target import resolve_monitor_evaluation_base_url
 from backend.monitor.infrastructure.web import gateway as monitor_gateway
+from backend.web.core.dependencies import require_capability
 
 router = APIRouter()
+
+MonitorReadCapability = Annotated[None, Depends(require_capability(Capability.INSPECT_RESOURCES))]
+MonitorControlCapability = Annotated[None, Depends(require_capability(Capability.USE_SANDBOX))]
 
 
 class EvaluationBatchCreateRequest(BaseModel):
@@ -54,62 +59,62 @@ async def _resource_io(fn, *args):
 
 
 @router.get("/sandboxes")
-def sandboxes_snapshot():
+def sandboxes_snapshot(_capability: MonitorReadCapability):
     return monitor_gateway.list_sandboxes()
 
 
 @router.get("/provider-orphan-runtimes")
-def provider_orphan_runtimes_snapshot():
+def provider_orphan_runtimes_snapshot(_capability: MonitorReadCapability):
     return monitor_gateway.list_provider_orphan_runtimes()
 
 
 @router.get("/providers/{provider_id}")
-def provider_detail_snapshot(provider_id: str):
+def provider_detail_snapshot(provider_id: str, _capability: MonitorReadCapability):
     return _or_404(monitor_gateway.get_provider_detail, provider_id)
 
 
 @router.get("/sandboxes/{sandbox_id}")
-def sandbox_detail_snapshot(sandbox_id: str):
+def sandbox_detail_snapshot(sandbox_id: str, _capability: MonitorReadCapability):
     return _or_404(monitor_gateway.get_sandbox_detail, sandbox_id)
 
 
 @router.post("/sandboxes/{sandbox_id}/cleanup")
-def sandbox_cleanup_action(sandbox_id: str):
+def sandbox_cleanup_action(sandbox_id: str, _capability: MonitorControlCapability):
     return _or_404(monitor_gateway.request_sandbox_cleanup, sandbox_id)
 
 
 @router.post("/provider-orphan-runtimes/{provider_id}/{runtime_id}/cleanup")
-def provider_orphan_runtime_cleanup_action(provider_id: str, runtime_id: str):
+def provider_orphan_runtime_cleanup_action(provider_id: str, runtime_id: str, _capability: MonitorControlCapability):
     return monitor_gateway.request_provider_orphan_runtime_cleanup(provider_id, runtime_id)
 
 
 @router.get("/operations/{operation_id}")
-def operation_detail_snapshot(operation_id: str):
+def operation_detail_snapshot(operation_id: str, _capability: MonitorReadCapability):
     return _or_404_or_503(monitor_gateway.get_operation_detail, operation_id)
 
 
 @router.get("/runtimes/{runtime_id}")
-def runtime_detail_snapshot(runtime_id: str):
+def runtime_detail_snapshot(runtime_id: str, _capability: MonitorReadCapability):
     return _or_404(monitor_gateway.get_runtime_detail, runtime_id)
 
 
 @router.get("/sandbox-configs")
-def sandbox_configs_snapshot():
+def sandbox_configs_snapshot(_capability: MonitorReadCapability):
     return monitor_gateway.get_sandbox_configs()
 
 
 @router.get("/dashboard")
-def dashboard_snapshot():
+def dashboard_snapshot(_capability: MonitorReadCapability):
     return monitor_gateway.get_dashboard()
 
 
 @router.get("/evaluation")
-def evaluation_snapshot():
+def evaluation_snapshot(_capability: MonitorReadCapability):
     return monitor_gateway.get_evaluation_workbench()
 
 
 @router.get("/evaluation/batches")
-def evaluation_batches_snapshot(limit: int = Query(default=50, ge=1, le=200)):
+def evaluation_batches_snapshot(_capability: MonitorReadCapability, limit: int = Query(default=50, ge=1, le=200)):
     return monitor_gateway.get_evaluation_batches(limit=limit)
 
 
@@ -117,6 +122,7 @@ def evaluation_batches_snapshot(limit: int = Query(default=50, ge=1, le=200)):
 def evaluation_batch_create_action(
     payload: EvaluationBatchCreateRequest,
     user_id: Annotated[str, Depends(get_current_user_id)],
+    _capability: MonitorControlCapability,
 ):
     return monitor_gateway.create_evaluation_batch(
         submitted_by_user_id=user_id,
@@ -133,6 +139,7 @@ def evaluation_batch_start_action(
     request: Request,
     background_tasks: BackgroundTasks,
     _user_id: Annotated[str, Depends(get_current_user_id)],
+    _capability: MonitorControlCapability,
 ):
     try:
         return monitor_gateway.start_evaluation_batch(
@@ -150,36 +157,36 @@ def evaluation_batch_start_action(
 
 
 @router.get("/evaluation/scenarios")
-def evaluation_scenarios_snapshot():
+def evaluation_scenarios_snapshot(_capability: MonitorReadCapability):
     return monitor_gateway.get_evaluation_scenarios()
 
 
 @router.get("/evaluation/batches/{batch_id}")
-def evaluation_batch_detail_snapshot(batch_id: str):
+def evaluation_batch_detail_snapshot(batch_id: str, _capability: MonitorReadCapability):
     return _or_404(monitor_gateway.get_evaluation_batch_detail, batch_id)
 
 
 @router.get("/evaluation/runs/{run_id}")
-def evaluation_run_detail_snapshot(run_id: str):
+def evaluation_run_detail_snapshot(run_id: str, _capability: MonitorReadCapability):
     return _or_404(monitor_gateway.get_evaluation_run_detail, run_id)
 
 
 @router.get("/resources")
-def resources_overview():
+def resources_overview(_capability: MonitorReadCapability):
     return monitor_gateway.get_resource_overview()
 
 
 @router.post("/resources/refresh")
-async def resources_refresh():
+async def resources_refresh(_capability: MonitorControlCapability):
     # @@@refresh-off-main-loop - provider I/O stays off event loop to avoid request head-of-line blocking.
     return await asyncio.to_thread(monitor_gateway.refresh_resource_overview)
 
 
 @router.get("/sandboxes/{sandbox_id}/browse")
-async def sandbox_browse(sandbox_id: str, path: str = Query(default="/")):
+async def sandbox_browse(sandbox_id: str, _capability: MonitorReadCapability, path: str = Query(default="/")):
     return await _resource_io(monitor_gateway.browse_sandbox, sandbox_id, path)
 
 
 @router.get("/sandboxes/{sandbox_id}/read")
-async def sandbox_read_file(sandbox_id: str, path: str = Query(...)):
+async def sandbox_read_file(sandbox_id: str, _capability: MonitorReadCapability, path: str = Query(...)):
     return await _resource_io(monitor_gateway.read_sandbox, sandbox_id, path)
