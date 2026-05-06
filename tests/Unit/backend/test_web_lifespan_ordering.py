@@ -2,6 +2,7 @@ from types import SimpleNamespace
 
 import pytest
 
+from backend.web.app_factory import RuntimeProfile
 from backend.web.core import lifespan as web_lifespan
 
 
@@ -293,6 +294,102 @@ async def test_web_lifespan_passes_borrowed_contact_repo_into_auth_runtime(monke
 
     async with web_lifespan.lifespan(app):
         assert seen == [contact_repo]
+
+
+@pytest.mark.asyncio
+async def test_communication_lifespan_uses_external_inbox_runtime_without_managed_threads(monkeypatch):
+    call_log: list[str] = []
+    returned_messaging_service = SimpleNamespace(set_delivery_fn=lambda _fn: None)
+    returned_relationship_service = object()
+    returned_chat_join_request_service = object()
+    returned_contact_repo = object()
+
+    def _attach_chat_runtime(app, _storage_container, *, user_repo, thread_repo):
+        call_log.append("chat")
+        return SimpleNamespace(
+            contact_repo=returned_contact_repo,
+            typing_tracker=object(),
+            messaging_service=returned_messaging_service,
+            relationship_service=returned_relationship_service,
+            chat_join_request_service=returned_chat_join_request_service,
+        )
+
+    def _attach_auth_runtime(_app, *, storage_state, contact_repo):
+        call_log.append("auth")
+        assert contact_repo is returned_contact_repo
+        return object()
+
+    def _attach_runtime_inbox_runtime(app, _storage_container, *, messaging_service):
+        call_log.append("runtime-inbox")
+        assert messaging_service is returned_messaging_service
+        app.state.agent_pool = {}
+        return SimpleNamespace(activity_reader=None)
+
+    def _attach_threads_runtime(*_args, **_kwargs):
+        raise AssertionError("communication profile must not bootstrap managed-agent threads runtime")
+
+    def _wire_chat_delivery(_app, *, messaging_service, activity_reader, thread_repo):
+        call_log.append("wire-chat")
+        assert messaging_service is returned_messaging_service
+        assert activity_reader is None
+
+    def _wire_relationship_request_notifications(_app, *, relationship_service, activity_reader, thread_repo, user_repo):
+        call_log.append("wire-relationship")
+        assert relationship_service is returned_relationship_service
+        assert activity_reader is None
+
+    def _wire_relationship_decision_notifications(_app, *, relationship_service, activity_reader, thread_repo, user_repo):
+        call_log.append("wire-relationship-decision")
+        assert relationship_service is returned_relationship_service
+        assert activity_reader is None
+
+    def _wire_chat_join_request_notifications(_app, *, chat_join_request_service, activity_reader, thread_repo, user_repo):
+        call_log.append("wire-chat-join")
+        assert chat_join_request_service is returned_chat_join_request_service
+        assert activity_reader is None
+
+    _patch_lifespan_runtime_contract(
+        monkeypatch,
+        attach_chat_runtime=_attach_chat_runtime,
+        attach_auth_runtime=_attach_auth_runtime,
+        attach_threads_runtime=_attach_threads_runtime,
+        wire_chat_delivery=_wire_chat_delivery,
+        wire_relationship_request_notifications=_wire_relationship_request_notifications,
+        wire_relationship_decision_notifications=_wire_relationship_decision_notifications,
+        wire_chat_join_request_notifications=_wire_chat_join_request_notifications,
+    )
+    monkeypatch.setattr(
+        web_lifespan,
+        "_require_web_runtime_contract",
+        lambda: (_ for _ in ()).throw(AssertionError("communication profile must not require managed runtime config")),
+    )
+
+    async def _validate_must_not_run():
+        raise AssertionError("communication profile must not validate managed runtime checkpointer")
+
+    monkeypatch.setattr(web_lifespan, "_validate_web_checkpointer_contract", _validate_must_not_run)
+    monkeypatch.setattr("backend.threads.bootstrap.attach_runtime_inbox_runtime", _attach_runtime_inbox_runtime)
+    monkeypatch.setattr(
+        "backend.threads.pool.idle_reaper.idle_reaper_loop",
+        lambda _app: (_ for _ in ()).throw(AssertionError("idle reaper must stay off in communication profile")),
+    )
+    monkeypatch.setattr(
+        "core.runtime.langgraph_checkpoint_store.agent_checkpoint_saver_from_conn_string",
+        lambda _pg_url: (_ for _ in ()).throw(AssertionError("communication profile must not initialize checkpointer")),
+    )
+
+    app = SimpleNamespace(state=SimpleNamespace(runtime_profile=RuntimeProfile.COMMUNICATION))
+
+    async with web_lifespan.lifespan(app):
+        assert call_log == [
+            "chat",
+            "auth",
+            "runtime-inbox",
+            "wire-chat",
+            "wire-relationship",
+            "wire-relationship-decision",
+            "wire-chat-join",
+        ]
 
 
 async def _never():

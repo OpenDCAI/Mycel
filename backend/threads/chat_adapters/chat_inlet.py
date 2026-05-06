@@ -22,8 +22,6 @@ logger = logging.getLogger(__name__)
 def make_chat_delivery_fn(app: Any, *, activity_reader: Any, thread_repo: Any):
     import asyncio
 
-    if activity_reader is None:
-        raise RuntimeError("Agent runtime thread activity reader is not configured")
     loop = asyncio.get_running_loop()
 
     async def deliver_to_runtime_gateway(request: ChatDeliveryRequest) -> None:
@@ -46,6 +44,8 @@ def make_chat_delivery_fn(app: Any, *, activity_reader: Any, thread_repo: Any):
             runtime_source = "external"
             thread_id = None
         elif recipient_type == "agent":
+            if activity_reader is None:
+                raise RuntimeError(f"Managed agent runtime is unavailable for chat delivery to {request.recipient_id}")
             runtime_source = "mycel"
             thread_id = select_runtime_thread_for_recipient(
                 request.recipient_id,

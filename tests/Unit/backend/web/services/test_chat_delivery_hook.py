@@ -236,16 +236,71 @@ async def test_chat_delivery_hook_requires_recipient_user_id() -> None:
     assert gateway.called is False
 
 
-def test_make_chat_delivery_fn_requires_activity_reader():
-    app = SimpleNamespace(
-        state=SimpleNamespace(
-            threads_runtime_state=SimpleNamespace(agent_runtime_gateway=object(), activity_reader=None),
-        )
+@pytest.mark.asyncio
+async def test_chat_delivery_hook_routes_external_user_without_managed_activity_reader() -> None:
+    class RecordingGateway:
+        envelope = None
+
+        async def dispatch_chat(self, envelope):
+            self.envelope = envelope
+
+    gateway = RecordingGateway()
+    app = SimpleNamespace(state=SimpleNamespace(threads_runtime_state=SimpleNamespace(agent_runtime_gateway=gateway)))
+    deliver = owner_chat_inlet.make_chat_delivery_fn(
+        app,
+        activity_reader=None,
+        thread_repo=object(),
+    )
+    request = ChatDeliveryRequest(
+        recipient_id="external-user-1",
+        recipient_user=SimpleNamespace(id="external-user-1", type="external"),
+        content="hello",
+        sender_name="Human",
+        sender_type="human",
+        chat_id="chat-1",
+        sender_id="human-user-1",
+        sender_avatar_url=None,
+        unread_count=2,
+        signal=None,
     )
 
-    with pytest.raises(RuntimeError, match="Agent runtime thread activity reader is not configured"):
-        owner_chat_inlet.make_chat_delivery_fn(
-            app,
-            activity_reader=None,
-            thread_repo=object(),
-        )
+    await asyncio.to_thread(deliver, request)
+
+    assert gateway.envelope is not None
+    assert gateway.envelope.recipient.agent_user_id == "external-user-1"
+    assert gateway.envelope.recipient.runtime_source == "external"
+    assert gateway.envelope.recipient.thread_id is None
+
+
+@pytest.mark.asyncio
+async def test_chat_delivery_hook_fails_loudly_for_managed_agent_without_activity_reader() -> None:
+    class RecordingGateway:
+        called = False
+
+        async def dispatch_chat(self, _envelope):
+            self.called = True
+
+    gateway = RecordingGateway()
+    app = SimpleNamespace(state=SimpleNamespace(threads_runtime_state=SimpleNamespace(agent_runtime_gateway=gateway)))
+    deliver = owner_chat_inlet.make_chat_delivery_fn(
+        app,
+        activity_reader=None,
+        thread_repo=object(),
+    )
+    request = ChatDeliveryRequest(
+        recipient_id="agent-user-1",
+        recipient_user=SimpleNamespace(id="agent-user-1", type="agent"),
+        content="hello",
+        sender_name="Human",
+        sender_type="human",
+        chat_id="chat-1",
+        sender_id="human-user-1",
+        sender_avatar_url=None,
+        unread_count=2,
+        signal=None,
+    )
+
+    with pytest.raises(RuntimeError, match="Managed agent runtime is unavailable for chat delivery to agent-user-1"):
+        await asyncio.to_thread(deliver, request)
+
+    assert gateway.called is False

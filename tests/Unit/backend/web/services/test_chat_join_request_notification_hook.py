@@ -90,7 +90,7 @@ async def test_chat_join_rejection_notification_dispatches_runtime_notification_
     )
     notify = chat_join_inlet.make_chat_join_rejection_notification_fn(
         _hook_app(gateway),
-        activity_reader=SimpleNamespace(list_active_threads_for_agent=lambda _agent_user_id: []),
+        activity_reader=None,
         thread_repo=SimpleNamespace(get_by_user_id=lambda _uid: None, list_by_agent_user=lambda _uid: []),
         user_repo=user_repo,
     )

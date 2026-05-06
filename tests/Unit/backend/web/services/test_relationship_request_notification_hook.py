@@ -122,7 +122,7 @@ async def test_relationship_request_notification_dispatches_external_runtime_not
     )
     notify = relationship_inlet.make_relationship_request_notification_fn(
         _hook_app(gateway),
-        activity_reader=SimpleNamespace(list_active_threads_for_agent=lambda _agent_user_id: []),
+        activity_reader=None,
         thread_repo=SimpleNamespace(get_by_user_id=lambda _uid: None, list_by_agent_user=lambda _uid: []),
         user_repo=user_repo,
     )
@@ -274,7 +274,7 @@ async def test_relationship_decision_notification_dispatches_external_runtime_no
     )
     notify = relationship_inlet.make_relationship_decision_notification_fn(
         _hook_app(gateway),
-        activity_reader=SimpleNamespace(list_active_threads_for_agent=lambda _agent_user_id: []),
+        activity_reader=None,
         thread_repo=SimpleNamespace(get_by_user_id=lambda _uid: None, list_by_agent_user=lambda _uid: []),
         user_repo=user_repo,
     )
