@@ -76,7 +76,14 @@ class SupabaseChatMemberRepo:
         return res.data[0] if res.data else None
 
     def update_last_read(self, chat_id: str, user_id: str, last_read_seq: int) -> None:
-        self._t().update({"last_read_seq": last_read_seq}).eq("chat_id", chat_id).eq("user_id", user_id).execute()
+        (
+            self._t()
+            .update({"last_read_seq": last_read_seq})
+            .eq("chat_id", chat_id)
+            .eq("user_id", user_id)
+            .lt("last_read_seq", int(last_read_seq))
+            .execute()
+        )
 
     def last_read_seq(self, chat_id: str, user_id: str) -> int:
         member_res = self._t().select("last_read_seq").eq("chat_id", chat_id).eq("user_id", user_id).limit(1).execute()

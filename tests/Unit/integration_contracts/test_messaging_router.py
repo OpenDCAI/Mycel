@@ -1002,12 +1002,31 @@ def test_mark_read_rejects_non_member_user() -> None:
     with pytest.raises(HTTPException) as exc_info:
         chats_router.mark_read(
             "chat-1",
+            body=chats_router.MarkReadBody(up_to_seq=7),
             user_id="external-user-1",
             messaging_service=messaging_service,
         )
 
     assert exc_info.value.status_code == 403
     assert exc_info.value.detail == "Not a participant of this chat"
+
+
+def test_mark_read_requires_explicit_consumed_sequence() -> None:
+    calls: list[tuple[str, str, int]] = []
+    messaging_service = SimpleNamespace(
+        is_chat_member=lambda _chat_id, _user_id: True,
+        mark_read=lambda chat_id, user_id, up_to_seq: calls.append((chat_id, user_id, up_to_seq)),
+    )
+
+    result = chats_router.mark_read(
+        "chat-1",
+        body=chats_router.MarkReadBody(up_to_seq=7),
+        user_id="external-user-1",
+        messaging_service=messaging_service,
+    )
+
+    assert result == {"status": "ok"}
+    assert calls == [("chat-1", "external-user-1", 7)]
 
 
 def test_create_chat_accepts_agent_user_ids_for_group_participants() -> None:

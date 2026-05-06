@@ -50,6 +50,12 @@ class MuteChatBody(BaseModel):
     mute_until: float | None = None
 
 
+class MarkReadBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    up_to_seq: int = Field(ge=0)
+
+
 class ChatJoinRequestBody(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -355,12 +361,13 @@ def delete_message_for_self(
 @router.post("/{chat_id}/read")
 def mark_read(
     chat_id: str,
+    body: MarkReadBody,
     user_id: Annotated[str, Depends(get_current_user_id)],
     messaging_service: Annotated[Any, Depends(get_messaging_service)],
 ):
     if not messaging_service.is_chat_member(chat_id, user_id):
         raise HTTPException(403, "Not a participant of this chat")
-    messaging_service.mark_read(chat_id, user_id)
+    messaging_service.mark_read(chat_id, user_id, body.up_to_seq)
     return {"status": "ok"}
 
 
