@@ -211,7 +211,7 @@ class SupabaseMessagesRepo:
         res = q.execute()
         rows = list(reversed(res.data or []))
         if viewer_id:
-            rows = [r for r in rows if self._is_visible_to(r, viewer_id) and viewer_id not in (r.get("deleted_for") or [])]
+            rows = [r for r in rows if viewer_id not in (r.get("deleted_for") or [])]
             rows = rows[-limit:]
         return rows
 
@@ -234,7 +234,7 @@ class SupabaseMessagesRepo:
         )
         for row in rows:
             chat_id = str(row.get("chat_id") or "")
-            if viewer_id and (not self._is_visible_to(row, viewer_id) or viewer_id in (row.get("deleted_for") or [])):
+            if viewer_id and viewer_id in (row.get("deleted_for") or []):
                 continue
             if chat_id and chat_id not in latest_by_chat:
                 latest_by_chat[chat_id] = row
@@ -248,7 +248,7 @@ class SupabaseMessagesRepo:
             q = q.gt("seq", last_read_seq)
         res = q.order("seq", desc=False).execute()
         rows = res.data or []
-        return [r for r in rows if self._is_visible_to(r, user_id) and user_id not in (r.get("deleted_for") or [])]
+        return [r for r in rows if self._is_unread_for(r, user_id) and user_id not in (r.get("deleted_for") or [])]
 
     def count_unread(self, chat_id: str, user_id: str) -> int:
         return len(self.list_unread(chat_id, user_id))
@@ -269,18 +269,16 @@ class SupabaseMessagesRepo:
             chat_id = str(row.get("chat_id") or "")
             if int(row.get("seq") or 0) <= last_read_by_chat.get(chat_id, 0):
                 continue
-            if not self._is_visible_to(row, user_id):
+            if not self._is_unread_for(row, user_id):
                 continue
             if user_id in (row.get("deleted_for") or []):
                 continue
             counts[chat_id] += 1
         return counts
 
-    def _is_visible_to(self, row: dict[str, Any], user_id: str) -> bool:
+    def _is_unread_for(self, row: dict[str, Any], user_id: str) -> bool:
         scope = str(row.get("delivery_scope") or "broadcast")
         if scope != "addressed":
-            return True
-        if row.get("sender_user_id") == user_id:
             return True
         return user_id in self._addressed_to_user_ids(row)
 

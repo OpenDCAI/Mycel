@@ -714,7 +714,7 @@ def test_supabase_messages_repo_count_unread_uses_last_read_seq_and_sender_user_
     assert ("sender_id", "user-1") not in client.tables["chat.messages"].neq_calls
 
 
-def test_supabase_messages_repo_filters_addressed_messages_from_non_recipients() -> None:
+def test_supabase_messages_repo_addressed_messages_stay_visible_but_do_not_create_unread_for_others() -> None:
     tables: dict[str, list[dict]] = {
         "chat.chat_members": [
             {"chat_id": "chat-1", "user_id": "user-1", "last_read_seq": 0},
@@ -736,7 +736,7 @@ def test_supabase_messages_repo_filters_addressed_messages_from_non_recipients()
                 "chat_id": "chat-1",
                 "seq": 2,
                 "sender_user_id": "user-1",
-                "content": "only user-2 sees this",
+                "content": "user-2 should wake for this",
                 "delivery_scope": "addressed",
                 "addressed_to_user_ids_json": ["user-2"],
             },
@@ -750,12 +750,12 @@ def test_supabase_messages_repo_filters_addressed_messages_from_non_recipients()
 
     assert [row["id"] for row in user_2_unread] == ["broadcast-1", "addressed-1"]
     assert [row["id"] for row in user_3_unread] == ["broadcast-1"]
-    assert [row["id"] for row in user_3_history] == ["broadcast-1"]
+    assert [row["id"] for row in user_3_history] == ["broadcast-1", "addressed-1"]
     assert repo.count_unread("chat-1", "user-3") == 1
     assert repo.count_unread_by_chat_ids("user-3", {"chat-1": 0}) == {"chat-1": 1}
 
 
-def test_supabase_messages_repo_latest_message_is_viewer_visible() -> None:
+def test_supabase_messages_repo_latest_message_uses_chat_history_visibility_not_wake_target() -> None:
     tables: dict[str, list[dict]] = {
         "chat.messages": [
             {
@@ -772,7 +772,7 @@ def test_supabase_messages_repo_latest_message_is_viewer_visible() -> None:
                 "chat_id": "chat-1",
                 "seq": 2,
                 "sender_user_id": "user-1",
-                "content": "hidden from user-3",
+                "content": "latest history for all members",
                 "delivery_scope": "addressed",
                 "addressed_to_user_ids_json": ["user-2"],
             },
@@ -782,4 +782,4 @@ def test_supabase_messages_repo_latest_message_is_viewer_visible() -> None:
 
     latest = repo.list_latest_by_chat_ids(["chat-1"], viewer_id="user-3")
 
-    assert latest["chat-1"]["id"] == "broadcast-1"
+    assert latest["chat-1"]["id"] == "addressed-1"
