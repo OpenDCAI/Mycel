@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 from types import SimpleNamespace
+from typing import Any
 
 import pytest
-from fastapi import HTTPException
+from fastapi import FastAPI, HTTPException
+from fastapi.testclient import TestClient
 
 from backend.web.routers import invite_codes as invite_codes_router
+from storage.contracts import UserType
 
 
 class _FakeInviteCodeRepo:
@@ -43,7 +46,7 @@ class _FakeInviteCodeRepo:
         return self.is_valid_result
 
 
-def _request(repo: _FakeInviteCodeRepo):
+def _request(repo: _FakeInviteCodeRepo) -> Any:
     return SimpleNamespace(
         app=SimpleNamespace(
             state=SimpleNamespace(
@@ -54,6 +57,31 @@ def _request(repo: _FakeInviteCodeRepo):
             )
         )
     )
+
+
+def test_external_user_cannot_generate_invite_code_over_http():
+    repo = _FakeInviteCodeRepo()
+    app = FastAPI()
+    app.state.auth_runtime_state = SimpleNamespace(
+        auth_service=SimpleNamespace(verify_token=lambda token: {"user_id": "external-1"} if token == "tok-external" else None)
+    )
+    app.state.user_repo = SimpleNamespace(
+        get_by_id=lambda user_id: (
+            SimpleNamespace(id=user_id, type=UserType.EXTERNAL, display_name="Codex Local") if user_id == "external-1" else None
+        )
+    )
+    app.state.runtime_storage_state = SimpleNamespace(
+        supabase_client=object(),
+        storage_container=SimpleNamespace(invite_code_repo=lambda: repo),
+    )
+    app.include_router(invite_codes_router.router)
+
+    with TestClient(app) as client:
+        response = client.post("/api/invite-codes", headers={"Authorization": "Bearer tok-external"}, json={"expires_days": 7})
+
+    assert response.status_code == 403
+    assert response.json()["detail"] == "Capability required: manage_invite_codes"
+    assert repo.generate_calls == []
 
 
 @pytest.mark.asyncio
@@ -93,7 +121,7 @@ async def test_revoke_invite_code_raises_404_when_repo_reports_missing():
     request = _request(repo)
 
     with pytest.raises(HTTPException) as exc_info:
-        await invite_codes_router.revoke_invite_code("invite-1", request=request, user_id="user-1")
+        await invite_codes_router.revoke_invite_code("invite-1", request=request, user_id="user-1", _capability=None)
 
     assert exc_info.value.status_code == 404
     assert exc_info.value.detail == "邀请码不存在"
@@ -120,7 +148,7 @@ async def test_list_invite_codes_returns_app_contract_from_repo_rows():
         },
     ]
 
-    result = await invite_codes_router.list_invite_codes(request=_request(repo), user_id="user-1")
+    result = await invite_codes_router.list_invite_codes(request=_request(repo), user_id="user-1", _capability=None)
 
     assert result == {
         "codes": [
@@ -159,6 +187,7 @@ async def test_generate_invite_code_returns_app_contract_from_repo_row():
         invite_codes_router.GenerateInviteCodeRequest(expires_days=7),
         request=_request(repo),
         user_id="user-1",
+        _capability=None,
     )
 
     assert result == {

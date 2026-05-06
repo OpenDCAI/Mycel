@@ -1,11 +1,12 @@
 import asyncio
 from collections.abc import Callable
-from typing import Annotated, Any
+from typing import Annotated, Any, cast
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 
-from backend.web.core.dependencies import get_current_user_id
+from backend.identity.capabilities import Capability
+from backend.web.core.dependencies import get_current_user_id, require_capability
 from storage.contracts import InviteCodeRepo
 
 router = APIRouter(prefix="/api/invite-codes", tags=["invite-codes"])
@@ -25,7 +26,7 @@ def _invite_code_repo(request: Request) -> InviteCodeRepo:
     repo = repo_factory() if callable(repo_factory) else None
     if repo is None:
         raise HTTPException(503, "邀请码仓库未初始化")
-    return repo
+    return cast(InviteCodeRepo, repo)
 
 
 async def _call_invite_code_repo(error_prefix: str, call: Callable[[], Any]) -> Any:
@@ -41,6 +42,8 @@ async def _call_invite_code_repo(error_prefix: str, call: Callable[[], Any]) -> 
 async def list_invite_codes(
     request: Request,
     user_id: Annotated[str, Depends(get_current_user_id)],
+    *,
+    _capability: Annotated[None, Depends(require_capability(Capability.MANAGE_INVITE_CODES))],
 ) -> dict:
     repo = _invite_code_repo(request)
     codes = await _call_invite_code_repo("获取邀请码列表失败：", repo.list_all)
@@ -56,6 +59,8 @@ async def generate_invite_code(
     payload: GenerateInviteCodeRequest,
     request: Request,
     user_id: Annotated[str, Depends(get_current_user_id)],
+    *,
+    _capability: Annotated[None, Depends(require_capability(Capability.MANAGE_INVITE_CODES))],
 ) -> dict:
     repo = _invite_code_repo(request)
     code = await _call_invite_code_repo(
@@ -70,6 +75,8 @@ async def revoke_invite_code(
     code: str,
     request: Request,
     user_id: Annotated[str, Depends(get_current_user_id)],
+    *,
+    _capability: Annotated[None, Depends(require_capability(Capability.MANAGE_INVITE_CODES))],
 ) -> dict:
     repo = _invite_code_repo(request)
     ok = await _call_invite_code_repo("吊销邀请码失败：", lambda: repo.revoke(code))

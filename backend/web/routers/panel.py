@@ -5,9 +5,10 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 
 from backend.chat.api.http.dependencies import get_contact_repo, get_thread_repo
 from backend.identity import profile as profile_owner
+from backend.identity.capabilities import Capability
 from backend.library import service as library_service
 from backend.threads import agent_user_service
-from backend.web.core.dependencies import get_current_user, get_current_user_id
+from backend.web.core.dependencies import get_current_user, get_current_user_id, require_capability
 from backend.web.models.panel import (
     AgentConfigPayload,
     CreateAgentRequest,
@@ -152,6 +153,8 @@ async def create_agent(
     req: CreateAgentRequest,
     user_id: CurrentUserId,
     request: Request,
+    *,
+    _capability: Annotated[None, Depends(require_capability(Capability.CREATE_MANAGED_AGENT))],
 ) -> dict[str, Any]:
     user_repo = request.app.state.user_repo
     agent_config_repo = _agent_config_repo(request)
