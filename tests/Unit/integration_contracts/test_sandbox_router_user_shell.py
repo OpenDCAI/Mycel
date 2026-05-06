@@ -1,16 +1,20 @@
 from __future__ import annotations
 
 from types import SimpleNamespace
+from typing import Any, cast
 
 import pytest
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
 
 from backend.sandboxes import service as sandbox_service
 from backend.web.routers import sandbox as sandbox_router
+from storage.contracts import UserType
 
 
 @pytest.mark.asyncio
 async def test_list_my_sandboxes_uses_canonical_sandbox_envelope(monkeypatch: pytest.MonkeyPatch) -> None:
-    seen: dict[str, object] = {}
+    seen: dict[str, Any] = {}
 
     def fake_list_user_sandboxes(user_id: str, *, thread_repo=None, user_repo=None, **kwargs) -> list[dict[str, object]]:
         seen.update(
@@ -25,10 +29,10 @@ async def test_list_my_sandboxes_uses_canonical_sandbox_envelope(monkeypatch: py
 
     thread_repo = SimpleNamespace()
     user_repo = SimpleNamespace()
-    request = SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace(thread_repo=thread_repo, user_repo=user_repo)))
+    request: Any = SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace(thread_repo=thread_repo, user_repo=user_repo)))
     monkeypatch.setattr(sandbox_router.user_sandbox_reads, "list_user_sandboxes", fake_list_user_sandboxes, raising=False)
 
-    result = await sandbox_router.list_my_sandboxes(user_id="owner-1", request=request)
+    result = cast(dict[str, Any], await sandbox_router.list_my_sandboxes(user_id="owner-1", request=request, _capability=None))
 
     assert result == {"sandboxes": [{"sandbox_id": "sandbox-1"}]}
     assert seen["user_id"] == "owner-1"
@@ -51,6 +55,30 @@ def test_sandbox_runtime_routes_do_not_expose_session_paths() -> None:
     assert not any("/sessions" in path for path in route_paths)
 
 
+def test_external_user_cannot_list_sandbox_runtimes_over_http(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        sandbox_router,
+        "init_providers_and_managers",
+        lambda: (_ for _ in ()).throw(AssertionError("capability gate should run before provider init")),
+    )
+    app = FastAPI()
+    app.state.auth_runtime_state = SimpleNamespace(
+        auth_service=SimpleNamespace(verify_token=lambda token: {"user_id": "external-1"} if token == "tok-external" else None)
+    )
+    app.state.user_repo = SimpleNamespace(
+        get_by_id=lambda user_id: (
+            SimpleNamespace(id=user_id, type=UserType.EXTERNAL, display_name="Codex Local") if user_id == "external-1" else None
+        )
+    )
+    app.include_router(sandbox_router.router)
+
+    with TestClient(app) as client:
+        response = client.get("/api/sandbox/runtimes", headers={"Authorization": "Bearer tok-external"})
+
+    assert response.status_code == 403
+    assert response.json()["detail"] == "Capability required: inspect_resources"
+
+
 @pytest.mark.asyncio
 async def test_list_sandbox_types_reports_current_daytona_provider_when_inventory_builds(
     monkeypatch: pytest.MonkeyPatch,
@@ -64,7 +92,7 @@ async def test_list_sandbox_types_reports_current_daytona_provider_when_inventor
         ],
     )
 
-    result = await sandbox_router.list_sandbox_types()
+    result = await sandbox_router.list_sandbox_types(None)
 
     assert result["types"] == [
         {"name": "local", "provider": "local", "available": True},
@@ -90,7 +118,7 @@ async def test_list_sandbox_runtimes_strips_runtime_identity(monkeypatch: pytest
         ],
     )
 
-    result = await sandbox_router.list_sandbox_runtimes()
+    result = await sandbox_router.list_sandbox_runtimes(None)
 
     assert "sess" + "ions" not in result
     assert result["runtime_rows"] == [
@@ -126,7 +154,7 @@ async def test_sandbox_runtime_mutation_response_strips_runtime_identity(monkeyp
         fake_mutate_sandbox_runtime,
     )
 
-    result = await sandbox_router.pause_sandbox_runtime("runtime-1")
+    result = await sandbox_router.pause_sandbox_runtime("runtime-1", _capability=None)
 
     assert result == {
         "ok": True,
@@ -154,7 +182,7 @@ async def test_get_sandbox_runtime_metrics_passes_provider_hint(monkeypatch: pyt
         fake_get_runtime_metrics,
     )
 
-    result = await sandbox_router.get_sandbox_runtime_metrics("runtime-1", provider="local")
+    result = await sandbox_router.get_sandbox_runtime_metrics("runtime-1", provider="local", _capability=None)
 
     assert result == {"session_id": "runtime-1", "provider": "local", "metrics": None}
     assert seen["args"] == ("runtime-1", "local")

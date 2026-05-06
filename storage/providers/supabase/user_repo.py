@@ -19,6 +19,7 @@ _COLS = (
     "email",
     "mycel_id",
     "created_by_user_id",
+    "owner_profile",
     "created_at",
     "updated_at",
 )
@@ -44,6 +45,7 @@ class SupabaseUserRepo:
                 "email": row.email,
                 "mycel_id": row.mycel_id,
                 "created_by_user_id": row.created_by_user_id,
+                "owner_profile": row.owner_profile.value if row.owner_profile is not None else None,
                 "created_at": row.created_at,
                 "updated_at": row.updated_at,
             }
@@ -93,7 +95,7 @@ class SupabaseUserRepo:
         return [UserRow.model_validate(row) for row in rows]
 
     def update(self, user_id: str, **fields: Any) -> None:
-        allowed = {"display_name", "owner_user_id", "agent_config_id", "avatar", "email", "mycel_id", "updated_at"}
+        allowed = {"display_name", "owner_user_id", "agent_config_id", "avatar", "email", "mycel_id", "owner_profile", "updated_at"}
         updates = {key: value for key, value in fields.items() if key in allowed}
         if not updates:
             return

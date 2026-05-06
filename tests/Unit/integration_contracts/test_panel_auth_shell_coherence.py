@@ -2262,10 +2262,39 @@ async def test_create_agent_route_fails_loud_when_contact_repo_missing():
             panel_router.CreateAgentRequest(name="Toad", description="probe"),
             request=request,
             user_id="user-1",
+            _capability=None,
         )
 
     assert exc_info.value.status_code == 503
     assert exc_info.value.detail == "chat bootstrap not attached: contact_repo"
+
+
+def test_external_user_cannot_create_managed_agent_over_http(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setattr(
+        agent_user_service,
+        "create_agent_user",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("capability gate should run before agent creation")),
+    )
+    app = FastAPI()
+    app.state.auth_runtime_state = SimpleNamespace(
+        auth_service=SimpleNamespace(verify_token=lambda token: {"user_id": "external-1"} if token == "tok-external" else None)
+    )
+    app.state.user_repo = SimpleNamespace(
+        get_by_id=lambda user_id: (
+            SimpleNamespace(id=user_id, type=UserType.EXTERNAL, display_name="Codex Local") if user_id == "external-1" else None
+        )
+    )
+    app.include_router(panel_router.router)
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/api/panel/agents",
+            headers={"Authorization": "Bearer tok-external"},
+            json={"name": "Managed", "description": "probe"},
+        )
+
+    assert response.status_code == 403
+    assert response.json()["detail"] == "Capability required: create_managed_agent"
 
 
 @pytest.mark.asyncio
@@ -2322,6 +2351,9 @@ def test_panel_agents_http_surface_does_not_expose_query_app_param(monkeypatch: 
     app = FastAPI()
     app.include_router(panel_router.router)
     app.dependency_overrides[panel_router.get_current_user_id] = lambda: "user-1"
+    app.dependency_overrides[panel_router.get_current_user] = lambda: SimpleNamespace(
+        id="user-1", type=UserType.HUMAN, display_name="Owner"
+    )
     app.state.user_repo = SimpleNamespace()
     app.state.runtime_storage_state = _runtime_storage_state(SimpleNamespace())
     app.state.thread_repo = SimpleNamespace(list_by_agent_user=lambda _agent_id: [])
@@ -2346,6 +2378,7 @@ def test_panel_agents_http_surface_does_not_expose_query_app_param(monkeypatch: 
             headers={"Authorization": "Bearer token"},
         )
         delete = client.delete("/api/panel/agents/agent-1", headers={"Authorization": "Bearer token"})
+    app.dependency_overrides.clear()
 
     assert create_params == []
     assert delete_params == [

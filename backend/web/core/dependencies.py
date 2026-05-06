@@ -6,6 +6,7 @@ from fastapi import Depends, FastAPI, HTTPException, Request
 from backend.identity.auth.dependencies import _get_auth_service as _get_auth_service
 from backend.identity.auth.user_resolution import get_current_user as get_current_user
 from backend.identity.auth.user_resolution import get_current_user_id as get_current_user_id
+from backend.identity.capabilities import Capability, require_user_capability
 from backend.threads import convergence as thread_runtime_convergence
 from backend.threads.activity_pool_service import get_or_create_agent
 from backend.threads.sandbox_resolution import resolve_thread_sandbox
@@ -21,11 +22,19 @@ __all__ = [
     "_get_auth_service",
     "get_current_user",
     "get_current_user_id",
+    "require_capability",
     "verify_thread_owner",
     "verify_thread_row_owner",
     "get_thread_lock",
     "get_thread_agent",
 ]
+
+
+def require_capability(capability: Capability):
+    async def _dependency(user: Annotated[Any, Depends(get_current_user)]) -> None:
+        require_user_capability(user, capability)
+
+    return _dependency
 
 
 async def verify_thread_owner(

@@ -9,21 +9,29 @@ from fastapi.testclient import TestClient
 from backend.chat.api.http import chats_router
 from backend.identity.auth.service import ExternalUserAlreadyExistsError
 from backend.web.routers import auth as auth_router
+from storage.contracts import UserType
 
 
 class _FakeAuthService:
     def __init__(self) -> None:
         self.send_otp_calls: list[tuple[str, str, str]] = []
         self.login_calls: list[tuple[str, str]] = []
+        self.create_guest_owner_token_calls: list[str | None] = []
         self.create_external_user_token_calls: list[tuple[str, str, str]] = []
         self.login_result = {"token": "tok-login"}
+        self.create_guest_owner_token_result = {
+            "token": "tok-guest",
+            "user": {"id": "guest-1", "name": "Guest", "type": "human", "owner_profile": "guest"},
+        }
         self.create_external_user_token_result = {
             "token": "tok-external",
             "user": {"id": "external-1", "name": "Codex Local", "type": "external"},
         }
         self.send_otp_error: Exception | None = None
         self.login_error: Exception | None = None
+        self.create_guest_owner_token_error: Exception | None = None
         self.create_external_user_token_error: Exception | None = None
+        self.verify_token_result: dict = {}
 
     def send_otp(self, email: str, password: str, invite_code: str) -> None:
         self.send_otp_calls.append((email, password, invite_code))
@@ -35,6 +43,15 @@ class _FakeAuthService:
         if self.login_error is not None:
             raise self.login_error
         return self.login_result
+
+    def verify_token(self, token: str) -> dict:
+        return self.verify_token_result
+
+    def create_guest_owner_token(self, *, display_name: str | None = None) -> dict:
+        self.create_guest_owner_token_calls.append(display_name)
+        if self.create_guest_owner_token_error is not None:
+            raise self.create_guest_owner_token_error
+        return self.create_guest_owner_token_result
 
     def create_external_user_token(self, user_id: str, display_name: str, *, created_by_user_id: str) -> dict:
         self.create_external_user_token_calls.append((user_id, display_name, created_by_user_id))
@@ -87,6 +104,31 @@ async def test_login_maps_value_error_to_unauthorized():
 
 
 @pytest.mark.asyncio
+async def test_create_guest_owner_calls_auth_service_without_current_user():
+    service = _FakeAuthService()
+    app = SimpleNamespace(state=SimpleNamespace(auth_runtime_state=SimpleNamespace(auth_service=service)))
+
+    result = await auth_router.create_guest_owner(auth_router.CreateGuestOwnerRequest(display_name="Forum Visitor"), app)
+
+    assert result == service.create_guest_owner_token_result
+    assert service.create_guest_owner_token_calls == ["Forum Visitor"]
+
+
+def test_create_guest_owner_route_is_public_auth_surface():
+    service = _FakeAuthService()
+    app = FastAPI()
+    app.state.auth_runtime_state = SimpleNamespace(auth_service=service)
+    app.include_router(auth_router.router)
+
+    with TestClient(app) as client:
+        response = client.post("/api/auth/guest", json={"display_name": "Forum Visitor"})
+
+    assert response.status_code == 200
+    assert response.json() == service.create_guest_owner_token_result
+    assert service.create_guest_owner_token_calls == ["Forum Visitor"]
+
+
+@pytest.mark.asyncio
 async def test_create_external_user_calls_auth_service_with_current_user():
     service = _FakeAuthService()
     app = SimpleNamespace(state=SimpleNamespace(auth_runtime_state=SimpleNamespace(auth_service=service)))
@@ -95,6 +137,7 @@ async def test_create_external_user_calls_auth_service_with_current_user():
         auth_router.CreateExternalUserRequest(user_id="external-1", display_name="Codex Local"),
         app,
         current_user_id="owner-1",
+        _capability=None,
     )
 
     assert result == service.create_external_user_token_result
@@ -120,6 +163,7 @@ async def test_auth_me_returns_authenticated_user_identity():
         "type": "external",
         "email": None,
         "mycel_id": None,
+        "owner_profile": None,
         "avatar": None,
     }
 
@@ -135,6 +179,7 @@ async def test_create_external_user_maps_duplicate_to_conflict():
             auth_router.CreateExternalUserRequest(user_id="external-1", display_name="Codex Local"),
             app,
             current_user_id="owner-1",
+            _capability=None,
         )
 
     assert exc_info.value.status_code == 409
@@ -152,6 +197,53 @@ def test_create_external_user_route_requires_current_user_dependency():
 
     assert response.status_code == 401
     assert service.create_external_user_token_calls == []
+
+
+def test_external_user_cannot_create_another_external_user_over_http():
+    service = _FakeAuthService()
+    service.verify_token_result = {"user_id": "external-1"}
+    app = FastAPI()
+    app.state.auth_runtime_state = SimpleNamespace(auth_service=service)
+    app.state.user_repo = SimpleNamespace(
+        get_by_id=lambda user_id: (
+            SimpleNamespace(id=user_id, type=UserType.EXTERNAL, display_name="Codex Local") if user_id == "external-1" else None
+        )
+    )
+    app.include_router(auth_router.router)
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/api/auth/external-users",
+            headers={"Authorization": "Bearer tok-external"},
+            json={"user_id": "nested-external", "display_name": "Nested External"},
+        )
+
+    assert response.status_code == 403
+    assert response.json()["detail"] == "Capability required: create_external_user"
+    assert service.create_external_user_token_calls == []
+
+
+def test_guest_owner_can_create_external_user_over_http():
+    service = _FakeAuthService()
+    service.verify_token_result = {"user_id": "guest-1"}
+    app = FastAPI()
+    app.state.auth_runtime_state = SimpleNamespace(auth_service=service)
+    app.state.user_repo = SimpleNamespace(
+        get_by_id=lambda user_id: (
+            SimpleNamespace(id=user_id, type=UserType.HUMAN, owner_profile="guest", display_name="Guest") if user_id == "guest-1" else None
+        )
+    )
+    app.include_router(auth_router.router)
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/api/auth/external-users",
+            headers={"Authorization": "Bearer tok-guest"},
+            json={"user_id": "guest-codex-1", "display_name": "Guest Codex"},
+        )
+
+    assert response.status_code == 200
+    assert service.create_external_user_token_calls == [("guest-codex-1", "Guest Codex", "guest-1")]
 
 
 def test_create_external_user_openapi_is_public_auth_surface():

@@ -9,8 +9,9 @@ import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel
 
+from backend.identity.capabilities import Capability
 from backend.sandboxes import account as account_resource_service
-from backend.web.core.dependencies import get_current_user_id
+from backend.web.core.dependencies import get_current_user_id, require_capability
 from backend.web.utils.serializers import extract_text_content
 from config.models_loader import ModelsLoader
 from config.models_schema import ModelsConfig
@@ -208,7 +209,11 @@ async def get_account_resources(request: Request, user_id: CurrentUserId) -> dic
 
 
 @router.get("/browse")
-async def browse_filesystem(path: str = Query(default="~"), include_files: bool = Query(default=False)) -> dict[str, Any]:
+async def browse_filesystem(
+    _capability: Annotated[None, Depends(require_capability(Capability.INSPECT_RESOURCES))],
+    path: str = Query(default="~"),
+    include_files: bool = Query(default=False),
+) -> dict[str, Any]:
     """Browse filesystem directories (and optionally files)."""
     try:
         target_path = Path(path).expanduser().resolve()
@@ -237,7 +242,10 @@ async def browse_filesystem(path: str = Query(default="~"), include_files: bool 
 
 
 @router.get("/read")
-async def read_local_file(path: str = Query(...)) -> dict[str, Any]:
+async def read_local_file(
+    _capability: Annotated[None, Depends(require_capability(Capability.INSPECT_RESOURCES))],
+    path: str = Query(...),
+) -> dict[str, Any]:
     """Read a local file's content (for SandboxBrowser in resources page)."""
     _read_max_bytes = 100 * 1024
     try:
