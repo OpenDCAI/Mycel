@@ -8,6 +8,12 @@ from fastapi import FastAPI
 from psycopg import AsyncConnection
 
 from backend.threads.pool import idle_reaper as idle_reaper_owner
+from backend.web.core.runtime_profile import RuntimeProfile
+
+
+def _runtime_profile(app: FastAPI) -> RuntimeProfile:
+    raw = getattr(app.state, "runtime_profile", RuntimeProfile.FULL)
+    return raw if isinstance(raw, RuntimeProfile) else RuntimeProfile(raw)
 
 
 def _require_web_runtime_contract() -> None:
@@ -34,8 +40,10 @@ async def _validate_web_checkpointer_contract() -> None:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    _require_web_runtime_contract()
-    await _validate_web_checkpointer_contract()
+    runtime_profile = _runtime_profile(app)
+    if runtime_profile is RuntimeProfile.FULL:
+        _require_web_runtime_contract()
+        await _validate_web_checkpointer_contract()
 
     # ---- Chat repos + services ----
     from backend.bootstrap.storage import attach_runtime_storage_state
@@ -44,13 +52,6 @@ async def lifespan(app: FastAPI):
     runtime_storage = attach_runtime_storage_state(app)
     _supabase_client = runtime_storage.supabase_client
     storage_container = runtime_storage.storage_container
-    from core.runtime.langgraph_checkpoint_store import LangGraphCheckpointStore, agent_checkpoint_saver_from_conn_string
-
-    pg_url = os.environ["LEON_POSTGRES_URL"]
-    app.state._thread_checkpoint_saver_ctx = agent_checkpoint_saver_from_conn_string(pg_url)
-    app.state._thread_checkpoint_saver = await app.state._thread_checkpoint_saver_ctx.__aenter__()
-    await app.state._thread_checkpoint_saver.setup()
-    thread_checkpoint_store = LangGraphCheckpointStore(app.state._thread_checkpoint_saver)
 
     app.state.user_repo = storage_container.user_repo()
     app.state.thread_repo = storage_container.thread_repo()
@@ -64,7 +65,7 @@ async def lifespan(app: FastAPI):
         wire_relationship_decision_notifications,
         wire_relationship_request_notifications,
     )
-    from backend.threads.bootstrap import attach_threads_runtime
+    from backend.threads.bootstrap import attach_runtime_inbox_runtime, attach_threads_runtime
 
     # @@@web-chat-before-threads - threads bootstrap now constructs the agent
     # runtime gateway eagerly, and that path requires chat-owned typing state
@@ -79,14 +80,28 @@ async def lifespan(app: FastAPI):
     # owner-agent contact repo, but web bootstrap should borrow the chat-owned
     # contact_repo returned by chat bootstrap instead of reopening storage.
     attach_auth_runtime_state(app, storage_state=runtime_storage, contact_repo=chat_runtime.contact_repo)
-    threads_runtime = attach_threads_runtime(
-        app,
-        storage_container,
-        typing_tracker=chat_runtime.typing_tracker,
-        messaging_service=chat_runtime.messaging_service,
-        relationship_service=chat_runtime.relationship_service,
-        chat_join_request_service=chat_runtime.chat_join_request_service,
-    )
+    if runtime_profile is RuntimeProfile.COMMUNICATION:
+        threads_runtime = attach_runtime_inbox_runtime(
+            app,
+            storage_container,
+            messaging_service=chat_runtime.messaging_service,
+        )
+    else:
+        from core.runtime.langgraph_checkpoint_store import LangGraphCheckpointStore, agent_checkpoint_saver_from_conn_string
+
+        pg_url = os.environ["LEON_POSTGRES_URL"]
+        app.state._thread_checkpoint_saver_ctx = agent_checkpoint_saver_from_conn_string(pg_url)
+        app.state._thread_checkpoint_saver = await app.state._thread_checkpoint_saver_ctx.__aenter__()
+        await app.state._thread_checkpoint_saver.setup()
+        thread_checkpoint_store = LangGraphCheckpointStore(app.state._thread_checkpoint_saver)
+        threads_runtime = attach_threads_runtime(
+            app,
+            storage_container,
+            typing_tracker=chat_runtime.typing_tracker,
+            messaging_service=chat_runtime.messaging_service,
+            relationship_service=chat_runtime.relationship_service,
+            chat_join_request_service=chat_runtime.chat_join_request_service,
+        )
     wire_chat_delivery(
         app,
         messaging_service=chat_runtime.messaging_service,
@@ -114,6 +129,12 @@ async def lifespan(app: FastAPI):
         thread_repo=app.state.thread_repo,
         user_repo=app.state.user_repo,
     )
+    app.state.idle_reaper_task = None
+
+    if runtime_profile is RuntimeProfile.COMMUNICATION:
+        app.state.threads_runtime_state = threads_runtime
+        yield
+        return
 
     # ---- Existing state ----
     from backend.threads.display.builder import DisplayBuilder
@@ -135,7 +156,6 @@ async def lifespan(app: FastAPI):
             checkpoint_store=thread_checkpoint_store,
         )
     app.state.threads_runtime_state = threads_runtime
-    app.state.idle_reaper_task = None
 
     try:
         from backend.sandboxes.service import init_providers_and_managers
