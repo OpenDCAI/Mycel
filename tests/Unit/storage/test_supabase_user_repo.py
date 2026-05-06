@@ -1,4 +1,4 @@
-from storage.contracts import UserRow, UserType
+from storage.contracts import OwnerProfile, UserRow, UserType
 from storage.providers.supabase.user_repo import SupabaseUserRepo
 
 
@@ -17,6 +17,7 @@ class _FakeTable:
                 "avatar": "toad.png",
                 "email": "toad@example.com",
                 "mycel_id": 10001,
+                "owner_profile": None,
                 "next_thread_seq": 3,
                 "created_at": 1.0,
                 "updated_at": 2.0,
@@ -85,6 +86,7 @@ def test_supabase_user_repo_create_persists_agent_identity_fields() -> None:
             email="toad@example.com",
             mycel_id=10001,
             created_by_user_id=None,
+            owner_profile=None,
             next_thread_seq=3,
             created_at=1.0,
             updated_at=2.0,
@@ -97,6 +99,7 @@ def test_supabase_user_repo_create_persists_agent_identity_fields() -> None:
     assert client.table_obj.insert_payload["owner_user_id"] == "owner-1"
     assert client.table_obj.insert_payload["agent_config_id"] == "cfg-1"
     assert client.table_obj.insert_payload["created_by_user_id"] is None
+    assert client.table_obj.insert_payload["owner_profile"] is None
     assert client.table_obj.insert_payload["next_thread_seq"] == 3
 
 
@@ -120,6 +123,27 @@ def test_supabase_user_repo_create_persists_external_creator() -> None:
     assert client.table_obj.insert_payload["created_by_user_id"] == "owner-1"
     assert client.table_obj.insert_payload["owner_user_id"] is None
     assert client.table_obj.insert_payload["agent_config_id"] is None
+    assert client.table_obj.insert_payload["owner_profile"] is None
+
+
+def test_supabase_user_repo_create_persists_guest_owner_profile() -> None:
+    client = _FakeClient()
+    repo = SupabaseUserRepo(client)
+
+    repo.create(
+        UserRow(
+            id="guest-owner-1",
+            type=UserType.HUMAN,
+            display_name="Guest",
+            owner_profile=OwnerProfile.GUEST,
+            created_at=1.0,
+        )
+    )
+
+    assert client.table_name == "identity.users"
+    assert client.table_obj.insert_payload is not None
+    assert client.table_obj.insert_payload["type"] == "human"
+    assert client.table_obj.insert_payload["owner_profile"] == "guest"
 
 
 def test_supabase_user_repo_get_by_id_returns_user_row() -> None:

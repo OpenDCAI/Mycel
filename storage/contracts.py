@@ -97,6 +97,11 @@ class UserType(StrEnum):
     EXTERNAL = "external"
 
 
+class OwnerProfile(StrEnum):
+    FULL = "full"
+    GUEST = "guest"
+
+
 class UserRow(BaseModel):
     id: str
     type: UserType
@@ -108,6 +113,7 @@ class UserRow(BaseModel):
     email: str | None = None
     mycel_id: int | None = None
     created_by_user_id: str | None = None
+    owner_profile: OwnerProfile | None = None
     created_at: float
     updated_at: float | None = None
 
@@ -131,6 +137,8 @@ class UserRow(BaseModel):
                 raise ValueError("external users must not carry agent_config_id")
             if self.created_by_user_id is None:
                 raise ValueError("external users require created_by_user_id")
+            if self.owner_profile is not None:
+                raise ValueError("external users must not carry owner_profile")
             return self
         if self.owner_user_id is None:
             raise ValueError("agent users require owner_user_id")
@@ -138,6 +146,8 @@ class UserRow(BaseModel):
             raise ValueError("agent users require agent_config_id")
         if self.created_by_user_id is not None:
             raise ValueError("agent users must not carry created_by_user_id")
+        if self.owner_profile is not None:
+            raise ValueError("agent users must not carry owner_profile")
         return self
 
 
