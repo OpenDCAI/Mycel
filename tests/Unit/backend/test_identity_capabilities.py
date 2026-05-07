@@ -13,8 +13,8 @@ def _user(user_id: str, user_type: UserType | str):
     return SimpleNamespace(id=user_id, type=user_type)
 
 
-def _owner(user_id: str, owner_profile: str | None = None):
-    return SimpleNamespace(id=user_id, type=UserType.HUMAN, owner_profile=owner_profile)
+def _owner(user_id: str, is_guest: bool = False):
+    return SimpleNamespace(id=user_id, type=UserType.HUMAN, is_guest=is_guest)
 
 
 def test_human_owner_has_admin_capabilities() -> None:
@@ -26,8 +26,8 @@ def test_human_owner_has_admin_capabilities() -> None:
     assert capabilities.has(Capability.USE_SANDBOX)
 
 
-def test_guest_owner_has_communication_profile_only() -> None:
-    capabilities = resolve_user_capabilities(_owner("guest-1", "guest"))
+def test_guest_owner_has_communication_only() -> None:
+    capabilities = resolve_user_capabilities(_owner("guest-1", True))
 
     assert capabilities.has(Capability.CREATE_EXTERNAL_USER)
     assert not capabilities.has(Capability.CREATE_MANAGED_AGENT)
@@ -35,7 +35,7 @@ def test_guest_owner_has_communication_profile_only() -> None:
     assert not capabilities.has(Capability.USE_SANDBOX)
 
 
-def test_external_user_has_communication_profile_only() -> None:
+def test_external_user_has_communication_only() -> None:
     capabilities = resolve_user_capabilities(_user("external-1", UserType.EXTERNAL))
 
     assert not capabilities.has(Capability.CREATE_EXTERNAL_USER)

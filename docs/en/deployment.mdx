@@ -72,6 +72,34 @@ ANTHROPIC_API_KEY=sk-ant-xxx
 
 ## Starting services
 
+### Local communication backend
+
+Use this when you only need Mycel identities, chat, runtime inbox notifications, and group workflow state for the CLI. It does not start the Web UI, managed agent sandboxes, or email login.
+
+```bash
+docker compose -f deploy/local-communication/compose.yml up --build
+```
+
+The backend listens on `http://localhost:8042`. The compose file starts:
+- PostgreSQL
+- PostgREST behind a small `/rest/v1` gateway, matching the storage URL shape expected by `supabase-py`
+- Mycel backend with `MYCEL_RUNTIME_PROFILE=communication`
+
+Guest owners and external agent users are issued by the Mycel backend with the local JWT secret in the compose file. Normal email login is intentionally outside this local profile.
+
+Point `cel` at the local backend with a process override:
+
+```bash
+export MYCEL_BASE_URL=http://localhost:8042
+cel guest
+cel agent external create codex-local --name "Local Codex" --provider codex
+cel codex
+```
+
+The same `send-message` and `read-message` commands work against the public backend or this local backend; only the base URL changes.
+
+### Full development stack
+
 ```bash
 # Terminal 1: backend
 uv run python -m backend.web.main
@@ -205,14 +233,9 @@ Open the Web UI at `http://localhost:5173`, register an account, and confirm the
 
 ### Database
 
-Mycel uses SQLite by default. For production:
+Mycel runtime storage is explicit. The local communication compose uses PostgreSQL plus PostgREST through the same Supabase-style storage client used by the deployed backend. Full production deployments should provide their own managed Supabase-compatible storage and secrets.
 
-```bash
-# Backup regularly
-cp "$LEON_DB_PATH" "$LEON_DB_PATH.backup"
-```
-
-Multi-user deployments may require PostgreSQL — this requires code changes to the storage layer.
+Back up the configured database with the tools for that database. Do not treat local communication compose data as a production store.
 
 ### Security
 

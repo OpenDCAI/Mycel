@@ -6,7 +6,7 @@ from typing import Any
 
 from fastapi import HTTPException
 
-from storage.contracts import OwnerProfile, UserType
+from storage.contracts import UserType
 
 
 class Capability(StrEnum):
@@ -51,9 +51,8 @@ def resolve_user_capabilities(user: Any) -> UserCapabilities:
     if user_type is None:
         raise HTTPException(403, "Unknown user capability profile")
     if user_type is UserType.HUMAN:
-        owner_profile = getattr(user, "owner_profile", None)
         values = _OWNER_CAPABILITIES
-        if owner_profile in {OwnerProfile.GUEST, OwnerProfile.GUEST.value}:
+        if bool(getattr(user, "is_guest", False)):
             values = _GUEST_OWNER_CAPABILITIES
     else:
         values = _CAPABILITIES_BY_USER_TYPE[user_type]

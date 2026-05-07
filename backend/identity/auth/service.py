@@ -12,7 +12,7 @@ from backend.identity.avatar.files import process_and_save_avatar
 from backend.identity.contact_bootstrap import ensure_owner_agent_contact
 from backend.sandboxes.recipe_bootstrap import seed_default_recipes
 from config.agent_config_types import AgentConfig
-from storage.contracts import InviteCodeRepo, OwnerProfile, UserRepo, UserRow, UserType
+from storage.contracts import InviteCodeRepo, UserRepo, UserRow, UserType
 from storage.providers.supabase import _query as q
 
 logger = logging.getLogger(__name__)
@@ -251,7 +251,7 @@ class AuthService:
                 id=guest_user_id,
                 type=UserType.HUMAN,
                 display_name=guest_display_name,
-                owner_profile=OwnerProfile.GUEST,
+                is_guest=True,
                 created_at=now,
             )
         )
@@ -260,7 +260,7 @@ class AuthService:
                 "sub": guest_user_id,
                 "iat": int(now),
                 "mycel_user_type": "human",
-                "mycel_owner_profile": OwnerProfile.GUEST.value,
+                "mycel_is_guest": True,
             },
             jwt_secret,
             algorithm=SUPABASE_JWT_ALGORITHM,
@@ -271,7 +271,7 @@ class AuthService:
                 "id": guest_user_id,
                 "name": guest_display_name,
                 "type": "human",
-                "owner_profile": OwnerProfile.GUEST.value,
+                "is_guest": True,
                 "email": None,
                 "mycel_id": None,
                 "avatar": None,

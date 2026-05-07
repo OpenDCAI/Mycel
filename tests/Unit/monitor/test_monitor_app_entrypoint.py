@@ -36,7 +36,7 @@ def test_monitor_app_mounts_only_global_monitor_routes(monkeypatch: pytest.Monke
 
 
 def test_monitor_app_accepts_evaluation_batch_create(monkeypatch: pytest.MonkeyPatch):
-    user_repo = SimpleNamespace(get_by_id=lambda user_id: SimpleNamespace(id=user_id, type=UserType.HUMAN, owner_profile=None))
+    user_repo = SimpleNamespace(get_by_id=lambda user_id: SimpleNamespace(id=user_id, type=UserType.HUMAN, is_guest=False))
     monitor_storage = SimpleNamespace(
         storage_container=SimpleNamespace(user_repo=lambda: user_repo, contact_repo=lambda: object()),
     )
@@ -102,7 +102,7 @@ def test_monitor_app_rejects_deleted_user_for_evaluation_batch_create(monkeypatc
 
 
 def test_monitor_app_accepts_evaluation_batch_start(monkeypatch: pytest.MonkeyPatch):
-    user_repo = SimpleNamespace(get_by_id=lambda user_id: SimpleNamespace(id=user_id, type=UserType.HUMAN, owner_profile=None))
+    user_repo = SimpleNamespace(get_by_id=lambda user_id: SimpleNamespace(id=user_id, type=UserType.HUMAN, is_guest=False))
     monitor_storage = SimpleNamespace(
         storage_container=SimpleNamespace(user_repo=lambda: user_repo, contact_repo=lambda: object()),
     )
@@ -144,7 +144,7 @@ def test_monitor_app_accepts_evaluation_batch_start(monkeypatch: pytest.MonkeyPa
 
 
 def test_monitor_app_maps_missing_remote_execution_target_to_503(monkeypatch: pytest.MonkeyPatch):
-    user_repo = SimpleNamespace(get_by_id=lambda user_id: SimpleNamespace(id=user_id, type=UserType.HUMAN, owner_profile=None))
+    user_repo = SimpleNamespace(get_by_id=lambda user_id: SimpleNamespace(id=user_id, type=UserType.HUMAN, is_guest=False))
     monitor_storage = SimpleNamespace(
         storage_container=SimpleNamespace(user_repo=lambda: user_repo, contact_repo=lambda: object()),
     )
