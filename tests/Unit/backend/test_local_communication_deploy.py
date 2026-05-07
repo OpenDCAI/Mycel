@@ -49,11 +49,14 @@ def test_cli_minimal_compose_is_four_long_running_services_plus_schema_init() ->
 def test_cli_minimal_backend_uses_communication_profile_and_thin_gateway() -> None:
     compose = yaml.safe_load(CLI_MINIMAL_COMPOSE.read_text()) or {}
     backend_env = compose["services"]["mycel-backend"]["environment"]
+    backend_ports = compose["services"]["mycel-backend"]["ports"]
     postgrest_env = compose["services"]["postgrest"]["environment"]
 
+    assert backend_ports == ["${MYCEL_BIND_HOST:-127.0.0.1}:${MYCEL_PORT:-8042}:8900"]
     assert backend_env["MYCEL_RUNTIME_PROFILE"] == "communication"
     assert backend_env["LEON_STORAGE_STRATEGY"] == "supabase"
     assert backend_env["SUPABASE_INTERNAL_URL"] == "http://gateway:8000"
+    assert backend_env["SUPABASE_PUBLIC_URL"] == "${MYCEL_PUBLIC_URL:-http://127.0.0.1:8042}"
     assert backend_env["LEON_DB_SCHEMA"] == "identity"
     assert postgrest_env["PGRST_DB_SCHEMAS"] == "identity,chat,agent,container,library,observability"
     assert postgrest_env["PGRST_JWT_SECRET"] == "${SUPABASE_JWT_SECRET:?SUPABASE_JWT_SECRET is required}"

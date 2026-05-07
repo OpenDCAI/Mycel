@@ -21,6 +21,13 @@ begin
 end $$;
 """.strip()
 
+APP_SCHEMA_STATE_SQL = """
+select
+  (select count(*) from information_schema.schemata where schema_name = any(%s)) as schema_count,
+  (select count(*) from information_schema.tables where table_schema = any(%s) and table_type = 'BASE TABLE') as table_count,
+  (select count(*) from information_schema.routines where specific_schema = any(%s) and routine_type = 'FUNCTION') as function_count
+""".strip()
+
 
 def load_manifest(path: Path = MANIFEST_PATH) -> dict[str, Any]:
     data = json.loads(path.read_text(encoding="utf-8"))
@@ -43,14 +50,46 @@ def ordered_schema_files(schema_dir: Path = SCHEMA_DIR) -> list[Path]:
     return files
 
 
+def app_schema_expectations(schema_dir: Path = SCHEMA_DIR) -> tuple[list[str], int, int]:
+    manifest = load_manifest(schema_dir / "app_schema_manifest.json")
+    schemas = manifest.get("app_owned_schemas")
+    table_count = manifest.get("baseline_table_count")
+    function_count = manifest.get("baseline_function_count")
+    if (
+        not isinstance(schemas, list)
+        or not all(isinstance(item, str) and item for item in schemas)
+        or not isinstance(table_count, int)
+        or not isinstance(function_count, int)
+    ):
+        raise RuntimeError("schema manifest must define app_owned_schemas, baseline_table_count, and baseline_function_count")
+    return schemas, table_count, function_count
+
+
 def apply_schema(database_url: str, *, prepare_supabase_roles: bool = False, schema_dir: Path = SCHEMA_DIR) -> list[Path]:
     import psycopg
 
     files = ordered_schema_files(schema_dir)
+    schemas, expected_tables, expected_functions = app_schema_expectations(schema_dir)
     if prepare_supabase_roles:
         with psycopg.connect(database_url, autocommit=True) as conn:
             with conn.cursor() as cur:
                 cur.execute(SUPABASE_ROLE_PRELUDE)
+
+    with psycopg.connect(database_url, autocommit=True) as conn:
+        with conn.cursor() as cur:
+            cur.execute(APP_SCHEMA_STATE_SQL, (schemas, schemas, schemas))
+            row = cur.fetchone()
+    schema_count, table_count, function_count = row
+    if (schema_count, table_count, function_count) == (0, 0, 0):
+        pass
+    elif (schema_count, table_count, function_count) == (len(schemas), expected_tables, expected_functions):
+        return []
+    else:
+        raise RuntimeError(
+            "database already contains a partial or drifted app schema: "
+            f"schemas={schema_count}/{len(schemas)}, tables={table_count}/{expected_tables}, "
+            f"functions={function_count}/{expected_functions}"
+        )
 
     for path in files:
         with psycopg.connect(database_url, autocommit=True) as conn:
