@@ -85,6 +85,24 @@ It is not the full Mycel platform. Full deployment is still represented by the
 root `docker-compose.yml` plus operator-managed Supabase/Coolify configuration,
 not by a `deploy/full` public self-hosting contract.
 
+Start the local-only profile:
+
+```bash
+python3 deploy/cli-minimal/generate-env.py > deploy/cli-minimal/.env
+docker compose --env-file deploy/cli-minimal/.env -f deploy/cli-minimal/compose.yml up
+```
+
+To let another machine connect, publish an explicit URL and point `cel` at it:
+
+```bash
+python3 deploy/cli-minimal/generate-env.py \
+  --bind-host 0.0.0.0 \
+  --public-url http://<host-or-lan-ip>:8042 \
+  > deploy/cli-minimal/.env
+docker compose --env-file deploy/cli-minimal/.env -f deploy/cli-minimal/compose.yml up
+cel connect http://<host-or-lan-ip>:8042
+```
+
 ### Full development stack
 
 ```bash
