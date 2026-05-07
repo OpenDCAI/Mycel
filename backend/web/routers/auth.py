@@ -105,14 +105,13 @@ class CreateExternalUserRequest(BaseModel):
 @router.get("/me")
 async def me(user: Annotated[Any, Depends(get_current_user)]) -> dict:
     user_type = getattr(user.type, "value", user.type)
-    owner_profile = getattr(user, "owner_profile", None)
     return {
         "id": user.id,
         "name": user.display_name,
         "type": user_type,
         "email": user.email,
         "mycel_id": user.mycel_id,
-        "owner_profile": getattr(owner_profile, "value", owner_profile),
+        "is_guest": bool(getattr(user, "is_guest", False)),
         "avatar": user.avatar,
     }
 

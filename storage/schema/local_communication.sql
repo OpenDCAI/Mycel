@@ -35,11 +35,11 @@ create table if not exists identity.users (
   email text unique,
   mycel_id integer unique,
   created_by_user_id text,
-  owner_profile text,
+  is_guest boolean not null default false,
   created_at double precision not null,
   updated_at double precision,
   check (type in ('human', 'agent', 'external')),
-  check (owner_profile is null or owner_profile in ('full', 'guest'))
+  check (type = 'human' or is_guest = false)
 );
 
 create table if not exists identity.invite_codes (

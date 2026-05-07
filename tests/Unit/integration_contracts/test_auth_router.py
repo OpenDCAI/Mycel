@@ -21,7 +21,7 @@ class _FakeAuthService:
         self.login_result = {"token": "tok-login"}
         self.create_guest_owner_token_result = {
             "token": "tok-guest",
-            "user": {"id": "guest-1", "name": "Guest", "type": "human", "owner_profile": "guest"},
+            "user": {"id": "guest-1", "name": "Guest", "type": "human", "is_guest": True},
         }
         self.create_external_user_token_result = {
             "token": "tok-external",
@@ -163,7 +163,7 @@ async def test_auth_me_returns_authenticated_user_identity():
         "type": "external",
         "email": None,
         "mycel_id": None,
-        "owner_profile": None,
+        "is_guest": False,
         "avatar": None,
     }
 
@@ -230,7 +230,7 @@ def test_guest_owner_can_create_external_user_over_http():
     app.state.auth_runtime_state = SimpleNamespace(auth_service=service)
     app.state.user_repo = SimpleNamespace(
         get_by_id=lambda user_id: (
-            SimpleNamespace(id=user_id, type=UserType.HUMAN, owner_profile="guest", display_name="Guest") if user_id == "guest-1" else None
+            SimpleNamespace(id=user_id, type=UserType.HUMAN, is_guest=True, display_name="Guest") if user_id == "guest-1" else None
         )
     )
     app.include_router(auth_router.router)

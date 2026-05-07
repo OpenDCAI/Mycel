@@ -8,7 +8,7 @@ import jwt
 import pytest
 
 from backend.identity.auth.service import AuthService
-from storage.contracts import OwnerProfile, UserType
+from storage.contracts import UserType
 
 
 def test_create_guest_owner_token_creates_restricted_human_without_bootstrap(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -31,19 +31,19 @@ def test_create_guest_owner_token_creates_restricted_human_without_bootstrap(mon
     assert len(created_rows) == 1
     assert created_rows[0].id == "guest-12345678-1234-5678-1234-567812345678"
     assert created_rows[0].type is UserType.HUMAN
-    assert created_rows[0].owner_profile is OwnerProfile.GUEST
+    assert created_rows[0].is_guest is True
     assert created_rows[0].display_name == "Guest Runner"
     assert created_rows[0].email is None
     assert created_rows[0].mycel_id is None
     decoded = jwt.decode(result["token"], "secret-1", algorithms=["HS256"], options={"verify_aud": False})
     assert decoded["sub"] == "guest-12345678-1234-5678-1234-567812345678"
-    assert decoded["mycel_owner_profile"] == "guest"
+    assert decoded["mycel_is_guest"] is True
     assert service.verify_token(result["token"]) == {"user_id": "guest-12345678-1234-5678-1234-567812345678"}
     assert result["user"] == {
         "id": "guest-12345678-1234-5678-1234-567812345678",
         "name": "Guest Runner",
         "type": "human",
-        "owner_profile": "guest",
+        "is_guest": True,
         "email": None,
         "mycel_id": None,
         "avatar": None,

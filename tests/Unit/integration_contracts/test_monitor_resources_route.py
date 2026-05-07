@@ -18,7 +18,7 @@ def _app(*, include_product_resources: bool = False) -> FastAPI:
     app = FastAPI()
     app.include_router(global_router.router, prefix="/api/monitor")
     app.include_router(monitor_threads_router.router, prefix="/api/monitor")
-    app.dependency_overrides[get_current_user] = lambda: SimpleNamespace(id="owner-1", type=UserType.HUMAN, owner_profile=None)
+    app.dependency_overrides[get_current_user] = lambda: SimpleNamespace(id="owner-1", type=UserType.HUMAN, is_guest=False)
     app.dependency_overrides[get_current_user_id] = lambda: "owner-1"
     if include_product_resources:
         app.include_router(resources.router)
@@ -165,7 +165,7 @@ def test_monitor_dashboard_uses_service_summaries(monkeypatch):
 def test_guest_owner_cannot_use_monitor_control_plane(method, path, body, detail):
     app = FastAPI()
     app.include_router(global_router.router, prefix="/api/monitor")
-    app.dependency_overrides[get_current_user] = lambda: SimpleNamespace(id="guest-1", type=UserType.HUMAN, owner_profile="guest")
+    app.dependency_overrides[get_current_user] = lambda: SimpleNamespace(id="guest-1", type=UserType.HUMAN, is_guest=True)
     app.dependency_overrides[get_current_user_id] = lambda: "guest-1"
 
     with TestClient(app) as client:
@@ -183,7 +183,7 @@ def test_global_monitor_router_accepts_evaluation_batch_create(monkeypatch):
     )
     app = FastAPI()
     app.include_router(global_router.router, prefix="/api/monitor")
-    app.dependency_overrides[get_current_user] = lambda: SimpleNamespace(id="owner-1", type=UserType.HUMAN, owner_profile=None)
+    app.dependency_overrides[get_current_user] = lambda: SimpleNamespace(id="owner-1", type=UserType.HUMAN, is_guest=False)
     app.dependency_overrides[get_current_user_id] = lambda: "owner-1"
     try:
         with TestClient(app) as client:

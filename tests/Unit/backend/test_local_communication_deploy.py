@@ -38,6 +38,8 @@ def test_local_communication_schema_contains_runtime_primitives() -> None:
         "create role authenticated nologin",
         "create role service_role nologin bypassrls",
         "create table if not exists identity.users",
+        "is_guest boolean not null default false",
+        "check (type = 'human' or is_guest = false)",
         "create table if not exists chat.chats",
         "create table if not exists chat.chat_members",
         "create table if not exists chat.messages",
@@ -53,3 +55,4 @@ def test_local_communication_schema_contains_runtime_primitives() -> None:
     missing = [fragment for fragment in required_fragments if fragment not in sql]
 
     assert missing == []
+    assert "owner_profile" not in sql
