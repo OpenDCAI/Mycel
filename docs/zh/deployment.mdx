@@ -76,7 +76,9 @@ ANTHROPIC_API_KEY=sk-ant-xxx
 
 之前的 `deploy/local-communication/compose.yml` 路径已经移除，因为它从手写 schema fork 启动。那条路径可以证明 prototype 能跑，但不能作为自部署契约。
 
-目前第一分钟 CLI onboarding 使用 hosted backend；本地开发使用下面的完整开发栈。下一版本地通信包必须复用 Mycel 正式 schema/init path，不能维护单独的 local SQL 文件。
+`deploy/cli-minimal/compose.yml` 是当前的 CLI-minimal 本地通信 profile。它复用正式 Mycel app schema/init path，运行 PostgreSQL + PostgREST，通过很薄的 nginx gateway 暴露 `/rest/v1/*`，并用 `MYCEL_RUNTIME_PROFILE=communication` 启动后端。
+
+它不是完整 Mycel 平台。完整部署目前仍由根目录 `docker-compose.yml` 加 operator 管理的 Supabase/Coolify 配置表示，还没有被提升为 `deploy/full` 这个公开自部署契约。
 
 ### 完整开发栈
 
