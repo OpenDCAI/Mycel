@@ -55,9 +55,9 @@ def check_schema_tree(repo_root: Path = REPO_ROOT) -> list[str]:
     schema_subdirs = sorted(path.relative_to(repo_root).as_posix() for path in schema_dir.iterdir() if path.is_dir())
     if schema_subdirs:
         violations.append(f"schema directory must be flat; found subdirectories: {', '.join(schema_subdirs)}")
-    local_schema_path = schema_dir / "local_communication.sql"
-    if local_schema_path.exists():
-        violations.append(f"forbidden schema fork path exists: {local_schema_path.relative_to(repo_root)}")
+    rejected_schema_fork_path = schema_dir / "local_communication.sql"
+    if rejected_schema_fork_path.exists():
+        violations.append(f"forbidden schema fork path exists: {rejected_schema_fork_path.relative_to(repo_root)}")
 
     manifest, manifest_errors = _read_manifest(manifest_path)
     violations.extend(manifest_errors)
