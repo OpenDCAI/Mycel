@@ -16,6 +16,7 @@ from backend.web.core.dependencies import (
 )
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
+communication_router = APIRouter(prefix="/api/auth", tags=["auth"])
 
 
 async def _call_auth_service(app: Any, status_code: int, call: Callable[[Any], Any]) -> Any:
@@ -89,6 +90,7 @@ class CreateGuestOwnerRequest(BaseModel):
 
 
 @router.post("/guest")
+@communication_router.post("/guest")
 async def create_guest_owner(payload: CreateGuestOwnerRequest, app: Annotated[Any, Depends(get_app)]) -> dict:
     return await _call_auth_service(
         app,
@@ -103,6 +105,7 @@ class CreateExternalUserRequest(BaseModel):
 
 
 @router.get("/me")
+@communication_router.get("/me")
 async def me(user: Annotated[Any, Depends(get_current_user)]) -> dict:
     user_type = getattr(user.type, "value", user.type)
     return {
@@ -117,6 +120,7 @@ async def me(user: Annotated[Any, Depends(get_current_user)]) -> dict:
 
 
 @router.post("/external-users")
+@communication_router.post("/external-users")
 async def create_external_user(
     payload: CreateExternalUserRequest,
     app: Annotated[Any, Depends(get_app)],

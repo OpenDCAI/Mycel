@@ -30,7 +30,7 @@ def include_communication_routes(app: FastAPI) -> None:
     from backend.chat.api.http import app_router as chat_app_router
     from backend.web.routers import auth, contacts, users
 
-    app.include_router(auth.router)
+    app.include_router(auth.communication_router)
     app.include_router(chat_app_router.router)
     app.include_router(contacts.router)
     app.include_router(users.users_router)

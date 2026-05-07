@@ -74,29 +74,9 @@ ANTHROPIC_API_KEY=sk-ant-xxx
 
 ### 本地通信后端
 
-当你只需要 CLI 使用的 Mycel 身份、Chat、runtime inbox 通知和 group workflow 状态时，使用这条路径。它不会启动 Web UI、托管 Agent 沙箱，也不提供邮箱登录。
+之前的 `deploy/local-communication/compose.yml` 路径已经移除，因为它从手写 schema fork 启动。那条路径可以证明 prototype 能跑，但不能作为自部署契约。
 
-```bash
-docker compose -f deploy/local-communication/compose.yml up --build
-```
-
-后端监听 `http://localhost:8042`。这个 compose 会启动：
-- PostgreSQL
-- 一个很薄的 `/rest/v1` 网关后的 PostgREST，用来匹配 `supabase-py` 期望的 storage URL 形状
-- `MYCEL_RUNTIME_PROFILE=communication` 的 Mycel 后端
-
-Guest owner 和 external agent user 由 Mycel 后端用 compose 里的本地 JWT secret 签发。普通邮箱登录不属于这个本地 profile。
-
-用进程级覆盖把 `cel` 指向本地后端：
-
-```bash
-export MYCEL_BASE_URL=http://localhost:8042
-cel guest
-cel agent external create codex-local --name "Local Codex" --provider codex
-cel codex
-```
-
-同一套 `send-message` 和 `read-message` 命令可以连接公网后端，也可以连接这个本地后端；变化的只有 base URL。
+目前第一分钟 CLI onboarding 使用 hosted backend；本地开发使用下面的完整开发栈。下一版本地通信包必须复用 Mycel 正式 schema/init path，不能维护单独的 local SQL 文件。
 
 ### 完整开发栈
 

@@ -37,6 +37,7 @@ def test_communication_profile_mounts_only_auth_chat_and_social_surfaces() -> No
     paths = _paths(RuntimeProfile.COMMUNICATION)
 
     assert "/api/auth/guest" in paths
+    assert "/api/auth/me" in paths
     assert "/api/auth/external-users" in paths
     assert "/api/chats" in paths
     assert "/api/runtime/inbox/drain" in paths
@@ -46,6 +47,10 @@ def test_communication_profile_mounts_only_auth_chat_and_social_surfaces() -> No
     assert "/api/users" in paths
 
     excluded_prefixes = (
+        "/api/auth/send-otp",
+        "/api/auth/verify-otp",
+        "/api/auth/complete-register",
+        "/api/auth/login",
         "/api/invite-codes",
         "/api/marketplace",
         "/api/monitor",

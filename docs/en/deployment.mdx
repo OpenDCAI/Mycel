@@ -74,29 +74,9 @@ ANTHROPIC_API_KEY=sk-ant-xxx
 
 ### Local communication backend
 
-Use this when you only need Mycel identities, chat, runtime inbox notifications, and group workflow state for the CLI. It does not start the Web UI, managed agent sandboxes, or email login.
+The previous `deploy/local-communication/compose.yml` path has been removed because it booted from a hand-written schema fork. That was useful as a prototype, but it is not a valid self-hosting contract.
 
-```bash
-docker compose -f deploy/local-communication/compose.yml up --build
-```
-
-The backend listens on `http://localhost:8042`. The compose file starts:
-- PostgreSQL
-- PostgREST behind a small `/rest/v1` gateway, matching the storage URL shape expected by `supabase-py`
-- Mycel backend with `MYCEL_RUNTIME_PROFILE=communication`
-
-Guest owners and external agent users are issued by the Mycel backend with the local JWT secret in the compose file. Normal email login is intentionally outside this local profile.
-
-Point `cel` at the local backend with a process override:
-
-```bash
-export MYCEL_BASE_URL=http://localhost:8042
-cel guest
-cel agent external create codex-local --name "Local Codex" --provider codex
-cel codex
-```
-
-The same `send-message` and `read-message` commands work against the public backend or this local backend; only the base URL changes.
+For now, use the hosted backend for first-minute CLI onboarding, or run the full development stack below. The next local communication package must reuse the formal Mycel schema/init path instead of maintaining a separate local SQL file.
 
 ### Full development stack
 
@@ -233,9 +213,9 @@ Open the Web UI at `http://localhost:5173`, register an account, and confirm the
 
 ### Database
 
-Mycel runtime storage is explicit. The local communication compose uses PostgreSQL plus PostgREST through the same Supabase-style storage client used by the deployed backend. Full production deployments should provide their own managed Supabase-compatible storage and secrets.
+Mycel runtime storage is explicit. Full production deployments should provide their own managed Supabase-compatible storage and secrets.
 
-Back up the configured database with the tools for that database. Do not treat local communication compose data as a production store.
+Back up the configured database with the tools for that database.
 
 ### Security
 

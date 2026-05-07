@@ -153,9 +153,10 @@ async def test_web_lifespan_wires_chat_delivery_after_threads_runtime(monkeypatc
             chat_join_request_service=returned_chat_join_request_service,
         )
 
-    def _attach_auth_runtime(_app, *, storage_state, contact_repo):
+    def _attach_auth_runtime(_app, *, storage_state, contact_repo, managed_onboarding):
         call_log.append("auth")
         assert contact_repo is returned_contact_repo
+        assert managed_onboarding is True
         return object()
 
     def _attach_threads_runtime(
@@ -222,7 +223,7 @@ async def test_web_lifespan_wires_chat_delivery_after_threads_runtime(monkeypatc
 
 @pytest.mark.asyncio
 async def test_web_lifespan_passes_borrowed_contact_repo_into_auth_runtime(monkeypatch):
-    seen: list[object] = []
+    seen: list[tuple[object, bool]] = []
     contact_repo = object()
 
     monkeypatch.setattr(web_lifespan, "_require_web_runtime_contract", lambda: None)
@@ -257,7 +258,7 @@ async def test_web_lifespan_passes_borrowed_contact_repo_into_auth_runtime(monke
     monkeypatch.setattr("backend.bootstrap.storage.attach_runtime_storage_state", lambda _app: runtime_storage)
     monkeypatch.setattr(
         "backend.identity.auth.runtime_bootstrap.attach_auth_runtime_state",
-        lambda _app, *, storage_state, contact_repo: seen.append(contact_repo) or object(),
+        lambda _app, *, storage_state, contact_repo, managed_onboarding: seen.append((contact_repo, managed_onboarding)) or object(),
     )
     monkeypatch.setattr(
         "core.runtime.langgraph_checkpoint_store.agent_checkpoint_saver_from_conn_string",
@@ -293,7 +294,7 @@ async def test_web_lifespan_passes_borrowed_contact_repo_into_auth_runtime(monke
     app = SimpleNamespace(state=SimpleNamespace())
 
     async with web_lifespan.lifespan(app):
-        assert seen == [contact_repo]
+        assert seen == [(contact_repo, True)]
 
 
 @pytest.mark.asyncio
@@ -314,9 +315,10 @@ async def test_communication_lifespan_uses_external_inbox_runtime_without_manage
             chat_join_request_service=returned_chat_join_request_service,
         )
 
-    def _attach_auth_runtime(_app, *, storage_state, contact_repo):
+    def _attach_auth_runtime(_app, *, storage_state, contact_repo, managed_onboarding):
         call_log.append("auth")
         assert contact_repo is returned_contact_repo
+        assert managed_onboarding is False
         return object()
 
     def _attach_runtime_inbox_runtime(app, _storage_container, *, messaging_service):

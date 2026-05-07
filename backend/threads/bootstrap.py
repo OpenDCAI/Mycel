@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from backend.chat.runtime_inbox_stream import RuntimeInboxStreamState
-from backend.chat.runtime_inbox_wake import PostgresRuntimeInboxWakeBus, RuntimeInboxWakeBus
+from backend.chat.runtime_inbox_wake import PostgresRuntimeInboxWakeBus
 from backend.threads.chat_adapters.bootstrap import build_agent_runtime_state
 from backend.threads.chat_adapters.external_inbox_handler import ExternalRuntimeInboxHandler
 from core.runtime.middleware.queue import MessageQueueManager
@@ -129,4 +129,4 @@ def build_runtime_inbox_wake_bus() -> Any:
     pg_url = str(os.getenv("LEON_POSTGRES_URL") or "").strip()
     if pg_url:
         return PostgresRuntimeInboxWakeBus(pg_url)
-    return RuntimeInboxWakeBus()
+    raise RuntimeError("LEON_POSTGRES_URL is required for runtime inbox wake bus")
