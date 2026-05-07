@@ -8,6 +8,7 @@ ROOT = Path(__file__).resolve().parents[3]
 SCHEMA_PATH = ROOT / "storage/schema/local_communication.sql"
 CLI_MINIMAL_COMPOSE = ROOT / "deploy/cli-minimal/compose.yml"
 CLI_MINIMAL_GATEWAY_CONF = ROOT / "deploy/cli-minimal/rest-gateway.conf"
+DEPLOY_README = ROOT / "deploy/README.md"
 
 
 def _compose_files() -> list[Path]:
@@ -76,3 +77,12 @@ def test_cli_minimal_gateway_is_nginx_rest_only_not_supabase_bundle() -> None:
     assert "/rest/v1/" in gateway_conf
     assert "/auth/v1/" not in gateway_conf
     assert not {"gotrue", "studio", "realtime", "storage", "analytics", "kong"} & set(services)
+
+
+def test_deploy_readme_names_cli_minimal_boundary_and_full_deploy_absence() -> None:
+    text = DEPLOY_README.read_text(encoding="utf-8")
+
+    assert "`deploy/cli-minimal` is the local communication backend" in text
+    assert "It is not a forked schema and it is not the full Mycel platform." in text
+    assert "Full deployment is not currently represented as `deploy/full`" in text
+    assert "root `docker-compose.yml` plus operator-managed Supabase" in text

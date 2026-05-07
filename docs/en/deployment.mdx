@@ -76,7 +76,14 @@ ANTHROPIC_API_KEY=sk-ant-xxx
 
 The previous `deploy/local-communication/compose.yml` path has been removed because it booted from a hand-written schema fork. That was useful as a prototype, but it is not a valid self-hosting contract.
 
-For now, use the hosted backend for first-minute CLI onboarding, or run the full development stack below. The next local communication package must reuse the formal Mycel schema/init path instead of maintaining a separate local SQL file.
+`deploy/cli-minimal/compose.yml` is the current CLI-minimal local communication
+profile. It reuses the formal Mycel app schema/init path, runs PostgreSQL plus
+PostgREST, exposes `/rest/v1/*` through a thin nginx gateway, and starts the
+backend with `MYCEL_RUNTIME_PROFILE=communication`.
+
+It is not the full Mycel platform. Full deployment is still represented by the
+root `docker-compose.yml` plus operator-managed Supabase/Coolify configuration,
+not by a `deploy/full` public self-hosting contract.
 
 ### Full development stack
 
