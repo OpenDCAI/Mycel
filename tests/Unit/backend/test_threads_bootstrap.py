@@ -22,7 +22,7 @@ def test_attach_threads_runtime_wires_runtime_dependencies(monkeypatch):
     storage_container = SimpleNamespace(queue_repo=lambda: queue_repo)
     app = SimpleNamespace(state=SimpleNamespace())
 
-    monkeypatch.delenv("LEON_POSTGRES_URL", raising=False)
+    monkeypatch.setenv("LEON_POSTGRES_URL", "postgres://unit-test")
     monkeypatch.setattr(
         threads_bootstrap,
         "MessageQueueManager",
@@ -30,8 +30,8 @@ def test_attach_threads_runtime_wires_runtime_dependencies(monkeypatch):
     )
     monkeypatch.setattr(
         threads_bootstrap,
-        "RuntimeInboxWakeBus",
-        lambda: seen.append(("runtime_inbox_wake_bus", app)) or runtime_inbox_wake_bus,
+        "PostgresRuntimeInboxWakeBus",
+        lambda pg_url: seen.append(("runtime_inbox_wake_bus", pg_url)) or runtime_inbox_wake_bus,
     )
     monkeypatch.setattr(
         threads_bootstrap,
@@ -82,7 +82,7 @@ def test_attach_threads_runtime_wires_runtime_dependencies(monkeypatch):
     assert state.checkpoint_store is None
     assert seen == [
         ("queue_manager", queue_repo),
-        ("runtime_inbox_wake_bus", app),
+        ("runtime_inbox_wake_bus", "postgres://unit-test"),
         ("runtime_inbox_stream", app),
         ("runtime_state", app),
         ("typing_tracker", typing_tracker),
@@ -110,6 +110,13 @@ def test_build_runtime_inbox_wake_bus_uses_postgres_when_configured(monkeypatch)
     )
 
     assert threads_bootstrap.build_runtime_inbox_wake_bus() is wake_bus
+
+
+def test_build_runtime_inbox_wake_bus_fails_without_explicit_backend(monkeypatch):
+    monkeypatch.delenv("LEON_POSTGRES_URL", raising=False)
+
+    with pytest.raises(RuntimeError, match="LEON_POSTGRES_URL"):
+        threads_bootstrap.build_runtime_inbox_wake_bus()
 
 
 def test_build_agent_runtime_state_does_not_write_top_level_activity_reader(monkeypatch):

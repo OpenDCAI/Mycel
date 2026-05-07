@@ -44,6 +44,47 @@ def test_build_auth_runtime_state_uses_runtime_storage_state(monkeypatch):
     }
 
 
+def test_build_auth_runtime_state_can_skip_managed_onboarding_repos(monkeypatch):
+    calls = {}
+    fake_auth_factory = object()
+
+    class _FakeAuthService:
+        def __init__(self, **kwargs):
+            calls["kwargs"] = kwargs
+
+    storage_container = SimpleNamespace(
+        user_repo=lambda: "users-repo",
+        agent_config_repo=lambda: (_ for _ in ()).throw(AssertionError("communication auth must not touch agent configs")),
+        invite_code_repo=lambda: (_ for _ in ()).throw(AssertionError("communication auth must not touch invite codes")),
+        contact_repo=lambda: "contact-repo",
+        recipe_repo=lambda: (_ for _ in ()).throw(AssertionError("communication auth must not touch recipes")),
+    )
+    storage_state = SimpleNamespace(
+        supabase_client="supabase-client",
+        storage_container=storage_container,
+    )
+
+    monkeypatch.setattr(auth_runtime_bootstrap, "create_supabase_auth_client", lambda: fake_auth_factory)
+    monkeypatch.setattr(auth_runtime_bootstrap, "AuthService", _FakeAuthService)
+
+    state = auth_runtime_bootstrap.build_auth_runtime_state(
+        storage_state,
+        contact_repo="contact-repo",
+        managed_onboarding=False,
+    )
+
+    assert state.supabase_auth_client_factory() is fake_auth_factory
+    assert calls["kwargs"] == {
+        "users": "users-repo",
+        "agent_configs": None,
+        "supabase_client": "supabase-client",
+        "supabase_auth_client_factory": state.supabase_auth_client_factory,
+        "invite_codes": None,
+        "contact_repo": "contact-repo",
+        "recipe_repo": None,
+    }
+
+
 def test_build_auth_runtime_state_requires_explicit_contact_repo():
     storage_state = SimpleNamespace(
         supabase_client="supabase-client",
@@ -62,7 +103,11 @@ def test_attach_auth_runtime_state_returns_state_without_loose_state_mirrors(mon
     fake_state = SimpleNamespace(auth_service=object(), supabase_auth_client_factory=object())
     app = type("_App", (), {"state": type("_State", (), {})()})()
 
-    monkeypatch.setattr(auth_runtime_bootstrap, "build_auth_runtime_state", lambda _storage_state, *, contact_repo: fake_state)
+    monkeypatch.setattr(
+        auth_runtime_bootstrap,
+        "build_auth_runtime_state",
+        lambda _storage_state, *, contact_repo, managed_onboarding=True: fake_state,
+    )
 
     result = auth_runtime_bootstrap.attach_auth_runtime_state(app, storage_state=object(), contact_repo=object())
 
