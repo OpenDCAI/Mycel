@@ -1,0 +1,68 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: postgres
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d postgres"]
+      interval: 2s
+      timeout: 5s
+      retries: 30
+    volumes:
+      - local-communication-db:/var/lib/postgresql/data
+      - ../../storage/schema/local_communication.sql:/docker-entrypoint-initdb.d/001-local-communication.sql:ro
+    restart: unless-stopped
+
+  postgrest:
+    image: postgrest/postgrest:v12.2.8
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      PGRST_DB_URI: postgres://postgres:postgres@db:5432/postgres
+      PGRST_DB_SCHEMAS: public,identity,chat,agent,container,library
+      PGRST_DB_ANON_ROLE: anon
+      PGRST_JWT_SECRET: mycel-local-communication-jwt-secret-at-least-32-chars
+    restart: unless-stopped
+
+  supabase-rest:
+    image: nginx:1.27-alpine
+    depends_on:
+      - postgrest
+    ports:
+      - "${MYCEL_LOCAL_REST_PORT:-54321}:8000"
+    volumes:
+      - ./rest-gateway.conf:/etc/nginx/nginx.conf:ro
+    restart: unless-stopped
+
+  backend:
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+    depends_on:
+      - supabase-rest
+    ports:
+      - "${MYCEL_LOCAL_BACKEND_PORT:-8042}:8900"
+    environment:
+      MYCEL_RUNTIME_PROFILE: communication
+      LEON_STORAGE_STRATEGY: supabase
+      LEON_SUPABASE_CLIENT_FACTORY: backend.identity.auth.supabase_runtime:create_supabase_client
+      LEON_DB_SCHEMA: public
+      SUPABASE_INTERNAL_URL: http://supabase-rest:8000
+      SUPABASE_PUBLIC_URL: http://localhost:${MYCEL_LOCAL_REST_PORT:-54321}
+      SUPABASE_ANON_KEY: >-
+        eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoiYW5vbiIsImlzcyI6InN1cGFiYXNlIiwiaWF0IjoxNzc4MTExMTg4LCJleHAiOjQxMDI0NDQ4MDB9.hQfjrcDx9hvOfl2F_YPeYzideziX9jHKO6NXU0Nk8fk
+      LEON_SUPABASE_SERVICE_ROLE_KEY: >-
+        eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoic2VydmljZV9yb2xlIiwiaXNzIjoic3VwYWJhc2UiLCJpYXQiOjE3NzgxMTExODgsImV4cCI6NDEwMjQ0NDgwMH0.eWVnZTF1ptQCPnI-afKE6G9EOBiT0PhZYfVZhgQQ3fo
+      SUPABASE_JWT_SECRET: mycel-local-communication-jwt-secret-at-least-32-chars
+      LEON_SUPABASE_HTTP_TRUST_ENV: "0"
+      LEON_LOCAL_WORKSPACE_ROOT: /data/workspaces
+      LEON_AVATAR_ROOT: /data/avatars
+    volumes:
+      - local-communication-backend:/data
+    restart: unless-stopped
+
+volumes:
+  local-communication-db:
+  local-communication-backend:

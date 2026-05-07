@@ -1,0 +1,13 @@
+.git
+.venv
+.pytest_cache
+.ruff_cache
+.mypy_cache
+.DS_Store
+
+frontend/app/node_modules
+frontend/app/.next
+frontend/app/dist
+
+worktrees
+notes
