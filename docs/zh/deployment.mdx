@@ -72,6 +72,34 @@ ANTHROPIC_API_KEY=sk-ant-xxx
 
 ## 启动服务
 
+### 本地通信后端
+
+当你只需要 CLI 使用的 Mycel 身份、Chat、runtime inbox 通知和 group workflow 状态时，使用这条路径。它不会启动 Web UI、托管 Agent 沙箱，也不提供邮箱登录。
+
+```bash
+docker compose -f deploy/local-communication/compose.yml up --build
+```
+
+后端监听 `http://localhost:8042`。这个 compose 会启动：
+- PostgreSQL
+- 一个很薄的 `/rest/v1` 网关后的 PostgREST，用来匹配 `supabase-py` 期望的 storage URL 形状
+- `MYCEL_RUNTIME_PROFILE=communication` 的 Mycel 后端
+
+Guest owner 和 external agent user 由 Mycel 后端用 compose 里的本地 JWT secret 签发。普通邮箱登录不属于这个本地 profile。
+
+用进程级覆盖把 `cel` 指向本地后端：
+
+```bash
+export MYCEL_BASE_URL=http://localhost:8042
+cel guest
+cel agent external create codex-local --name "Local Codex" --provider codex
+cel codex
+```
+
+同一套 `send-message` 和 `read-message` 命令可以连接公网后端，也可以连接这个本地后端；变化的只有 base URL。
+
+### 完整开发栈
+
 ```bash
 # 终端 1：后端
 uv run python -m backend.web.main
@@ -205,14 +233,9 @@ Daytona Proxy（端口 4000）必须从 Runner 可访问，文件操作依赖它
 
 ### 数据库
 
-Mycel 默认使用 SQLite。生产环境建议：
+Mycel runtime storage 是显式配置的。当前本地通信 compose 使用 PostgreSQL 和 PostgREST，并通过与线上后端相同的 Supabase-style storage client 访问。完整生产部署应提供自己的 Supabase-compatible storage 和密钥。
 
-```bash
-# 定期备份
-cp "$LEON_DB_PATH" "$LEON_DB_PATH.backup"
-```
-
-多用户部署可能需要 PostgreSQL — 需要对存储层进行代码改动。
+请使用对应数据库的工具进行备份。不要把本地通信 compose 的数据当成生产存储。
 
 ### 安全
 
