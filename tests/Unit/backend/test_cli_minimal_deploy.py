@@ -8,7 +8,7 @@ import jwt
 import yaml
 
 ROOT = Path(__file__).resolve().parents[3]
-SCHEMA_PATH = ROOT / "storage/schema/local_communication.sql"
+FORBIDDEN_LOCAL_SCHEMA_PATH = ROOT / "storage/schema/local_communication.sql"
 CLI_MINIMAL_COMPOSE = ROOT / "deploy/cli-minimal/compose.yml"
 CLI_MINIMAL_GATEWAY_CONF = ROOT / "deploy/cli-minimal/rest-gateway.conf"
 CLI_MINIMAL_ENV_SCRIPT = ROOT / "deploy/cli-minimal/generate-env.py"
@@ -19,7 +19,7 @@ def _compose_files() -> list[Path]:
     return sorted((ROOT / "deploy").glob("**/compose*.yml")) + sorted((ROOT / "deploy").glob("**/docker-compose*.yml"))
 
 
-def test_active_deploys_do_not_mount_handwritten_local_communication_schema() -> None:
+def test_active_deploys_do_not_mount_rejected_local_schema_fork() -> None:
     offenders: list[str] = []
     for path in _compose_files():
         compose = yaml.safe_load(path.read_text()) or {}
@@ -31,8 +31,8 @@ def test_active_deploys_do_not_mount_handwritten_local_communication_schema() ->
     assert offenders == []
 
 
-def test_local_communication_schema_is_not_a_product_bootstrap_source() -> None:
-    assert not SCHEMA_PATH.exists()
+def test_rejected_local_schema_fork_is_not_a_product_bootstrap_source() -> None:
+    assert not FORBIDDEN_LOCAL_SCHEMA_PATH.exists()
 
 
 def test_cli_minimal_compose_is_four_long_running_services_plus_schema_init() -> None:
