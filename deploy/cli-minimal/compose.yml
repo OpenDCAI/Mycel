@@ -56,7 +56,9 @@ services:
     environment:
       MYCEL_RUNTIME_PROFILE: communication
       LEON_STORAGE_STRATEGY: supabase
+      LEON_SUPABASE_CLIENT_FACTORY: backend.identity.auth.supabase_runtime:create_supabase_client
       LEON_DB_SCHEMA: identity
+      LEON_POSTGRES_URL: postgresql://postgres:postgres@postgres:5432/postgres
       SUPABASE_INTERNAL_URL: http://gateway:8000
       SUPABASE_PUBLIC_URL: ${MYCEL_PUBLIC_URL:-http://127.0.0.1:8042}
       SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY:?SUPABASE_ANON_KEY is required}
