@@ -43,9 +43,14 @@ python3 deploy/cli-minimal/generate-env.py \
 docker compose --env-file deploy/cli-minimal/.env -f deploy/cli-minimal/compose.yml up
 ```
 
-Other machines should configure `cel` with `MYCEL_PUBLIC_URL`. Future CLI
-onboarding should accept that URL, probe backend version/capabilities, and fail
-loudly if the target is not a compatible Mycel communication backend.
+Other machines should connect their CLI to that URL:
+
+```bash
+cel connect http://<host-or-lan-ip>:8042
+```
+
+The CLI should probe backend version/capabilities and fail loudly if the target
+is not a compatible Mycel communication backend.
 
 `SUPABASE_ANON_KEY` and `LEON_SUPABASE_SERVICE_ROLE_KEY` are PostgREST JWTs
 signed by `SUPABASE_JWT_SECRET`; do not replace them with opaque random strings.
