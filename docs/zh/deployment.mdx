@@ -74,7 +74,7 @@ ANTHROPIC_API_KEY=sk-ant-xxx
 
 ### 本地通信后端
 
-之前的 `deploy/local-communication/compose.yml` 路径已经移除，因为它从手写 schema fork 启动。那条路径可以证明 prototype 能跑，但不能作为自部署契约。
+之前的 `deploy/local-communication/compose.yml` 路径已经移除，因为它从手写 schema fork 启动。那条路径只能作为历史 proof，不能作为自部署契约。
 
 `deploy/cli-minimal/compose.yml` 是当前的 CLI-minimal 本地通信 profile。它复用正式 Mycel app schema/init path，运行 PostgreSQL + PostgREST，通过很薄的 nginx gateway 暴露 `/rest/v1/*`，并用 `MYCEL_RUNTIME_PROFILE=communication` 启动后端。
 
