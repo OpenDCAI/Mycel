@@ -56,6 +56,23 @@ def test_app_schema_checker_passes_current_tree() -> None:
     assert checker.check_schema_tree(ROOT) == []
 
 
+def test_app_schema_checker_rejects_schema_subdirectories(tmp_path) -> None:
+    checker = _load_checker()
+    schema_dir = tmp_path / "storage" / "schema"
+    schema_dir.mkdir(parents=True)
+    (schema_dir / "nested").mkdir()
+    (schema_dir / "app_schema_manifest.json").write_text(
+        '{"baseline": "app_schema.sql", "patches": [], "app_owned_schemas": ["identity"], '
+        '"baseline_table_count": 0, "baseline_function_count": 0}',
+        encoding="utf-8",
+    )
+    (schema_dir / "app_schema.sql").write_text("CREATE SCHEMA identity;", encoding="utf-8")
+
+    violations = checker.check_schema_tree(tmp_path)
+
+    assert violations == ["schema directory must be flat; found subdirectories: storage/schema/nested"]
+
+
 def test_app_schema_checker_is_a_loud_cli_gate() -> None:
     result = subprocess.run(
         [sys.executable, str(CHECKER_PATH)],

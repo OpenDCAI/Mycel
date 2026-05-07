@@ -14,11 +14,6 @@ CREATE_SCHEMA_RE = re.compile(r"^CREATE SCHEMA (?P<name>[a-z_][a-z0-9_]*)", re.M
 CREATE_TABLE_RE = re.compile(r"^CREATE TABLE (?P<name>[a-z_][a-z0-9_]*\.[a-z_][a-z0-9_]*) \(", re.MULTILINE)
 CREATE_FUNCTION_RE = re.compile(r"^CREATE FUNCTION (?P<name>[a-z_][a-z0-9_]*\.[a-z_][a-z0-9_]*)\(", re.MULTILINE)
 
-FORBIDDEN_SCHEMA_PATHS = [
-    SCHEMA_DIR / "local_communication.sql",
-    SCHEMA_DIR / "canonical",
-]
-
 FORBIDDEN_BASELINE_TEXT = [
     "OWNER TO",
     "GRANT ",
@@ -57,9 +52,12 @@ def check_schema_tree(repo_root: Path = REPO_ROOT) -> list[str]:
     manifest_path = schema_dir / "app_schema_manifest.json"
     violations: list[str] = []
 
-    for path in [schema_dir / "local_communication.sql", schema_dir / "canonical"]:
-        if path.exists():
-            violations.append(f"forbidden schema fork path exists: {path.relative_to(repo_root)}")
+    schema_subdirs = sorted(path.relative_to(repo_root).as_posix() for path in schema_dir.iterdir() if path.is_dir())
+    if schema_subdirs:
+        violations.append(f"schema directory must be flat; found subdirectories: {', '.join(schema_subdirs)}")
+    local_schema_path = schema_dir / "local_communication.sql"
+    if local_schema_path.exists():
+        violations.append(f"forbidden schema fork path exists: {local_schema_path.relative_to(repo_root)}")
 
     manifest, manifest_errors = _read_manifest(manifest_path)
     violations.extend(manifest_errors)

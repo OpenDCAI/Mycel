@@ -29,6 +29,16 @@ select
 """.strip()
 
 
+def local_supabase_role_grants_sql(schemas: list[str]) -> str:
+    schema_list = ", ".join(schemas)
+    return f"""
+grant usage on schema {schema_list} to service_role;
+grant all privileges on all tables in schema {schema_list} to service_role;
+grant all privileges on all sequences in schema {schema_list} to service_role;
+grant all privileges on all functions in schema {schema_list} to service_role;
+""".strip()
+
+
 def load_manifest(path: Path = MANIFEST_PATH) -> dict[str, Any]:
     data = json.loads(path.read_text(encoding="utf-8"))
     if not isinstance(data, dict):
@@ -95,6 +105,10 @@ def apply_schema(database_url: str, *, prepare_supabase_roles: bool = False, sch
         with psycopg.connect(database_url, autocommit=True) as conn:
             with conn.cursor() as cur:
                 cur.execute(path.read_text(encoding="utf-8"))
+    if prepare_supabase_roles:
+        with psycopg.connect(database_url, autocommit=True) as conn:
+            with conn.cursor() as cur:
+                cur.execute(local_supabase_role_grants_sql(schemas))
     return files
 
 

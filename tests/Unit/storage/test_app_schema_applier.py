@@ -77,6 +77,17 @@ def test_supabase_role_prelude_is_explicit() -> None:
     assert "create role anon" in applier.SUPABASE_ROLE_PRELUDE
 
 
+def test_local_supabase_role_grants_cover_all_app_owned_schemas() -> None:
+    applier = _load_applier()
+
+    sql = applier.local_supabase_role_grants_sql(["identity", "chat"])
+
+    assert "grant usage on schema identity, chat to service_role" in sql
+    assert "grant all privileges on all tables in schema identity, chat to service_role" in sql
+    assert "grant all privileges on all sequences in schema identity, chat to service_role" in sql
+    assert "grant all privileges on all functions in schema identity, chat to service_role" in sql
+
+
 def test_applier_isolates_session_state_between_schema_files(tmp_path, monkeypatch) -> None:
     applier = _load_applier()
     schema_dir = tmp_path / "schema"
@@ -133,6 +144,7 @@ def test_applier_isolates_session_state_between_schema_files(tmp_path, monkeypat
         [applier.APP_SCHEMA_STATE_SQL],
         ["select set_config('search_path', '', false);"],
         ["create extension if not exists pgcrypto;"],
+        [applier.local_supabase_role_grants_sql(["identity"])],
     ]
 
 
