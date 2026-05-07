@@ -82,12 +82,16 @@ def test_applier_isolates_session_state_between_schema_files(tmp_path, monkeypat
     schema_dir = tmp_path / "schema"
     schema_dir.mkdir()
     (schema_dir / "app_schema_manifest.json").write_text(
-        '{"baseline": "baseline.sql", "patches": ["patch.sql"]}',
+        (
+            '{"baseline": "baseline.sql", "patches": ["patch.sql"], '
+            '"app_owned_schemas": ["identity"], "baseline_table_count": 0, "baseline_function_count": 0}'
+        ),
         encoding="utf-8",
     )
     (schema_dir / "baseline.sql").write_text("select set_config('search_path', '', false);", encoding="utf-8")
     (schema_dir / "patch.sql").write_text("create extension if not exists pgcrypto;", encoding="utf-8")
     executed: list[list[str]] = []
+    fetch_results = [(0, 0, 0)]
 
     class Cursor:
         def __init__(self, statements: list[str]) -> None:
@@ -99,8 +103,11 @@ def test_applier_isolates_session_state_between_schema_files(tmp_path, monkeypat
         def __exit__(self, *args) -> None:
             return None
 
-        def execute(self, statement: str) -> None:
+        def execute(self, statement: str, params=None) -> None:
             self._statements.append(statement)
+
+        def fetchone(self):
+            return fetch_results.pop(0)
 
     class Connection:
         def __init__(self) -> None:
@@ -123,6 +130,109 @@ def test_applier_isolates_session_state_between_schema_files(tmp_path, monkeypat
 
     assert executed == [
         [applier.SUPABASE_ROLE_PRELUDE],
+        [applier.APP_SCHEMA_STATE_SQL],
         ["select set_config('search_path', '', false);"],
         ["create extension if not exists pgcrypto;"],
     ]
+
+
+def test_applier_skips_database_that_already_matches_manifest(tmp_path, monkeypatch) -> None:
+    applier = _load_applier()
+    schema_dir = tmp_path / "schema"
+    schema_dir.mkdir()
+    (schema_dir / "app_schema_manifest.json").write_text(
+        (
+            '{"baseline": "baseline.sql", "patches": ["patch.sql"], '
+            '"app_owned_schemas": ["identity"], "baseline_table_count": 2, "baseline_function_count": 1}'
+        ),
+        encoding="utf-8",
+    )
+    (schema_dir / "baseline.sql").write_text("create schema identity;", encoding="utf-8")
+    (schema_dir / "patch.sql").write_text("alter table identity.users add column name text;", encoding="utf-8")
+    executed: list[list[str]] = []
+
+    class Cursor:
+        def __init__(self, statements: list[str]) -> None:
+            self._statements = statements
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args) -> None:
+            return None
+
+        def execute(self, statement: str, params=None) -> None:
+            self._statements.append(statement)
+
+        def fetchone(self):
+            return (1, 2, 1)
+
+    class Connection:
+        def __init__(self) -> None:
+            self.statements: list[str] = []
+            executed.append(self.statements)
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args) -> None:
+            return None
+
+        def cursor(self) -> Cursor:
+            return Cursor(self.statements)
+
+    fake_psycopg = types.SimpleNamespace(connect=lambda *args, **kwargs: Connection())
+    monkeypatch.setitem(sys.modules, "psycopg", fake_psycopg)
+
+    applied = applier.apply_schema("postgresql://example", schema_dir=schema_dir)
+
+    assert applied == []
+    assert len(executed) == 1
+    assert "information_schema.schemata" in executed[0][0]
+
+
+def test_applier_fails_loudly_on_partial_app_schema(tmp_path, monkeypatch) -> None:
+    applier = _load_applier()
+    schema_dir = tmp_path / "schema"
+    schema_dir.mkdir()
+    (schema_dir / "app_schema_manifest.json").write_text(
+        (
+            '{"baseline": "baseline.sql", "patches": [], '
+            '"app_owned_schemas": ["identity", "chat"], "baseline_table_count": 2, "baseline_function_count": 0}'
+        ),
+        encoding="utf-8",
+    )
+    (schema_dir / "baseline.sql").write_text("create schema identity; create schema chat;", encoding="utf-8")
+
+    class Cursor:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args) -> None:
+            return None
+
+        def execute(self, statement: str, params=None) -> None:
+            return None
+
+        def fetchone(self):
+            return (1, 1, 0)
+
+    class Connection:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args) -> None:
+            return None
+
+        def cursor(self) -> Cursor:
+            return Cursor()
+
+    fake_psycopg = types.SimpleNamespace(connect=lambda *args, **kwargs: Connection())
+    monkeypatch.setitem(sys.modules, "psycopg", fake_psycopg)
+
+    try:
+        applier.apply_schema("postgresql://example", schema_dir=schema_dir)
+    except RuntimeError as exc:
+        assert "already contains a partial or drifted app schema" in str(exc)
+    else:
+        raise AssertionError("expected partial schema to fail loudly")

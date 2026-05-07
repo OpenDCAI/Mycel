@@ -52,13 +52,13 @@ services:
     depends_on:
       - gateway
     ports:
-      - "127.0.0.1:8042:8900"
+      - "${MYCEL_BIND_HOST:-127.0.0.1}:${MYCEL_PORT:-8042}:8900"
     environment:
       MYCEL_RUNTIME_PROFILE: communication
       LEON_STORAGE_STRATEGY: supabase
       LEON_DB_SCHEMA: identity
       SUPABASE_INTERNAL_URL: http://gateway:8000
-      SUPABASE_PUBLIC_URL: http://127.0.0.1:8042
+      SUPABASE_PUBLIC_URL: ${MYCEL_PUBLIC_URL:-http://127.0.0.1:8042}
       SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY:?SUPABASE_ANON_KEY is required}
       LEON_SUPABASE_SERVICE_ROLE_KEY: ${LEON_SUPABASE_SERVICE_ROLE_KEY:?LEON_SUPABASE_SERVICE_ROLE_KEY is required}
       SUPABASE_JWT_SECRET: ${SUPABASE_JWT_SECRET:?SUPABASE_JWT_SECRET is required}
