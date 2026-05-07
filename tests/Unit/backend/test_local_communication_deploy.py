@@ -55,9 +55,11 @@ def test_cli_minimal_backend_uses_communication_profile_and_thin_gateway() -> No
     assert backend_ports == ["${MYCEL_BIND_HOST:-127.0.0.1}:${MYCEL_PORT:-8042}:8900"]
     assert backend_env["MYCEL_RUNTIME_PROFILE"] == "communication"
     assert backend_env["LEON_STORAGE_STRATEGY"] == "supabase"
+    assert backend_env["LEON_SUPABASE_CLIENT_FACTORY"] == "backend.identity.auth.supabase_runtime:create_supabase_client"
     assert backend_env["SUPABASE_INTERNAL_URL"] == "http://gateway:8000"
     assert backend_env["SUPABASE_PUBLIC_URL"] == "${MYCEL_PUBLIC_URL:-http://127.0.0.1:8042}"
     assert backend_env["LEON_DB_SCHEMA"] == "identity"
+    assert backend_env["LEON_POSTGRES_URL"] == "postgresql://postgres:postgres@postgres:5432/postgres"
     assert postgrest_env["PGRST_DB_SCHEMAS"] == "identity,chat,agent,container,library,observability"
     assert postgrest_env["PGRST_JWT_SECRET"] == "${SUPABASE_JWT_SECRET:?SUPABASE_JWT_SECRET is required}"
     assert backend_env["SUPABASE_JWT_SECRET"] == "${SUPABASE_JWT_SECRET:?SUPABASE_JWT_SECRET is required}"
