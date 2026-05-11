@@ -14,7 +14,10 @@ from backend.chat.api.http.dependencies import (
     get_current_user_id,
     get_messaging_service,
 )
-from storage.errors import StaleChatWorkflowVersionError
+from storage.errors import (
+    StaleChatWorkflowEventVersionError,
+    StaleChatWorkflowVersionError,
+)
 
 router = APIRouter(prefix="/api/chats", tags=["chats"])
 
@@ -75,6 +78,7 @@ class UpdateChatWorkflowEventBody(BaseModel):
     final_state: dict[str, Any] | None = None
     metadata: dict[str, Any] | None = None
     settled_at: float | None = None
+    expected_state_version: int | None = Field(default=None, ge=0)
 
 
 @router.get("/{chat_id}/workflow")
@@ -197,16 +201,29 @@ def update_chat_workflow_event(
     chat_workflow_event_service: Annotated[Any, Depends(get_chat_workflow_event_service)],
 ):
     get_accessible_chat_or_404(chat_repo, messaging_service, chat_id, user_id)
-    event = chat_workflow_event_service.update_event(
-        chat_id,
-        event_id,
-        state=body.state,
-        decision_states=body.decision_states,
-        rationales=body.rationales,
-        final_state=body.final_state,
-        metadata=body.metadata,
-        settled_at=body.settled_at,
-    )
+    try:
+        event = chat_workflow_event_service.update_event(
+            chat_id,
+            event_id,
+            state=body.state,
+            decision_states=body.decision_states,
+            rationales=body.rationales,
+            final_state=body.final_state,
+            metadata=body.metadata,
+            settled_at=body.settled_at,
+            expected_state_version=body.expected_state_version,
+        )
+    except StaleChatWorkflowEventVersionError as exc:
+        raise HTTPException(
+            409,
+            {
+                "error": "stale_chat_workflow_event_state_version",
+                "chat_id": exc.chat_id,
+                "event_id": exc.event_id,
+                "expected_state_version": exc.expected_state_version,
+                "actual_state_version": exc.actual_state_version,
+            },
+        ) from exc
     if event is None:
         raise HTTPException(404, "Chat workflow event not found")
     return event

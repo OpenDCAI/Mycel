@@ -12,7 +12,10 @@ from backend.chat.api.http import chat_workflow_router, chats_router, relationsh
 from backend.identity.avatar.urls import avatar_url
 from backend.web.core.dependencies import get_current_user_id
 from storage.contracts import ContactEdgeRow
-from storage.errors import StaleChatWorkflowVersionError
+from storage.errors import (
+    StaleChatWorkflowEventVersionError,
+    StaleChatWorkflowVersionError,
+)
 
 
 def _chat(chat_id: str) -> SimpleNamespace:
@@ -574,6 +577,63 @@ def test_chat_workflow_event_routes_use_chat_access_helper(monkeypatch: pytest.M
                 },
             ),
         ),
+    ]
+
+
+def test_chat_workflow_event_patch_carries_expected_version_and_returns_conflict(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[dict[str, object]] = []
+
+    def update_event(chat_id: str, event_id: str, **kwargs):
+        calls.append({"chat_id": chat_id, "event_id": event_id, **kwargs})
+        raise StaleChatWorkflowEventVersionError(
+            chat_id=chat_id,
+            event_id=event_id,
+            expected_state_version=4,
+            actual_state_version=5,
+        )
+
+    app = FastAPI()
+    app.include_router(chat_workflow_router.router)
+    app.dependency_overrides[chat_workflow_router.get_current_user_id] = lambda: "user-1"
+    app.dependency_overrides[chat_workflow_router.get_chat_repo] = lambda: SimpleNamespace(name="chat-repo")
+    app.dependency_overrides[chat_workflow_router.get_messaging_service] = lambda: SimpleNamespace(name="messaging")
+    app.dependency_overrides[chat_workflow_router.get_chat_workflow_event_service] = lambda: SimpleNamespace(update_event=update_event)
+    monkeypatch.setattr(chat_workflow_router, "get_accessible_chat_or_404", lambda *_args: _chat("chat-1"))
+
+    try:
+        with TestClient(app) as client:
+            response = client.patch(
+                "/api/chats/chat-1/workflow/events/evt-1",
+                json={
+                    "decision_states": {"reviewer-a": {"1": "completed"}},
+                    "expected_state_version": 4,
+                },
+            )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 409
+    assert response.json()["detail"] == {
+        "error": "stale_chat_workflow_event_state_version",
+        "chat_id": "chat-1",
+        "event_id": "evt-1",
+        "expected_state_version": 4,
+        "actual_state_version": 5,
+    }
+    assert calls == [
+        {
+            "chat_id": "chat-1",
+            "event_id": "evt-1",
+            "state": None,
+            "decision_states": {"reviewer-a": {"1": "completed"}},
+            "rationales": None,
+            "final_state": None,
+            "metadata": None,
+            "settled_at": None,
+            "expected_state_version": 4,
+        }
     ]
 
 

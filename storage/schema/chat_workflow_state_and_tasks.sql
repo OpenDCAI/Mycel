@@ -39,11 +39,15 @@ create table if not exists chat.workflow_events (
     rationales_json         jsonb not null default '{}'::jsonb,
     final_state_json        jsonb not null default '{}'::jsonb,
     metadata_json           jsonb not null default '{}'::jsonb,
+    state_version           integer not null default 0,
     created_at              double precision not null,
     updated_at              double precision,
     settled_at              double precision,
     primary key (chat_id, event_id)
 );
+
+alter table if exists chat.workflow_events
+    add column if not exists state_version integer not null default 0;
 
 create index if not exists idx_chat_tasks_owner_user_id
     on chat.tasks(owner_user_id)

@@ -314,6 +314,7 @@ class ChatWorkflowEventRow(BaseModel):
     rationales: dict[str, Any] = Field(default_factory=dict)
     final_state: dict[str, Any] = Field(default_factory=dict)
     metadata: dict[str, Any] = Field(default_factory=dict)
+    state_version: int = 0
     created_at: float
     updated_at: float | None = None
     settled_at: float | None = None
@@ -323,6 +324,13 @@ class ChatWorkflowEventRow(BaseModel):
     def _validate_chat_workflow_event_identity_fields(cls, value: str, info: Any) -> str:
         if not value.strip():
             raise ValueError(f"chat_workflow_event.{info.field_name} must not be blank")
+        return value
+
+    @field_validator("state_version")
+    @classmethod
+    def _validate_chat_workflow_event_state_version(cls, value: int) -> int:
+        if value < 0:
+            raise ValueError("chat_workflow_event.state_version must be non-negative")
         return value
 
 
@@ -548,7 +556,13 @@ class ChatWorkflowEventRepo(Protocol):
     def get(self, scope_id: str, event_id: str) -> ChatWorkflowEventRow | None: ...
     def list_all(self, scope_id: str) -> list[ChatWorkflowEventRow]: ...
     def insert(self, scope_id: str, event: ChatWorkflowEventRow) -> None: ...
-    def update(self, scope_id: str, event: ChatWorkflowEventRow) -> None: ...
+    def update(
+        self,
+        scope_id: str,
+        event: ChatWorkflowEventRow,
+        *,
+        expected_state_version: int | None = None,
+    ) -> ChatWorkflowEventRow: ...
     def delete(self, scope_id: str, event_id: str) -> None: ...
 
 
