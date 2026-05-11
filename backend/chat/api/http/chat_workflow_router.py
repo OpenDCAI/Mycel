@@ -166,7 +166,7 @@ def create_chat_workflow_event(
         chat_id,
         kind=body.kind,
         resource_refs=body.resource_refs,
-        requested_by_user_id=body.requested_by_user_id,
+        requested_by_user_id=body.requested_by_user_id or user_id,
         decision_states=body.decision_states,
         rationales=body.rationales,
         final_state=body.final_state,

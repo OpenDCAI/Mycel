@@ -580,6 +580,49 @@ def test_chat_workflow_event_routes_use_chat_access_helper(monkeypatch: pytest.M
     ]
 
 
+def test_chat_workflow_event_create_defaults_requester_to_authenticated_user(monkeypatch: pytest.MonkeyPatch) -> None:
+    seen: list[tuple[str, object]] = []
+    chat_repo = SimpleNamespace(name="chat-repo")
+    messaging_service = SimpleNamespace(name="messaging")
+    event_service = SimpleNamespace(
+        create_event=lambda chat_id, **kwargs: (
+            seen.append(("create_event", (chat_id, kwargs))) or {"event_id": "1", "requested_by_user_id": kwargs["requested_by_user_id"]}
+        )
+    )
+    monkeypatch.setattr(chat_workflow_router, "get_accessible_chat_or_404", lambda *_args: _chat("chat-1"))
+
+    result = chat_workflow_router.create_chat_workflow_event(
+        "chat-1",
+        chat_workflow_router.CreateChatWorkflowEventBody(
+            kind="task_proposed_review",
+            resource_refs=[{"type": "task", "id": "1"}],
+        ),
+        user_id="user-1",
+        chat_repo=chat_repo,
+        messaging_service=messaging_service,
+        chat_workflow_event_service=event_service,
+    )
+
+    assert result == {"event_id": "1", "requested_by_user_id": "user-1"}
+    assert seen == [
+        (
+            "create_event",
+            (
+                "chat-1",
+                {
+                    "kind": "task_proposed_review",
+                    "resource_refs": [{"type": "task", "id": "1"}],
+                    "requested_by_user_id": "user-1",
+                    "decision_states": {},
+                    "rationales": {},
+                    "final_state": {},
+                    "metadata": {},
+                },
+            ),
+        )
+    ]
+
+
 def test_chat_workflow_event_patch_carries_expected_version_and_returns_conflict(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
