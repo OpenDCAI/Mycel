@@ -49,6 +49,7 @@ class ExternalRuntimeInboxHandler:
         }
         if envelope.message.metadata:
             payload.update(envelope.message.metadata)
+        payload.update(_transport_payload(envelope.transport))
         self._queue_manager.enqueue(
             json.dumps(payload, ensure_ascii=False, separators=(",", ":")),
             inbox_id,
@@ -61,3 +62,14 @@ class ExternalRuntimeInboxHandler:
         if self._wake_bus is not None and envelope.wake:
             self._wake_bus.publish(inbox_id)
         return agent_runtime_protocol.AgentRuntimeNotificationResult(status="accepted", thread_id=inbox_id)
+
+
+def _transport_payload(transport: agent_runtime_protocol.AgentRuntimeTransport) -> dict[str, str]:
+    payload: dict[str, str] = {}
+    if transport.delivery_id is not None:
+        payload["delivery_id"] = transport.delivery_id
+    if transport.correlation_id is not None:
+        payload["correlation_id"] = transport.correlation_id
+    if transport.idempotency_key is not None:
+        payload["idempotency_key"] = transport.idempotency_key
+    return payload

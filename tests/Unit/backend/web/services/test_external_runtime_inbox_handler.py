@@ -13,6 +13,7 @@ from protocols.agent_runtime import (
     AgentRuntimeActor,
     AgentRuntimeMessage,
     AgentRuntimeNotificationEnvelope,
+    AgentRuntimeTransport,
 )
 
 
@@ -81,6 +82,11 @@ async def test_external_runtime_inbox_handler_queues_generic_runtime_notificatio
             metadata={"relationship_id": "hire_visit:external-user-1:human-user-1"},
         ),
         notification_type="relationship",
+        transport=AgentRuntimeTransport(
+            delivery_id="delivery-1",
+            correlation_id="corr-1",
+            idempotency_key="idem-1",
+        ),
     )
 
     result = await handler.dispatch_notification(envelope)
@@ -102,6 +108,9 @@ async def test_external_runtime_inbox_handler_queues_generic_runtime_notificatio
         "sender_name": "Human",
         "summary": "Human requested a relationship with you.",
         "relationship_id": "hire_visit:external-user-1:human-user-1",
+        "delivery_id": "delivery-1",
+        "correlation_id": "corr-1",
+        "idempotency_key": "idem-1",
     }
 
 
