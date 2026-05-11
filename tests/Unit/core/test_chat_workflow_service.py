@@ -307,3 +307,34 @@ def test_chat_workflow_event_service_requires_requester_for_wired_notification()
         assert str(exc) == "Workflow event notification requires requested_by_user_id"
     else:
         raise AssertionError("wired workflow event notification accepted missing requester")
+
+
+def test_chat_workflow_event_service_notifies_after_update_when_wired() -> None:
+    repo = _WorkflowEventRepo()
+    notifications = []
+    service = ChatWorkflowEventService(repo)
+    event = service.create_event("chat-1", kind="task_proposed_review")
+    service.set_event_notification_fn(lambda event, sender_user_id: notifications.append((event, sender_user_id)))
+
+    updated = service.update_event(
+        "chat-1",
+        event["event_id"],
+        state="settled",
+        updated_by_user_id="reviewer-1",
+    )
+
+    assert notifications == [(updated, "reviewer-1")]
+
+
+def test_chat_workflow_event_service_requires_actor_for_wired_update_notification() -> None:
+    repo = _WorkflowEventRepo()
+    service = ChatWorkflowEventService(repo)
+    event = service.create_event("chat-1", kind="task_proposed_review")
+    service.set_event_notification_fn(lambda _event, _sender_user_id: None)
+
+    try:
+        service.update_event("chat-1", event["event_id"], state="settled")
+    except RuntimeError as exc:
+        assert str(exc) == "Workflow event update notification requires updated_by_user_id"
+    else:
+        raise AssertionError("wired workflow event update notification accepted missing actor")

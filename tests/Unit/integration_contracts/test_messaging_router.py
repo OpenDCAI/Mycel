@@ -676,6 +676,7 @@ def test_chat_workflow_event_patch_carries_expected_version_and_returns_conflict
             "metadata": None,
             "settled_at": None,
             "expected_state_version": 4,
+            "updated_by_user_id": "user-1",
         }
     ]
 
