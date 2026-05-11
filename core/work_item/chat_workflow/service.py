@@ -23,6 +23,7 @@ class ChatWorkflowService:
         state: str = "active",
         config: dict[str, Any] | None = None,
         updated_by_user_id: str | None = None,
+        expected_state_version: int | None = None,
     ) -> dict[str, Any]:
         return _workflow_response(
             self._repo.upsert(
@@ -31,6 +32,7 @@ class ChatWorkflowService:
                 state=state,
                 config=config or {},
                 updated_by_user_id=updated_by_user_id,
+                expected_state_version=expected_state_version,
             )
         )
 
@@ -195,6 +197,7 @@ def _workflow_response(row: Any) -> dict[str, Any]:
         "kind": row.kind,
         "state": row.state,
         "config": dict(row.config),
+        "state_version": row.state_version,
         "updated_by_user_id": row.updated_by_user_id,
         "created_at": row.created_at,
         "updated_at": row.updated_at,

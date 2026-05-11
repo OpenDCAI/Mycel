@@ -27,3 +27,4 @@ maintained prompts.
 ## Multi-Agent Workflows
 
 - `multi-agent-natural-language-workflows.md`
+- `distributed-group-workflow.md`

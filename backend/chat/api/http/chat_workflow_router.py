@@ -14,6 +14,7 @@ from backend.chat.api.http.dependencies import (
     get_current_user_id,
     get_messaging_service,
 )
+from storage.errors import StaleChatWorkflowVersionError
 
 router = APIRouter(prefix="/api/chats", tags=["chats"])
 
@@ -24,6 +25,7 @@ class SetChatWorkflowBody(BaseModel):
     kind: str
     state: str = "active"
     config: dict[str, Any] = Field(default_factory=dict)
+    expected_state_version: int | None = Field(default=None, ge=0)
 
 
 class CreateChatTaskBody(BaseModel):
@@ -100,13 +102,25 @@ def set_chat_workflow(
     chat_workflow_service: Annotated[Any, Depends(get_chat_workflow_service)],
 ):
     get_accessible_chat_or_404(chat_repo, messaging_service, chat_id, user_id)
-    return chat_workflow_service.set_workflow(
-        chat_id,
-        kind=body.kind,
-        state=body.state,
-        config=body.config,
-        updated_by_user_id=user_id,
-    )
+    try:
+        return chat_workflow_service.set_workflow(
+            chat_id,
+            kind=body.kind,
+            state=body.state,
+            config=body.config,
+            updated_by_user_id=user_id,
+            expected_state_version=body.expected_state_version,
+        )
+    except StaleChatWorkflowVersionError as exc:
+        raise HTTPException(
+            409,
+            {
+                "error": "stale_chat_workflow_state_version",
+                "chat_id": exc.chat_id,
+                "expected_state_version": exc.expected_state_version,
+                "actual_state_version": exc.actual_state_version,
+            },
+        ) from exc
 
 
 @router.delete("/{chat_id}/workflow")
