@@ -10,6 +10,7 @@ from backend.threads.chat_adapters.relationship_inlet import (
     make_relationship_decision_notification_fn,
     make_relationship_request_notification_fn,
 )
+from backend.threads.chat_adapters.workflow_event_inlet import make_workflow_event_notification_fn
 from core.work_item.chat_workflow.service import ChatTaskService, ChatWorkflowEventService, ChatWorkflowService
 from messaging.delivery.resolver import HireVisitDeliveryResolver
 from messaging.join_requests import ChatJoinRequestService
@@ -164,5 +165,25 @@ def wire_chat_join_request_notifications(
             activity_reader=activity_reader,
             thread_repo=thread_repo,
             user_repo=user_repo,
+        )
+    )
+
+
+def wire_workflow_event_notifications(
+    app: Any,
+    *,
+    chat_workflow_event_service: Any,
+    messaging_service: Any,
+    activity_reader: Any,
+    thread_repo: Any,
+    user_repo: Any,
+) -> None:
+    chat_workflow_event_service.set_event_notification_fn(
+        make_workflow_event_notification_fn(
+            app,
+            activity_reader=activity_reader,
+            thread_repo=thread_repo,
+            user_repo=user_repo,
+            messaging_service=messaging_service,
         )
     )

@@ -249,3 +249,36 @@ def test_wire_chat_join_request_notifications_binds_rejection_notification_fn(mo
     )
 
     assert chat_join_request_service.notification_fn is notification_fn
+
+
+def test_wire_workflow_event_notifications_binds_notification_fn(monkeypatch):
+    notification_fn = object()
+    chat_workflow_event_service = SimpleNamespace(notification_fn=None)
+    messaging_service = object()
+    activity_reader = object()
+    thread_repo = object()
+    user_repo = object()
+
+    def _set_notification_fn(value):
+        chat_workflow_event_service.notification_fn = value
+
+    chat_workflow_event_service.set_event_notification_fn = _set_notification_fn
+
+    app = SimpleNamespace(state=SimpleNamespace())
+
+    monkeypatch.setattr(
+        chat_bootstrap,
+        "make_workflow_event_notification_fn",
+        lambda target_app, *, activity_reader, thread_repo, user_repo, messaging_service: notification_fn,
+    )
+
+    chat_bootstrap.wire_workflow_event_notifications(
+        app,
+        chat_workflow_event_service=chat_workflow_event_service,
+        messaging_service=messaging_service,
+        activity_reader=activity_reader,
+        thread_repo=thread_repo,
+        user_repo=user_repo,
+    )
+
+    assert chat_workflow_event_service.notification_fn is notification_fn

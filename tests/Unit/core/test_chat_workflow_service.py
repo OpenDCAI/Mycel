@@ -279,3 +279,31 @@ def test_chat_workflow_event_service_versions_updates_and_rejects_stale_writes()
         raise AssertionError("stale workflow event write did not fail")
 
     assert service.get_event("chat-1", event["event_id"]) == updated
+
+
+def test_chat_workflow_event_service_notifies_after_create_when_wired() -> None:
+    repo = _WorkflowEventRepo()
+    notifications = []
+    service = ChatWorkflowEventService(repo)
+    service.set_event_notification_fn(lambda event, sender_user_id: notifications.append((event, sender_user_id)))
+
+    event = service.create_event(
+        "chat-1",
+        kind="task_proposed_review",
+        requested_by_user_id="owner-1",
+    )
+
+    assert notifications == [(event, "owner-1")]
+
+
+def test_chat_workflow_event_service_requires_requester_for_wired_notification() -> None:
+    repo = _WorkflowEventRepo()
+    service = ChatWorkflowEventService(repo)
+    service.set_event_notification_fn(lambda _event, _sender_user_id: None)
+
+    try:
+        service.create_event("chat-1", kind="task_proposed_review")
+    except RuntimeError as exc:
+        assert str(exc) == "Workflow event notification requires requested_by_user_id"
+    else:
+        raise AssertionError("wired workflow event notification accepted missing requester")
