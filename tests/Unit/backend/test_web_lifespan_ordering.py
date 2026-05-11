@@ -27,6 +27,7 @@ def _patch_lifespan_runtime_contract(
     wire_relationship_request_notifications,
     wire_relationship_decision_notifications=lambda *_args, **_kwargs: None,
     wire_chat_join_request_notifications=lambda *_args, **_kwargs: None,
+    wire_workflow_event_notifications=lambda *_args, **_kwargs: None,
 ):
     monkeypatch.setattr(web_lifespan, "_require_web_runtime_contract", lambda: None)
     monkeypatch.setenv("LEON_POSTGRES_URL", "postgres://unit-test")
@@ -78,6 +79,7 @@ def _patch_lifespan_runtime_contract(
     monkeypatch.setattr("backend.chat.bootstrap.wire_relationship_request_notifications", wire_relationship_request_notifications)
     monkeypatch.setattr("backend.chat.bootstrap.wire_relationship_decision_notifications", wire_relationship_decision_notifications)
     monkeypatch.setattr("backend.chat.bootstrap.wire_chat_join_request_notifications", wire_chat_join_request_notifications)
+    monkeypatch.setattr("backend.chat.bootstrap.wire_workflow_event_notifications", wire_workflow_event_notifications)
     monkeypatch.setattr("backend.threads.bootstrap.attach_threads_runtime", attach_threads_runtime)
     monkeypatch.setattr("backend.threads.display.builder.DisplayBuilder", lambda: object())
     monkeypatch.setattr("backend.sandboxes.service.init_providers_and_managers", lambda: None)
@@ -91,6 +93,7 @@ async def test_web_lifespan_attaches_chat_runtime_before_threads_runtime(monkeyp
     returned_messaging_service = SimpleNamespace(set_delivery_fn=lambda _fn: None)
     returned_relationship_service = object()
     returned_chat_join_request_service = object()
+    returned_chat_workflow_event_service = object()
 
     def _attach_chat_runtime(app, _storage_container, *, user_repo, thread_repo):
         contact_repo = object()
@@ -100,6 +103,7 @@ async def test_web_lifespan_attaches_chat_runtime_before_threads_runtime(monkeyp
             messaging_service=returned_messaging_service,
             relationship_service=returned_relationship_service,
             chat_join_request_service=returned_chat_join_request_service,
+            chat_workflow_event_service=returned_chat_workflow_event_service,
         )
 
     def _attach_threads_runtime(
@@ -140,6 +144,7 @@ async def test_web_lifespan_wires_chat_delivery_after_threads_runtime(monkeypatc
     returned_messaging_service = SimpleNamespace(set_delivery_fn=lambda _fn: None)
     returned_relationship_service = object()
     returned_chat_join_request_service = object()
+    returned_chat_workflow_event_service = object()
     returned_contact_repo = object()
     returned_activity_reader = object()
 
@@ -151,6 +156,7 @@ async def test_web_lifespan_wires_chat_delivery_after_threads_runtime(monkeypatc
             messaging_service=returned_messaging_service,
             relationship_service=returned_relationship_service,
             chat_join_request_service=returned_chat_join_request_service,
+            chat_workflow_event_service=returned_chat_workflow_event_service,
         )
 
     def _attach_auth_runtime(_app, *, storage_state, contact_repo, managed_onboarding):
@@ -196,6 +202,20 @@ async def test_web_lifespan_wires_chat_delivery_after_threads_runtime(monkeypatc
         assert chat_join_request_service is returned_chat_join_request_service
         assert activity_reader is returned_activity_reader
 
+    def _wire_workflow_event_notifications(
+        _app,
+        *,
+        chat_workflow_event_service,
+        messaging_service,
+        activity_reader,
+        thread_repo,
+        user_repo,
+    ):
+        call_log.append("wire-workflow-event")
+        assert chat_workflow_event_service is returned_chat_workflow_event_service
+        assert messaging_service is returned_messaging_service
+        assert activity_reader is returned_activity_reader
+
     _patch_lifespan_runtime_contract(
         monkeypatch,
         attach_chat_runtime=_attach_chat_runtime,
@@ -205,6 +225,7 @@ async def test_web_lifespan_wires_chat_delivery_after_threads_runtime(monkeypatc
         wire_relationship_request_notifications=_wire_relationship_request_notifications,
         wire_relationship_decision_notifications=_wire_relationship_decision_notifications,
         wire_chat_join_request_notifications=_wire_chat_join_request_notifications,
+        wire_workflow_event_notifications=_wire_workflow_event_notifications,
     )
 
     app = SimpleNamespace(state=SimpleNamespace())
@@ -218,6 +239,7 @@ async def test_web_lifespan_wires_chat_delivery_after_threads_runtime(monkeypatc
             "wire-relationship",
             "wire-relationship-decision",
             "wire-chat-join",
+            "wire-workflow-event",
         ]
 
 
@@ -276,6 +298,7 @@ async def test_web_lifespan_passes_borrowed_contact_repo_into_auth_runtime(monke
             messaging_service=SimpleNamespace(set_delivery_fn=lambda _fn: None),
             relationship_service=object(),
             chat_join_request_service=object(),
+            chat_workflow_event_service=object(),
         ),
     )
     monkeypatch.setattr(
@@ -286,6 +309,7 @@ async def test_web_lifespan_passes_borrowed_contact_repo_into_auth_runtime(monke
     monkeypatch.setattr("backend.chat.bootstrap.wire_relationship_request_notifications", lambda *_args, **_kwargs: None)
     monkeypatch.setattr("backend.chat.bootstrap.wire_relationship_decision_notifications", lambda *_args, **_kwargs: None)
     monkeypatch.setattr("backend.chat.bootstrap.wire_chat_join_request_notifications", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr("backend.chat.bootstrap.wire_workflow_event_notifications", lambda *_args, **_kwargs: None)
     monkeypatch.setattr("backend.threads.display.builder.DisplayBuilder", lambda: object())
     monkeypatch.setattr("backend.sandboxes.service.init_providers_and_managers", lambda: None)
     monkeypatch.setattr("backend.threads.pool.idle_reaper.idle_reaper_loop", lambda _app: _never())
@@ -303,6 +327,7 @@ async def test_communication_lifespan_uses_external_inbox_runtime_without_manage
     returned_messaging_service = SimpleNamespace(set_delivery_fn=lambda _fn: None)
     returned_relationship_service = object()
     returned_chat_join_request_service = object()
+    returned_chat_workflow_event_service = object()
     returned_contact_repo = object()
 
     def _attach_chat_runtime(app, _storage_container, *, user_repo, thread_repo):
@@ -313,6 +338,7 @@ async def test_communication_lifespan_uses_external_inbox_runtime_without_manage
             messaging_service=returned_messaging_service,
             relationship_service=returned_relationship_service,
             chat_join_request_service=returned_chat_join_request_service,
+            chat_workflow_event_service=returned_chat_workflow_event_service,
         )
 
     def _attach_auth_runtime(_app, *, storage_state, contact_repo, managed_onboarding):
@@ -350,6 +376,20 @@ async def test_communication_lifespan_uses_external_inbox_runtime_without_manage
         assert chat_join_request_service is returned_chat_join_request_service
         assert activity_reader is None
 
+    def _wire_workflow_event_notifications(
+        _app,
+        *,
+        chat_workflow_event_service,
+        messaging_service,
+        activity_reader,
+        thread_repo,
+        user_repo,
+    ):
+        call_log.append("wire-workflow-event")
+        assert chat_workflow_event_service is returned_chat_workflow_event_service
+        assert messaging_service is returned_messaging_service
+        assert activity_reader is None
+
     _patch_lifespan_runtime_contract(
         monkeypatch,
         attach_chat_runtime=_attach_chat_runtime,
@@ -359,6 +399,7 @@ async def test_communication_lifespan_uses_external_inbox_runtime_without_manage
         wire_relationship_request_notifications=_wire_relationship_request_notifications,
         wire_relationship_decision_notifications=_wire_relationship_decision_notifications,
         wire_chat_join_request_notifications=_wire_chat_join_request_notifications,
+        wire_workflow_event_notifications=_wire_workflow_event_notifications,
     )
     monkeypatch.setattr(
         web_lifespan,
@@ -391,6 +432,7 @@ async def test_communication_lifespan_uses_external_inbox_runtime_without_manage
             "wire-relationship",
             "wire-relationship-decision",
             "wire-chat-join",
+            "wire-workflow-event",
         ]
 
 

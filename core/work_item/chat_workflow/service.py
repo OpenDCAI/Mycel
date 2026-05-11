@@ -121,6 +121,10 @@ class ChatTaskService:
 class ChatWorkflowEventService:
     def __init__(self, event_repo: Any) -> None:
         self._repo = event_repo
+        self._event_notification_fn: Any | None = None
+
+    def set_event_notification_fn(self, notification_fn: Any) -> None:
+        self._event_notification_fn = notification_fn
 
     def list_events(self, chat_id: str) -> list[dict[str, Any]]:
         return [_event_response(event) for event in self._repo.list_all(chat_id)]
@@ -155,7 +159,12 @@ class ChatWorkflowEventService:
             created_at=time.time(),
         )
         self._repo.insert(chat_id, event)
-        return _event_response(event)
+        response = _event_response(event)
+        if self._event_notification_fn is not None:
+            if requested_by_user_id is None:
+                raise RuntimeError("Workflow event notification requires requested_by_user_id")
+            self._event_notification_fn(response, requested_by_user_id)
+        return response
 
     def update_event(
         self,
