@@ -178,6 +178,7 @@ class ChatWorkflowEventService:
         metadata: dict[str, Any] | None = None,
         settled_at: float | None = None,
         expected_state_version: int | None = None,
+        updated_by_user_id: str | None = None,
     ) -> dict[str, Any] | None:
         event = self._repo.get(chat_id, event_id)
         if event is None:
@@ -196,7 +197,12 @@ class ChatWorkflowEventService:
         if settled_at is not None:
             event.settled_at = settled_at
         updated = self._repo.update(chat_id, event, expected_state_version=expected_state_version)
-        return _event_response(updated)
+        response = _event_response(updated)
+        if self._event_notification_fn is not None:
+            if updated_by_user_id is None:
+                raise RuntimeError("Workflow event update notification requires updated_by_user_id")
+            self._event_notification_fn(response, updated_by_user_id)
+        return response
 
     def delete_event(self, chat_id: str, event_id: str) -> None:
         self._repo.delete(chat_id, event_id)

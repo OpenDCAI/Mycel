@@ -212,6 +212,7 @@ def update_chat_workflow_event(
             metadata=body.metadata,
             settled_at=body.settled_at,
             expected_state_version=body.expected_state_version,
+            updated_by_user_id=user_id,
         )
     except StaleChatWorkflowEventVersionError as exc:
         raise HTTPException(
