@@ -168,10 +168,12 @@ class ChatWorkflowEventService:
         final_state: dict[str, Any] | None = None,
         metadata: dict[str, Any] | None = None,
         settled_at: float | None = None,
+        expected_state_version: int | None = None,
     ) -> dict[str, Any] | None:
         event = self._repo.get(chat_id, event_id)
         if event is None:
             return None
+        event = event.model_copy(deep=True)
         if state is not None:
             event.state = state
         if decision_states is not None:
@@ -184,8 +186,8 @@ class ChatWorkflowEventService:
             event.metadata = dict(metadata)
         if settled_at is not None:
             event.settled_at = settled_at
-        self._repo.update(chat_id, event)
-        return _event_response(event)
+        updated = self._repo.update(chat_id, event, expected_state_version=expected_state_version)
+        return _event_response(updated)
 
     def delete_event(self, chat_id: str, event_id: str) -> None:
         self._repo.delete(chat_id, event_id)
@@ -222,6 +224,7 @@ def _event_response(event: ChatWorkflowEventRow) -> dict[str, Any]:
         "rationales": dict(event.rationales),
         "final_state": dict(event.final_state),
         "metadata": dict(event.metadata),
+        "state_version": event.state_version,
         "created_at": event.created_at,
         "updated_at": event.updated_at,
         "settled_at": event.settled_at,

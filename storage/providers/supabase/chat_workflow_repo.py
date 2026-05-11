@@ -5,7 +5,10 @@ from typing import Any
 
 from core.work_item.types import WorkItem
 from storage.contracts import ChatWorkflowEventRow, ChatWorkflowRow
-from storage.errors import StaleChatWorkflowVersionError
+from storage.errors import (
+    StaleChatWorkflowEventVersionError,
+    StaleChatWorkflowVersionError,
+)
 from storage.providers.supabase import _query as q
 
 _SCHEMA = "chat"
@@ -174,10 +177,39 @@ class SupabaseChatWorkflowEventRepo:
     def insert(self, scope_id: str, event: ChatWorkflowEventRow) -> None:
         self._t().insert(_workflow_event_payload(scope_id, event)).execute()
 
-    def update(self, scope_id: str, event: ChatWorkflowEventRow) -> None:
+    def update(
+        self,
+        scope_id: str,
+        event: ChatWorkflowEventRow,
+        *,
+        expected_state_version: int | None = None,
+    ) -> ChatWorkflowEventRow:
+        existing = self.get(scope_id, event.event_id)
+        actual_state_version = existing.state_version if existing is not None else None
+        if expected_state_version is not None and actual_state_version != expected_state_version:
+            raise StaleChatWorkflowEventVersionError(
+                chat_id=scope_id,
+                event_id=event.event_id,
+                expected_state_version=expected_state_version,
+                actual_state_version=actual_state_version,
+            )
+        next_state_version = 0 if existing is None else existing.state_version + 1
         payload = _workflow_event_payload(scope_id, event)
         payload.pop("created_at", None)
-        self._t().update(payload).eq("chat_id", scope_id).eq("event_id", event.event_id).execute()
+        payload["state_version"] = next_state_version
+        query = self._t().update(payload).eq("chat_id", scope_id).eq("event_id", event.event_id)
+        if expected_state_version is not None:
+            query = query.eq("state_version", expected_state_version)
+        rows = q.rows(query.execute(), _EVENT_REPO, "update")
+        if expected_state_version is not None and not rows:
+            current = self.get(scope_id, event.event_id)
+            raise StaleChatWorkflowEventVersionError(
+                chat_id=scope_id,
+                event_id=event.event_id,
+                expected_state_version=expected_state_version,
+                actual_state_version=current.state_version if current is not None else None,
+            )
+        return _row_to_workflow_event(rows[0] if rows else payload)
 
     def delete(self, scope_id: str, event_id: str) -> None:
         self._t().delete().eq("chat_id", scope_id).eq("event_id", event_id).execute()
@@ -225,6 +257,7 @@ def _row_to_workflow_event(row: dict[str, Any]) -> ChatWorkflowEventRow:
         rationales=dict(row.get("rationales_json") or row.get("rationales") or {}),
         final_state=dict(row.get("final_state_json") or row.get("final_state") or {}),
         metadata=dict(row.get("metadata_json") or row.get("metadata") or {}),
+        state_version=int(row.get("state_version") or 0),
         created_at=float(row["created_at"]),
         updated_at=float(row["updated_at"]) if row.get("updated_at") is not None else None,
         settled_at=float(row["settled_at"]) if row.get("settled_at") is not None else None,
@@ -263,6 +296,7 @@ def _workflow_event_payload(scope_id: str, event: ChatWorkflowEventRow) -> dict[
         "rationales_json": dict(event.rationales),
         "final_state_json": dict(event.final_state),
         "metadata_json": dict(event.metadata),
+        "state_version": event.state_version,
         "created_at": event.created_at,
         "updated_at": now,
         "settled_at": event.settled_at,

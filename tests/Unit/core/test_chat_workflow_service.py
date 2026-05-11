@@ -9,7 +9,10 @@ from core.work_item.chat_workflow.service import (
 )
 from core.work_item.types import WorkItem
 from storage.contracts import ChatWorkflowEventRow, ChatWorkflowRow
-from storage.errors import StaleChatWorkflowVersionError
+from storage.errors import (
+    StaleChatWorkflowEventVersionError,
+    StaleChatWorkflowVersionError,
+)
 
 
 class _WorkflowRepo:
@@ -93,8 +96,25 @@ class _WorkflowEventRepo:
     def insert(self, scope_id: str, event: ChatWorkflowEventRow) -> None:
         self.rows.setdefault(scope_id, {})[event.event_id] = event
 
-    def update(self, scope_id: str, event: ChatWorkflowEventRow) -> None:
-        self.rows.setdefault(scope_id, {})[event.event_id] = event
+    def update(
+        self,
+        scope_id: str,
+        event: ChatWorkflowEventRow,
+        *,
+        expected_state_version: int | None = None,
+    ) -> ChatWorkflowEventRow:
+        existing = self.rows.get(scope_id, {}).get(event.event_id)
+        existing_version = int(getattr(existing, "state_version", 0)) if existing is not None else None
+        if expected_state_version is not None and existing_version != expected_state_version:
+            raise StaleChatWorkflowEventVersionError(
+                chat_id=scope_id,
+                event_id=event.event_id,
+                expected_state_version=expected_state_version,
+                actual_state_version=existing_version,
+            )
+        updated = event.model_copy(update={"state_version": 0 if existing is None else existing_version + 1})
+        self.rows.setdefault(scope_id, {})[event.event_id] = updated
+        return updated
 
     def delete(self, scope_id: str, event_id: str) -> None:
         self.rows.get(scope_id, {}).pop(event_id, None)
@@ -226,3 +246,36 @@ def test_chat_workflow_event_service_keeps_events_scoped_to_chat_id() -> None:
     assert updated["decision_states"] == {"reviewer-user": {"1": "pending"}}
     assert updated["final_state"] == {"1": "pending"}
     assert updated["settled_at"] == 42.0
+
+
+def test_chat_workflow_event_service_versions_updates_and_rejects_stale_writes() -> None:
+    repo = _WorkflowEventRepo()
+    service = ChatWorkflowEventService(repo)
+
+    event = service.create_event("chat-1", kind="task_proposed_review")
+    updated = service.update_event(
+        "chat-1",
+        event["event_id"],
+        decision_states={"reviewer-a": {"1": "completed"}},
+        expected_state_version=event["state_version"],
+    )
+
+    assert event["state_version"] == 0
+    assert updated is not None
+    assert updated["state_version"] == 1
+    try:
+        service.update_event(
+            "chat-1",
+            event["event_id"],
+            decision_states={"reviewer-b": {"1": "pending"}},
+            expected_state_version=event["state_version"],
+        )
+    except StaleChatWorkflowEventVersionError as exc:
+        assert exc.chat_id == "chat-1"
+        assert exc.event_id == event["event_id"]
+        assert exc.expected_state_version == 0
+        assert exc.actual_state_version == 1
+    else:
+        raise AssertionError("stale workflow event write did not fail")
+
+    assert service.get_event("chat-1", event["event_id"]) == updated

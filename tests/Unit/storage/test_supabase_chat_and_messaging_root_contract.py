@@ -6,7 +6,11 @@ import pytest
 
 from core.work_item.types import WorkItem
 from storage.contracts import ChatRow, ChatWorkflowEventRow, ContactEdgeRow
-from storage.errors import StaleChatWorkflowVersionError, StorageConflictError
+from storage.errors import (
+    StaleChatWorkflowEventVersionError,
+    StaleChatWorkflowVersionError,
+    StorageConflictError,
+)
 from storage.providers.supabase.chat_repo import SupabaseChatRepo
 from storage.providers.supabase.chat_workflow_repo import (
     SupabaseChatTaskRepo,
@@ -181,6 +185,45 @@ def test_supabase_chat_workflow_event_repo_uses_chat_schema_sibling_table() -> N
     assert event.resource_refs == [{"type": "task", "id": "1"}]
     assert tables["chat.workflow_events"][0]["chat_id"] == "chat-1"
     assert "workflow_events" not in tables
+
+
+def test_supabase_chat_workflow_event_repo_rejects_stale_state_version() -> None:
+    tables: dict[str, list[dict]] = {
+        "chat.workflow_events": [
+            {
+                "chat_id": "chat-1",
+                "event_id": "1",
+                "kind": "task_proposed_review",
+                "state": "open",
+                "resource_refs_json": [],
+                "decision_states_json": {},
+                "rationales_json": {},
+                "final_state_json": {},
+                "metadata_json": {},
+                "state_version": 0,
+                "created_at": 1.0,
+                "updated_at": 1.0,
+            }
+        ]
+    }
+    repo = SupabaseChatWorkflowEventRepo(FakeSupabaseClient(tables=tables))
+    event = repo.get("chat-1", "1")
+    assert event is not None
+
+    updated = event.model_copy(update={"decision_states": {"reviewer-a": {"1": "completed"}}})
+    stored = repo.update("chat-1", updated, expected_state_version=0)
+    assert stored.state_version == 1
+    assert tables["chat.workflow_events"][0]["decision_states_json"] == {"reviewer-a": {"1": "completed"}}
+
+    stale = stored.model_copy(update={"decision_states": {"reviewer-b": {"1": "pending"}}})
+    with pytest.raises(StaleChatWorkflowEventVersionError) as exc:
+        repo.update("chat-1", stale, expected_state_version=0)
+
+    assert exc.value.chat_id == "chat-1"
+    assert exc.value.event_id == "1"
+    assert exc.value.expected_state_version == 0
+    assert exc.value.actual_state_version == 1
+    assert tables["chat.workflow_events"][0]["decision_states_json"] == {"reviewer-a": {"1": "completed"}}
 
 
 def test_supabase_find_chat_between_only_returns_direct_chat() -> None:

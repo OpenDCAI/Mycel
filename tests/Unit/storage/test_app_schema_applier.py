@@ -45,6 +45,13 @@ def test_chat_workflow_state_version_patch_updates_existing_tables() -> None:
     assert "add column if not exists state_version" in sql
 
 
+def test_chat_workflow_event_state_version_patch_updates_existing_tables() -> None:
+    sql = (ROOT / "storage/schema/chat_workflow_state_and_tasks.sql").read_text(encoding="utf-8")
+
+    assert "alter table if exists chat.workflow_events" in sql
+    assert "add column if not exists state_version integer not null default 0" in sql
+
+
 def test_applier_print_files_is_connection_free() -> None:
     result = subprocess.run(
         [sys.executable, str(APPLIER_PATH), "--print-files"],
