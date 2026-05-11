@@ -285,7 +285,7 @@ def test_chat_workflow_event_service_notifies_after_create_when_wired() -> None:
     repo = _WorkflowEventRepo()
     notifications = []
     service = ChatWorkflowEventService(repo)
-    service.set_event_notification_fn(lambda event, sender_user_id: notifications.append((event, sender_user_id)))
+    service.set_event_notification_fn(notifications.append)
 
     event = service.create_event(
         "chat-1",
@@ -293,13 +293,16 @@ def test_chat_workflow_event_service_notifies_after_create_when_wired() -> None:
         requested_by_user_id="owner-1",
     )
 
-    assert notifications == [(event, "owner-1")]
+    assert len(notifications) == 1
+    assert notifications[0].operation == "created"
+    assert notifications[0].event == event
+    assert notifications[0].actor_user_id == "owner-1"
 
 
 def test_chat_workflow_event_service_requires_requester_for_wired_notification() -> None:
     repo = _WorkflowEventRepo()
     service = ChatWorkflowEventService(repo)
-    service.set_event_notification_fn(lambda _event, _sender_user_id: None)
+    service.set_event_notification_fn(lambda _change: None)
 
     try:
         service.create_event("chat-1", kind="task_proposed_review")
@@ -314,7 +317,7 @@ def test_chat_workflow_event_service_notifies_after_update_when_wired() -> None:
     notifications = []
     service = ChatWorkflowEventService(repo)
     event = service.create_event("chat-1", kind="task_proposed_review")
-    service.set_event_notification_fn(lambda event, sender_user_id: notifications.append((event, sender_user_id)))
+    service.set_event_notification_fn(notifications.append)
 
     updated = service.update_event(
         "chat-1",
@@ -323,14 +326,17 @@ def test_chat_workflow_event_service_notifies_after_update_when_wired() -> None:
         updated_by_user_id="reviewer-1",
     )
 
-    assert notifications == [(updated, "reviewer-1")]
+    assert len(notifications) == 1
+    assert notifications[0].operation == "updated"
+    assert notifications[0].event == updated
+    assert notifications[0].actor_user_id == "reviewer-1"
 
 
 def test_chat_workflow_event_service_requires_actor_for_wired_update_notification() -> None:
     repo = _WorkflowEventRepo()
     service = ChatWorkflowEventService(repo)
     event = service.create_event("chat-1", kind="task_proposed_review")
-    service.set_event_notification_fn(lambda _event, _sender_user_id: None)
+    service.set_event_notification_fn(lambda _change: None)
 
     try:
         service.update_event("chat-1", event["event_id"], state="settled")

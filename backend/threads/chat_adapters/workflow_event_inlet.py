@@ -7,6 +7,7 @@ from typing import Any
 
 from backend.threads.chat_adapters.port import get_agent_runtime_gateway
 from backend.threads.chat_adapters.runtime_recipient import select_runtime_notification_recipient
+from core.work_item.chat_workflow.service import WorkflowEventChange
 from protocols.agent_runtime import (
     AgentChatRecipient,
     AgentRuntimeActor,
@@ -26,19 +27,18 @@ def make_workflow_event_notification_fn(
 ):
     loop = asyncio.get_running_loop()
 
-    async def notify_runtime(event: Mapping[str, Any], sender_user_id: str) -> None:
+    async def notify_runtime(change: WorkflowEventChange) -> None:
         await dispatch_workflow_event_notifications(
             app,
-            event=event,
-            members=messaging_service.list_chat_members(_required_str(event, "chat_id")),
-            sender_user_id=sender_user_id,
+            change=change,
+            members=messaging_service.list_chat_members(_required_str(change.event, "chat_id")),
             user_repo=user_repo,
             thread_repo=thread_repo,
             activity_reader=activity_reader,
         )
 
-    def _notify(event: Mapping[str, Any], sender_user_id: str) -> None:
-        future = asyncio.run_coroutine_threadsafe(notify_runtime(event, sender_user_id), loop)
+    def _notify(change: WorkflowEventChange) -> None:
+        future = asyncio.run_coroutine_threadsafe(notify_runtime(change), loop)
         future.result()
 
     return _notify
@@ -47,13 +47,13 @@ def make_workflow_event_notification_fn(
 async def dispatch_workflow_event_notifications(
     app: Any,
     *,
-    event: Mapping[str, Any],
+    change: WorkflowEventChange,
     members: list[Mapping[str, Any]],
-    sender_user_id: str,
     user_repo: Any,
     thread_repo: Any,
     activity_reader: Any,
 ) -> None:
+    sender_user_id = change.actor_user_id
     sender_user = _require_user(user_repo, sender_user_id, "sender")
     sender = AgentRuntimeActor(
         user_id=sender_user_id,
@@ -77,7 +77,7 @@ async def dispatch_workflow_event_notifications(
             continue
         await dispatch_workflow_event_notification(
             app,
-            event=event,
+            change=change,
             recipient=recipient,
             sender=sender,
         )
@@ -86,13 +86,13 @@ async def dispatch_workflow_event_notifications(
 async def dispatch_workflow_event_notification(
     app: Any,
     *,
-    event: Mapping[str, Any],
+    change: WorkflowEventChange,
     recipient: AgentChatRecipient,
     sender: AgentRuntimeActor,
 ) -> None:
     await get_agent_runtime_gateway(app).dispatch_notification(
         make_workflow_event_notification_envelope(
-            event=event,
+            change=change,
             recipient=recipient,
             sender=sender,
         )
@@ -101,10 +101,11 @@ async def dispatch_workflow_event_notification(
 
 def make_workflow_event_notification_envelope(
     *,
-    event: Mapping[str, Any],
+    change: WorkflowEventChange,
     recipient: AgentChatRecipient,
     sender: AgentRuntimeActor,
 ) -> AgentRuntimeNotificationEnvelope:
+    event = change.event
     chat_id = _required_str(event, "chat_id")
     event_id = _required_str(event, "event_id")
     kind = _required_str(event, "kind")
@@ -116,11 +117,12 @@ def make_workflow_event_notification_envelope(
         recipient=recipient,
         sender=sender,
         message=AgentRuntimeMessage(
-            content=f"Workflow event {kind} is {state}.",
+            content=f"Workflow event {kind} was {change.operation} and is {state}.",
             metadata={
                 "chat_id": chat_id,
                 "event_id": event_id,
                 "kind": kind,
+                "operation": change.operation,
                 "state": state,
                 "state_version": state_version,
             },

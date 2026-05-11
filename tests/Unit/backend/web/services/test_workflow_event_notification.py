@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 from types import SimpleNamespace
+from typing import Literal
 
 import pytest
 
@@ -10,6 +11,7 @@ from backend.threads.chat_adapters.workflow_event_inlet import (
     make_workflow_event_notification_envelope,
     make_workflow_event_notification_fn,
 )
+from core.work_item.chat_workflow.service import WorkflowEventChange
 from protocols.agent_runtime import AgentChatRecipient, AgentRuntimeActor
 
 
@@ -21,6 +23,14 @@ def _event() -> dict[str, object]:
         "state": "open",
         "state_version": 3,
     }
+
+
+def _change(operation: Literal["created", "updated"] = "created") -> WorkflowEventChange:
+    return WorkflowEventChange(
+        operation=operation,
+        event=_event(),
+        actor_user_id="owner-1",
+    )
 
 
 class _RecordingGateway:
@@ -60,16 +70,20 @@ def _thread_repo(*agent_ids: str) -> SimpleNamespace:
 
 def test_workflow_event_notification_is_metadata_only() -> None:
     envelope = make_workflow_event_notification_envelope(
-        event={
-            "chat_id": "chat-1",
-            "event_id": "event-1",
-            "kind": "task_proposed_review",
-            "state": "open",
-            "state_version": 3,
-            "resource_refs": [{"type": "task", "id": "1"}],
-            "rationales": {"reviewer-1": "must not leak"},
-            "final_state": {"1": "completed"},
-        },
+        change=WorkflowEventChange(
+            operation="created",
+            event={
+                "chat_id": "chat-1",
+                "event_id": "event-1",
+                "kind": "task_proposed_review",
+                "state": "open",
+                "state_version": 3,
+                "resource_refs": [{"type": "task", "id": "1"}],
+                "rationales": {"reviewer-1": "must not leak"},
+                "final_state": {"1": "completed"},
+            },
+            actor_user_id="owner-1",
+        ),
         recipient=AgentChatRecipient(agent_user_id="agent-1", runtime_source="mycel", thread_id="thread-1"),
         sender=AgentRuntimeActor(user_id="owner-1", user_type="human", display_name="Owner", source="workflow"),
     )
@@ -78,11 +92,12 @@ def test_workflow_event_notification_is_metadata_only() -> None:
     assert envelope.notification_type == "workflow_event"
     assert envelope.recipient.agent_user_id == "agent-1"
     assert envelope.sender.user_id == "owner-1"
-    assert envelope.message.content == "Workflow event task_proposed_review is open."
+    assert envelope.message.content == "Workflow event task_proposed_review was created and is open."
     assert envelope.message.metadata == {
         "chat_id": "chat-1",
         "event_id": "event-1",
         "kind": "task_proposed_review",
+        "operation": "created",
         "state": "open",
         "state_version": 3,
     }
@@ -95,13 +110,17 @@ def test_workflow_event_notification_is_metadata_only() -> None:
 def test_workflow_event_notification_fails_loudly_on_missing_identity() -> None:
     try:
         make_workflow_event_notification_envelope(
-            event={
-                "chat_id": "chat-1",
-                "event_id": "",
-                "kind": "task_proposed_review",
-                "state": "open",
-                "state_version": 3,
-            },
+            change=WorkflowEventChange(
+                operation="created",
+                event={
+                    "chat_id": "chat-1",
+                    "event_id": "",
+                    "kind": "task_proposed_review",
+                    "state": "open",
+                    "state_version": 3,
+                },
+                actor_user_id="owner-1",
+            ),
             recipient=AgentChatRecipient(agent_user_id="agent-1", runtime_source="mycel", thread_id="thread-1"),
             sender=AgentRuntimeActor(user_id="owner-1", user_type="human", display_name="Owner", source="workflow"),
         )
@@ -117,7 +136,7 @@ async def test_dispatch_workflow_event_notifications_fans_out_to_runtime_members
 
     await dispatch_workflow_event_notifications(
         _runtime_app(gateway),
-        event=_event(),
+        change=_change("updated"),
         members=[
             {"user_id": "owner-1"},
             {"user_id": "agent-1"},
@@ -125,7 +144,6 @@ async def test_dispatch_workflow_event_notifications_fans_out_to_runtime_members
             {"user_id": "external-1"},
             {"user_id": "human-2"},
         ],
-        sender_user_id="owner-1",
         user_repo=_users("agent-1", "agent-without-thread"),
         thread_repo=_thread_repo("agent-1"),
         activity_reader=SimpleNamespace(list_active_threads_for_agent=lambda _agent_user_id: []),
@@ -136,6 +154,7 @@ async def test_dispatch_workflow_event_notifications_fans_out_to_runtime_members
     assert gateway.envelopes[0].recipient.thread_id == "thread-agent-1"
     assert all(envelope.sender.user_id == "owner-1" for envelope in gateway.envelopes)
     assert all(envelope.message.metadata["event_id"] == "event-1" for envelope in gateway.envelopes)
+    assert all(envelope.message.metadata["operation"] == "updated" for envelope in gateway.envelopes)
 
 
 @pytest.mark.asyncio
@@ -152,8 +171,7 @@ async def test_workflow_event_notification_fn_reads_members_and_schedules_runtim
 
     await asyncio.to_thread(
         notify,
-        _event(),
-        "owner-1",
+        _change(),
     )
 
     assert [envelope.recipient.agent_user_id for envelope in gateway.envelopes] == ["agent-1"]

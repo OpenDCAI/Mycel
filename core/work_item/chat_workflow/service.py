@@ -1,10 +1,19 @@
 from __future__ import annotations
 
 import time
-from typing import Any
+from collections.abc import Callable
+from dataclasses import dataclass
+from typing import Any, Literal
 
 from core.work_item.types import WorkItem
 from storage.contracts import ChatWorkflowEventRow
+
+
+@dataclass(frozen=True)
+class WorkflowEventChange:
+    operation: Literal["created", "updated"]
+    event: dict[str, Any]
+    actor_user_id: str
 
 
 class ChatWorkflowService:
@@ -121,9 +130,9 @@ class ChatTaskService:
 class ChatWorkflowEventService:
     def __init__(self, event_repo: Any) -> None:
         self._repo = event_repo
-        self._event_notification_fn: Any | None = None
+        self._event_notification_fn: Callable[[WorkflowEventChange], None] | None = None
 
-    def set_event_notification_fn(self, notification_fn: Any) -> None:
+    def set_event_notification_fn(self, notification_fn: Callable[[WorkflowEventChange], None]) -> None:
         self._event_notification_fn = notification_fn
 
     def list_events(self, chat_id: str) -> list[dict[str, Any]]:
@@ -163,7 +172,13 @@ class ChatWorkflowEventService:
         if self._event_notification_fn is not None:
             if requested_by_user_id is None:
                 raise RuntimeError("Workflow event notification requires requested_by_user_id")
-            self._event_notification_fn(response, requested_by_user_id)
+            self._event_notification_fn(
+                WorkflowEventChange(
+                    operation="created",
+                    event=response,
+                    actor_user_id=requested_by_user_id,
+                )
+            )
         return response
 
     def update_event(
@@ -201,7 +216,13 @@ class ChatWorkflowEventService:
         if self._event_notification_fn is not None:
             if updated_by_user_id is None:
                 raise RuntimeError("Workflow event update notification requires updated_by_user_id")
-            self._event_notification_fn(response, updated_by_user_id)
+            self._event_notification_fn(
+                WorkflowEventChange(
+                    operation="updated",
+                    event=response,
+                    actor_user_id=updated_by_user_id,
+                )
+            )
         return response
 
     def delete_event(self, chat_id: str, event_id: str) -> None:
