@@ -39,6 +39,12 @@ def test_applier_uses_manifest_order() -> None:
     ]
 
 
+def test_chat_workflow_state_version_patch_updates_existing_tables() -> None:
+    sql = (ROOT / "storage/schema/chat_workflow_state_and_tasks.sql").read_text(encoding="utf-8")
+
+    assert "add column if not exists state_version" in sql
+
+
 def test_applier_print_files_is_connection_free() -> None:
     result = subprocess.run(
         [sys.executable, str(APPLIER_PATH), "--print-files"],

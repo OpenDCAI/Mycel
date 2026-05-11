@@ -6,7 +6,7 @@ import pytest
 
 from core.work_item.types import WorkItem
 from storage.contracts import ChatRow, ChatWorkflowEventRow, ContactEdgeRow
-from storage.errors import StorageConflictError
+from storage.errors import StaleChatWorkflowVersionError, StorageConflictError
 from storage.providers.supabase.chat_repo import SupabaseChatRepo
 from storage.providers.supabase.chat_workflow_repo import (
     SupabaseChatTaskRepo,
@@ -81,6 +81,47 @@ def test_supabase_chat_workflow_repo_uses_chat_schema_sibling_table() -> None:
     assert workflow.config == {"reviewer": "reviewer-user"}
     assert tables["chat.workflow_state"][0]["chat_id"] == "chat-1"
     assert "workflow_state" not in tables
+
+
+def test_supabase_chat_workflow_repo_rejects_stale_state_version() -> None:
+    tables: dict[str, list[dict]] = {
+        "chat.workflow_state": [
+            {
+                "chat_id": "chat-1",
+                "kind": "cel-group",
+                "state": "active",
+                "config_json": {"participants": []},
+                "state_version": 0,
+                "created_at": 1.0,
+                "updated_at": 1.0,
+            }
+        ]
+    }
+    repo = SupabaseChatWorkflowRepo(FakeSupabaseClient(tables=tables))
+
+    updated = repo.upsert(
+        "chat-1",
+        kind="cel-group",
+        state="active",
+        config={"participants": [{"handle": "worker-a"}]},
+        expected_state_version=0,
+    )
+    assert updated.state_version == 1
+    assert tables["chat.workflow_state"][0]["config_json"] == {"participants": [{"handle": "worker-a"}]}
+
+    with pytest.raises(StaleChatWorkflowVersionError) as exc:
+        repo.upsert(
+            "chat-1",
+            kind="cel-group",
+            state="active",
+            config={"participants": [{"handle": "worker-b"}]},
+            expected_state_version=0,
+        )
+
+    assert exc.value.chat_id == "chat-1"
+    assert exc.value.expected_state_version == 0
+    assert exc.value.actual_state_version == 1
+    assert tables["chat.workflow_state"][0]["config_json"] == {"participants": [{"handle": "worker-a"}]}
 
 
 def test_supabase_chat_task_repo_uses_work_item_shape_in_chat_schema() -> None:

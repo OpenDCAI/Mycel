@@ -3,10 +3,14 @@ create table if not exists chat.workflow_state (
     kind                text not null,
     state               text not null default 'active',
     config_json         jsonb not null default '{}'::jsonb,
+    state_version       integer not null default 0,
     updated_by_user_id  text references identity.users(id) on delete set null,
     created_at          double precision not null,
     updated_at          double precision
 );
+
+alter table if exists chat.workflow_state
+    add column if not exists state_version integer not null default 0;
 
 create table if not exists chat.tasks (
     chat_id          text not null references chat.chats(id) on delete cascade,

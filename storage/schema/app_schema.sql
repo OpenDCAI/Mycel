@@ -902,6 +902,7 @@ CREATE TABLE chat.workflow_state (
     kind text NOT NULL,
     state text DEFAULT 'active'::text NOT NULL,
     config_json jsonb DEFAULT '{}'::jsonb NOT NULL,
+    state_version integer DEFAULT 0 NOT NULL,
     updated_by_user_id text,
     created_at double precision NOT NULL,
     updated_at double precision

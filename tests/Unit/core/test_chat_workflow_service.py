@@ -9,6 +9,7 @@ from core.work_item.chat_workflow.service import (
 )
 from core.work_item.types import WorkItem
 from storage.contracts import ChatWorkflowEventRow, ChatWorkflowRow
+from storage.errors import StaleChatWorkflowVersionError
 
 
 class _WorkflowRepo:
@@ -26,7 +27,16 @@ class _WorkflowRepo:
         state: str,
         config: dict[str, Any],
         updated_by_user_id: str | None = None,
+        expected_state_version: int | None = None,
     ) -> ChatWorkflowRow:
+        existing = self.rows.get(chat_id)
+        existing_version = int(getattr(existing, "state_version", 0)) if existing is not None else None
+        if expected_state_version is not None and existing_version != expected_state_version:
+            raise StaleChatWorkflowVersionError(
+                chat_id=chat_id,
+                expected_state_version=expected_state_version,
+                actual_state_version=existing_version,
+            )
         row = ChatWorkflowRow(
             chat_id=chat_id,
             kind=kind,
@@ -35,6 +45,7 @@ class _WorkflowRepo:
             updated_by_user_id=updated_by_user_id,
             created_at=1.0,
             updated_at=2.0,
+            state_version=0 if existing is None else existing_version + 1,
         )
         self.rows[chat_id] = row
         return row
@@ -105,6 +116,44 @@ def test_chat_workflow_service_projects_explicit_chat_scope() -> None:
     assert created["config"] == {"reviewer": "reviewer-user"}
     assert service.get_workflow("chat-1") == created
     assert service.get_workflow("chat-2") is None
+
+
+def test_chat_workflow_service_versions_config_writes_and_rejects_stale_updates() -> None:
+    repo = _WorkflowRepo()
+    service = ChatWorkflowService(repo)
+
+    created = service.set_workflow(
+        "chat-1",
+        kind="cel-group",
+        state="active",
+        config={"participants": []},
+    )
+    updated = service.set_workflow(
+        "chat-1",
+        kind="cel-group",
+        state="active",
+        config={"participants": [{"handle": "worker-a"}]},
+        expected_state_version=created["state_version"],
+    )
+
+    assert created["state_version"] == 0
+    assert updated["state_version"] == 1
+    try:
+        service.set_workflow(
+            "chat-1",
+            kind="cel-group",
+            state="active",
+            config={"participants": [{"handle": "worker-b"}]},
+            expected_state_version=created["state_version"],
+        )
+    except StaleChatWorkflowVersionError as exc:
+        assert exc.chat_id == "chat-1"
+        assert exc.expected_state_version == 0
+        assert exc.actual_state_version == 1
+    else:
+        raise AssertionError("stale workflow config write did not fail")
+
+    assert service.get_workflow("chat-1") == updated
 
 
 def test_chat_task_service_keeps_tasks_scoped_to_chat_id() -> None:

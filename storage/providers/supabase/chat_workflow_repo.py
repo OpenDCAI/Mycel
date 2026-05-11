@@ -5,6 +5,7 @@ from typing import Any
 
 from core.work_item.types import WorkItem
 from storage.contracts import ChatWorkflowEventRow, ChatWorkflowRow
+from storage.errors import StaleChatWorkflowVersionError
 from storage.providers.supabase import _query as q
 
 _SCHEMA = "chat"
@@ -32,23 +33,50 @@ class SupabaseChatWorkflowRepo:
         state: str = "active",
         config: dict[str, Any] | None = None,
         updated_by_user_id: str | None = None,
+        expected_state_version: int | None = None,
     ) -> ChatWorkflowRow:
         now = time.time()
         existing = self.get(chat_id)
+        actual_state_version = existing.state_version if existing is not None else None
+        if expected_state_version is not None and actual_state_version != expected_state_version:
+            raise StaleChatWorkflowVersionError(
+                chat_id=chat_id,
+                expected_state_version=expected_state_version,
+                actual_state_version=actual_state_version,
+            )
+        next_state_version = 0 if existing is None else existing.state_version + 1
         payload = {
             "chat_id": chat_id,
             "kind": kind,
             "state": state,
             "config_json": config or {},
+            "state_version": next_state_version,
             "updated_by_user_id": updated_by_user_id,
             "created_at": existing.created_at if existing else now,
             "updated_at": now,
         }
-        rows = q.rows(
-            self._t().upsert(payload, on_conflict="chat_id").execute(),
-            _WORKFLOW_REPO,
-            "upsert",
-        )
+        if expected_state_version is None:
+            rows = q.rows(
+                self._t().upsert(payload, on_conflict="chat_id").execute(),
+                _WORKFLOW_REPO,
+                "upsert",
+            )
+        else:
+            update_payload = dict(payload)
+            update_payload.pop("chat_id", None)
+            update_payload.pop("created_at", None)
+            rows = q.rows(
+                self._t().update(update_payload).eq("chat_id", chat_id).eq("state_version", expected_state_version).execute(),
+                _WORKFLOW_REPO,
+                "upsert",
+            )
+            if not rows:
+                current = self.get(chat_id)
+                raise StaleChatWorkflowVersionError(
+                    chat_id=chat_id,
+                    expected_state_version=expected_state_version,
+                    actual_state_version=current.state_version if current is not None else None,
+                )
         return _row_to_workflow(rows[0] if rows else payload)
 
     def delete(self, chat_id: str) -> None:
@@ -164,6 +192,7 @@ def _row_to_workflow(row: dict[str, Any]) -> ChatWorkflowRow:
         kind=str(row["kind"]),
         state=str(row.get("state") or "active"),
         config=dict(row.get("config_json") or row.get("config") or {}),
+        state_version=int(row.get("state_version") or 0),
         updated_by_user_id=row.get("updated_by_user_id"),
         created_at=float(row["created_at"]),
         updated_at=float(row["updated_at"]) if row.get("updated_at") is not None else None,

@@ -12,6 +12,7 @@ from backend.chat.api.http import chat_workflow_router, chats_router, relationsh
 from backend.identity.avatar.urls import avatar_url
 from backend.web.core.dependencies import get_current_user_id
 from storage.contracts import ContactEdgeRow
+from storage.errors import StaleChatWorkflowVersionError
 
 
 def _chat(chat_id: str) -> SimpleNamespace:
@@ -334,6 +335,137 @@ def test_chat_workflow_routes_use_chat_access_helper(monkeypatch: pytest.MonkeyP
     assert seen == [
         ("helper", (chat_repo, messaging_service, "chat-1", "user-1")),
         ("get_workflow", "chat-1"),
+    ]
+
+
+def test_set_chat_workflow_returns_conflict_for_stale_state_version(monkeypatch: pytest.MonkeyPatch) -> None:
+    chat_repo = SimpleNamespace(name="chat-repo")
+    messaging_service = SimpleNamespace(name="messaging")
+
+    monkeypatch.setattr(chat_workflow_router, "get_accessible_chat_or_404", lambda *_args: _chat("chat-1"))
+
+    def set_workflow(_chat_id: str, **_kwargs):
+        raise StaleChatWorkflowVersionError(
+            chat_id="chat-1",
+            expected_state_version=0,
+            actual_state_version=1,
+        )
+
+    with pytest.raises(HTTPException) as exc:
+        chat_workflow_router.set_chat_workflow(
+            "chat-1",
+            chat_workflow_router.SetChatWorkflowBody(
+                kind="cel-group",
+                config={"participants": []},
+                expected_state_version=0,
+            ),
+            user_id="user-1",
+            chat_repo=chat_repo,
+            messaging_service=messaging_service,
+            chat_workflow_service=SimpleNamespace(set_workflow=set_workflow),
+        )
+
+    assert exc.value.status_code == 409
+    assert exc.value.detail == {
+        "error": "stale_chat_workflow_state_version",
+        "chat_id": "chat-1",
+        "expected_state_version": 0,
+        "actual_state_version": 1,
+    }
+
+
+def test_chat_workflow_http_put_carries_expected_version_and_returns_conflict(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls: list[dict[str, object]] = []
+
+    def set_workflow(chat_id: str, **kwargs):
+        calls.append({"chat_id": chat_id, **kwargs})
+        raise StaleChatWorkflowVersionError(
+            chat_id=chat_id,
+            expected_state_version=2,
+            actual_state_version=3,
+        )
+
+    app = FastAPI()
+    app.include_router(chat_workflow_router.router)
+    app.dependency_overrides[chat_workflow_router.get_current_user_id] = lambda: "user-1"
+    app.dependency_overrides[chat_workflow_router.get_chat_repo] = lambda: SimpleNamespace(name="chat-repo")
+    app.dependency_overrides[chat_workflow_router.get_messaging_service] = lambda: SimpleNamespace(name="messaging")
+    app.dependency_overrides[chat_workflow_router.get_chat_workflow_service] = lambda: SimpleNamespace(set_workflow=set_workflow)
+    monkeypatch.setattr(chat_workflow_router, "get_accessible_chat_or_404", lambda *_args: _chat("chat-1"))
+
+    try:
+        with TestClient(app) as client:
+            response = client.put(
+                "/api/chats/chat-1/workflow",
+                json={
+                    "kind": "cel-group",
+                    "state": "active",
+                    "config": {"participants": []},
+                    "expected_state_version": 2,
+                },
+            )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 409
+    assert response.json()["detail"] == {
+        "error": "stale_chat_workflow_state_version",
+        "chat_id": "chat-1",
+        "expected_state_version": 2,
+        "actual_state_version": 3,
+    }
+    assert calls == [
+        {
+            "chat_id": "chat-1",
+            "kind": "cel-group",
+            "state": "active",
+            "config": {"participants": []},
+            "updated_by_user_id": "user-1",
+            "expected_state_version": 2,
+        }
+    ]
+
+
+def test_chat_workflow_http_put_omits_expected_version_when_not_supplied(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[dict[str, object]] = []
+
+    def set_workflow(chat_id: str, **kwargs):
+        calls.append({"chat_id": chat_id, **kwargs})
+        return {"chat_id": chat_id, "kind": kwargs["kind"], "state": kwargs["state"]}
+
+    app = FastAPI()
+    app.include_router(chat_workflow_router.router)
+    app.dependency_overrides[chat_workflow_router.get_current_user_id] = lambda: "user-1"
+    app.dependency_overrides[chat_workflow_router.get_chat_repo] = lambda: SimpleNamespace(name="chat-repo")
+    app.dependency_overrides[chat_workflow_router.get_messaging_service] = lambda: SimpleNamespace(name="messaging")
+    app.dependency_overrides[chat_workflow_router.get_chat_workflow_service] = lambda: SimpleNamespace(set_workflow=set_workflow)
+    monkeypatch.setattr(chat_workflow_router, "get_accessible_chat_or_404", lambda *_args: _chat("chat-1"))
+
+    try:
+        with TestClient(app) as client:
+            response = client.put(
+                "/api/chats/chat-1/workflow",
+                json={
+                    "kind": "cel-group",
+                    "state": "active",
+                    "config": {"participants": []},
+                },
+            )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    assert calls == [
+        {
+            "chat_id": "chat-1",
+            "kind": "cel-group",
+            "state": "active",
+            "config": {"participants": []},
+            "updated_by_user_id": "user-1",
+            "expected_state_version": None,
+        }
     ]
 
 

@@ -283,6 +283,7 @@ class ChatWorkflowRow(BaseModel):
     kind: str
     state: str = "active"
     config: dict[str, Any] = Field(default_factory=dict)
+    state_version: int = 0
     updated_by_user_id: str | None = None
     created_at: float
     updated_at: float | None = None
@@ -292,6 +293,13 @@ class ChatWorkflowRow(BaseModel):
     def _validate_chat_workflow_identity_fields(cls, value: str, info: Any) -> str:
         if not value.strip():
             raise ValueError(f"chat_workflow.{info.field_name} must not be blank")
+        return value
+
+    @field_validator("state_version")
+    @classmethod
+    def _validate_chat_workflow_state_version(cls, value: int) -> int:
+        if value < 0:
+            raise ValueError("chat_workflow.state_version must be non-negative")
         return value
 
 
@@ -525,6 +533,7 @@ class ChatWorkflowRepo(Protocol):
         state: str,
         config: dict[str, Any],
         updated_by_user_id: str | None = None,
+        expected_state_version: int | None = None,
     ) -> ChatWorkflowRow: ...
     def delete(self, chat_id: str) -> None: ...
 
