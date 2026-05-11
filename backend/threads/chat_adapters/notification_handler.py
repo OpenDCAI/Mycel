@@ -20,6 +20,7 @@ class NativeAgentNotificationHandler:
                 thread_id=thread_id,
                 sender=envelope.sender,
                 message=envelope.message,
+                transport=envelope.transport,
             )
         )
         return agent_runtime_protocol.AgentRuntimeNotificationResult(status="accepted", thread_id=result.thread_id)
