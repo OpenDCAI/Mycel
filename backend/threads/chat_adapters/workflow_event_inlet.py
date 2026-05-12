@@ -2,10 +2,10 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import Callable, Mapping, Sequence
-from enum import Enum
 from typing import Any
 
 from backend.threads.chat_adapters.port import get_agent_runtime_gateway
+from backend.threads.chat_adapters.runtime_identity import make_runtime_actor, require_user, user_type
 from backend.threads.chat_adapters.runtime_recipient import select_runtime_notification_recipient
 from core.work_item.chat_workflow.service import WorkflowEventChange
 from protocols.agent_runtime import (
@@ -73,22 +73,22 @@ def plan_workflow_event_runtime_notifications(
     activity_reader: Any,
 ) -> list[AgentRuntimeNotificationEnvelope]:
     sender_user_id = change.actor_user_id
-    sender_user = _require_user(user_repo, sender_user_id, "sender")
-    sender = AgentRuntimeActor(
+    sender_user = require_user(user_repo, sender_user_id, context="Workflow event notification", role="sender")
+    sender = make_runtime_actor(
         user_id=sender_user_id,
-        user_type=_user_type(sender_user, sender_user_id),
-        display_name=_display_name(sender_user, sender_user_id),
+        user=sender_user,
         source="workflow",
+        context="Workflow event notification",
     )
     envelopes: list[AgentRuntimeNotificationEnvelope] = []
     for member in members:
         recipient_user_id = _member_user_id(member)
         if recipient_user_id == sender_user_id:
             continue
-        recipient_user = _require_user(user_repo, recipient_user_id, "recipient")
+        recipient_user = require_user(user_repo, recipient_user_id, context="Workflow event notification", role="recipient")
         recipient = select_runtime_notification_recipient(
             recipient_user_id,
-            _user_type(recipient_user, recipient_user_id),
+            user_type(recipient_user, recipient_user_id, context="Workflow event notification"),
             thread_repo=thread_repo,
             activity_reader=activity_reader,
             context="workflow event",
@@ -161,24 +161,3 @@ def _member_user_id(member: Mapping[str, Any]) -> str:
     if not user_id:
         raise RuntimeError("Workflow event notification member row is missing user_id")
     return user_id
-
-
-def _require_user(user_repo: Any, user_id: str, role: str) -> Any:
-    user = user_repo.get_by_id(user_id)
-    if user is None:
-        raise RuntimeError(f"Workflow event notification {role} user not found: {user_id}")
-    return user
-
-
-def _user_type(user: Any, user_id: str) -> str:
-    raw_type = getattr(user, "type", None)
-    if raw_type is None:
-        raise RuntimeError(f"Workflow event notification user is missing type: {user_id}")
-    return raw_type.value if isinstance(raw_type, Enum) else str(raw_type)
-
-
-def _display_name(user: Any, user_id: str) -> str:
-    display_name = getattr(user, "display_name", None)
-    if display_name is None:
-        raise RuntimeError(f"Workflow event notification user is missing display name: {user_id}")
-    return str(display_name)
