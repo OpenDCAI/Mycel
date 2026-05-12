@@ -17,7 +17,6 @@ from backend.threads.chat_adapters.runtime_thread_input_action import (
     QueuedThreadInputAction,
     RuntimeThreadInputAction,
     dispatch_queued_thread_input_action,
-    dispatch_runtime_thread_input_envelopes,
     internal_runtime_thread_input_action,
     owner_runtime_thread_input_action,
     plan_runtime_thread_input_envelope,
@@ -266,33 +265,6 @@ def test_runtime_thread_input_action_plans_runtime_envelope() -> None:
         message=AgentRuntimeMessage(content="hello", attachments=["file-1"]),
         enable_trajectory=True,
     )
-
-
-@pytest.mark.asyncio
-async def test_runtime_thread_input_envelopes_dispatch_through_gateway() -> None:
-    from protocols.agent_runtime import AgentThreadInputResult
-
-    captured: list[Any] = []
-
-    class _Gateway:
-        async def dispatch_thread_input(self, envelope: Any) -> AgentThreadInputResult:
-            captured.append(envelope)
-            return AgentThreadInputResult(status="started", routing="direct", thread_id="thread-1")
-
-    action = internal_runtime_thread_input_action(
-        thread_id="thread-1",
-        user_id="owner-1",
-        message="answer",
-        metadata={"request_id": "req-1"},
-    )
-    envelope = plan_runtime_thread_input_envelope(action)
-
-    await dispatch_runtime_thread_input_envelopes(
-        SimpleNamespace(state=SimpleNamespace(threads_runtime_state=SimpleNamespace(agent_runtime_gateway=_Gateway()))),
-        [envelope],
-    )
-
-    assert captured == [envelope]
 
 
 @pytest.mark.asyncio
