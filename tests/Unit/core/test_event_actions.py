@@ -2,7 +2,36 @@ from __future__ import annotations
 
 import pytest
 
-from core.event_actions import run_sync_actions
+from core.event_actions import plan_event_actions, run_sync_actions
+
+
+def test_plan_event_actions_flattens_planners_in_order() -> None:
+    def first(value: str) -> list[str]:
+        return [f"first:{value}", f"first-again:{value}"]
+
+    def second(value: str) -> list[str]:
+        return [f"second:{value}"]
+
+    actions = plan_event_actions([first, second], "event-1")
+
+    assert actions == ["first:event-1", "first-again:event-1", "second:event-1"]
+
+
+def test_plan_event_actions_snapshots_planners_before_running() -> None:
+    planners = []
+
+    def first(value: str) -> list[str]:
+        planners.append(second)
+        return [f"first:{value}"]
+
+    def second(value: str) -> list[str]:
+        return [f"second:{value}"]
+
+    planners.append(first)
+
+    actions = plan_event_actions(planners, "event-1")
+
+    assert actions == ["first:event-1"]
 
 
 def test_run_sync_actions_runs_registered_actions_in_order() -> None:

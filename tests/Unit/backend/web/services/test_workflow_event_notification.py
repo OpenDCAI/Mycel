@@ -9,6 +9,7 @@ import pytest
 from backend.threads.chat_adapters.workflow_event_inlet import (
     make_workflow_event_notification_actions,
     make_workflow_event_notification_fn,
+    workflow_event_notification_action_planner,
     workflow_event_runtime_notification_action,
 )
 from core.work_item.chat_workflow.service import WorkflowEventChange
@@ -150,6 +151,23 @@ def test_workflow_event_notification_planner_selects_recipient_actions() -> None
         assert action.metadata is not None
         assert action.metadata["event_id"] == "event-1"
         assert action.metadata["operation"] == "updated"
+
+
+def test_workflow_event_notification_action_planner_reads_chat_members() -> None:
+    seen_chat_ids: list[str] = []
+
+    def list_chat_members(chat_id: str) -> list[dict[str, str]]:
+        seen_chat_ids.append(chat_id)
+        return [{"user_id": "owner-1"}, {"user_id": "agent-1"}]
+
+    planner = workflow_event_notification_action_planner(SimpleNamespace(list_chat_members=list_chat_members))
+
+    actions = planner(_change("updated"))
+
+    assert seen_chat_ids == ["chat-1"]
+    assert [action.recipient_user_id for action in actions] == ["agent-1"]
+    assert actions[0].metadata is not None
+    assert actions[0].metadata["operation"] == "updated"
 
 
 @pytest.mark.asyncio

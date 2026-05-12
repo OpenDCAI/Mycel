@@ -8,6 +8,7 @@ from backend.threads.chat_adapters.runtime_notification_action import (
     RuntimeNotificationAction,
     dispatch_runtime_notification_actions,
 )
+from core.event_actions import plan_event_actions
 from core.work_item.chat_workflow.service import WorkflowEventChange
 from protocols.agent_runtime import AgentRuntimeTransport
 
@@ -20,11 +21,10 @@ def make_workflow_event_notification_fn(
     user_repo: Any,
     messaging_service: Any,
 ) -> Callable[[WorkflowEventChange], None]:
+    planner = workflow_event_notification_action_planner(messaging_service)
+
     async def notify_runtime(change: WorkflowEventChange) -> None:
-        actions = make_workflow_event_notification_actions(
-            change,
-            messaging_service.list_chat_members(_required_str(change.event, "chat_id")),
-        )
+        actions = plan_event_actions([planner], change)
         await dispatch_runtime_notification_actions(
             app,
             actions,
@@ -34,6 +34,16 @@ def make_workflow_event_notification_fn(
         )
 
     return make_sync_runtime_event_hook(notify_runtime)
+
+
+def workflow_event_notification_action_planner(messaging_service: Any) -> Callable[[WorkflowEventChange], list[RuntimeNotificationAction]]:
+    def plan(change: WorkflowEventChange) -> list[RuntimeNotificationAction]:
+        return make_workflow_event_notification_actions(
+            change,
+            messaging_service.list_chat_members(_required_str(change.event, "chat_id")),
+        )
+
+    return plan
 
 
 def make_workflow_event_notification_actions(
