@@ -91,6 +91,18 @@ def test_thread_router_does_not_import_runtime_thread_input_actions_directly() -
     assert "runtime_thread_input_action" not in text
 
 
+def test_thread_run_lifecycle_does_not_import_runtime_thread_input_actions_directly() -> None:
+    repo_root = Path(__file__).parents[5]
+    run_files = [
+        repo_root / "backend" / "threads" / "run" / "cancellation.py",
+        repo_root / "backend" / "threads" / "run" / "followups.py",
+    ]
+
+    for path in run_files:
+        text = path.read_text(encoding="utf-8")
+        assert "runtime_thread_input_action" not in text, path
+
+
 def test_runtime_actions_use_shared_actor_builder() -> None:
     repo_root = Path(__file__).parents[5]
     action_files = list((repo_root / "backend" / "threads" / "chat_adapters").glob("runtime_*_action.py"))
