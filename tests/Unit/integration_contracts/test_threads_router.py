@@ -14,9 +14,12 @@ from fastapi import Request
 from langchain_core.messages import HumanMessage, SystemMessage, ToolMessage
 
 from backend.threads.chat_adapters.runtime_thread_input_action import (
+    QueuedThreadInputAction,
     RuntimeThreadInputAction,
+    dispatch_queued_thread_input_action,
     internal_runtime_thread_input_action,
     owner_runtime_thread_input_action,
+    queued_thread_input_action,
 )
 from backend.web.models.requests import CreateThreadRequest, ResolvePermissionRequest, SendMessageRequest, ThreadPermissionRuleRequest
 from backend.web.routers import threads as threads_router
@@ -237,6 +240,20 @@ def test_internal_thread_input_action_carries_followup_contract() -> None:
         metadata={"ask_user_question_answered": {"request_id": "req-1"}},
         enable_trajectory=False,
     )
+
+
+def test_queued_thread_input_action_enqueues_steer_message() -> None:
+    enqueued: list[tuple[str, str, str]] = []
+    queue_manager = SimpleNamespace(
+        enqueue=lambda content, thread_id, notification_type: enqueued.append((content, thread_id, notification_type))
+    )
+    action = queued_thread_input_action(thread_id="thread-1", message="follow up")
+
+    result = dispatch_queued_thread_input_action(queue_manager, action)
+
+    assert action == QueuedThreadInputAction(thread_id="thread-1", content="follow up", notification_type="steer")
+    assert enqueued == [("follow up", "thread-1", "steer")]
+    assert result == {"status": "queued", "thread_id": "thread-1"}
 
 
 def _make_request(headers: dict[str, str] | None = None) -> Request:

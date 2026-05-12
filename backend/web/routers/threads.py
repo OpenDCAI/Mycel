@@ -1026,8 +1026,15 @@ async def queue_message(
     """Enqueue a followup message. Will be consumed when agent reaches IDLE."""
     if not payload.message.strip():
         raise HTTPException(status_code=400, detail="message cannot be empty")
-    app.state.queue_manager.enqueue(payload.message, thread_id, notification_type="steer")
-    return {"status": "queued", "thread_id": thread_id}
+    from backend.threads.chat_adapters.runtime_thread_input_action import (
+        dispatch_queued_thread_input_action,
+        queued_thread_input_action,
+    )
+
+    return dispatch_queued_thread_input_action(
+        app.state.queue_manager,
+        queued_thread_input_action(thread_id=thread_id, message=payload.message),
+    )
 
 
 @router.get("/{thread_id}/queue")
