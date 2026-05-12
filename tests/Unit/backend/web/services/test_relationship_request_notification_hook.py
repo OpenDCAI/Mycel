@@ -44,12 +44,40 @@ def _thread_repo() -> SimpleNamespace:
     )
 
 
+def _empty_thread_repo() -> SimpleNamespace:
+    return SimpleNamespace(get_by_user_id=lambda _uid: None, list_by_agent_user=lambda _uid: [])
+
+
+def _activity_reader() -> SimpleNamespace:
+    return SimpleNamespace(list_active_threads_for_agent=lambda _agent_user_id: [])
+
+
+def _user(user_id: str, user_type: str, display_name: str) -> SimpleNamespace:
+    return SimpleNamespace(id=user_id, type=user_type, display_name=display_name, avatar=None)
+
+
+def _user_repo(*users: SimpleNamespace) -> SimpleNamespace:
+    rows = {user.id: user for user in users}
+    return SimpleNamespace(get_by_id=lambda uid: rows.get(uid))
+
+
+class _RecordingGateway:
+    def __init__(self) -> None:
+        self.envelopes = []
+
+    async def dispatch_notification(self, envelope):
+        self.envelopes.append(envelope)
+        thread_id = envelope.recipient.thread_id or f"external:{envelope.recipient.agent_user_id}"
+        return SimpleNamespace(status="accepted", thread_id=thread_id)
+
+
+def _only_envelope(gateway: _RecordingGateway):
+    assert len(gateway.envelopes) == 1
+    return gateway.envelopes[0]
+
+
 def test_relationship_request_notification_planner_returns_runtime_action() -> None:
-    user_repo = SimpleNamespace(
-        get_by_id=lambda uid: {
-            "human-user-1": SimpleNamespace(id="human-user-1", type="human", display_name="Human", avatar=None),
-        }.get(uid)
-    )
+    user_repo = _user_repo(_user("human-user-1", "human", "Human"))
     planner = relationship_inlet.relationship_request_notification_action_planner(user_repo)
 
     actions = planner(_relationship_row(message="Please add me."))
@@ -71,11 +99,7 @@ def test_relationship_request_notification_planner_returns_runtime_action() -> N
 
 
 def test_relationship_decision_notification_planner_returns_runtime_action() -> None:
-    user_repo = SimpleNamespace(
-        get_by_id=lambda uid: {
-            "human-user-1": SimpleNamespace(id="human-user-1", type="human", display_name="Human", avatar=None),
-        }.get(uid)
-    )
+    user_repo = _user_repo(_user("human-user-1", "human", "Human"))
     planner = relationship_inlet.relationship_decision_notification_action_planner(user_repo)
 
     actions = planner(
@@ -104,84 +128,40 @@ def test_relationship_decision_notification_planner_returns_runtime_action() -> 
 
 @pytest.mark.asyncio
 async def test_relationship_request_notification_dispatches_runtime_notification_to_agent_target() -> None:
-    class RecordingGateway:
-        envelope = None
-
-        async def dispatch_notification(self, envelope):
-            self.envelope = envelope
-            return SimpleNamespace(status="accepted", thread_id=envelope.recipient.thread_id)
-
-    gateway = RecordingGateway()
-    user_repo = SimpleNamespace(
-        get_by_id=lambda uid: {
-            "human-user-1": SimpleNamespace(
-                id="human-user-1",
-                type="human",
-                display_name="Human",
-                avatar=None,
-            ),
-            "agent-user-1": SimpleNamespace(
-                id="agent-user-1",
-                type="agent",
-                display_name="Toad",
-                avatar=None,
-            ),
-        }.get(uid)
-    )
+    gateway = _RecordingGateway()
+    user_repo = _user_repo(_user("human-user-1", "human", "Human"), _user("agent-user-1", "agent", "Agent"))
     notify = relationship_inlet.make_relationship_request_notification_fn(
         _hook_app(gateway),
-        activity_reader=SimpleNamespace(list_active_threads_for_agent=lambda _agent_user_id: []),
+        activity_reader=_activity_reader(),
         thread_repo=_thread_repo(),
         user_repo=user_repo,
     )
 
     await asyncio.to_thread(notify, _relationship_row(message="Please add me to the planning chat."))
 
-    assert gateway.envelope is not None
-    assert gateway.envelope.recipient.agent_user_id == "agent-user-1"
-    assert gateway.envelope.recipient.runtime_source == "mycel"
-    assert gateway.envelope.recipient.thread_id == "thread-main"
-    assert gateway.envelope.sender.user_id == "human-user-1"
-    assert gateway.envelope.sender.user_type == "human"
-    assert gateway.envelope.sender.display_name == "Human"
-    assert gateway.envelope.sender.source == "relationship"
-    assert gateway.envelope.event_type == "relationship.requested"
-    assert gateway.envelope.notification_type == "relationship"
-    assert "Human requested a relationship with you." in gateway.envelope.message.content
-    assert "Please add me to the planning chat." in gateway.envelope.message.content
-    assert gateway.envelope.message.metadata == {"relationship_id": "hire_visit:agent-user-1:human-user-1"}
+    envelope = _only_envelope(gateway)
+    assert envelope.recipient.agent_user_id == "agent-user-1"
+    assert envelope.recipient.runtime_source == "mycel"
+    assert envelope.recipient.thread_id == "thread-main"
+    assert envelope.sender.user_id == "human-user-1"
+    assert envelope.sender.user_type == "human"
+    assert envelope.sender.display_name == "Human"
+    assert envelope.sender.source == "relationship"
+    assert envelope.event_type == "relationship.requested"
+    assert envelope.notification_type == "relationship"
+    assert "Human requested a relationship with you." in envelope.message.content
+    assert "Please add me to the planning chat." in envelope.message.content
+    assert envelope.message.metadata == {"relationship_id": "hire_visit:agent-user-1:human-user-1"}
 
 
 @pytest.mark.asyncio
 async def test_relationship_request_notification_dispatches_external_runtime_notification_to_external_target() -> None:
-    class RecordingGateway:
-        envelope = None
-
-        async def dispatch_notification(self, envelope):
-            self.envelope = envelope
-            return SimpleNamespace(status="accepted", thread_id=f"external:{envelope.recipient.agent_user_id}")
-
-    gateway = RecordingGateway()
-    user_repo = SimpleNamespace(
-        get_by_id=lambda uid: {
-            "human-user-1": SimpleNamespace(
-                id="human-user-1",
-                type="human",
-                display_name="Human",
-                avatar=None,
-            ),
-            "external-user-1": SimpleNamespace(
-                id="external-user-1",
-                type="external",
-                display_name="External",
-                avatar=None,
-            ),
-        }.get(uid)
-    )
+    gateway = _RecordingGateway()
+    user_repo = _user_repo(_user("human-user-1", "human", "Human"), _user("external-user-1", "external", "External"))
     notify = relationship_inlet.make_relationship_request_notification_fn(
         _hook_app(gateway),
         activity_reader=None,
-        thread_repo=SimpleNamespace(get_by_user_id=lambda _uid: None, list_by_agent_user=lambda _uid: []),
+        thread_repo=_empty_thread_repo(),
         user_repo=user_repo,
     )
 
@@ -195,35 +175,24 @@ async def test_relationship_request_notification_dispatches_external_runtime_not
         ),
     )
 
-    assert gateway.envelope is not None
-    assert gateway.envelope.recipient.agent_user_id == "external-user-1"
-    assert gateway.envelope.recipient.runtime_source == "external"
-    assert gateway.envelope.sender.user_id == "human-user-1"
-    assert gateway.envelope.sender.source == "relationship"
-    assert gateway.envelope.event_type == "relationship.requested"
-    assert "Human requested a relationship with you." in gateway.envelope.message.content
-    assert gateway.envelope.message.metadata == {"relationship_id": "hire_visit:external-user-1:human-user-1"}
+    envelope = _only_envelope(gateway)
+    assert envelope.recipient.agent_user_id == "external-user-1"
+    assert envelope.recipient.runtime_source == "external"
+    assert envelope.sender.user_id == "human-user-1"
+    assert envelope.sender.source == "relationship"
+    assert envelope.event_type == "relationship.requested"
+    assert "Human requested a relationship with you." in envelope.message.content
+    assert envelope.message.metadata == {"relationship_id": "hire_visit:external-user-1:human-user-1"}
 
 
 @pytest.mark.asyncio
 async def test_relationship_request_notification_does_not_dispatch_to_non_agent_target() -> None:
-    class RecordingGateway:
-        called = False
-
-        async def dispatch_notification(self, _envelope):
-            self.called = True
-
-    gateway = RecordingGateway()
-    user_repo = SimpleNamespace(
-        get_by_id=lambda uid: {
-            "human-user-1": SimpleNamespace(id="human-user-1", type="human", display_name="Human", avatar=None),
-            "human-user-2": SimpleNamespace(id="human-user-2", type="human", display_name="Other", avatar=None),
-        }.get(uid)
-    )
+    gateway = _RecordingGateway()
+    user_repo = _user_repo(_user("human-user-1", "human", "Human"), _user("human-user-2", "human", "Other"))
     notify = relationship_inlet.make_relationship_request_notification_fn(
         _hook_app(gateway),
-        activity_reader=SimpleNamespace(list_active_threads_for_agent=lambda _agent_user_id: []),
-        thread_repo=SimpleNamespace(get_by_user_id=lambda _uid: None, list_by_agent_user=lambda _uid: []),
+        activity_reader=_activity_reader(),
+        thread_repo=_empty_thread_repo(),
         user_repo=user_repo,
     )
 
@@ -232,55 +201,32 @@ async def test_relationship_request_notification_does_not_dispatch_to_non_agent_
         _relationship_row(user_low="human-user-1", user_high="human-user-2", initiator_user_id="human-user-1"),
     )
 
-    assert gateway.called is False
+    assert gateway.envelopes == []
 
 
 @pytest.mark.asyncio
 async def test_relationship_request_notification_skips_agent_wake_when_no_runtime_thread() -> None:
-    class RecordingGateway:
-        called = False
-
-        async def dispatch_notification(self, _envelope):
-            self.called = True
-
-    gateway = RecordingGateway()
-    user_repo = SimpleNamespace(
-        get_by_id=lambda uid: {
-            "human-user-1": SimpleNamespace(id="human-user-1", type="human", display_name="Human", avatar=None),
-            "agent-user-1": SimpleNamespace(id="agent-user-1", type="agent", display_name="Toad", avatar=None),
-        }.get(uid)
-    )
+    gateway = _RecordingGateway()
+    user_repo = _user_repo(_user("human-user-1", "human", "Human"), _user("agent-user-1", "agent", "Agent"))
     notify = relationship_inlet.make_relationship_request_notification_fn(
         _hook_app(gateway),
-        activity_reader=SimpleNamespace(list_active_threads_for_agent=lambda _agent_user_id: []),
-        thread_repo=SimpleNamespace(get_by_user_id=lambda _uid: None, list_by_agent_user=lambda _uid: []),
+        activity_reader=_activity_reader(),
+        thread_repo=_empty_thread_repo(),
         user_repo=user_repo,
     )
 
     await asyncio.to_thread(notify, _relationship_row())
 
-    assert gateway.called is False
+    assert gateway.envelopes == []
 
 
 @pytest.mark.asyncio
 async def test_relationship_decision_notification_dispatches_runtime_notification_to_agent_requester() -> None:
-    class RecordingGateway:
-        envelope = None
-
-        async def dispatch_notification(self, envelope):
-            self.envelope = envelope
-            return SimpleNamespace(status="accepted", thread_id=envelope.recipient.thread_id)
-
-    gateway = RecordingGateway()
-    user_repo = SimpleNamespace(
-        get_by_id=lambda uid: {
-            "human-user-1": SimpleNamespace(id="human-user-1", type="human", display_name="Human", avatar=None),
-            "agent-user-1": SimpleNamespace(id="agent-user-1", type="agent", display_name="Toad", avatar=None),
-        }.get(uid)
-    )
+    gateway = _RecordingGateway()
+    user_repo = _user_repo(_user("human-user-1", "human", "Human"), _user("agent-user-1", "agent", "Agent"))
     notify = relationship_inlet.make_relationship_decision_notification_fn(
         _hook_app(gateway),
-        activity_reader=SimpleNamespace(list_active_threads_for_agent=lambda _agent_user_id: []),
+        activity_reader=_activity_reader(),
         thread_repo=_thread_repo(),
         user_repo=user_repo,
     )
@@ -296,18 +242,18 @@ async def test_relationship_decision_notification_dispatches_runtime_notificatio
         "approve",
     )
 
-    assert gateway.envelope is not None
-    assert gateway.envelope.recipient.agent_user_id == "agent-user-1"
-    assert gateway.envelope.recipient.runtime_source == "mycel"
-    assert gateway.envelope.recipient.thread_id == "thread-main"
-    assert gateway.envelope.sender.user_id == "human-user-1"
-    assert gateway.envelope.sender.user_type == "human"
-    assert gateway.envelope.sender.display_name == "Human"
-    assert gateway.envelope.sender.source == "relationship"
-    assert gateway.envelope.event_type == "relationship.approved"
-    assert gateway.envelope.notification_type == "relationship"
-    assert "Human approved your relationship request." in gateway.envelope.message.content
-    assert gateway.envelope.message.metadata == {
+    envelope = _only_envelope(gateway)
+    assert envelope.recipient.agent_user_id == "agent-user-1"
+    assert envelope.recipient.runtime_source == "mycel"
+    assert envelope.recipient.thread_id == "thread-main"
+    assert envelope.sender.user_id == "human-user-1"
+    assert envelope.sender.user_type == "human"
+    assert envelope.sender.display_name == "Human"
+    assert envelope.sender.source == "relationship"
+    assert envelope.event_type == "relationship.approved"
+    assert envelope.notification_type == "relationship"
+    assert "Human approved your relationship request." in envelope.message.content
+    assert envelope.message.metadata == {
         "relationship_id": "hire_visit:agent-user-1:human-user-1",
         "event": "approve",
         "state": "visit",
@@ -316,24 +262,12 @@ async def test_relationship_decision_notification_dispatches_runtime_notificatio
 
 @pytest.mark.asyncio
 async def test_relationship_decision_notification_dispatches_external_runtime_notification_to_external_requester() -> None:
-    class RecordingGateway:
-        envelope = None
-
-        async def dispatch_notification(self, envelope):
-            self.envelope = envelope
-            return SimpleNamespace(status="accepted", thread_id=f"external:{envelope.recipient.agent_user_id}")
-
-    gateway = RecordingGateway()
-    user_repo = SimpleNamespace(
-        get_by_id=lambda uid: {
-            "human-user-1": SimpleNamespace(id="human-user-1", type="human", display_name="Human", avatar=None),
-            "external-user-1": SimpleNamespace(id="external-user-1", type="external", display_name="External", avatar=None),
-        }.get(uid)
-    )
+    gateway = _RecordingGateway()
+    user_repo = _user_repo(_user("human-user-1", "human", "Human"), _user("external-user-1", "external", "External"))
     notify = relationship_inlet.make_relationship_decision_notification_fn(
         _hook_app(gateway),
         activity_reader=None,
-        thread_repo=SimpleNamespace(get_by_user_id=lambda _uid: None, list_by_agent_user=lambda _uid: []),
+        thread_repo=_empty_thread_repo(),
         user_repo=user_repo,
     )
 
@@ -348,14 +282,14 @@ async def test_relationship_decision_notification_dispatches_external_runtime_no
         "approve",
     )
 
-    assert gateway.envelope is not None
-    assert gateway.envelope.recipient.agent_user_id == "external-user-1"
-    assert gateway.envelope.recipient.runtime_source == "external"
-    assert gateway.envelope.sender.user_id == "human-user-1"
-    assert gateway.envelope.sender.source == "relationship"
-    assert gateway.envelope.event_type == "relationship.approved"
-    assert "Human approved your relationship request." in gateway.envelope.message.content
-    assert gateway.envelope.message.metadata == {
+    envelope = _only_envelope(gateway)
+    assert envelope.recipient.agent_user_id == "external-user-1"
+    assert envelope.recipient.runtime_source == "external"
+    assert envelope.sender.user_id == "human-user-1"
+    assert envelope.sender.source == "relationship"
+    assert envelope.event_type == "relationship.approved"
+    assert "Human approved your relationship request." in envelope.message.content
+    assert envelope.message.metadata == {
         "relationship_id": "hire_visit:external-user-1:human-user-1",
         "event": "approve",
         "state": "visit",
@@ -364,23 +298,12 @@ async def test_relationship_decision_notification_dispatches_external_runtime_no
 
 @pytest.mark.asyncio
 async def test_relationship_decision_notification_ignores_non_agent_requester() -> None:
-    class RecordingGateway:
-        called = False
-
-        async def dispatch_notification(self, _envelope):
-            self.called = True
-
-    gateway = RecordingGateway()
-    user_repo = SimpleNamespace(
-        get_by_id=lambda uid: {
-            "human-user-1": SimpleNamespace(id="human-user-1", type="human", display_name="Human", avatar=None),
-            "human-user-2": SimpleNamespace(id="human-user-2", type="human", display_name="Other", avatar=None),
-        }.get(uid)
-    )
+    gateway = _RecordingGateway()
+    user_repo = _user_repo(_user("human-user-1", "human", "Human"), _user("human-user-2", "human", "Other"))
     notify = relationship_inlet.make_relationship_decision_notification_fn(
         _hook_app(gateway),
-        activity_reader=SimpleNamespace(list_active_threads_for_agent=lambda _agent_user_id: []),
-        thread_repo=SimpleNamespace(get_by_user_id=lambda _uid: None, list_by_agent_user=lambda _uid: []),
+        activity_reader=_activity_reader(),
+        thread_repo=_empty_thread_repo(),
         user_repo=user_repo,
     )
 
@@ -390,28 +313,17 @@ async def test_relationship_decision_notification_ignores_non_agent_requester() 
         "reject",
     )
 
-    assert gateway.called is False
+    assert gateway.envelopes == []
 
 
 @pytest.mark.asyncio
 async def test_relationship_decision_notification_skips_agent_wake_when_no_runtime_thread() -> None:
-    class RecordingGateway:
-        called = False
-
-        async def dispatch_notification(self, _envelope):
-            self.called = True
-
-    gateway = RecordingGateway()
-    user_repo = SimpleNamespace(
-        get_by_id=lambda uid: {
-            "human-user-1": SimpleNamespace(id="human-user-1", type="human", display_name="Human", avatar=None),
-            "agent-user-1": SimpleNamespace(id="agent-user-1", type="agent", display_name="Toad", avatar=None),
-        }.get(uid)
-    )
+    gateway = _RecordingGateway()
+    user_repo = _user_repo(_user("human-user-1", "human", "Human"), _user("agent-user-1", "agent", "Agent"))
     notify = relationship_inlet.make_relationship_decision_notification_fn(
         _hook_app(gateway),
-        activity_reader=SimpleNamespace(list_active_threads_for_agent=lambda _agent_user_id: []),
-        thread_repo=SimpleNamespace(get_by_user_id=lambda _uid: None, list_by_agent_user=lambda _uid: []),
+        activity_reader=_activity_reader(),
+        thread_repo=_empty_thread_repo(),
         user_repo=user_repo,
     )
 
@@ -426,4 +338,4 @@ async def test_relationship_decision_notification_skips_agent_wake_when_no_runti
         "approve",
     )
 
-    assert gateway.called is False
+    assert gateway.envelopes == []
