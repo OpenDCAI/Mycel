@@ -18,6 +18,7 @@ from messaging.delivery.contracts import ChatDeliveryRequest
 from messaging.delivery.dispatcher import ChatDeliveryDispatcher
 from messaging.delivery.resolver import HireVisitDeliveryResolver
 from messaging.display_user import resolve_messaging_display_user
+from messaging.errors import ChatNotCaughtUpError
 from messaging.relationships.service import RelationshipActionError, RelationshipService
 from messaging.service import ChatMessageDeliveryActionError, ChatMessageEventActionError, MessagingService
 from messaging.tools.chat_tool_service import ChatToolService
@@ -2959,11 +2960,36 @@ def test_chat_tool_send_does_not_serialize_concurrent_group_replies_after_read()
     ]
 
 
-def test_chat_tool_send_returns_tool_error_when_chat_advances_after_read() -> None:
+def test_chat_tool_send_does_not_match_runtime_error_text_as_caught_up_signal() -> None:
     registry = ToolRegistry()
 
     def _send(*_args, **_kwargs):
         raise RuntimeError("Chat advanced after your last read. Call read_messages(chat_id='chat-1') first.")
+
+    ChatToolService(
+        registry=registry,
+        chat_identity_id="agent-user-1",
+        messaging_service=SimpleNamespace(
+            is_chat_member=lambda _chat_id, _user_id: True,
+            list_unread=lambda _chat_id, _user_id: [],
+            send=_send,
+        ),
+    )
+
+    send_message = registry.get("send_message")
+    assert send_message is not None
+
+    with pytest.raises(RuntimeError) as exc_info:
+        send_message.handler(content="GROUP_READ_OK", chat_id="chat-1")
+
+    assert str(exc_info.value) == "Chat advanced after your last read. Call read_messages(chat_id='chat-1') first."
+
+
+def test_chat_tool_send_maps_typed_caught_up_error_to_tool_error() -> None:
+    registry = ToolRegistry()
+
+    def _send(*_args, **_kwargs):
+        raise ChatNotCaughtUpError("Read unread messages before sending.")
 
     ChatToolService(
         registry=registry,
@@ -2983,7 +3009,8 @@ def test_chat_tool_send_returns_tool_error_when_chat_advances_after_read() -> No
     assert isinstance(result, ToolResultEnvelope)
     assert result.kind == "error"
     assert result.metadata["error_type"] == "chat_not_caught_up"
-    assert result.content == "Chat advanced after your last read. Call read_messages(chat_id='chat-1') first."
+    assert result.metadata["chat_id"] == "chat-1"
+    assert result.content == "Read unread messages before sending."
 
 
 def test_read_messages_uses_agent_user_target_name_on_no_history() -> None:
