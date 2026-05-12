@@ -1,23 +1,19 @@
 from __future__ import annotations
 
-import logging
 from enum import Enum
 from typing import Any
 
 from backend.threads.chat_adapters.chat_notification_format import format_chat_notification
 from backend.threads.chat_adapters.port import get_agent_runtime_gateway
 from backend.threads.chat_adapters.runtime_event_hook import make_sync_runtime_event_hook
+from backend.threads.chat_adapters.runtime_recipient import resolve_runtime_chat_delivery_recipient
 from messaging.delivery.contracts import ChatDeliveryRequest
-from messaging.delivery.runtime_thread_selector import select_runtime_thread_for_recipient
 from protocols.agent_runtime import (
     AgentChatContext,
     AgentChatDeliveryEnvelope,
-    AgentChatRecipient,
     AgentRuntimeActor,
     AgentRuntimeMessage,
 )
-
-logger = logging.getLogger(__name__)
 
 
 def make_chat_delivery_fn(app: Any, *, activity_reader: Any, thread_repo: Any):
@@ -37,23 +33,14 @@ def make_chat_delivery_fn(app: Any, *, activity_reader: Any, thread_repo: Any):
             request.unread_count,
             signal=request.signal,
         )
-        if recipient_type == "external":
-            runtime_source = "external"
-            thread_id = None
-        elif recipient_type == "agent":
-            if activity_reader is None:
-                raise RuntimeError(f"Managed agent runtime is unavailable for chat delivery to {request.recipient_id}")
-            runtime_source = "mycel"
-            thread_id = select_runtime_thread_for_recipient(
-                request.recipient_id,
-                thread_repo=thread_repo,
-                activity_reader=activity_reader,
-            )
-            if thread_id is None:
-                logger.info("Skipped chat wake for agent without runtime thread: %s", request.recipient_id)
-                return
-        else:
-            raise RuntimeError(f"Chat delivery recipient type is not runtime-addressable: {recipient_type}")
+        recipient = resolve_runtime_chat_delivery_recipient(
+            request.recipient_id,
+            recipient_type,
+            thread_repo=thread_repo,
+            activity_reader=activity_reader,
+        )
+        if recipient is None:
+            return
         envelope = AgentChatDeliveryEnvelope(
             chat=AgentChatContext(chat_id=request.chat_id),
             sender=AgentRuntimeActor(
@@ -63,7 +50,7 @@ def make_chat_delivery_fn(app: Any, *, activity_reader: Any, thread_repo: Any):
                 avatar_url=request.sender_avatar_url,
                 source="chat",
             ),
-            recipient=AgentChatRecipient(agent_user_id=request.recipient_id, runtime_source=runtime_source, thread_id=thread_id),
+            recipient=recipient,
             message=AgentRuntimeMessage(content=rendered_content, signal=request.signal),
             extensions={
                 "mycel": {
