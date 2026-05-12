@@ -2,17 +2,13 @@ from __future__ import annotations
 
 from typing import Any
 
-from backend.threads.chat_adapters.port import get_agent_runtime_gateway
 from backend.threads.chat_adapters.runtime_event_hook import make_sync_runtime_event_hook
-from backend.threads.chat_adapters.runtime_identity import display_name, make_runtime_actor, require_user, user_type
-from backend.threads.chat_adapters.runtime_recipient import select_runtime_notification_recipient
-from messaging.contracts import RelationshipEvent, RelationshipRow
-from protocols.agent_runtime import (
-    AgentChatRecipient,
-    AgentRuntimeActor,
-    AgentRuntimeMessage,
-    AgentRuntimeNotificationEnvelope,
+from backend.threads.chat_adapters.runtime_identity import display_name, require_user
+from backend.threads.chat_adapters.runtime_notification_action import (
+    RuntimeNotificationAction,
+    dispatch_runtime_notification_action,
 )
+from messaging.contracts import RelationshipEvent, RelationshipRow
 
 _DECISION_VERBS: dict[RelationshipEvent, str] = {
     "approve": "approved",
@@ -25,35 +21,25 @@ def make_relationship_request_notification_fn(app: Any, *, activity_reader: Any,
         requester_id = _requester_id(row)
         target_id = _target_id(row, requester_id)
         requester = require_user(user_repo, requester_id, context="Relationship request", role="requester")
-        target = require_user(user_repo, target_id, context="Relationship request", role="target")
-        target_type = user_type(target, target_id, context="Relationship request")
-        recipient = select_runtime_notification_recipient(
-            target_id,
-            target_type,
-            thread_repo=thread_repo,
-            activity_reader=activity_reader,
-            context="relationship request",
-        )
-        if recipient is None:
-            return
-        await _dispatch_notification(
+        await dispatch_runtime_notification_action(
             app,
-            recipient=recipient,
-            sender=make_runtime_actor(
-                user_id=requester_id,
-                user=requester,
-                source="relationship",
+            RuntimeNotificationAction(
                 context="Relationship request",
-                include_avatar=True,
-            ),
-            message=AgentRuntimeMessage(
+                recipient_user_id=target_id,
+                sender_user_id=requester_id,
+                sender_source="relationship",
+                event_type="relationship.requested",
+                notification_type="relationship",
                 content=_notification_content(
                     display_name(requester, requester_id, context="Relationship request"),
                     row.message,
                 ),
                 metadata={"relationship_id": row.id},
+                include_sender_avatar=True,
             ),
-            event_type="relationship.requested",
+            user_repo=user_repo,
+            thread_repo=thread_repo,
+            activity_reader=activity_reader,
         )
 
     return make_sync_runtime_event_hook(notify_runtime)
@@ -63,62 +49,31 @@ def make_relationship_decision_notification_fn(app: Any, *, activity_reader: Any
     async def notify_runtime(row: RelationshipRow, event: RelationshipEvent) -> None:
         requester_id = _requester_id(row)
         decider_id = _target_id(row, requester_id)
-        requester = require_user(user_repo, requester_id, context="Relationship request", role="requester")
+        verb = _decision_verb(event)
         decider = require_user(user_repo, decider_id, context="Relationship request", role="decider")
-        requester_type = user_type(requester, requester_id, context="Relationship request")
-        recipient = select_runtime_notification_recipient(
-            requester_id,
-            requester_type,
-            thread_repo=thread_repo,
-            activity_reader=activity_reader,
-            context="relationship decision",
-        )
-        if recipient is None:
-            return
-        await _dispatch_notification(
+        await dispatch_runtime_notification_action(
             app,
-            recipient=recipient,
-            sender=make_runtime_actor(
-                user_id=decider_id,
-                user=decider,
-                source="relationship",
+            RuntimeNotificationAction(
                 context="Relationship request",
-                include_avatar=True,
-            ),
-            message=AgentRuntimeMessage(
-                content=(
-                    f"{display_name(decider, decider_id, context='Relationship request')} "
-                    f"{_decision_verb(event)} your relationship request."
-                ),
+                recipient_user_id=requester_id,
+                sender_user_id=decider_id,
+                sender_source="relationship",
+                event_type=f"relationship.{verb}",
+                notification_type="relationship",
+                content=(f"{display_name(decider, decider_id, context='Relationship request')} {verb} your relationship request."),
                 metadata={
                     "relationship_id": row.id,
                     "event": event,
                     "state": row.state,
                 },
+                include_sender_avatar=True,
             ),
-            event_type=f"relationship.{_decision_verb(event)}",
+            user_repo=user_repo,
+            thread_repo=thread_repo,
+            activity_reader=activity_reader,
         )
 
     return make_sync_runtime_event_hook(notify_runtime)
-
-
-async def _dispatch_notification(
-    app: Any,
-    *,
-    recipient: AgentChatRecipient,
-    sender: AgentRuntimeActor,
-    message: AgentRuntimeMessage,
-    event_type: str,
-) -> None:
-    await get_agent_runtime_gateway(app).dispatch_notification(
-        AgentRuntimeNotificationEnvelope(
-            event_type=event_type,
-            recipient=recipient,
-            sender=sender,
-            message=message,
-            notification_type="relationship",
-        )
-    )
 
 
 def _requester_id(row: RelationshipRow) -> str:
