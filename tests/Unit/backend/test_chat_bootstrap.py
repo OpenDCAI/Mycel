@@ -159,24 +159,24 @@ def test_wire_chat_delivery_binds_delivery_fn(monkeypatch):
     assert messaging_service.delivery_fn is delivery_fn
 
 
-def test_wire_relationship_request_notifications_binds_notification_fn(monkeypatch):
-    notification_fn = object()
-    relationship_service = SimpleNamespace(notification_fn=None)
+def test_wire_relationship_request_notifications_binds_event_action(monkeypatch):
+    event_action = object()
+    relationship_service = SimpleNamespace(event_action=None)
     activity_reader = object()
     thread_repo = object()
     user_repo = object()
 
-    def _set_notification_fn(value):
-        relationship_service.notification_fn = value
+    def _add_relationship_request_action(value):
+        relationship_service.event_action = value
 
-    relationship_service.set_relationship_request_notification_fn = _set_notification_fn
+    relationship_service.add_relationship_request_action = _add_relationship_request_action
 
     app = SimpleNamespace(state=SimpleNamespace())
 
     monkeypatch.setattr(
         chat_bootstrap,
         "make_relationship_request_notification_fn",
-        lambda target_app, *, activity_reader, thread_repo, user_repo: notification_fn,
+        lambda target_app, *, activity_reader, thread_repo, user_repo: event_action,
     )
 
     chat_bootstrap.wire_relationship_request_notifications(
@@ -187,27 +187,27 @@ def test_wire_relationship_request_notifications_binds_notification_fn(monkeypat
         user_repo=user_repo,
     )
 
-    assert relationship_service.notification_fn is notification_fn
+    assert relationship_service.event_action is event_action
 
 
-def test_wire_relationship_decision_notifications_binds_notification_fn(monkeypatch):
-    notification_fn = object()
-    relationship_service = SimpleNamespace(notification_fn=None)
+def test_wire_relationship_decision_notifications_binds_event_action(monkeypatch):
+    event_action = object()
+    relationship_service = SimpleNamespace(event_action=None)
     activity_reader = object()
     thread_repo = object()
     user_repo = object()
 
-    def _set_notification_fn(value):
-        relationship_service.notification_fn = value
+    def _add_relationship_decision_action(value):
+        relationship_service.event_action = value
 
-    relationship_service.set_relationship_decision_notification_fn = _set_notification_fn
+    relationship_service.add_relationship_decision_action = _add_relationship_decision_action
 
     app = SimpleNamespace(state=SimpleNamespace())
 
     monkeypatch.setattr(
         chat_bootstrap,
         "make_relationship_decision_notification_fn",
-        lambda target_app, *, activity_reader, thread_repo, user_repo: notification_fn,
+        lambda target_app, *, activity_reader, thread_repo, user_repo: event_action,
     )
 
     chat_bootstrap.wire_relationship_decision_notifications(
@@ -218,7 +218,7 @@ def test_wire_relationship_decision_notifications_binds_notification_fn(monkeypa
         user_repo=user_repo,
     )
 
-    assert relationship_service.notification_fn is notification_fn
+    assert relationship_service.event_action is event_action
 
 
 def test_wire_chat_join_request_notifications_binds_rejection_notification_fn(monkeypatch):

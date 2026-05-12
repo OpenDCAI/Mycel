@@ -30,14 +30,18 @@ class RelationshipService:
         on_relationship_decided: Callable[[RelationshipRow, RelationshipEvent], None] | None = None,
     ) -> None:
         self._repo = relationship_repo
-        self._on_relationship_requested = on_relationship_requested
-        self._on_relationship_decided = on_relationship_decided
+        self._relationship_request_actions: list[Callable[[RelationshipRow], None]] = []
+        self._relationship_decision_actions: list[Callable[[RelationshipRow, RelationshipEvent], None]] = []
+        if on_relationship_requested is not None:
+            self.add_relationship_request_action(on_relationship_requested)
+        if on_relationship_decided is not None:
+            self.add_relationship_decision_action(on_relationship_decided)
 
-    def set_relationship_request_notification_fn(self, fn: Callable[[RelationshipRow], None]) -> None:
-        self._on_relationship_requested = fn
+    def add_relationship_request_action(self, action: Callable[[RelationshipRow], None]) -> None:
+        self._relationship_request_actions.append(action)
 
-    def set_relationship_decision_notification_fn(self, fn: Callable[[RelationshipRow, RelationshipEvent], None]) -> None:
-        self._on_relationship_decided = fn
+    def add_relationship_decision_action(self, action: Callable[[RelationshipRow, RelationshipEvent], None]) -> None:
+        self._relationship_decision_actions.append(action)
 
     def apply_event(
         self,
@@ -87,27 +91,36 @@ class RelationshipService:
 
     def request(self, requester_id: str, target_id: str, message: str | None = None) -> RelationshipRow:
         row = self.apply_event(requester_id, target_id, "request", message=message)
-        self._run_post_commit_action("request", row, self._on_relationship_requested)
+        self._run_request_actions(row)
         return row
 
     def approve(self, approver_id: str, requester_id: str) -> RelationshipRow:
         row = self.apply_event(approver_id, requester_id, "approve")
-        self._run_post_commit_action("approve", row, self._on_relationship_decided)
+        self._run_decision_actions("approve", row)
         return row
 
     def reject(self, approver_id: str, requester_id: str) -> RelationshipRow:
         row = self.apply_event(approver_id, requester_id, "reject")
-        self._run_post_commit_action("reject", row, self._on_relationship_decided)
+        self._run_decision_actions("reject", row)
         return row
 
-    def _run_post_commit_action(self, event: RelationshipEvent, row: RelationshipRow, fn: Callable[..., None] | None) -> None:
-        if fn is None:
+    def _run_request_actions(self, row: RelationshipRow) -> None:
+        actions = list(self._relationship_request_actions)
+        if not actions:
             return
         try:
-            if event == "request":
-                fn(row)
-            else:
-                fn(row, event)
+            for action in actions:
+                action(row)
+        except Exception as exc:
+            raise RelationshipActionError(event="request", row=row) from exc
+
+    def _run_decision_actions(self, event: RelationshipEvent, row: RelationshipRow) -> None:
+        actions = list(self._relationship_decision_actions)
+        if not actions:
+            return
+        try:
+            for action in actions:
+                action(row, event)
         except Exception as exc:
             raise RelationshipActionError(event=event, row=row) from exc
 

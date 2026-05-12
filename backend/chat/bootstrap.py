@@ -123,7 +123,7 @@ def wire_relationship_request_notifications(
     thread_repo: Any,
     user_repo: Any,
 ) -> None:
-    relationship_service.set_relationship_request_notification_fn(
+    relationship_service.add_relationship_request_action(
         make_relationship_request_notification_fn(
             app,
             activity_reader=activity_reader,
@@ -141,7 +141,7 @@ def wire_relationship_decision_notifications(
     thread_repo: Any,
     user_repo: Any,
 ) -> None:
-    relationship_service.set_relationship_decision_notification_fn(
+    relationship_service.add_relationship_decision_action(
         make_relationship_decision_notification_fn(
             app,
             activity_reader=activity_reader,
