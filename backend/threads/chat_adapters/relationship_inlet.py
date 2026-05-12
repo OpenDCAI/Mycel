@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-import asyncio
 from typing import Any
 
 from backend.threads.chat_adapters.port import get_agent_runtime_gateway
+from backend.threads.chat_adapters.runtime_event_hook import make_sync_runtime_event_hook
 from backend.threads.chat_adapters.runtime_identity import display_name, make_runtime_actor, require_user, user_type
 from backend.threads.chat_adapters.runtime_recipient import select_runtime_notification_recipient
 from messaging.contracts import RelationshipEvent, RelationshipRow
@@ -21,8 +21,6 @@ _DECISION_VERBS: dict[RelationshipEvent, str] = {
 
 
 def make_relationship_request_notification_fn(app: Any, *, activity_reader: Any, thread_repo: Any, user_repo: Any):
-    loop = asyncio.get_running_loop()
-
     async def notify_runtime(row: RelationshipRow) -> None:
         requester_id = _requester_id(row)
         target_id = _target_id(row, requester_id)
@@ -58,16 +56,10 @@ def make_relationship_request_notification_fn(app: Any, *, activity_reader: Any,
             event_type="relationship.requested",
         )
 
-    def _notify(row: RelationshipRow) -> None:
-        future = asyncio.run_coroutine_threadsafe(notify_runtime(row), loop)
-        future.result()
-
-    return _notify
+    return make_sync_runtime_event_hook(notify_runtime)
 
 
 def make_relationship_decision_notification_fn(app: Any, *, activity_reader: Any, thread_repo: Any, user_repo: Any):
-    loop = asyncio.get_running_loop()
-
     async def notify_runtime(row: RelationshipRow, event: RelationshipEvent) -> None:
         requester_id = _requester_id(row)
         decider_id = _target_id(row, requester_id)
@@ -107,11 +99,7 @@ def make_relationship_decision_notification_fn(app: Any, *, activity_reader: Any
             event_type=f"relationship.{_decision_verb(event)}",
         )
 
-    def _notify(row: RelationshipRow, event: RelationshipEvent) -> None:
-        future = asyncio.run_coroutine_threadsafe(notify_runtime(row, event), loop)
-        future.result()
-
-    return _notify
+    return make_sync_runtime_event_hook(notify_runtime)
 
 
 async def _dispatch_notification(

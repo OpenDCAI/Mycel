@@ -6,6 +6,7 @@ from typing import Any
 
 from backend.threads.chat_adapters.chat_notification_format import format_chat_notification
 from backend.threads.chat_adapters.port import get_agent_runtime_gateway
+from backend.threads.chat_adapters.runtime_event_hook import make_sync_runtime_event_hook
 from messaging.delivery.contracts import ChatDeliveryRequest
 from messaging.delivery.runtime_thread_selector import select_runtime_thread_for_recipient
 from protocols.agent_runtime import (
@@ -20,10 +21,6 @@ logger = logging.getLogger(__name__)
 
 
 def make_chat_delivery_fn(app: Any, *, activity_reader: Any, thread_repo: Any):
-    import asyncio
-
-    loop = asyncio.get_running_loop()
-
     async def deliver_to_runtime_gateway(request: ChatDeliveryRequest) -> None:
         raw_recipient_type = getattr(request.recipient_user, "type", None)
         if raw_recipient_type is None:
@@ -78,8 +75,4 @@ def make_chat_delivery_fn(app: Any, *, activity_reader: Any, thread_repo: Any):
         )
         await get_agent_runtime_gateway(app).dispatch_chat(envelope)
 
-    def _deliver(request: ChatDeliveryRequest) -> None:
-        future = asyncio.run_coroutine_threadsafe(deliver_to_runtime_gateway(request), loop)
-        future.result()
-
-    return _deliver
+    return make_sync_runtime_event_hook(deliver_to_runtime_gateway)
