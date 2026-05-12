@@ -6,12 +6,7 @@ from typing import Any
 from core.runtime.middleware.monitor import AgentState
 from protocols import agent_runtime as agent_runtime_protocol
 
-from .runtime_metadata import (
-    thread_input_from_notification,
-    thread_input_message_metadata,
-    thread_input_metadata,
-    thread_input_notification_type,
-)
+from .runtime_metadata import thread_input_message_metadata, thread_input_metadata, thread_input_notification_type
 
 
 class NativeAgentThreadInputHandler:
@@ -37,12 +32,6 @@ class NativeAgentThreadInputHandler:
         self._resolve_thread_sandbox = resolve_thread_sandbox
         self._start_agent_run = start_agent_run
         self._clear_resource_overview_cache = clear_resource_overview_cache
-
-    async def dispatch_notification(
-        self, envelope: agent_runtime_protocol.AgentRuntimeNotificationEnvelope
-    ) -> agent_runtime_protocol.AgentRuntimeNotificationResult:
-        result = await self.dispatch(thread_input_from_notification(envelope))
-        return agent_runtime_protocol.AgentRuntimeNotificationResult(status="accepted", thread_id=result.thread_id)
 
     async def dispatch(self, envelope: agent_runtime_protocol.AgentThreadInputEnvelope) -> agent_runtime_protocol.AgentThreadInputResult:
         thread_id = envelope.thread_id
