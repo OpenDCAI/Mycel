@@ -5,7 +5,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any, Literal
 
-from core.event_actions import run_sync_actions
+from core.sync_callbacks import run_sync_callbacks
 from core.work_item.types import WorkItem
 from storage.contracts import ChatWorkflowEventRow
 
@@ -236,7 +236,7 @@ class ChatWorkflowEventService:
         if actor_user_id is None:
             raise RuntimeError("Workflow event change requires actor_user_id")
         change = WorkflowEventChange(operation=operation, event=event, actor_user_id=actor_user_id)
-        run_sync_actions(
+        run_sync_callbacks(
             self._event_change_actions,
             change,
             on_error=lambda _exc: WorkflowEventActionError(operation=operation, event=event),

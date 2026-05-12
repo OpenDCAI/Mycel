@@ -4,17 +4,17 @@ from collections.abc import Callable, Iterable
 from typing import Any
 
 
-def run_sync_actions(
-    actions: Iterable[Callable[..., None]],
+def run_sync_callbacks(
+    callbacks: Iterable[Callable[..., None]],
     /,
     *args: Any,
     on_error: Callable[[Exception], Exception],
 ) -> None:
-    current_actions = list(actions)
-    if not current_actions:
+    current_callbacks = list(callbacks)
+    if not current_callbacks:
         return
     try:
-        for action in current_actions:
-            action(*args)
+        for callback in current_callbacks:
+            callback(*args)
     except Exception as exc:
         raise on_error(exc) from exc

@@ -16,7 +16,7 @@ from collections.abc import Callable, Mapping
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
-from core.event_actions import run_sync_actions
+from core.sync_callbacks import run_sync_callbacks
 from messaging.avatars import AvatarUrlBuilder
 from messaging.contracts import ContentType, MessageType
 from messaging.delivery.dispatcher import ChatDeliveryDispatcher, ChatDeliveryFn
@@ -321,14 +321,14 @@ class MessagingService:
         return created
 
     def _run_chat_message_event_actions(self, message: dict[str, Any]) -> None:
-        run_sync_actions(
+        run_sync_callbacks(
             self._chat_message_event_actions,
             message,
             on_error=lambda _exc: ChatMessageEventActionError(message=message),
         )
 
     def _run_chat_message_delivery_actions(self, message: dict[str, Any]) -> None:
-        run_sync_actions(
+        run_sync_callbacks(
             self._chat_message_delivery_actions,
             message,
             on_error=lambda _exc: ChatMessageDeliveryActionError(message=message),
