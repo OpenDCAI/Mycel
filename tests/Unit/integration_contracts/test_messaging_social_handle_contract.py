@@ -922,18 +922,15 @@ def test_messaging_service_notification_mentions_dispatch_to_agent_recipients() 
     assert delivered == ["managed-owner-1"]
 
 
-def test_messaging_service_send_delivery_failure_carries_persisted_message() -> None:
-    def fail_delivery(_request: ChatDeliveryRequest) -> None:
-        raise RuntimeError("runtime offline")
-
-    service = MessagingService(
+def _chat_delivery_action_service(*, seq: int = 7, delivery_fn: Any | None = None) -> Any:
+    return MessagingService(
         chat_repo=SimpleNamespace(),
         chat_member_repo=SimpleNamespace(
-            list_members=lambda _chat_id: [{"user_id": "agent-user-1"}],
+            list_members=lambda _chat_id: [{"user_id": "human-user-1"}, {"user_id": "agent-user-1"}],
             update_last_read=lambda _chat_id, _user_id, _seq: None,
         ),
         messages_repo=SimpleNamespace(
-            create=lambda row: {**row, "seq": 7},
+            create=lambda row: {**row, "seq": seq},
             count_unread=lambda _chat_id, _user_id: 1,
         ),
         user_repo=SimpleNamespace(
@@ -945,8 +942,15 @@ def test_messaging_service_send_delivery_failure_carries_persisted_message() -> 
                 else None
             )
         ),
-        delivery_fn=fail_delivery,
+        delivery_fn=delivery_fn or (lambda _request: None),
     )
+
+
+def test_messaging_service_send_delivery_failure_carries_persisted_message() -> None:
+    def fail_delivery(_request: ChatDeliveryRequest) -> None:
+        raise RuntimeError("runtime offline")
+
+    service = _chat_delivery_action_service(delivery_fn=fail_delivery)
 
     with pytest.raises(ChatMessageDeliveryActionError) as exc_info:
         service.send("chat-1", "human-user-1", "hello", mentions=["agent-user-1"])
@@ -957,6 +961,31 @@ def test_messaging_service_send_delivery_failure_carries_persisted_message() -> 
     assert exc_info.value.message["content"] == "hello"
     assert exc_info.value.message["seq"] == 7
     assert str(exc_info.value.__cause__) == "runtime offline"
+
+
+def test_messaging_service_send_runs_registered_delivery_actions_after_persist() -> None:
+    calls: list[tuple[str, int]] = []
+    service = _chat_delivery_action_service(delivery_fn=lambda _request: calls.append(("dispatcher", 7)))
+    service.add_chat_message_delivery_action(lambda message: calls.append(("custom", message["seq"])))
+
+    service.send("chat-1", "human-user-1", "hello", mentions=["agent-user-1"])
+
+    assert calls == [("dispatcher", 7), ("custom", 7)]
+
+
+def test_messaging_service_send_delivery_action_failure_carries_persisted_message() -> None:
+    service = _chat_delivery_action_service(seq=9)
+
+    def fail_action(_message: dict[str, Any]) -> None:
+        raise RuntimeError("custom delivery side effect failed")
+
+    service.add_chat_message_delivery_action(fail_action)
+
+    with pytest.raises(ChatMessageDeliveryActionError) as exc_info:
+        service.send("chat-1", "human-user-1", "hello", mentions=["agent-user-1"])
+
+    assert exc_info.value.message["seq"] == 9
+    assert str(exc_info.value.__cause__) == "custom delivery side effect failed"
 
 
 def test_messaging_service_send_fails_before_persisting_unknown_sender() -> None:
