@@ -16,6 +16,13 @@ class WorkflowEventChange:
     actor_user_id: str
 
 
+class WorkflowEventActionError(RuntimeError):
+    def __init__(self, *, operation: Literal["created", "updated"], event: dict[str, Any]) -> None:
+        super().__init__(f"Workflow event action failed after {operation}")
+        self.operation = operation
+        self.event = event
+
+
 class ChatWorkflowService:
     def __init__(self, workflow_repo: Any) -> None:
         self._repo = workflow_repo
@@ -178,13 +185,16 @@ class ChatWorkflowEventService:
         if change_fn is not None:
             if actor_user_id is None:
                 raise RuntimeError("Workflow event change requires requested_by_user_id")
-            change_fn(
-                WorkflowEventChange(
-                    operation="created",
-                    event=response,
-                    actor_user_id=actor_user_id,
+            try:
+                change_fn(
+                    WorkflowEventChange(
+                        operation="created",
+                        event=response,
+                        actor_user_id=actor_user_id,
+                    )
                 )
-            )
+            except Exception as exc:
+                raise WorkflowEventActionError(operation="created", event=response) from exc
         return response
 
     def update_event(
@@ -228,13 +238,16 @@ class ChatWorkflowEventService:
         if change_fn is not None:
             if actor_user_id is None:
                 raise RuntimeError("Workflow event change requires updated_by_user_id")
-            change_fn(
-                WorkflowEventChange(
-                    operation="updated",
-                    event=response,
-                    actor_user_id=actor_user_id,
+            try:
+                change_fn(
+                    WorkflowEventChange(
+                        operation="updated",
+                        event=response,
+                        actor_user_id=actor_user_id,
+                    )
                 )
-            )
+            except Exception as exc:
+                raise WorkflowEventActionError(operation="updated", event=response) from exc
         return response
 
     def delete_event(self, chat_id: str, event_id: str) -> None:

@@ -6,6 +6,7 @@ from core.work_item.chat_workflow.service import (
     ChatTaskService,
     ChatWorkflowEventService,
     ChatWorkflowService,
+    WorkflowEventActionError,
 )
 from core.work_item.types import WorkItem
 from storage.contracts import ChatWorkflowEventRow, ChatWorkflowRow
@@ -299,6 +300,30 @@ def test_chat_workflow_event_service_emits_change_after_create_when_wired() -> N
     assert changes[0].actor_user_id == "owner-1"
 
 
+def test_chat_workflow_event_service_reports_create_action_failure_with_persisted_event() -> None:
+    repo = _WorkflowEventRepo()
+    service = ChatWorkflowEventService(repo)
+
+    def _fail(_change):
+        raise ValueError("runtime offline")
+
+    service.set_event_change_fn(_fail)
+
+    try:
+        service.create_event(
+            "chat-1",
+            kind="task_proposed_review",
+            requested_by_user_id="owner-1",
+        )
+    except WorkflowEventActionError as exc:
+        assert str(exc) == "Workflow event action failed after created"
+        assert exc.operation == "created"
+        assert exc.event == service.get_event("chat-1", "1")
+        assert type(exc.__cause__) is ValueError
+    else:
+        raise AssertionError("workflow event action failure did not surface")
+
+
 def test_chat_workflow_event_service_requires_requester_for_wired_change() -> None:
     repo = _WorkflowEventRepo()
     service = ChatWorkflowEventService(repo)
@@ -331,6 +356,33 @@ def test_chat_workflow_event_service_emits_change_after_update_when_wired() -> N
     assert changes[0].operation == "updated"
     assert changes[0].event == updated
     assert changes[0].actor_user_id == "reviewer-1"
+
+
+def test_chat_workflow_event_service_reports_update_action_failure_with_persisted_event() -> None:
+    repo = _WorkflowEventRepo()
+    service = ChatWorkflowEventService(repo)
+    event = service.create_event("chat-1", kind="task_proposed_review")
+
+    def _fail(_change):
+        raise ValueError("runtime offline")
+
+    service.set_event_change_fn(_fail)
+
+    try:
+        service.update_event(
+            "chat-1",
+            event["event_id"],
+            state="settled",
+            updated_by_user_id="reviewer-1",
+        )
+    except WorkflowEventActionError as exc:
+        assert str(exc) == "Workflow event action failed after updated"
+        assert exc.operation == "updated"
+        assert exc.event == service.get_event("chat-1", event["event_id"])
+        assert exc.event["state"] == "settled"
+        assert type(exc.__cause__) is ValueError
+    else:
+        raise AssertionError("workflow event action failure did not surface")
 
 
 def test_chat_workflow_event_service_requires_actor_for_wired_update_change() -> None:
