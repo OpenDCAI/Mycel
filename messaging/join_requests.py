@@ -3,6 +3,13 @@ from __future__ import annotations
 from typing import Any
 
 
+class ChatJoinRequestActionError(RuntimeError):
+    def __init__(self, *, action: str, row: dict[str, Any]) -> None:
+        super().__init__(f"Chat join action failed after {action}")
+        self.action = action
+        self.row = dict(row)
+
+
 class ChatJoinRequestService:
     def __init__(
         self,
@@ -92,7 +99,10 @@ class ChatJoinRequestService:
             mentions=[requester_user_id],
         )
         if self._on_join_request_rejected is not None:
-            self._on_join_request_rejected(row)
+            try:
+                self._on_join_request_rejected(row)
+            except Exception as exc:
+                raise ChatJoinRequestActionError(action="reject", row=row) from exc
         return self._project_request(row)
 
     def _require_joinable_chat(self, chat_id: str) -> Any:
@@ -131,5 +141,6 @@ class ChatJoinRequestService:
         if requester is not None:
             projected["requester_name"] = requester.display_name
             requester_type = getattr(requester, "type", None)
-            projected["requester_type"] = requester_type.value if hasattr(requester_type, "value") else str(requester_type)
+            requester_type_value = getattr(requester_type, "value", None)
+            projected["requester_type"] = str(requester_type_value if requester_type_value is not None else requester_type)
         return projected

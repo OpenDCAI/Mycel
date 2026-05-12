@@ -19,6 +19,7 @@ from backend.chat.api.http.dependencies import (
     get_user_repo,
 )
 from messaging.errors import ChatNotCaughtUpError
+from messaging.join_requests import ChatJoinRequestActionError
 from messaging.user_ownership import is_owned_by_viewer
 
 router = APIRouter(prefix="/api/chats", tags=["chats"])
@@ -74,6 +75,17 @@ class ChatMemberAddBody(BaseModel):
 
 
 def _map_chat_join_error(exc: Exception) -> HTTPException:
+    if isinstance(exc, ChatJoinRequestActionError):
+        cause = exc.__cause__
+        return HTTPException(
+            500,
+            {
+                "error": "chat_join_action_failed",
+                "action": exc.action,
+                "row": exc.row,
+                "cause": str(cause) if cause is not None else str(exc),
+            },
+        )
     if isinstance(exc, LookupError):
         return HTTPException(404, str(exc))
     if isinstance(exc, PermissionError):
