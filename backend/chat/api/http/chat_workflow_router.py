@@ -14,6 +14,7 @@ from backend.chat.api.http.dependencies import (
     get_current_user_id,
     get_messaging_service,
 )
+from core.work_item.chat_workflow.service import WorkflowEventActionError
 from storage.errors import (
     StaleChatWorkflowEventVersionError,
     StaleChatWorkflowVersionError,
@@ -152,6 +153,19 @@ def list_chat_workflow_events(
     return chat_workflow_event_service.list_events(chat_id)
 
 
+def _workflow_event_action_failure(exc: WorkflowEventActionError) -> HTTPException:
+    cause = exc.__cause__
+    return HTTPException(
+        500,
+        {
+            "error": "workflow_event_action_failed",
+            "operation": exc.operation,
+            "event": exc.event,
+            "cause": str(cause) if cause is not None else str(exc),
+        },
+    )
+
+
 @router.post("/{chat_id}/workflow/events")
 def create_chat_workflow_event(
     chat_id: str,
@@ -162,16 +176,19 @@ def create_chat_workflow_event(
     chat_workflow_event_service: Annotated[Any, Depends(get_chat_workflow_event_service)],
 ):
     get_accessible_chat_or_404(chat_repo, messaging_service, chat_id, user_id)
-    return chat_workflow_event_service.create_event(
-        chat_id,
-        kind=body.kind,
-        resource_refs=body.resource_refs,
-        requested_by_user_id=body.requested_by_user_id or user_id,
-        decision_states=body.decision_states,
-        rationales=body.rationales,
-        final_state=body.final_state,
-        metadata=body.metadata,
-    )
+    try:
+        return chat_workflow_event_service.create_event(
+            chat_id,
+            kind=body.kind,
+            resource_refs=body.resource_refs,
+            requested_by_user_id=body.requested_by_user_id or user_id,
+            decision_states=body.decision_states,
+            rationales=body.rationales,
+            final_state=body.final_state,
+            metadata=body.metadata,
+        )
+    except WorkflowEventActionError as exc:
+        raise _workflow_event_action_failure(exc) from exc
 
 
 @router.get("/{chat_id}/workflow/events/{event_id}")
@@ -214,6 +231,8 @@ def update_chat_workflow_event(
             expected_state_version=body.expected_state_version,
             updated_by_user_id=user_id,
         )
+    except WorkflowEventActionError as exc:
+        raise _workflow_event_action_failure(exc) from exc
     except StaleChatWorkflowEventVersionError as exc:
         raise HTTPException(
             409,

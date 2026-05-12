@@ -11,6 +11,7 @@ from pydantic import ValidationError
 from backend.chat.api.http import chat_workflow_router, chats_router, relationships_router
 from backend.identity.avatar.urls import avatar_url
 from backend.web.core.dependencies import get_current_user_id
+from core.work_item.chat_workflow.service import WorkflowEventActionError
 from storage.contracts import ContactEdgeRow
 from storage.errors import (
     StaleChatWorkflowEventVersionError,
@@ -30,7 +31,8 @@ def _chat(chat_id: str) -> SimpleNamespace:
 
 def _route_test_app(state: SimpleNamespace) -> FastAPI:
     app = FastAPI()
-    app.state = state
+    for key, value in vars(state).items():
+        setattr(app.state, key, value)
     app.include_router(chats_router.router)
     app.dependency_overrides[get_current_user_id] = lambda: "human-user-1"
     return app
@@ -623,6 +625,38 @@ def test_chat_workflow_event_create_defaults_requester_to_authenticated_user(mon
     ]
 
 
+def test_chat_workflow_event_create_returns_persisted_event_when_action_fails(monkeypatch: pytest.MonkeyPatch) -> None:
+    event = {"chat_id": "chat-1", "event_id": "evt-1", "kind": "task_proposed_review"}
+
+    def create_event(_chat_id: str, **_kwargs):
+        raise WorkflowEventActionError(operation="created", event=event) from RuntimeError("runtime offline")
+
+    app = FastAPI()
+    app.include_router(chat_workflow_router.router)
+    app.dependency_overrides[chat_workflow_router.get_current_user_id] = lambda: "user-1"
+    app.dependency_overrides[chat_workflow_router.get_chat_repo] = lambda: SimpleNamespace(name="chat-repo")
+    app.dependency_overrides[chat_workflow_router.get_messaging_service] = lambda: SimpleNamespace(name="messaging")
+    app.dependency_overrides[chat_workflow_router.get_chat_workflow_event_service] = lambda: SimpleNamespace(create_event=create_event)
+    monkeypatch.setattr(chat_workflow_router, "get_accessible_chat_or_404", lambda *_args: _chat("chat-1"))
+
+    try:
+        with TestClient(app, raise_server_exceptions=False) as client:
+            response = client.post(
+                "/api/chats/chat-1/workflow/events",
+                json={"kind": "task_proposed_review"},
+            )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 500
+    assert response.json()["detail"] == {
+        "error": "workflow_event_action_failed",
+        "operation": "created",
+        "event": event,
+        "cause": "runtime offline",
+    }
+
+
 def test_chat_workflow_event_patch_carries_expected_version_and_returns_conflict(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -679,6 +713,38 @@ def test_chat_workflow_event_patch_carries_expected_version_and_returns_conflict
             "updated_by_user_id": "user-1",
         }
     ]
+
+
+def test_chat_workflow_event_patch_returns_persisted_event_when_action_fails(monkeypatch: pytest.MonkeyPatch) -> None:
+    event = {"chat_id": "chat-1", "event_id": "evt-1", "kind": "task_proposed_review", "state": "settled"}
+
+    def update_event(_chat_id: str, _event_id: str, **_kwargs):
+        raise WorkflowEventActionError(operation="updated", event=event) from RuntimeError("runtime offline")
+
+    app = FastAPI()
+    app.include_router(chat_workflow_router.router)
+    app.dependency_overrides[chat_workflow_router.get_current_user_id] = lambda: "user-1"
+    app.dependency_overrides[chat_workflow_router.get_chat_repo] = lambda: SimpleNamespace(name="chat-repo")
+    app.dependency_overrides[chat_workflow_router.get_messaging_service] = lambda: SimpleNamespace(name="messaging")
+    app.dependency_overrides[chat_workflow_router.get_chat_workflow_event_service] = lambda: SimpleNamespace(update_event=update_event)
+    monkeypatch.setattr(chat_workflow_router, "get_accessible_chat_or_404", lambda *_args: _chat("chat-1"))
+
+    try:
+        with TestClient(app, raise_server_exceptions=False) as client:
+            response = client.patch(
+                "/api/chats/chat-1/workflow/events/evt-1",
+                json={"state": "settled"},
+            )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 500
+    assert response.json()["detail"] == {
+        "error": "workflow_event_action_failed",
+        "operation": "updated",
+        "event": event,
+        "cause": "runtime offline",
+    }
 
 
 def test_resolve_display_user_delegates_to_messaging_service(monkeypatch: pytest.MonkeyPatch) -> None:
