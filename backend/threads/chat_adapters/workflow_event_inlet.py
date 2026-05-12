@@ -1,13 +1,15 @@
 from __future__ import annotations
 
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Mapping
 from typing import Any
 
-from backend.threads.chat_adapters.port import get_agent_runtime_gateway
 from backend.threads.chat_adapters.runtime_event_hook import make_sync_runtime_event_hook
-from backend.threads.chat_adapters.runtime_notification_action import RuntimeNotificationAction, plan_runtime_notification_action
+from backend.threads.chat_adapters.runtime_notification_action import (
+    RuntimeNotificationAction,
+    dispatch_runtime_notification_action,
+)
 from core.work_item.chat_workflow.service import WorkflowEventChange
-from protocols.agent_runtime import AgentRuntimeNotificationEnvelope, AgentRuntimeTransport
+from protocols.agent_runtime import AgentRuntimeTransport
 
 
 def make_workflow_event_notification_fn(
@@ -19,62 +21,19 @@ def make_workflow_event_notification_fn(
     messaging_service: Any,
 ) -> Callable[[WorkflowEventChange], None]:
     async def notify_runtime(change: WorkflowEventChange) -> None:
-        await dispatch_workflow_event_notifications(
-            app,
-            change=change,
-            members=messaging_service.list_chat_members(_required_str(change.event, "chat_id")),
-            user_repo=user_repo,
-            thread_repo=thread_repo,
-            activity_reader=activity_reader,
-        )
+        for member in messaging_service.list_chat_members(_required_str(change.event, "chat_id")):
+            recipient_user_id = _member_user_id(member)
+            if recipient_user_id == change.actor_user_id:
+                continue
+            await dispatch_runtime_notification_action(
+                app,
+                workflow_event_runtime_notification_action(change=change, recipient_user_id=recipient_user_id),
+                user_repo=user_repo,
+                thread_repo=thread_repo,
+                activity_reader=activity_reader,
+            )
 
     return make_sync_runtime_event_hook(notify_runtime)
-
-
-async def dispatch_workflow_event_notifications(
-    app: Any,
-    *,
-    change: WorkflowEventChange,
-    members: Sequence[Mapping[str, Any]],
-    user_repo: Any,
-    thread_repo: Any,
-    activity_reader: Any,
-) -> None:
-    gateway = get_agent_runtime_gateway(app)
-    for envelope in plan_workflow_event_runtime_notifications(
-        change=change,
-        members=members,
-        user_repo=user_repo,
-        thread_repo=thread_repo,
-        activity_reader=activity_reader,
-    ):
-        await gateway.dispatch_notification(envelope)
-
-
-def plan_workflow_event_runtime_notifications(
-    *,
-    change: WorkflowEventChange,
-    members: Sequence[Mapping[str, Any]],
-    user_repo: Any,
-    thread_repo: Any,
-    activity_reader: Any,
-) -> list[AgentRuntimeNotificationEnvelope]:
-    sender_user_id = change.actor_user_id
-    envelopes: list[AgentRuntimeNotificationEnvelope] = []
-    for member in members:
-        recipient_user_id = _member_user_id(member)
-        if recipient_user_id == sender_user_id:
-            continue
-        envelope = plan_runtime_notification_action(
-            workflow_event_runtime_notification_action(change=change, recipient_user_id=recipient_user_id),
-            user_repo=user_repo,
-            thread_repo=thread_repo,
-            activity_reader=activity_reader,
-        )
-        if envelope is None:
-            continue
-        envelopes.append(envelope)
-    return envelopes
 
 
 def workflow_event_runtime_notification_action(*, change: WorkflowEventChange, recipient_user_id: str) -> RuntimeNotificationAction:
