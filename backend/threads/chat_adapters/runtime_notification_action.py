@@ -76,27 +76,8 @@ async def dispatch_runtime_notification_actions(
     thread_repo: Any,
     activity_reader: Any,
 ) -> int:
-    envelopes = plan_runtime_notification_envelopes(
-        actions,
-        user_repo=user_repo,
-        thread_repo=thread_repo,
-        activity_reader=activity_reader,
-    )
-    if envelopes:
-        gateway = get_agent_runtime_gateway(app)
-        for envelope in envelopes:
-            await gateway.dispatch_notification(envelope)
-    return len(envelopes)
-
-
-def plan_runtime_notification_envelopes(
-    actions: Iterable[RuntimeNotificationAction],
-    *,
-    user_repo: Any,
-    thread_repo: Any,
-    activity_reader: Any,
-) -> list[AgentRuntimeNotificationEnvelope]:
-    envelopes: list[AgentRuntimeNotificationEnvelope] = []
+    gateway = None
+    dispatched_count = 0
     for action in actions:
         envelope = plan_runtime_notification_envelope(
             action,
@@ -104,9 +85,13 @@ def plan_runtime_notification_envelopes(
             thread_repo=thread_repo,
             activity_reader=activity_reader,
         )
-        if envelope is not None:
-            envelopes.append(envelope)
-    return envelopes
+        if envelope is None:
+            continue
+        if gateway is None:
+            gateway = get_agent_runtime_gateway(app)
+        await gateway.dispatch_notification(envelope)
+        dispatched_count += 1
+    return dispatched_count
 
 
 def plan_runtime_notification_envelope(
