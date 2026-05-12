@@ -5,16 +5,9 @@ from typing import Any
 
 from backend.threads.chat_adapters.port import get_agent_runtime_gateway
 from backend.threads.chat_adapters.runtime_event_hook import make_sync_runtime_event_hook
-from backend.threads.chat_adapters.runtime_identity import make_runtime_actor, require_user
-from backend.threads.chat_adapters.runtime_recipient import resolve_runtime_notification_recipient
+from backend.threads.chat_adapters.runtime_notification_action import RuntimeNotificationAction, plan_runtime_notification_action
 from core.work_item.chat_workflow.service import WorkflowEventChange
-from protocols.agent_runtime import (
-    AgentChatRecipient,
-    AgentRuntimeActor,
-    AgentRuntimeMessage,
-    AgentRuntimeNotificationEnvelope,
-    AgentRuntimeTransport,
-)
+from protocols.agent_runtime import AgentRuntimeNotificationEnvelope, AgentRuntimeTransport
 
 
 def make_workflow_event_notification_fn(
@@ -67,44 +60,24 @@ def plan_workflow_event_runtime_notifications(
     activity_reader: Any,
 ) -> list[AgentRuntimeNotificationEnvelope]:
     sender_user_id = change.actor_user_id
-    sender_user = require_user(user_repo, sender_user_id, context="Workflow event notification", role="sender")
-    sender = make_runtime_actor(
-        user_id=sender_user_id,
-        user=sender_user,
-        source="workflow",
-        context="Workflow event notification",
-    )
     envelopes: list[AgentRuntimeNotificationEnvelope] = []
     for member in members:
         recipient_user_id = _member_user_id(member)
         if recipient_user_id == sender_user_id:
             continue
-        recipient = resolve_runtime_notification_recipient(
-            recipient_user_id,
+        envelope = plan_runtime_notification_action(
+            workflow_event_runtime_notification_action(change=change, recipient_user_id=recipient_user_id),
             user_repo=user_repo,
             thread_repo=thread_repo,
             activity_reader=activity_reader,
-            context="Workflow event notification",
-            runtime_context="workflow event",
         )
-        if recipient is None:
+        if envelope is None:
             continue
-        envelopes.append(
-            make_workflow_event_notification_envelope(
-                change=change,
-                recipient=recipient,
-                sender=sender,
-            )
-        )
+        envelopes.append(envelope)
     return envelopes
 
 
-def make_workflow_event_notification_envelope(
-    *,
-    change: WorkflowEventChange,
-    recipient: AgentChatRecipient,
-    sender: AgentRuntimeActor,
-) -> AgentRuntimeNotificationEnvelope:
+def workflow_event_runtime_notification_action(*, change: WorkflowEventChange, recipient_user_id: str) -> RuntimeNotificationAction:
     event = change.event
     chat_id = _required_str(event, "chat_id")
     event_id = _required_str(event, "event_id")
@@ -112,29 +85,30 @@ def make_workflow_event_notification_envelope(
     state = _required_str(event, "state")
     state_version = _required_int(event, "state_version")
     delivery_key = f"workflow:{chat_id}:{event_id}:{state_version}"
-    return AgentRuntimeNotificationEnvelope(
+    return RuntimeNotificationAction(
+        context="Workflow event notification",
+        recipient_user_id=recipient_user_id,
+        sender_user_id=change.actor_user_id,
+        sender_source="workflow",
         event_type="chat.workflow.event",
-        recipient=recipient,
-        sender=sender,
-        message=AgentRuntimeMessage(
-            content=f"Workflow event {kind} was {change.operation} and is {state}.",
-            metadata={
-                "chat_id": chat_id,
-                "event_id": event_id,
-                "kind": kind,
-                "operation": change.operation,
-                "actor_user_id": change.actor_user_id,
-                "resource_refs": _resource_refs(event),
-                "state": state,
-                "state_version": state_version,
-            },
-        ),
         notification_type="workflow_event",
+        content=f"Workflow event {kind} was {change.operation} and is {state}.",
+        metadata={
+            "chat_id": chat_id,
+            "event_id": event_id,
+            "kind": kind,
+            "operation": change.operation,
+            "actor_user_id": change.actor_user_id,
+            "resource_refs": _resource_refs(event),
+            "state": state,
+            "state_version": state_version,
+        },
         transport=AgentRuntimeTransport(
             delivery_id=delivery_key,
             correlation_id=f"workflow:{chat_id}:{event_id}",
             idempotency_key=delivery_key,
         ),
+        runtime_context="workflow event",
     )
 
 
