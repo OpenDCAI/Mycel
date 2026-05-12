@@ -1,11 +1,12 @@
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass
 from typing import Any
 
 from backend.threads.chat_adapters.port import get_agent_runtime_gateway
 from backend.threads.chat_adapters.runtime_identity import runtime_actor
-from protocols.agent_runtime import AgentRuntimeMessage, AgentThreadInputEnvelope
+from protocols.agent_runtime import AgentRuntimeMessage, AgentThreadInputEnvelope, AgentThreadInputResult
 
 
 @dataclass(frozen=True)
@@ -94,20 +95,34 @@ def internal_runtime_thread_input_action(
 
 
 async def dispatch_runtime_thread_input_action(app: Any, action: RuntimeThreadInputAction):
-    return await get_agent_runtime_gateway(app).dispatch_thread_input(
-        AgentThreadInputEnvelope(
-            thread_id=action.thread_id,
-            sender=runtime_actor(
-                user_id=action.sender_user_id,
-                user_type=action.sender_user_type,
-                display_name=action.sender_display_name,
-                source=action.sender_source,
-            ),
-            message=AgentRuntimeMessage(
-                content=action.content,
-                attachments=action.attachments,
-                metadata=action.metadata,
-            ),
-            enable_trajectory=action.enable_trajectory,
-        )
+    results = await dispatch_runtime_thread_input_envelopes(app, [plan_runtime_thread_input_envelope(action)])
+    return results[0]
+
+
+async def dispatch_runtime_thread_input_envelopes(
+    app: Any,
+    envelopes: Iterable[AgentThreadInputEnvelope],
+) -> list[AgentThreadInputResult]:
+    gateway = get_agent_runtime_gateway(app)
+    results = []
+    for envelope in envelopes:
+        results.append(await gateway.dispatch_thread_input(envelope))
+    return results
+
+
+def plan_runtime_thread_input_envelope(action: RuntimeThreadInputAction) -> AgentThreadInputEnvelope:
+    return AgentThreadInputEnvelope(
+        thread_id=action.thread_id,
+        sender=runtime_actor(
+            user_id=action.sender_user_id,
+            user_type=action.sender_user_type,
+            display_name=action.sender_display_name,
+            source=action.sender_source,
+        ),
+        message=AgentRuntimeMessage(
+            content=action.content,
+            attachments=action.attachments,
+            metadata=action.metadata,
+        ),
+        enable_trajectory=action.enable_trajectory,
     )
