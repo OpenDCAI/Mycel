@@ -76,6 +76,26 @@ class _FakeRelationshipRepo:
         return row
 
 
+class _RequestRelationshipRepo:
+    def __init__(self) -> None:
+        self.persisted = False
+
+    def get(self, _requester_id: str, _target_id: str):
+        return None
+
+    def upsert(self, _requester_id: str, _target_id: str, **fields: Any):
+        self.persisted = True
+        return {
+            "id": "hire_visit:agent-user-1:human-user-1",
+            "user_low": "agent-user-1",
+            "user_high": "human-user-1",
+            "kind": "hire_visit",
+            "created_at": "2026-04-07T00:00:00Z",
+            "updated_at": "2026-04-07T00:00:01Z",
+            **fields,
+        }
+
+
 def _messaging_display_service(**overrides: Any) -> SimpleNamespace:
     def _resolve_display_user(uid: str) -> Any | None:
         if uid == "agent-user-1":
@@ -131,22 +151,7 @@ def test_relationship_revoke_deletes_hire_without_snapshot_side_channel() -> Non
 
 
 def test_relationship_request_uses_single_pending_state_and_initiator() -> None:
-    class _RequestRepo:
-        def get(self, _requester_id: str, _target_id: str):
-            return None
-
-        def upsert(self, _requester_id: str, _target_id: str, **fields: Any):
-            return {
-                "id": "hire_visit:agent-user-1:human-user-1",
-                "user_low": "agent-user-1",
-                "user_high": "human-user-1",
-                "kind": "hire_visit",
-                "created_at": "2026-04-07T00:00:00Z",
-                "updated_at": "2026-04-07T00:00:01Z",
-                **fields,
-            }
-
-    service = RelationshipService(_RequestRepo())
+    service = RelationshipService(_RequestRelationshipRepo())
 
     row = service.request("human-user-1", "agent-user-1")
 
@@ -155,26 +160,7 @@ def test_relationship_request_uses_single_pending_state_and_initiator() -> None:
 
 
 def test_relationship_request_notifies_after_persisting_pending_row() -> None:
-    class _RequestRepo:
-        def __init__(self) -> None:
-            self.persisted = False
-
-        def get(self, _requester_id: str, _target_id: str):
-            return None
-
-        def upsert(self, _requester_id: str, _target_id: str, **fields: Any):
-            self.persisted = True
-            return {
-                "id": "hire_visit:agent-user-1:human-user-1",
-                "user_low": "agent-user-1",
-                "user_high": "human-user-1",
-                "kind": "hire_visit",
-                "created_at": "2026-04-07T00:00:00Z",
-                "updated_at": "2026-04-07T00:00:01Z",
-                **fields,
-            }
-
-    repo = _RequestRepo()
+    repo = _RequestRelationshipRepo()
     notifications = []
     service = RelationshipService(repo, on_relationship_requested=notifications.append)
 
@@ -186,26 +172,25 @@ def test_relationship_request_notifies_after_persisting_pending_row() -> None:
     assert notifications[0].initiator_user_id == "human-user-1"
 
 
+def test_relationship_request_runs_each_registered_action_after_persisting_request() -> None:
+    repo = _RequestRelationshipRepo()
+    first_notifications = []
+    second_notifications = []
+    service = RelationshipService(repo)
+    service.add_relationship_request_action(first_notifications.append)
+    service.add_relationship_request_action(second_notifications.append)
+
+    row = service.request("human-user-1", "agent-user-1")
+
+    assert first_notifications == [row]
+    assert second_notifications == [row]
+
+
 def test_relationship_request_action_failure_carries_persisted_row() -> None:
-    class _RequestRepo:
-        def get(self, _requester_id: str, _target_id: str):
-            return None
-
-        def upsert(self, _requester_id: str, _target_id: str, **fields: Any):
-            return {
-                "id": "hire_visit:agent-user-1:human-user-1",
-                "user_low": "agent-user-1",
-                "user_high": "human-user-1",
-                "kind": "hire_visit",
-                "created_at": "2026-04-07T00:00:00Z",
-                "updated_at": "2026-04-07T00:00:01Z",
-                **fields,
-            }
-
     def fail_after_persist(_row):
         raise RuntimeError("runtime offline")
 
-    service = RelationshipService(_RequestRepo(), on_relationship_requested=fail_after_persist)
+    service = RelationshipService(_RequestRelationshipRepo(), on_relationship_requested=fail_after_persist)
 
     with pytest.raises(RelationshipActionError) as exc_info:
         service.request("human-user-1", "agent-user-1")
@@ -227,6 +212,21 @@ def test_relationship_approve_notifies_original_requester_after_persisting_decis
 
     assert row.state == "visit"
     assert notifications == [(row, "approve")]
+
+
+def test_relationship_decision_runs_each_registered_action_after_persisting_decision() -> None:
+    repo = _FakeRelationshipRepo()
+    repo._existing[("agent-user-1", "human-user-1")]["state"] = "pending"
+    first_notifications = []
+    second_notifications = []
+    service = RelationshipService(repo)
+    service.add_relationship_decision_action(lambda row, event: first_notifications.append((row, event)))
+    service.add_relationship_decision_action(lambda row, event: second_notifications.append((row, event)))
+
+    row = service.approve("agent-user-1", "human-user-1")
+
+    assert first_notifications == [(row, "approve")]
+    assert second_notifications == [(row, "approve")]
 
 
 def test_relationship_decision_action_failure_carries_persisted_row_and_event() -> None:
