@@ -137,10 +137,10 @@ class ChatTaskService:
 class ChatWorkflowEventService:
     def __init__(self, event_repo: Any) -> None:
         self._repo = event_repo
-        self._event_change_fn: Callable[[WorkflowEventChange], None] | None = None
+        self._event_change_actions: list[Callable[[WorkflowEventChange], None]] = []
 
-    def set_event_change_fn(self, change_fn: Callable[[WorkflowEventChange], None]) -> None:
-        self._event_change_fn = change_fn
+    def add_event_change_action(self, action: Callable[[WorkflowEventChange], None]) -> None:
+        self._event_change_actions.append(action)
 
     def list_events(self, chat_id: str) -> list[dict[str, Any]]:
         return [_event_response(event) for event in self._repo.list_all(chat_id)]
@@ -217,7 +217,7 @@ class ChatWorkflowEventService:
         return response
 
     def _event_change_actor(self, actor_user_id: str | None, *, field: str) -> str | None:
-        if self._event_change_fn is None:
+        if not self._event_change_actions:
             return None
         if actor_user_id is None:
             raise RuntimeError(f"Workflow event change requires {field}")
@@ -230,13 +230,15 @@ class ChatWorkflowEventService:
         event: dict[str, Any],
         actor_user_id: str | None,
     ) -> None:
-        change_fn = self._event_change_fn
-        if change_fn is None:
+        actions = list(self._event_change_actions)
+        if not actions:
             return
         if actor_user_id is None:
             raise RuntimeError("Workflow event change requires actor_user_id")
         try:
-            change_fn(WorkflowEventChange(operation=operation, event=event, actor_user_id=actor_user_id))
+            change = WorkflowEventChange(operation=operation, event=event, actor_user_id=actor_user_id)
+            for action in actions:
+                action(change)
         except Exception as exc:
             raise WorkflowEventActionError(operation=operation, event=event) from exc
 
