@@ -9,7 +9,8 @@ from backend.threads.chat_adapters.runtime_chat_delivery_action import (
     RuntimeChatDeliveryAction,
     dispatch_runtime_chat_delivery_actions,
 )
-from backend.threads.chat_adapters.runtime_event_hook import make_sync_runtime_event_hook, run_planned_runtime_event
+from backend.threads.chat_adapters.runtime_event_hook import make_sync_runtime_event_hook
+from backend.threads.chat_adapters.runtime_event_runner import run_planned_runtime_event
 from messaging.delivery.contracts import ChatDeliveryRequest
 
 
