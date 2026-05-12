@@ -195,7 +195,7 @@ async def test_chat_delivery_hook_propagates_runtime_gateway_failures() -> None:
 
 
 @pytest.mark.asyncio
-async def test_chat_delivery_hook_uses_request_sender_type() -> None:
+async def test_chat_delivery_event_and_hook_use_request_sender_type() -> None:
     class RecordingGateway:
         envelope = None
 
@@ -222,6 +222,18 @@ async def test_chat_delivery_hook_uses_request_sender_type() -> None:
         signal=None,
     )
 
+    dispatched_count = await owner_chat_inlet.dispatch_chat_delivery_event(
+        app,
+        request,
+        activity_reader=app.state.threads_runtime_state.activity_reader,
+        thread_repo=app.state.thread_repo,
+    )
+
+    assert dispatched_count == 1
+    assert gateway.envelope is not None
+    assert gateway.envelope.sender.user_type == "human"
+
+    gateway.envelope = None
     await asyncio.to_thread(deliver, request)
 
     assert gateway.envelope is not None

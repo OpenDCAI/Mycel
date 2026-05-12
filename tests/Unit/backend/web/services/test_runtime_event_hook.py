@@ -5,7 +5,6 @@ import asyncio
 import pytest
 
 from backend.threads.chat_adapters.runtime_event_hook import (
-    make_sync_planned_runtime_event_hook,
     make_sync_runtime_event_hook,
     run_planned_runtime_event,
 )
@@ -63,20 +62,3 @@ async def test_run_planned_runtime_event_returns_dispatch_result(
 
     assert result == dispatch_result
     assert calls == [planned_actions]
-
-
-@pytest.mark.asyncio
-async def test_sync_planned_runtime_event_hook_plans_and_dispatches_actions_from_worker_thread() -> None:
-    calls: list[list[str]] = []
-
-    def planner(value: str) -> list[str]:
-        return [f"planned:{value}"]
-
-    async def dispatch(actions: list[str]) -> None:
-        calls.append(actions)
-
-    hook = make_sync_planned_runtime_event_hook(planner, dispatch)
-
-    await asyncio.to_thread(hook, "event-1")
-
-    assert calls == [["planned:event-1"]]
