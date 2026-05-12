@@ -44,6 +44,12 @@ def _max_message_seq(messages: list[dict[str, Any]]) -> int:
     return max(seqs)
 
 
+class ChatMessageDeliveryActionError(RuntimeError):
+    def __init__(self, *, message: dict[str, Any]) -> None:
+        super().__init__("Chat message delivery action failed after send")
+        self.message = dict(message)
+
+
 class MessagingService:
     """Core messaging operations backed by Supabase repos."""
 
@@ -303,14 +309,17 @@ class MessagingService:
 
         # Deliver to agent recipients
         if _should_dispatch_chat_delivery(message_type, mentions, normalized_addressed_to):
-            self._delivery_dispatcher.dispatch(
-                chat_id,
-                sender_id,
-                content,
-                mentions or [],
-                signal=signal,
-                addressed_to_user_ids=normalized_addressed_to,
-            )
+            try:
+                self._delivery_dispatcher.dispatch(
+                    chat_id,
+                    sender_id,
+                    content,
+                    mentions or [],
+                    signal=signal,
+                    addressed_to_user_ids=normalized_addressed_to,
+                )
+            except Exception as exc:
+                raise ChatMessageDeliveryActionError(message=created) from exc
 
         return created
 
