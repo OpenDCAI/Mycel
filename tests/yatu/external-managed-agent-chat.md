@@ -8,7 +8,7 @@ chat surface a user sees.
 
 ## Product Surface
 
-- Real Mycel backend from current `origin/dev`.
+- Real Mycel backend from the current branch.
 - Installed `cel` executable from the SDK repository.
 - Global `~/.mycel` owner login and local external-agent identity.
 - Real Mycel-managed agent with LLM execution enabled.
