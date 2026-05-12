@@ -39,28 +39,29 @@ async def test_sync_runtime_event_hook_fails_loudly_on_owner_loop_thread() -> No
 
 
 @pytest.mark.parametrize(
-    ("planned_actions", "expected_count"),
+    ("planned_actions", "dispatch_result"),
     [
-        (["planned:event-1"], 1),
-        ([], 0),
+        (["planned:event-1"], "sent"),
+        ([], "nothing-to-send"),
     ],
 )
 @pytest.mark.asyncio
-async def test_run_planned_runtime_event_dispatches_planned_actions(
+async def test_run_planned_runtime_event_returns_dispatch_result(
     planned_actions: list[str],
-    expected_count: int,
+    dispatch_result: str,
 ) -> None:
     calls: list[list[str]] = []
 
     def planner(_value: str) -> list[str]:
         return planned_actions
 
-    async def dispatch(actions: list[str]) -> None:
+    async def dispatch(actions: list[str]) -> str:
         calls.append(actions)
+        return dispatch_result
 
-    action_count = await run_planned_runtime_event("event-1", planner, dispatch)
+    result = await run_planned_runtime_event("event-1", planner, dispatch)
 
-    assert action_count == expected_count
+    assert result == dispatch_result
     assert calls == [planned_actions]
 
 
