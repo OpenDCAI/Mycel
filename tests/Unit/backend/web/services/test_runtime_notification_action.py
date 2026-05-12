@@ -8,7 +8,6 @@ import pytest
 
 from backend.threads.chat_adapters.runtime_notification_action import (
     RuntimeNotificationAction,
-    dispatch_runtime_notification_action,
     dispatch_runtime_notification_actions,
     dispatch_runtime_notification_event,
     make_runtime_notification_event_hook,
@@ -68,22 +67,24 @@ def _action(**overrides) -> RuntimeNotificationAction:
 async def test_runtime_notification_action_resolves_and_dispatches_to_runtime_recipient() -> None:
     gateway = _RecordingGateway()
 
-    dispatched = await dispatch_runtime_notification_action(
+    dispatched_count = await dispatch_runtime_notification_actions(
         _runtime_app(gateway),
-        _action(
-            metadata={"resource_id": "resource-1"},
-            transport=AgentRuntimeTransport(
-                delivery_id="delivery-1",
-                correlation_id="resource-1",
-                idempotency_key="delivery-1",
+        [
+            _action(
+                metadata={"resource_id": "resource-1"},
+                transport=AgentRuntimeTransport(
+                    delivery_id="delivery-1",
+                    correlation_id="resource-1",
+                    idempotency_key="delivery-1",
+                ),
             ),
-        ),
+        ],
         user_repo=_users(),
         thread_repo=_thread_repo(),
         activity_reader=_activity_reader(),
     )
 
-    assert dispatched is True
+    assert dispatched_count == 1
     assert len(gateway.envelopes) == 1
     envelope = gateway.envelopes[0]
     assert envelope.recipient.agent_user_id == "agent-1"

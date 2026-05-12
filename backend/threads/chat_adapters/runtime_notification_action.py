@@ -90,24 +90,6 @@ def runtime_notification_action_dispatcher(
     return dispatch_actions
 
 
-async def dispatch_runtime_notification_action(
-    app: Any,
-    action: RuntimeNotificationAction,
-    *,
-    user_repo: Any,
-    thread_repo: Any,
-    activity_reader: Any,
-) -> bool:
-    dispatched_count = await dispatch_runtime_notification_actions(
-        app,
-        [action],
-        user_repo=user_repo,
-        thread_repo=thread_repo,
-        activity_reader=activity_reader,
-    )
-    return dispatched_count > 0
-
-
 async def dispatch_runtime_notification_actions(
     app: Any,
     actions: Iterable[RuntimeNotificationAction],
