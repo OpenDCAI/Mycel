@@ -9,7 +9,7 @@ from backend.threads.chat_adapters.runtime_notification_action import (
     RuntimeNotificationAction,
     dispatch_runtime_notification_actions,
 )
-from core.event_actions import plan_event_actions
+from core.event_actions import plan_event_actions, single_event_action_planner
 
 
 def make_chat_join_rejection_notification_fn(app: Any, *, activity_reader: Any, thread_repo: Any, user_repo: Any):
@@ -29,10 +29,10 @@ def make_chat_join_rejection_notification_fn(app: Any, *, activity_reader: Any, 
 
 
 def chat_join_rejection_notification_action_planner(user_repo: Any) -> Callable[[dict[str, Any]], list[RuntimeNotificationAction]]:
-    def plan(row: dict[str, Any]) -> list[RuntimeNotificationAction]:
-        return [chat_join_rejection_notification_action(row, user_repo=user_repo)]
+    def make_action(row: dict[str, Any]) -> RuntimeNotificationAction:
+        return chat_join_rejection_notification_action(row, user_repo=user_repo)
 
-    return plan
+    return single_event_action_planner(make_action)
 
 
 def chat_join_rejection_notification_action(row: dict[str, Any], *, user_repo: Any) -> RuntimeNotificationAction:
