@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-import asyncio
 from typing import Any
 
 from backend.threads.chat_adapters.port import get_agent_runtime_gateway
+from backend.threads.chat_adapters.runtime_event_hook import make_sync_runtime_event_hook
 from backend.threads.chat_adapters.runtime_identity import display_name, make_runtime_actor, require_user, user_type
 from backend.threads.chat_adapters.runtime_recipient import select_runtime_notification_recipient
 from protocols.agent_runtime import (
@@ -13,8 +13,6 @@ from protocols.agent_runtime import (
 
 
 def make_chat_join_rejection_notification_fn(app: Any, *, activity_reader: Any, thread_repo: Any, user_repo: Any):
-    loop = asyncio.get_running_loop()
-
     async def notify_runtime(row: dict[str, Any]) -> None:
         requester_id = _required_str(row, "requester_user_id")
         decider_id = _required_str(row, "decided_by_user_id")
@@ -56,11 +54,7 @@ def make_chat_join_rejection_notification_fn(app: Any, *, activity_reader: Any, 
             )
         )
 
-    def _notify(row: dict[str, Any]) -> None:
-        future = asyncio.run_coroutine_threadsafe(notify_runtime(row), loop)
-        future.result()
-
-    return _notify
+    return make_sync_runtime_event_hook(notify_runtime)
 
 
 def _required_str(row: dict[str, Any], key: str) -> str:

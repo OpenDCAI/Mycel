@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-import asyncio
 from collections.abc import Callable, Mapping, Sequence
 from typing import Any
 
 from backend.threads.chat_adapters.port import get_agent_runtime_gateway
+from backend.threads.chat_adapters.runtime_event_hook import make_sync_runtime_event_hook
 from backend.threads.chat_adapters.runtime_identity import make_runtime_actor, require_user, user_type
 from backend.threads.chat_adapters.runtime_recipient import select_runtime_notification_recipient
 from core.work_item.chat_workflow.service import WorkflowEventChange
@@ -25,8 +25,6 @@ def make_workflow_event_notification_fn(
     user_repo: Any,
     messaging_service: Any,
 ) -> Callable[[WorkflowEventChange], None]:
-    loop = asyncio.get_running_loop()
-
     async def notify_runtime(change: WorkflowEventChange) -> None:
         await dispatch_workflow_event_notifications(
             app,
@@ -37,11 +35,7 @@ def make_workflow_event_notification_fn(
             activity_reader=activity_reader,
         )
 
-    def _notify(change: WorkflowEventChange) -> None:
-        future = asyncio.run_coroutine_threadsafe(notify_runtime(change), loop)
-        future.result()
-
-    return _notify
+    return make_sync_runtime_event_hook(notify_runtime)
 
 
 async def dispatch_workflow_event_notifications(
