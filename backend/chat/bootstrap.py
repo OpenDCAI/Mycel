@@ -159,7 +159,7 @@ def wire_chat_join_request_notifications(
     thread_repo: Any,
     user_repo: Any,
 ) -> None:
-    chat_join_request_service.set_join_request_rejected_notification_fn(
+    chat_join_request_service.add_join_request_rejected_action(
         make_chat_join_rejection_notification_fn(
             app,
             activity_reader=activity_reader,

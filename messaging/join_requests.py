@@ -24,10 +24,12 @@ class ChatJoinRequestService:
         self._members = chat_member_repo
         self._requests = chat_join_request_repo
         self._messaging = messaging_service
-        self._on_join_request_rejected = on_join_request_rejected
+        self._join_request_rejected_actions: list[Any] = []
+        if on_join_request_rejected is not None:
+            self.add_join_request_rejected_action(on_join_request_rejected)
 
-    def set_join_request_rejected_notification_fn(self, fn: Any) -> None:
-        self._on_join_request_rejected = fn
+    def add_join_request_rejected_action(self, action: Any) -> None:
+        self._join_request_rejected_actions.append(action)
 
     def request(self, chat_id: str, requester_user_id: str, message: str | None = None) -> dict[str, Any]:
         chat = self._require_joinable_chat(chat_id)
@@ -98,12 +100,18 @@ class ChatJoinRequestService:
             message_type="notification",
             mentions=[requester_user_id],
         )
-        if self._on_join_request_rejected is not None:
-            try:
-                self._on_join_request_rejected(row)
-            except Exception as exc:
-                raise ChatJoinRequestActionError(action="reject", row=row) from exc
+        self._run_join_request_rejected_actions(row)
         return self._project_request(row)
+
+    def _run_join_request_rejected_actions(self, row: dict[str, Any]) -> None:
+        actions = list(self._join_request_rejected_actions)
+        if not actions:
+            return
+        try:
+            for action in actions:
+                action(row)
+        except Exception as exc:
+            raise ChatJoinRequestActionError(action="reject", row=row) from exc
 
     def _require_joinable_chat(self, chat_id: str) -> Any:
         chat = self._chats.get_by_id(chat_id)
