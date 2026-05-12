@@ -6,6 +6,7 @@ import logging
 from collections.abc import Callable
 from typing import Any
 
+from core.event_actions import run_sync_actions
 from messaging.contracts import RelationshipEvent, RelationshipRow, RelationshipState
 from messaging.relationships.state_machine import transition
 
@@ -105,24 +106,19 @@ class RelationshipService:
         return row
 
     def _run_request_actions(self, row: RelationshipRow) -> None:
-        actions = list(self._relationship_request_actions)
-        if not actions:
-            return
-        try:
-            for action in actions:
-                action(row)
-        except Exception as exc:
-            raise RelationshipActionError(event="request", row=row) from exc
+        run_sync_actions(
+            self._relationship_request_actions,
+            row,
+            on_error=lambda _exc: RelationshipActionError(event="request", row=row),
+        )
 
     def _run_decision_actions(self, event: RelationshipEvent, row: RelationshipRow) -> None:
-        actions = list(self._relationship_decision_actions)
-        if not actions:
-            return
-        try:
-            for action in actions:
-                action(row, event)
-        except Exception as exc:
-            raise RelationshipActionError(event=event, row=row) from exc
+        run_sync_actions(
+            self._relationship_decision_actions,
+            row,
+            event,
+            on_error=lambda _exc: RelationshipActionError(event=event, row=row),
+        )
 
     def upgrade(self, owner_id: str, agent_id: str) -> RelationshipRow:
         return self.apply_event(owner_id, agent_id, "upgrade")

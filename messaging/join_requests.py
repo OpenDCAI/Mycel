@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from core.event_actions import run_sync_actions
+
 
 class ChatJoinRequestActionError(RuntimeError):
     def __init__(self, *, action: str, row: dict[str, Any]) -> None:
@@ -104,14 +106,11 @@ class ChatJoinRequestService:
         return self._project_request(row)
 
     def _run_join_request_rejected_actions(self, row: dict[str, Any]) -> None:
-        actions = list(self._join_request_rejected_actions)
-        if not actions:
-            return
-        try:
-            for action in actions:
-                action(row)
-        except Exception as exc:
-            raise ChatJoinRequestActionError(action="reject", row=row) from exc
+        run_sync_actions(
+            self._join_request_rejected_actions,
+            row,
+            on_error=lambda _exc: ChatJoinRequestActionError(action="reject", row=row),
+        )
 
     def _require_joinable_chat(self, chat_id: str) -> Any:
         chat = self._chats.get_by_id(chat_id)
