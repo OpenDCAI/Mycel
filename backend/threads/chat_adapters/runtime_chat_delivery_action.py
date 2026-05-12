@@ -54,23 +54,51 @@ async def dispatch_runtime_chat_delivery_actions(
 ) -> int:
     dispatched_count = 0
     for action in actions:
-        if await _dispatch_runtime_chat_delivery_action(
-            app,
+        envelope = plan_runtime_chat_delivery_envelope(
             action,
             thread_repo=thread_repo,
             activity_reader=activity_reader,
-        ):
-            dispatched_count += 1
+        )
+        if envelope is None:
+            continue
+        await dispatch_runtime_chat_delivery_envelopes(app, [envelope])
+        dispatched_count += 1
     return dispatched_count
 
 
-async def _dispatch_runtime_chat_delivery_action(
-    app: Any,
+async def dispatch_runtime_chat_delivery_envelopes(app: Any, envelopes: Iterable[AgentChatDeliveryEnvelope]) -> None:
+    current_envelopes = list(envelopes)
+    if not current_envelopes:
+        return
+    gateway = get_agent_runtime_gateway(app)
+    for envelope in current_envelopes:
+        await gateway.dispatch_chat(envelope)
+
+
+def plan_runtime_chat_delivery_envelopes(
+    actions: Iterable[RuntimeChatDeliveryAction],
+    *,
+    thread_repo: Any,
+    activity_reader: Any,
+) -> list[AgentChatDeliveryEnvelope]:
+    envelopes: list[AgentChatDeliveryEnvelope] = []
+    for action in actions:
+        envelope = plan_runtime_chat_delivery_envelope(
+            action,
+            thread_repo=thread_repo,
+            activity_reader=activity_reader,
+        )
+        if envelope is not None:
+            envelopes.append(envelope)
+    return envelopes
+
+
+def plan_runtime_chat_delivery_envelope(
     action: RuntimeChatDeliveryAction,
     *,
     thread_repo: Any,
     activity_reader: Any,
-) -> bool:
+) -> AgentChatDeliveryEnvelope | None:
     recipient = resolve_runtime_chat_delivery_recipient(
         action.recipient_id,
         action.recipient_user_type,
@@ -78,26 +106,23 @@ async def _dispatch_runtime_chat_delivery_action(
         activity_reader=activity_reader,
     )
     if recipient is None:
-        return False
-    await get_agent_runtime_gateway(app).dispatch_chat(
-        AgentChatDeliveryEnvelope(
-            chat=AgentChatContext(chat_id=action.chat_id),
-            sender=runtime_actor(
-                user_id=action.sender_id,
-                user_type=action.sender_type,
-                display_name=action.sender_name,
-                avatar_url=action.sender_avatar_url,
-                source="chat",
-            ),
-            recipient=recipient,
-            message=AgentRuntimeMessage(content=action.content, signal=action.signal),
-            extensions={
-                "mycel": {
-                    "recipient_user_id": action.recipient_user_id,
-                    "recipient_user_type": action.recipient_user_type,
-                    "raw_content": action.raw_content,
-                }
-            },
-        )
+        return None
+    return AgentChatDeliveryEnvelope(
+        chat=AgentChatContext(chat_id=action.chat_id),
+        sender=runtime_actor(
+            user_id=action.sender_id,
+            user_type=action.sender_type,
+            display_name=action.sender_name,
+            avatar_url=action.sender_avatar_url,
+            source="chat",
+        ),
+        recipient=recipient,
+        message=AgentRuntimeMessage(content=action.content, signal=action.signal),
+        extensions={
+            "mycel": {
+                "recipient_user_id": action.recipient_user_id,
+                "recipient_user_type": action.recipient_user_type,
+                "raw_content": action.raw_content,
+            }
+        },
     )
-    return True

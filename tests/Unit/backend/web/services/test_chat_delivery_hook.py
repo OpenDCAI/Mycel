@@ -7,7 +7,11 @@ import pytest
 
 from backend.threads.chat_adapters import chat_inlet as owner_chat_inlet
 from backend.threads.chat_adapters.chat_notification_format import format_chat_notification
-from backend.threads.chat_adapters.runtime_chat_delivery_action import RuntimeChatDeliveryAction
+from backend.threads.chat_adapters.runtime_chat_delivery_action import (
+    RuntimeChatDeliveryAction,
+    dispatch_runtime_chat_delivery_actions,
+    plan_runtime_chat_delivery_envelope,
+)
 from messaging.delivery.dispatcher import ChatDeliveryRequest
 
 
@@ -26,6 +30,24 @@ def _hook_app(gateway: object) -> SimpleNamespace:
             ),
         )
     )
+
+
+def _runtime_chat_action(**overrides) -> RuntimeChatDeliveryAction:
+    values = {
+        "chat_id": "chat-1",
+        "recipient_id": "agent-user-1",
+        "recipient_user_id": "agent-user-1",
+        "recipient_user_type": "agent",
+        "sender_id": "human-user-1",
+        "sender_type": "human",
+        "sender_name": "Human",
+        "sender_avatar_url": None,
+        "content": "rendered chat reminder",
+        "raw_content": "raw chat message",
+        "signal": None,
+    }
+    values.update(overrides)
+    return RuntimeChatDeliveryAction(**values)
 
 
 def test_chat_delivery_request_builds_runtime_action() -> None:
@@ -81,6 +103,66 @@ def test_chat_delivery_action_planner_returns_runtime_action() -> None:
     assert actions[0].recipient_user_id == "agent-user-1"
     assert actions[0].content == format_chat_notification("Human", "chat-1", 2, signal=None)
     assert actions[0].raw_content == "hello"
+
+
+def test_runtime_chat_delivery_action_plans_runtime_envelope() -> None:
+    action = _runtime_chat_action(signal="urgent")
+
+    envelope = plan_runtime_chat_delivery_envelope(
+        action,
+        thread_repo=_hook_app(object()).state.thread_repo,
+        activity_reader=SimpleNamespace(list_active_threads_for_agent=lambda _agent_user_id: []),
+    )
+
+    assert envelope is not None
+    assert envelope.chat.chat_id == "chat-1"
+    assert envelope.recipient.agent_user_id == "agent-user-1"
+    assert envelope.recipient.thread_id == "thread-1"
+    assert envelope.sender.user_id == "human-user-1"
+    assert envelope.sender.source == "chat"
+    assert envelope.message.content == "rendered chat reminder"
+    assert envelope.message.signal == "urgent"
+    assert envelope.extensions == {
+        "mycel": {
+            "recipient_user_id": "agent-user-1",
+            "recipient_user_type": "agent",
+            "raw_content": "raw chat message",
+        }
+    }
+
+
+@pytest.mark.asyncio
+async def test_runtime_chat_delivery_actions_dispatches_prior_envelopes_before_later_planning_failure() -> None:
+    class RecordingGateway:
+        def __init__(self) -> None:
+            self.envelopes = []
+
+        async def dispatch_chat(self, envelope):
+            self.envelopes.append(envelope)
+
+    gateway = RecordingGateway()
+
+    with pytest.raises(RuntimeError, match="Managed agent runtime is unavailable for chat delivery to agent-user-1"):
+        await dispatch_runtime_chat_delivery_actions(
+            _hook_app(gateway),
+            [
+                _runtime_chat_action(
+                    recipient_id="external-user-1",
+                    recipient_user_id="external-user-1",
+                    recipient_user_type="external",
+                    content="external reminder",
+                    raw_content="raw external",
+                ),
+                _runtime_chat_action(
+                    content="agent reminder",
+                    raw_content="raw agent",
+                ),
+            ],
+            thread_repo=object(),
+            activity_reader=None,
+        )
+
+    assert [envelope.recipient.agent_user_id for envelope in gateway.envelopes] == ["external-user-1"]
 
 
 @pytest.mark.asyncio
