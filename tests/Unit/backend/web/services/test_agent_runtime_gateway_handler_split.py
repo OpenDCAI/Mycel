@@ -6,7 +6,6 @@ from typing import Any
 import pytest
 
 from backend.threads.chat_adapters.gateway import NativeAgentRuntimeGateway
-from backend.threads.chat_adapters.thread_handler import NativeAgentThreadInputHandler
 from protocols.agent_runtime import AgentChatDeliveryResult, AgentRuntimeNotificationResult, AgentThreadInputResult
 
 
@@ -50,11 +49,9 @@ async def test_gateway_delegates_chat_and_thread_input_to_split_handlers() -> No
     )
 
     chat_handler = _FakeChatHandler()
-    notification_handler = _FakeNotificationHandler()
     thread_input_handler = _FakeThreadInputHandler()
     gateway = NativeAgentRuntimeGateway(
         chat_handlers={"mycel": chat_handler},
-        notification_handlers={"mycel": notification_handler},
         thread_input_handler=thread_input_handler,
     )
     chat_envelope = AgentChatDeliveryEnvelope(
@@ -78,13 +75,17 @@ async def test_gateway_delegates_chat_and_thread_input_to_split_handlers() -> No
 
     chat_result = await gateway.dispatch_chat(chat_envelope)
     notification_result = await gateway.dispatch_notification(notification_envelope)
+    notification_thread_input = thread_input_handler.called_with
     thread_result = await gateway.dispatch_thread_input(thread_envelope)
 
     assert chat_result == AgentChatDeliveryResult(status="accepted", thread_id="thread-1")
     assert notification_result == AgentRuntimeNotificationResult(status="accepted", thread_id="thread-1")
     assert thread_result == AgentThreadInputResult(status="started", routing="direct", thread_id="thread-1")
     assert chat_handler.called_with is chat_envelope
-    assert notification_handler.called_with is notification_envelope
+    assert isinstance(notification_thread_input, AgentThreadInputEnvelope)
+    assert notification_thread_input.thread_id == "thread-1"
+    assert notification_thread_input.sender is notification_envelope.sender
+    assert notification_thread_input.message.content == notification_envelope.message.content
     assert thread_input_handler.called_with is thread_envelope
 
 
@@ -151,7 +152,7 @@ async def test_gateway_rejects_unregistered_chat_runtime_source() -> None:
 
 
 @pytest.mark.asyncio
-async def test_gateway_routes_notifications_by_runtime_source() -> None:
+async def test_gateway_routes_external_notifications_by_runtime_source() -> None:
     from protocols.agent_runtime import (
         AgentChatRecipient,
         AgentRuntimeActor,
@@ -161,12 +162,12 @@ async def test_gateway_routes_notifications_by_runtime_source() -> None:
 
     handler = _FakeNotificationHandler()
     gateway = NativeAgentRuntimeGateway(
-        notification_handlers={"mycel": handler},
+        notification_handlers={"external": handler},
         thread_input_handler=_FakeThreadInputHandler(),
     )
     envelope = AgentRuntimeNotificationEnvelope(
         event_type="relationship.requested",
-        recipient=AgentChatRecipient(agent_user_id="agent-1", runtime_source="mycel", thread_id="thread-1"),
+        recipient=AgentChatRecipient(agent_user_id="agent-1", runtime_source="external"),
         sender=AgentRuntimeActor(user_id="human-1", user_type="human", display_name="Human"),
         message=AgentRuntimeMessage(content="hello"),
         notification_type="relationship",
@@ -204,7 +205,7 @@ async def test_gateway_rejects_unregistered_notification_runtime_source() -> Non
 
 
 @pytest.mark.asyncio
-async def test_native_thread_input_handler_converts_notification_to_thread_input_at_runtime_boundary() -> None:
+async def test_gateway_converts_managed_notification_to_thread_input_at_runtime_boundary() -> None:
     from protocols.agent_runtime import (
         AgentChatRecipient,
         AgentRuntimeActor,
@@ -214,17 +215,8 @@ async def test_native_thread_input_handler_converts_notification_to_thread_input
         AgentThreadInputEnvelope,
     )
 
-    class _CapturingThreadInputHandler(NativeAgentThreadInputHandler):
-        called_with: AgentThreadInputEnvelope | None = None
-
-        def __init__(self) -> None:
-            pass
-
-        async def dispatch(self, envelope: AgentThreadInputEnvelope) -> AgentThreadInputResult:
-            self.called_with = envelope
-            return AgentThreadInputResult(status="started", routing="direct", thread_id="thread-1")
-
-    handler = _CapturingThreadInputHandler()
+    handler = _FakeThreadInputHandler()
+    gateway = NativeAgentRuntimeGateway(thread_input_handler=handler)
     envelope = AgentRuntimeNotificationEnvelope(
         event_type="relationship.requested",
         recipient=AgentChatRecipient(agent_user_id="agent-1", runtime_source="mycel", thread_id="thread-1"),
@@ -238,7 +230,7 @@ async def test_native_thread_input_handler_converts_notification_to_thread_input
         ),
     )
 
-    result = await handler.dispatch_notification(envelope)
+    result = await gateway.dispatch_notification(envelope)
 
     assert result == AgentRuntimeNotificationResult(status="accepted", thread_id="thread-1")
     called = handler.called_with

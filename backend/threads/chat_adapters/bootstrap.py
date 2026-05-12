@@ -60,7 +60,6 @@ def build_agent_runtime_state(app: Any, *, typing_tracker: Any) -> AgentRuntimeG
             "external": external_runtime_handler,
         },
         notification_handlers={
-            "mycel": thread_input_handler,
             "external": external_runtime_handler,
         },
         thread_input_handler=thread_input_handler,

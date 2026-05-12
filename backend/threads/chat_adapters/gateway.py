@@ -5,6 +5,8 @@ from typing import Protocol
 
 from protocols import agent_runtime as agent_runtime_protocol
 
+from .runtime_metadata import thread_input_from_notification
+
 
 class AgentChatRuntimeHandler(Protocol):
     async def dispatch(
@@ -47,6 +49,9 @@ class NativeAgentRuntimeGateway:
     async def dispatch_notification(
         self, envelope: agent_runtime_protocol.AgentRuntimeNotificationEnvelope
     ) -> agent_runtime_protocol.AgentRuntimeNotificationResult:
+        if envelope.recipient.runtime_source == "mycel":
+            result = await self.dispatch_thread_input(thread_input_from_notification(envelope))
+            return agent_runtime_protocol.AgentRuntimeNotificationResult(status="accepted", thread_id=result.thread_id)
         handler = self._notification_handlers.get(envelope.recipient.runtime_source)
         if handler is None:
             raise ValueError(f"No Agent runtime notification handler registered for runtime_source={envelope.recipient.runtime_source!r}")
