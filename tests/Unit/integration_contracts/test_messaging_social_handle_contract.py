@@ -19,7 +19,7 @@ from messaging.delivery.dispatcher import ChatDeliveryDispatcher
 from messaging.delivery.resolver import HireVisitDeliveryResolver
 from messaging.display_user import resolve_messaging_display_user
 from messaging.relationships.service import RelationshipActionError, RelationshipService
-from messaging.service import ChatMessageDeliveryActionError, MessagingService
+from messaging.service import ChatMessageDeliveryActionError, ChatMessageEventActionError, MessagingService
 from messaging.tools.chat_tool_service import ChatToolService
 from storage.contracts import ContactEdgeRow
 
@@ -867,6 +867,33 @@ def test_messaging_service_event_bus_message_uses_service_owned_projection() -> 
         "event": "message",
         "data": service.project_message_response(created),
     }
+
+
+def test_messaging_service_event_bus_failure_carries_persisted_message() -> None:
+    def fail_publish(_chat_id: str, _payload: dict[str, object]) -> None:
+        raise RuntimeError("event bus offline")
+
+    service = MessagingService(
+        chat_repo=SimpleNamespace(),
+        chat_member_repo=SimpleNamespace(list_members=lambda _chat_id: [], update_last_read=lambda _chat_id, _user_id, _seq: None),
+        messages_repo=SimpleNamespace(create=lambda row: {**row, "seq": 11}),
+        user_repo=SimpleNamespace(
+            get_by_id=lambda uid: (
+                SimpleNamespace(id=uid, display_name="Human", type="human", avatar=None) if uid == "human-user-1" else None
+            )
+        ),
+        event_bus=SimpleNamespace(publish=fail_publish),
+    )
+
+    with pytest.raises(ChatMessageEventActionError) as exc_info:
+        service.send("chat-1", "human-user-1", "hello")
+
+    assert str(exc_info.value) == "Chat message event action failed after send"
+    assert exc_info.value.message["chat_id"] == "chat-1"
+    assert exc_info.value.message["sender_id"] == "human-user-1"
+    assert exc_info.value.message["content"] == "hello"
+    assert exc_info.value.message["seq"] == 11
+    assert str(exc_info.value.__cause__) == "event bus offline"
 
 
 def test_messaging_service_notification_mentions_dispatch_to_agent_recipients() -> None:

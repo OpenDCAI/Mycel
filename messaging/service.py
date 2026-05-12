@@ -51,6 +51,12 @@ class ChatMessageDeliveryActionError(RuntimeError):
         self.message = dict(message)
 
 
+class ChatMessageEventActionError(RuntimeError):
+    def __init__(self, *, message: dict[str, Any]) -> None:
+        super().__init__("Chat message event action failed after send")
+        self.message = dict(message)
+
+
 class MessagingService:
     """Core messaging operations backed by Supabase repos."""
 
@@ -88,6 +94,9 @@ class MessagingService:
         )
         self._chat_message_delivery_actions: list[Callable[[dict[str, Any]], None]] = [self._dispatch_chat_message_delivery]
         self._event_bus = event_bus
+        self._chat_message_event_actions: list[Callable[[dict[str, Any]], None]] = []
+        if event_bus is not None:
+            self._chat_message_event_actions.append(self._publish_chat_message_event)
 
     def _normalize_message_row(self, row: dict[str, Any]) -> dict[str, Any]:
         return {
@@ -303,14 +312,7 @@ class MessagingService:
         logger.debug("[messaging] send chat=%s sender=%s msg=%s type=%s", chat_id[:8], sender_id[:15], msg_id[:8], message_type)
 
         # Publish to event bus (SSE / realtime transport)
-        if self._event_bus:
-            self._event_bus.publish(
-                chat_id,
-                {
-                    "event": "message",
-                    "data": self._project_message_response(created),
-                },
-            )
+        self._run_chat_message_event_actions(created)
 
         # Deliver to agent recipients
         if _should_dispatch_chat_delivery(message_type, mentions, normalized_addressed_to):
@@ -318,11 +320,30 @@ class MessagingService:
 
         return created
 
+    def _run_chat_message_event_actions(self, message: dict[str, Any]) -> None:
+        run_sync_actions(
+            self._chat_message_event_actions,
+            message,
+            on_error=lambda _exc: ChatMessageEventActionError(message=message),
+        )
+
     def _run_chat_message_delivery_actions(self, message: dict[str, Any]) -> None:
         run_sync_actions(
             self._chat_message_delivery_actions,
             message,
             on_error=lambda _exc: ChatMessageDeliveryActionError(message=message),
+        )
+
+    def _publish_chat_message_event(self, message: dict[str, Any]) -> None:
+        event_bus = self._event_bus
+        if event_bus is None:
+            raise RuntimeError("Chat message event action registered without event bus")
+        event_bus.publish(
+            str(message["chat_id"]),
+            {
+                "event": "message",
+                "data": self._project_message_response(message),
+            },
         )
 
     def _dispatch_chat_message_delivery(self, message: dict[str, Any]) -> None:

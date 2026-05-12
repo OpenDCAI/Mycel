@@ -20,7 +20,7 @@ from backend.chat.api.http.dependencies import (
 )
 from messaging.errors import ChatNotCaughtUpError
 from messaging.join_requests import ChatJoinRequestActionError
-from messaging.service import ChatMessageDeliveryActionError
+from messaging.service import ChatMessageDeliveryActionError, ChatMessageEventActionError
 from messaging.user_ownership import is_owned_by_viewer
 
 router = APIRouter(prefix="/api/chats", tags=["chats"])
@@ -102,6 +102,18 @@ def _chat_message_delivery_action_failure(exc: ChatMessageDeliveryActionError) -
         500,
         {
             "error": "chat_message_delivery_action_failed",
+            "message": exc.message,
+            "cause": str(cause) if cause is not None else str(exc),
+        },
+    )
+
+
+def _chat_message_event_action_failure(exc: ChatMessageEventActionError) -> HTTPException:
+    cause = exc.__cause__
+    return HTTPException(
+        500,
+        {
+            "error": "chat_message_event_action_failed",
             "message": exc.message,
             "cause": str(cause) if cause is not None else str(exc),
         },
@@ -332,6 +344,8 @@ def send_message(
         )
     except ChatNotCaughtUpError as exc:
         raise HTTPException(409, "Read unread messages before sending.") from exc
+    except ChatMessageEventActionError as exc:
+        raise _chat_message_event_action_failure(exc) from exc
     except ChatMessageDeliveryActionError as exc:
         raise _chat_message_delivery_action_failure(exc) from exc
     except ValueError as exc:
