@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Callable, Iterable
+from collections.abc import Callable, Coroutine, Iterable
 from dataclasses import dataclass
 from typing import Any
 
@@ -39,16 +39,15 @@ def make_runtime_notification_event_hook[EventT](
     thread_repo: Any,
     activity_reader: Any,
 ) -> Callable[[EventT], None]:
-    async def dispatch_actions(actions: list[RuntimeNotificationAction]) -> int:
-        return await dispatch_runtime_notification_actions(
+    return make_planned_runtime_event_hook(
+        planner,
+        runtime_notification_action_dispatcher(
             app,
-            actions,
             user_repo=user_repo,
             thread_repo=thread_repo,
             activity_reader=activity_reader,
-        )
-
-    return make_planned_runtime_event_hook(planner, dispatch_actions)
+        ),
+    )
 
 
 async def dispatch_runtime_notification_event[EventT](
@@ -60,6 +59,25 @@ async def dispatch_runtime_notification_event[EventT](
     thread_repo: Any,
     activity_reader: Any,
 ) -> int:
+    return await run_planned_runtime_event(
+        event,
+        planner,
+        runtime_notification_action_dispatcher(
+            app,
+            user_repo=user_repo,
+            thread_repo=thread_repo,
+            activity_reader=activity_reader,
+        ),
+    )
+
+
+def runtime_notification_action_dispatcher(
+    app: Any,
+    *,
+    user_repo: Any,
+    thread_repo: Any,
+    activity_reader: Any,
+) -> Callable[[list[RuntimeNotificationAction]], Coroutine[Any, Any, int]]:
     async def dispatch_actions(actions: list[RuntimeNotificationAction]) -> int:
         return await dispatch_runtime_notification_actions(
             app,
@@ -69,7 +87,7 @@ async def dispatch_runtime_notification_event[EventT](
             activity_reader=activity_reader,
         )
 
-    return await run_planned_runtime_event(event, planner, dispatch_actions)
+    return dispatch_actions
 
 
 async def dispatch_runtime_notification_action(

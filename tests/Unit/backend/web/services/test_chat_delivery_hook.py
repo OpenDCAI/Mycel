@@ -11,6 +11,7 @@ from backend.threads.chat_adapters.runtime_chat_delivery_action import (
     RuntimeChatDeliveryAction,
     dispatch_runtime_chat_delivery_actions,
     plan_runtime_chat_delivery_envelope,
+    runtime_chat_delivery_action_dispatcher,
 )
 from messaging.delivery.dispatcher import ChatDeliveryRequest
 
@@ -163,6 +164,29 @@ async def test_runtime_chat_delivery_actions_dispatches_prior_envelopes_before_l
         )
 
     assert [envelope.recipient.agent_user_id for envelope in gateway.envelopes] == ["external-user-1"]
+
+
+@pytest.mark.asyncio
+async def test_runtime_chat_delivery_action_dispatcher_binds_runtime_dependencies() -> None:
+    class RecordingGateway:
+        def __init__(self) -> None:
+            self.envelopes = []
+
+        async def dispatch_chat(self, envelope):
+            self.envelopes.append(envelope)
+
+    gateway = RecordingGateway()
+    app = _hook_app(gateway)
+    dispatch_actions = runtime_chat_delivery_action_dispatcher(
+        app,
+        thread_repo=app.state.thread_repo,
+        activity_reader=app.state.threads_runtime_state.activity_reader,
+    )
+
+    dispatched_count = await dispatch_actions([_runtime_chat_action()])
+
+    assert dispatched_count == 1
+    assert [envelope.recipient.agent_user_id for envelope in gateway.envelopes] == ["agent-user-1"]
 
 
 @pytest.mark.asyncio
