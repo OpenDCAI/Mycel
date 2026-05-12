@@ -1,27 +1,39 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from enum import Enum
 from typing import Any
 
 from backend.threads.chat_adapters.chat_notification_format import format_chat_notification
 from backend.threads.chat_adapters.runtime_chat_delivery_action import (
     RuntimeChatDeliveryAction,
-    dispatch_runtime_chat_delivery_action,
+    dispatch_runtime_chat_delivery_actions,
 )
 from backend.threads.chat_adapters.runtime_event_hook import make_sync_runtime_event_hook
+from core.event_actions import plan_event_actions
 from messaging.delivery.contracts import ChatDeliveryRequest
 
 
 def make_chat_delivery_fn(app: Any, *, activity_reader: Any, thread_repo: Any):
+    planner = chat_delivery_runtime_action_planner()
+
     async def deliver_to_runtime_gateway(request: ChatDeliveryRequest) -> None:
-        await dispatch_runtime_chat_delivery_action(
+        actions = plan_event_actions([planner], request)
+        await dispatch_runtime_chat_delivery_actions(
             app,
-            chat_delivery_runtime_action(request),
+            actions,
             thread_repo=thread_repo,
             activity_reader=activity_reader,
         )
 
     return make_sync_runtime_event_hook(deliver_to_runtime_gateway)
+
+
+def chat_delivery_runtime_action_planner() -> Callable[[ChatDeliveryRequest], list[RuntimeChatDeliveryAction]]:
+    def plan(request: ChatDeliveryRequest) -> list[RuntimeChatDeliveryAction]:
+        return [chat_delivery_runtime_action(request)]
+
+    return plan
 
 
 def chat_delivery_runtime_action(request: ChatDeliveryRequest) -> RuntimeChatDeliveryAction:

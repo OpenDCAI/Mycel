@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass
 from typing import Any
 
@@ -29,6 +30,41 @@ class RuntimeChatDeliveryAction:
 
 
 async def dispatch_runtime_chat_delivery_action(
+    app: Any,
+    action: RuntimeChatDeliveryAction,
+    *,
+    thread_repo: Any,
+    activity_reader: Any,
+) -> bool:
+    dispatched_count = await dispatch_runtime_chat_delivery_actions(
+        app,
+        [action],
+        thread_repo=thread_repo,
+        activity_reader=activity_reader,
+    )
+    return dispatched_count > 0
+
+
+async def dispatch_runtime_chat_delivery_actions(
+    app: Any,
+    actions: Iterable[RuntimeChatDeliveryAction],
+    *,
+    thread_repo: Any,
+    activity_reader: Any,
+) -> int:
+    dispatched_count = 0
+    for action in actions:
+        if await _dispatch_runtime_chat_delivery_action(
+            app,
+            action,
+            thread_repo=thread_repo,
+            activity_reader=activity_reader,
+        ):
+            dispatched_count += 1
+    return dispatched_count
+
+
+async def _dispatch_runtime_chat_delivery_action(
     app: Any,
     action: RuntimeChatDeliveryAction,
     *,
