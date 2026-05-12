@@ -310,6 +310,7 @@ def test_chat_workflow_event_service_requires_requester_for_wired_change() -> No
         assert str(exc) == "Workflow event change requires requested_by_user_id"
     else:
         raise AssertionError("wired workflow event change accepted missing requester")
+    assert repo.list_all("chat-1") == []
 
 
 def test_chat_workflow_event_service_emits_change_after_update_when_wired() -> None:
@@ -344,3 +345,4 @@ def test_chat_workflow_event_service_requires_actor_for_wired_update_change() ->
         assert str(exc) == "Workflow event change requires updated_by_user_id"
     else:
         raise AssertionError("wired workflow event change accepted missing actor")
+    assert service.get_event("chat-1", event["event_id"]) == event
