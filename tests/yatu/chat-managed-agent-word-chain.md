@@ -8,7 +8,7 @@ without me coordinating each word.
 
 ## Product Surface
 
-- Real Mycel backend from current `origin/dev`.
+- Real Mycel backend from the current branch.
 - Real Mycel-managed agents with LLM execution enabled.
 - Public chat UI or public chat API/CLI.
 - Durable chat messages visible to all group members.
