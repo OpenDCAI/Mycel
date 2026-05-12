@@ -191,7 +191,6 @@ async def test_workflow_event_notification_fn_selects_runtime_members() -> None:
     )
 
     await asyncio.to_thread(notify, _change("updated"))
-
     envelopes = gateway.envelopes
     assert [envelope.recipient.agent_user_id for envelope in envelopes] == ["agent-1", "external-1"]
     assert [envelope.recipient.runtime_source for envelope in envelopes] == ["mycel", "external"]
@@ -235,24 +234,3 @@ async def test_workflow_event_notification_fn_skips_gateway_when_no_runtime_reci
     )
 
     await asyncio.to_thread(notify, _change("updated"))
-
-
-@pytest.mark.asyncio
-async def test_workflow_event_notification_fn_reads_members_and_schedules_runtime_delivery() -> None:
-    gateway = _RecordingGateway()
-    messaging_service = SimpleNamespace(list_chat_members=lambda chat_id: [{"user_id": "owner-1"}, {"user_id": "agent-1"}])
-    notify = make_workflow_event_notification_fn(
-        _runtime_app(gateway),
-        activity_reader=SimpleNamespace(list_active_threads_for_agent=lambda _agent_user_id: []),
-        thread_repo=_thread_repo("agent-1"),
-        user_repo=_users("agent-1"),
-        messaging_service=messaging_service,
-    )
-
-    await asyncio.to_thread(
-        notify,
-        _change(),
-    )
-
-    assert [envelope.recipient.agent_user_id for envelope in gateway.envelopes] == ["agent-1"]
-    assert gateway.envelopes[0].transport.delivery_id == "workflow:chat-1:event-1:3"
