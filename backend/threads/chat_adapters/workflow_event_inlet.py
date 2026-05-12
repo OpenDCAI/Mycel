@@ -53,6 +53,25 @@ async def dispatch_workflow_event_notifications(
     thread_repo: Any,
     activity_reader: Any,
 ) -> None:
+    gateway = get_agent_runtime_gateway(app)
+    for envelope in make_workflow_event_notification_envelopes(
+        change=change,
+        members=members,
+        user_repo=user_repo,
+        thread_repo=thread_repo,
+        activity_reader=activity_reader,
+    ):
+        await gateway.dispatch_notification(envelope)
+
+
+def make_workflow_event_notification_envelopes(
+    *,
+    change: WorkflowEventChange,
+    members: list[Mapping[str, Any]],
+    user_repo: Any,
+    thread_repo: Any,
+    activity_reader: Any,
+) -> list[AgentRuntimeNotificationEnvelope]:
     sender_user_id = change.actor_user_id
     sender_user = _require_user(user_repo, sender_user_id, "sender")
     sender = AgentRuntimeActor(
@@ -61,6 +80,7 @@ async def dispatch_workflow_event_notifications(
         display_name=_display_name(sender_user, sender_user_id),
         source="workflow",
     )
+    envelopes: list[AgentRuntimeNotificationEnvelope] = []
     for member in members:
         recipient_user_id = _member_user_id(member)
         if recipient_user_id == sender_user_id:
@@ -75,28 +95,14 @@ async def dispatch_workflow_event_notifications(
         )
         if recipient is None:
             continue
-        await dispatch_workflow_event_notification(
-            app,
-            change=change,
-            recipient=recipient,
-            sender=sender,
+        envelopes.append(
+            make_workflow_event_notification_envelope(
+                change=change,
+                recipient=recipient,
+                sender=sender,
+            )
         )
-
-
-async def dispatch_workflow_event_notification(
-    app: Any,
-    *,
-    change: WorkflowEventChange,
-    recipient: AgentChatRecipient,
-    sender: AgentRuntimeActor,
-) -> None:
-    await get_agent_runtime_gateway(app).dispatch_notification(
-        make_workflow_event_notification_envelope(
-            change=change,
-            recipient=recipient,
-            sender=sender,
-        )
-    )
+    return envelopes
 
 
 def make_workflow_event_notification_envelope(
