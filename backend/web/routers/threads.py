@@ -986,10 +986,7 @@ async def send_message(
         raise HTTPException(status_code=400, detail="message cannot be empty")
 
     from backend.threads.activity_pool_service import get_or_create_agent
-    from backend.threads.chat_adapters.runtime_thread_input_action import (
-        dispatch_runtime_thread_input_action,
-        owner_runtime_thread_input_action,
-    )
+    from backend.threads.chat_adapters.thread_input_inlet import dispatch_owner_thread_input
 
     message = payload.message
     # @@@attachment-wire - sync files to sandbox and prepend paths
@@ -1004,15 +1001,13 @@ async def send_message(
             agent=agent,
         )
 
-    result = await dispatch_runtime_thread_input_action(
+    result = await dispatch_owner_thread_input(
         app,
-        owner_runtime_thread_input_action(
-            thread_id=thread_id,
-            user_id=user_id,
-            message=message,
-            attachments=payload.attachments or None,
-            enable_trajectory=payload.enable_trajectory,
-        ),
+        thread_id=thread_id,
+        user_id=user_id,
+        message=message,
+        attachments=payload.attachments or None,
+        enable_trajectory=payload.enable_trajectory,
     )
     return result.to_response()
 
@@ -1026,15 +1021,9 @@ async def queue_message(
     """Enqueue a followup message. Will be consumed when agent reaches IDLE."""
     if not payload.message.strip():
         raise HTTPException(status_code=400, detail="message cannot be empty")
-    from backend.threads.chat_adapters.runtime_thread_input_action import (
-        dispatch_queued_thread_input_action,
-        queued_thread_input_action,
-    )
+    from backend.threads.chat_adapters.thread_input_inlet import queue_thread_input
 
-    return dispatch_queued_thread_input_action(
-        app.state.queue_manager,
-        queued_thread_input_action(thread_id=thread_id, message=payload.message),
-    )
+    return queue_thread_input(app.state.queue_manager, thread_id=thread_id, message=payload.message)
 
 
 @router.get("/{thread_id}/queue")
@@ -1176,10 +1165,7 @@ async def resolve_thread_permission_request(
 
     followup: dict[str, Any] | None = None
     if is_ask_user_question and payload.decision == "allow" and pending_request is not None and answers is not None:
-        from backend.threads.chat_adapters.runtime_thread_input_action import (
-            dispatch_runtime_thread_input_action,
-            internal_runtime_thread_input_action,
-        )
+        from backend.threads.chat_adapters.thread_input_inlet import dispatch_internal_thread_input
 
         answered_payload = _build_ask_user_question_answered_payload(
             pending_request,
@@ -1187,18 +1173,16 @@ async def resolve_thread_permission_request(
             annotations=getattr(payload, "annotations", None),
         )
 
-        followup_result = await dispatch_runtime_thread_input_action(
+        followup_result = await dispatch_internal_thread_input(
             app,
-            internal_runtime_thread_input_action(
-                thread_id=thread_id,
-                user_id=user_id or "internal",
-                message=_format_ask_user_question_followup(
-                    pending_request,
-                    answers=answers,
-                    annotations=getattr(payload, "annotations", None),
-                ),
-                metadata={"ask_user_question_answered": answered_payload},
+            thread_id=thread_id,
+            user_id=user_id or "internal",
+            message=_format_ask_user_question_followup(
+                pending_request,
+                answers=answers,
+                annotations=getattr(payload, "annotations", None),
             ),
+            metadata={"ask_user_question_answered": answered_payload},
         )
         followup = followup_result.to_response()
 
@@ -1553,10 +1537,7 @@ async def _notify_task_cancelled(app: Any, thread_id: str, task_id: str, run: An
         agent = _get_agent_for_thread(app, thread_id)
         qm = getattr(agent, "queue_manager", None) if agent else None
         if qm:
-            from backend.threads.chat_adapters.runtime_thread_input_action import (
-                dispatch_queued_thread_input_action,
-                queued_command_thread_input_action,
-            )
+            from backend.threads.chat_adapters.thread_input_inlet import queue_command_thread_input
 
             description = getattr(run, "description", "") or ""
             command = getattr(run, "command", "") or ""
@@ -1568,9 +1549,6 @@ async def _notify_task_cancelled(app: Any, thread_id: str, task_id: str, run: An
                 + (f"<CommandLine>{command[:200]}</CommandLine>" if command else "")
                 + "</CommandNotification>"
             )
-            dispatch_queued_thread_input_action(
-                qm,
-                queued_command_thread_input_action(thread_id=thread_id, message=notification),
-            )
+            queue_command_thread_input(qm, thread_id=thread_id, message=notification)
     except Exception:
         logger.warning("Failed to enqueue cancellation notice for task %s", task_id, exc_info=True)
