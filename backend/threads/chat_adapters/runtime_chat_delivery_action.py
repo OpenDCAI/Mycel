@@ -5,6 +5,8 @@ from dataclasses import dataclass
 from typing import Any
 
 from backend.threads.chat_adapters.port import get_agent_runtime_gateway
+from backend.threads.chat_adapters.runtime_event_hook import make_planned_runtime_event_hook
+from backend.threads.chat_adapters.runtime_event_runner import run_planned_runtime_event
 from backend.threads.chat_adapters.runtime_identity import runtime_actor
 from backend.threads.chat_adapters.runtime_recipient import resolve_runtime_chat_delivery_recipient
 from protocols.agent_runtime import (
@@ -27,6 +29,42 @@ class RuntimeChatDeliveryAction:
     content: str
     raw_content: str
     signal: str | None
+
+
+def make_runtime_chat_delivery_event_hook[EventT](
+    app: Any,
+    planner: Callable[[EventT], Iterable[RuntimeChatDeliveryAction]],
+    *,
+    thread_repo: Any,
+    activity_reader: Any,
+) -> Callable[[EventT], None]:
+    return make_planned_runtime_event_hook(
+        planner,
+        runtime_chat_delivery_action_dispatcher(
+            app,
+            thread_repo=thread_repo,
+            activity_reader=activity_reader,
+        ),
+    )
+
+
+async def dispatch_runtime_chat_delivery_event[EventT](
+    app: Any,
+    event: EventT,
+    planner: Callable[[EventT], Iterable[RuntimeChatDeliveryAction]],
+    *,
+    thread_repo: Any,
+    activity_reader: Any,
+) -> int:
+    return await run_planned_runtime_event(
+        event,
+        planner,
+        runtime_chat_delivery_action_dispatcher(
+            app,
+            thread_repo=thread_repo,
+            activity_reader=activity_reader,
+        ),
+    )
 
 
 async def dispatch_runtime_chat_delivery_action(
