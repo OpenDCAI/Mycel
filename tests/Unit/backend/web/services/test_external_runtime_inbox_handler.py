@@ -5,7 +5,11 @@ from types import SimpleNamespace
 
 import pytest
 
-from backend.threads.chat_adapters.external_inbox_handler import ExternalRuntimeInboxHandler, external_inbox_key
+from backend.threads.chat_adapters.external_inbox_handler import (
+    ExternalRuntimeInboxActionError,
+    ExternalRuntimeInboxHandler,
+    external_inbox_key,
+)
 from protocols.agent_runtime import (
     AgentChatContext,
     AgentChatDeliveryEnvelope,
@@ -23,6 +27,11 @@ class _RecordingWakeBus:
 
     def publish(self, inbox_id: str) -> None:
         self.published.append(inbox_id)
+
+
+class _FailingWakeBus:
+    def publish(self, _inbox_id: str) -> None:
+        raise RuntimeError("wake publish failed")
 
 
 def _envelope() -> AgentChatDeliveryEnvelope:
@@ -61,6 +70,25 @@ async def test_external_runtime_inbox_handler_queues_chat_wake_token_only() -> N
     assert payload == {"event_type": "chat.message", "chat_id": "chat-1"}
     assert wake_bus.published == ["external:external-user-1"]
     assert "managed runtime prompt must not leak" not in content
+
+
+@pytest.mark.asyncio
+async def test_external_runtime_inbox_handler_wraps_chat_wake_failure_after_enqueue() -> None:
+    enqueued: list[tuple[str, str, str, dict]] = []
+    handler = ExternalRuntimeInboxHandler(
+        wake_bus=_FailingWakeBus(),
+        queue_manager=SimpleNamespace(
+            enqueue=lambda content, thread_id, notification_type, **meta: enqueued.append((content, thread_id, notification_type, meta))
+        ),
+    )
+
+    with pytest.raises(ExternalRuntimeInboxActionError) as exc_info:
+        await handler.dispatch(_envelope())
+
+    assert len(enqueued) == 1
+    assert exc_info.value.inbox_id == "external:external-user-1"
+    assert exc_info.value.notification_type == "chat"
+    assert str(exc_info.value.__cause__) == "wake publish failed"
 
 
 @pytest.mark.asyncio
@@ -112,6 +140,33 @@ async def test_external_runtime_inbox_handler_queues_generic_runtime_notificatio
         "correlation_id": "corr-1",
         "idempotency_key": "idem-1",
     }
+
+
+@pytest.mark.asyncio
+async def test_external_runtime_inbox_handler_wraps_notification_wake_failure_after_enqueue() -> None:
+    enqueued: list[tuple[str, str, str, dict]] = []
+    handler = ExternalRuntimeInboxHandler(
+        wake_bus=_FailingWakeBus(),
+        queue_manager=SimpleNamespace(
+            enqueue=lambda content, thread_id, notification_type, **meta: enqueued.append((content, thread_id, notification_type, meta))
+        ),
+    )
+    envelope = AgentRuntimeNotificationEnvelope(
+        event_type="relationship.requested",
+        recipient=AgentChatRecipient(agent_user_id="external-user-1", runtime_source="external"),
+        sender=AgentRuntimeActor(user_id="human-user-1", user_type="human", display_name="Human", source="relationship"),
+        message=AgentRuntimeMessage(content="Human requested a relationship with you."),
+        notification_type="relationship",
+        transport=AgentRuntimeTransport(),
+    )
+
+    with pytest.raises(ExternalRuntimeInboxActionError) as exc_info:
+        await handler.dispatch_notification(envelope)
+
+    assert len(enqueued) == 1
+    assert exc_info.value.inbox_id == "external:external-user-1"
+    assert exc_info.value.notification_type == "relationship"
+    assert str(exc_info.value.__cause__) == "wake publish failed"
 
 
 def test_external_inbox_key_rejects_blank_user_id() -> None:
