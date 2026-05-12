@@ -211,6 +211,7 @@ async def test_native_notification_handler_converts_to_thread_input_at_runtime_b
         AgentRuntimeMessage,
         AgentRuntimeNotificationEnvelope,
         AgentRuntimeTransport,
+        AgentThreadInputEnvelope,
     )
 
     thread_input_handler = _FakeThreadInputHandler()
@@ -231,8 +232,18 @@ async def test_native_notification_handler_converts_to_thread_input_at_runtime_b
     result = await handler.dispatch_notification(envelope)
 
     assert result == AgentRuntimeNotificationResult(status="accepted", thread_id="thread-1")
-    assert thread_input_handler.called_with is not None
-    assert thread_input_handler.called_with.thread_id == "thread-1"
-    assert thread_input_handler.called_with.sender is envelope.sender
-    assert thread_input_handler.called_with.message is envelope.message
-    assert thread_input_handler.called_with.transport is envelope.transport
+    called = thread_input_handler.called_with
+    assert isinstance(called, AgentThreadInputEnvelope)
+    assert called.thread_id == "thread-1"
+    assert called.sender is envelope.sender
+    assert called.message.content == envelope.message.content
+    assert called.message.metadata == {
+        "relationship_id": "rel-1",
+        "event_type": "relationship.requested",
+        "notification_type": "relationship",
+        "runtime_protocol_version": "agent.runtime.notification.v1",
+        "delivery_id": "delivery-1",
+        "correlation_id": "corr-1",
+        "idempotency_key": "idem-1",
+    }
+    assert called.transport is envelope.transport

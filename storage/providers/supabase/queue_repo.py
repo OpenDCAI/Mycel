@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from typing import Any
 
 from storage.contracts import QueueItem
@@ -20,6 +21,19 @@ class SupabaseQueueRepo:
     def _t(self) -> Any:
         return q.schema_table(self._client, "agent", _TABLE, _REPO)
 
+    def _hydrate_metadata(self, row: dict[str, Any]) -> dict[str, Any] | None:
+        raw = row.get("metadata_json")
+        if raw is None:
+            return None
+        if isinstance(raw, dict):
+            return dict(raw)
+        if isinstance(raw, str):
+            parsed = json.loads(raw)
+            if not isinstance(parsed, dict):
+                raise RuntimeError("Supabase queue repo expected metadata_json to decode to an object.")
+            return parsed
+        raise RuntimeError(f"Supabase queue repo expected metadata_json object or string, got {type(raw).__name__}.")
+
     def _hydrate_item(self, row: dict[str, Any]) -> QueueItem:
         return QueueItem(
             content=str(row.get("content") or ""),
@@ -27,6 +41,7 @@ class SupabaseQueueRepo:
             source=row.get("source"),
             sender_id=row.get(_SENDER_USER_ID),
             sender_name=row.get("sender_name"),
+            metadata=self._hydrate_metadata(row),
         )
 
     def enqueue(
@@ -37,6 +52,7 @@ class SupabaseQueueRepo:
         source: str | None = None,
         sender_id: str | None = None,
         sender_name: str | None = None,
+        metadata: dict[str, Any] | None = None,
     ) -> None:
         self._t().insert(
             {
@@ -46,6 +62,7 @@ class SupabaseQueueRepo:
                 "source": source,
                 _SENDER_USER_ID: sender_id,
                 "sender_name": sender_name,
+                "metadata_json": dict(metadata or {}),
             }
         ).execute()
 
@@ -53,7 +70,9 @@ class SupabaseQueueRepo:
         head = q.rows(
             q.limit(
                 q.order(
-                    self._t().select(f"id,content,notification_type,source,{_SENDER_USER_ID},sender_name").eq("thread_id", thread_id),
+                    self._t()
+                    .select(f"id,content,notification_type,source,{_SENDER_USER_ID},sender_name,metadata_json")
+                    .eq("thread_id", thread_id),
                     "id",
                     desc=False,
                     repo=_REPO,
@@ -79,7 +98,9 @@ class SupabaseQueueRepo:
         # Fetch all rows ordered by id, then delete them all
         raw = q.rows(
             q.order(
-                self._t().select(f"id,content,notification_type,source,{_SENDER_USER_ID},sender_name").eq("thread_id", thread_id),
+                self._t()
+                .select(f"id,content,notification_type,source,{_SENDER_USER_ID},sender_name,metadata_json")
+                .eq("thread_id", thread_id),
                 "id",
                 desc=False,
                 repo=_REPO,

@@ -12,6 +12,7 @@ from core.runtime.middleware import (
     ModelResponse,
 )
 from core.runtime.notifications import is_terminal_background_notification
+from core.runtime.queue_metadata import queue_item_message_metadata
 
 from .manager import MessageQueueManager
 
@@ -109,6 +110,7 @@ class SteeringMiddleware(AgentMiddleware):
                 source=item.source,
                 sender_id=item.sender_id,
                 sender_name=item.sender_name,
+                metadata=item.metadata,
             )
         items = inject_now
         if not items:
@@ -125,14 +127,7 @@ class SteeringMiddleware(AgentMiddleware):
             messages.append(
                 HumanMessage(
                     content=item.content,
-                    metadata={
-                        "source": source,
-                        "notification_type": item.notification_type,
-                        "sender_name": item.sender_name,
-                        "sender_avatar_url": item.sender_avatar_url,
-                        "sender_id": item.sender_id,
-                        "is_steer": is_steer,
-                    },
+                    metadata=queue_item_message_metadata(item),
                 )
             )
 

@@ -7,7 +7,7 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 
 from config.agent_config_types import AgentConfig, Skill, SkillPackage
 
-NotificationType = Literal["steer", "command", "agent", "chat", "relationship", "chat_join"]
+NotificationType = str
 
 
 # Sandbox — repo protocols
@@ -634,6 +634,7 @@ class QueueItem(BaseModel):
     sender_name: str | None = None
     sender_avatar_url: str | None = None
     is_steer: bool = False
+    metadata: dict[str, Any] | None = None
 
 
 class QueueRepo(Protocol):
@@ -646,6 +647,7 @@ class QueueRepo(Protocol):
         source: str | None = None,
         sender_id: str | None = None,
         sender_name: str | None = None,
+        metadata: dict[str, Any] | None = None,
     ) -> None: ...
     def dequeue(self, thread_id: str) -> QueueItem | None: ...
     def drain_all(self, thread_id: str) -> list[QueueItem]: ...

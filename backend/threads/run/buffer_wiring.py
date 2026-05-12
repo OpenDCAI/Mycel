@@ -7,6 +7,7 @@ from typing import Any
 
 from backend.threads.events.buffer import ThreadEventBuffer
 from core.runtime.middleware.monitor import AgentState
+from core.runtime.queue_metadata import queue_item_message_metadata
 
 logger = logging.getLogger(__name__)
 
@@ -111,13 +112,7 @@ def ensure_thread_handlers(agent: Any, thread_id: str, app: Any) -> None:
                     thread_id,
                     item.content,
                     app,
-                    message_metadata={
-                        "source": getattr(item, "source", None) or "system",
-                        "notification_type": item.notification_type,
-                        "sender_name": getattr(item, "sender_name", None),
-                        "sender_avatar_url": getattr(item, "sender_avatar_url", None),
-                        "is_steer": getattr(item, "is_steer", False),
-                    },
+                    message_metadata=queue_item_message_metadata(item),
                 )
             except Exception:
                 logger.error("wake_handler failed for thread %s", thread_id, exc_info=True)
