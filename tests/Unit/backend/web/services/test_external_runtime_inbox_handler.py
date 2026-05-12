@@ -43,16 +43,36 @@ def _envelope() -> AgentChatDeliveryEnvelope:
     )
 
 
-@pytest.mark.asyncio
-async def test_external_runtime_inbox_handler_queues_chat_wake_token_only() -> None:
+def _queueing_handler(wake_bus: object) -> tuple[ExternalRuntimeInboxHandler, list[tuple[str, str, str, dict]]]:
     enqueued: list[tuple[str, str, str, dict]] = []
-    wake_bus = _RecordingWakeBus()
     handler = ExternalRuntimeInboxHandler(
         wake_bus=wake_bus,
         queue_manager=SimpleNamespace(
             enqueue=lambda content, thread_id, notification_type, **meta: enqueued.append((content, thread_id, notification_type, meta))
         ),
     )
+    return handler, enqueued
+
+
+def _notification_envelope(
+    *,
+    message: AgentRuntimeMessage,
+    transport: AgentRuntimeTransport | None = None,
+) -> AgentRuntimeNotificationEnvelope:
+    return AgentRuntimeNotificationEnvelope(
+        event_type="relationship.requested",
+        recipient=AgentChatRecipient(agent_user_id="external-user-1", runtime_source="external"),
+        sender=AgentRuntimeActor(user_id="human-user-1", user_type="human", display_name="Human", source="relationship"),
+        message=message,
+        notification_type="relationship",
+        transport=transport or AgentRuntimeTransport(),
+    )
+
+
+@pytest.mark.asyncio
+async def test_external_runtime_inbox_handler_queues_chat_wake_token_only() -> None:
+    wake_bus = _RecordingWakeBus()
+    handler, enqueued = _queueing_handler(wake_bus)
 
     result = await handler.dispatch(_envelope())
 
@@ -74,13 +94,7 @@ async def test_external_runtime_inbox_handler_queues_chat_wake_token_only() -> N
 
 @pytest.mark.asyncio
 async def test_external_runtime_inbox_handler_wraps_chat_wake_failure_after_enqueue() -> None:
-    enqueued: list[tuple[str, str, str, dict]] = []
-    handler = ExternalRuntimeInboxHandler(
-        wake_bus=_FailingWakeBus(),
-        queue_manager=SimpleNamespace(
-            enqueue=lambda content, thread_id, notification_type, **meta: enqueued.append((content, thread_id, notification_type, meta))
-        ),
-    )
+    handler, enqueued = _queueing_handler(_FailingWakeBus())
 
     with pytest.raises(ExternalRuntimeInboxActionError) as exc_info:
         await handler.dispatch(_envelope())
@@ -93,23 +107,13 @@ async def test_external_runtime_inbox_handler_wraps_chat_wake_failure_after_enqu
 
 @pytest.mark.asyncio
 async def test_external_runtime_inbox_handler_queues_generic_runtime_notification() -> None:
-    enqueued: list[tuple[str, str, str, dict]] = []
     wake_bus = _RecordingWakeBus()
-    handler = ExternalRuntimeInboxHandler(
-        wake_bus=wake_bus,
-        queue_manager=SimpleNamespace(
-            enqueue=lambda content, thread_id, notification_type, **meta: enqueued.append((content, thread_id, notification_type, meta))
-        ),
-    )
-    envelope = AgentRuntimeNotificationEnvelope(
-        event_type="relationship.requested",
-        recipient=AgentChatRecipient(agent_user_id="external-user-1", runtime_source="external"),
-        sender=AgentRuntimeActor(user_id="human-user-1", user_type="human", display_name="Human", source="relationship"),
+    handler, enqueued = _queueing_handler(wake_bus)
+    envelope = _notification_envelope(
         message=AgentRuntimeMessage(
             content="Human requested a relationship with you.",
             metadata={"relationship_id": "hire_visit:external-user-1:human-user-1"},
         ),
-        notification_type="relationship",
         transport=AgentRuntimeTransport(
             delivery_id="delivery-1",
             correlation_id="corr-1",
@@ -144,20 +148,9 @@ async def test_external_runtime_inbox_handler_queues_generic_runtime_notificatio
 
 @pytest.mark.asyncio
 async def test_external_runtime_inbox_handler_wraps_notification_wake_failure_after_enqueue() -> None:
-    enqueued: list[tuple[str, str, str, dict]] = []
-    handler = ExternalRuntimeInboxHandler(
-        wake_bus=_FailingWakeBus(),
-        queue_manager=SimpleNamespace(
-            enqueue=lambda content, thread_id, notification_type, **meta: enqueued.append((content, thread_id, notification_type, meta))
-        ),
-    )
-    envelope = AgentRuntimeNotificationEnvelope(
-        event_type="relationship.requested",
-        recipient=AgentChatRecipient(agent_user_id="external-user-1", runtime_source="external"),
-        sender=AgentRuntimeActor(user_id="human-user-1", user_type="human", display_name="Human", source="relationship"),
+    handler, enqueued = _queueing_handler(_FailingWakeBus())
+    envelope = _notification_envelope(
         message=AgentRuntimeMessage(content="Human requested a relationship with you."),
-        notification_type="relationship",
-        transport=AgentRuntimeTransport(),
     )
 
     with pytest.raises(ExternalRuntimeInboxActionError) as exc_info:

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 from types import SimpleNamespace
+from typing import Any
 
 import pytest
 
@@ -36,27 +37,40 @@ def _thread_repo() -> SimpleNamespace:
     )
 
 
+class _RecordingGateway:
+    def __init__(self) -> None:
+        self.envelopes = []
+
+    async def dispatch_notification(self, envelope):
+        self.envelopes.append(envelope)
+        return SimpleNamespace(status="accepted", thread_id=envelope.recipient.thread_id)
+
+
+def _activity_reader() -> SimpleNamespace:
+    return SimpleNamespace(list_active_threads_for_agent=lambda _agent_user_id: [])
+
+
+def _action(**overrides) -> RuntimeNotificationAction:
+    payload: dict[str, Any] = {
+        "context": "Test action",
+        "recipient_user_id": "agent-1",
+        "sender_user_id": "owner-1",
+        "sender_source": "workflow",
+        "event_type": "test.event",
+        "notification_type": "test",
+        "content": "Action happened.",
+    }
+    payload.update(overrides)
+    return RuntimeNotificationAction(**payload)
+
+
 @pytest.mark.asyncio
 async def test_runtime_notification_action_resolves_and_dispatches_to_runtime_recipient() -> None:
-    class RecordingGateway:
-        envelope = None
-
-        async def dispatch_notification(self, envelope):
-            self.envelope = envelope
-            return SimpleNamespace(status="accepted", thread_id=envelope.recipient.thread_id)
-
-    gateway = RecordingGateway()
+    gateway = _RecordingGateway()
 
     dispatched = await dispatch_runtime_notification_action(
         _runtime_app(gateway),
-        RuntimeNotificationAction(
-            context="Test action",
-            recipient_user_id="agent-1",
-            sender_user_id="owner-1",
-            sender_source="workflow",
-            event_type="test.event",
-            notification_type="test",
-            content="Action happened.",
+        _action(
             metadata={"resource_id": "resource-1"},
             transport=AgentRuntimeTransport(
                 delivery_id="delivery-1",
@@ -66,60 +80,39 @@ async def test_runtime_notification_action_resolves_and_dispatches_to_runtime_re
         ),
         user_repo=_users(),
         thread_repo=_thread_repo(),
-        activity_reader=SimpleNamespace(list_active_threads_for_agent=lambda _agent_user_id: []),
+        activity_reader=_activity_reader(),
     )
 
     assert dispatched is True
-    assert gateway.envelope is not None
-    assert gateway.envelope.recipient.agent_user_id == "agent-1"
-    assert gateway.envelope.recipient.runtime_source == "mycel"
-    assert gateway.envelope.recipient.thread_id == "thread-agent-1"
-    assert gateway.envelope.sender.user_id == "owner-1"
-    assert gateway.envelope.sender.source == "workflow"
-    assert gateway.envelope.event_type == "test.event"
-    assert gateway.envelope.notification_type == "test"
-    assert gateway.envelope.message.content == "Action happened."
-    assert gateway.envelope.message.metadata == {"resource_id": "resource-1"}
-    assert gateway.envelope.transport.delivery_id == "delivery-1"
+    assert len(gateway.envelopes) == 1
+    envelope = gateway.envelopes[0]
+    assert envelope.recipient.agent_user_id == "agent-1"
+    assert envelope.recipient.runtime_source == "mycel"
+    assert envelope.recipient.thread_id == "thread-agent-1"
+    assert envelope.sender.user_id == "owner-1"
+    assert envelope.sender.source == "workflow"
+    assert envelope.event_type == "test.event"
+    assert envelope.notification_type == "test"
+    assert envelope.message.content == "Action happened."
+    assert envelope.message.metadata == {"resource_id": "resource-1"}
+    assert envelope.transport.delivery_id == "delivery-1"
 
 
 @pytest.mark.asyncio
 async def test_runtime_notification_actions_dispatches_only_runtime_recipients() -> None:
-    class RecordingGateway:
-        def __init__(self) -> None:
-            self.envelopes = []
-
-        async def dispatch_notification(self, envelope):
-            self.envelopes.append(envelope)
-            return SimpleNamespace(status="accepted", thread_id=envelope.recipient.thread_id)
-
-    gateway = RecordingGateway()
+    gateway = _RecordingGateway()
 
     dispatched_count = await dispatch_runtime_notification_actions(
         _runtime_app(gateway),
         [
-            RuntimeNotificationAction(
-                context="Test action",
-                recipient_user_id="agent-1",
-                sender_user_id="owner-1",
-                sender_source="workflow",
-                event_type="test.event",
-                notification_type="test",
-                content="Action happened.",
-            ),
-            RuntimeNotificationAction(
-                context="Test action",
+            _action(),
+            _action(
                 recipient_user_id="owner-1",
-                sender_user_id="owner-1",
-                sender_source="workflow",
-                event_type="test.event",
-                notification_type="test",
-                content="Action happened.",
             ),
         ],
         user_repo=_users(),
         thread_repo=_thread_repo(),
-        activity_reader=SimpleNamespace(list_active_threads_for_agent=lambda _agent_user_id: []),
+        activity_reader=_activity_reader(),
     )
 
     assert dispatched_count == 1
@@ -128,35 +121,15 @@ async def test_runtime_notification_actions_dispatches_only_runtime_recipients()
 
 @pytest.mark.asyncio
 async def test_runtime_notification_action_dispatcher_binds_runtime_dependencies() -> None:
-    class RecordingGateway:
-        def __init__(self) -> None:
-            self.envelopes = []
-
-        async def dispatch_notification(self, envelope):
-            self.envelopes.append(envelope)
-            return SimpleNamespace(status="accepted", thread_id=envelope.recipient.thread_id)
-
-    gateway = RecordingGateway()
+    gateway = _RecordingGateway()
     dispatch_actions = runtime_notification_action_dispatcher(
         _runtime_app(gateway),
         user_repo=_users(),
         thread_repo=_thread_repo(),
-        activity_reader=SimpleNamespace(list_active_threads_for_agent=lambda _agent_user_id: []),
+        activity_reader=_activity_reader(),
     )
 
-    dispatched_count = await dispatch_actions(
-        [
-            RuntimeNotificationAction(
-                context="Test action",
-                recipient_user_id="agent-1",
-                sender_user_id="owner-1",
-                sender_source="workflow",
-                event_type="test.event",
-                notification_type="test",
-                content="Action happened.",
-            )
-        ]
-    )
+    dispatched_count = await dispatch_actions([_action()])
 
     assert dispatched_count == 1
     assert [envelope.recipient.agent_user_id for envelope in gateway.envelopes] == ["agent-1"]
@@ -164,28 +137,10 @@ async def test_runtime_notification_action_dispatcher_binds_runtime_dependencies
 
 @pytest.mark.asyncio
 async def test_runtime_notification_event_and_hook_plan_and_dispatch_actions() -> None:
-    class RecordingGateway:
-        def __init__(self) -> None:
-            self.envelopes = []
-
-        async def dispatch_notification(self, envelope):
-            self.envelopes.append(envelope)
-            return SimpleNamespace(status="accepted", thread_id=envelope.recipient.thread_id)
-
-    gateway = RecordingGateway()
+    gateway = _RecordingGateway()
 
     def planner(value: str) -> list[RuntimeNotificationAction]:
-        return [
-            RuntimeNotificationAction(
-                context="Test hook",
-                recipient_user_id="agent-1",
-                sender_user_id="owner-1",
-                sender_source="workflow",
-                event_type="test.event",
-                notification_type="test",
-                content=f"Action {value}.",
-            )
-        ]
+        return [_action(context="Test hook", content=f"Action {value}.")]
 
     dispatched_count = await dispatch_runtime_notification_event(
         _runtime_app(gateway),
@@ -193,7 +148,7 @@ async def test_runtime_notification_event_and_hook_plan_and_dispatch_actions() -
         planner,
         user_repo=_users(),
         thread_repo=_thread_repo(),
-        activity_reader=SimpleNamespace(list_active_threads_for_agent=lambda _agent_user_id: []),
+        activity_reader=_activity_reader(),
     )
 
     assert dispatched_count == 1
@@ -205,7 +160,7 @@ async def test_runtime_notification_event_and_hook_plan_and_dispatch_actions() -
         planner,
         user_repo=_users(),
         thread_repo=_thread_repo(),
-        activity_reader=SimpleNamespace(list_active_threads_for_agent=lambda _agent_user_id: []),
+        activity_reader=_activity_reader(),
     )
 
     await asyncio.to_thread(hook, "event-2")
