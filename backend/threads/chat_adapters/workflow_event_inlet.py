@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping, Sequence
 from enum import Enum
 from typing import Any
 
@@ -24,7 +24,7 @@ def make_workflow_event_notification_fn(
     thread_repo: Any,
     user_repo: Any,
     messaging_service: Any,
-):
+) -> Callable[[WorkflowEventChange], None]:
     loop = asyncio.get_running_loop()
 
     async def notify_runtime(change: WorkflowEventChange) -> None:
@@ -48,13 +48,13 @@ async def dispatch_workflow_event_notifications(
     app: Any,
     *,
     change: WorkflowEventChange,
-    members: list[Mapping[str, Any]],
+    members: Sequence[Mapping[str, Any]],
     user_repo: Any,
     thread_repo: Any,
     activity_reader: Any,
 ) -> None:
     gateway = get_agent_runtime_gateway(app)
-    for envelope in make_workflow_event_notification_envelopes(
+    for envelope in plan_workflow_event_runtime_notifications(
         change=change,
         members=members,
         user_repo=user_repo,
@@ -64,10 +64,10 @@ async def dispatch_workflow_event_notifications(
         await gateway.dispatch_notification(envelope)
 
 
-def make_workflow_event_notification_envelopes(
+def plan_workflow_event_runtime_notifications(
     *,
     change: WorkflowEventChange,
-    members: list[Mapping[str, Any]],
+    members: Sequence[Mapping[str, Any]],
     user_repo: Any,
     thread_repo: Any,
     activity_reader: Any,
