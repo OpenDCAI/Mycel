@@ -21,6 +21,7 @@ from backend.threads.chat_adapters.runtime_thread_input_action import (
     owner_runtime_thread_input_action,
     queued_command_thread_input_action,
     queued_thread_input_action,
+    requeue_thread_input_item,
 )
 from backend.web.models.requests import CreateThreadRequest, ResolvePermissionRequest, SendMessageRequest, ThreadPermissionRuleRequest
 from backend.web.routers import threads as threads_router
@@ -273,6 +274,38 @@ def test_queued_command_thread_input_action_enqueues_command_message() -> None:
     )
     assert enqueued == [("<CommandNotification />", "thread-1", "command")]
     assert result == {"status": "queued", "thread_id": "thread-1"}
+
+
+def test_requeue_thread_input_item_preserves_queue_metadata() -> None:
+    enqueued: list[tuple[tuple[Any, ...], dict[str, Any]]] = []
+    queue_manager = SimpleNamespace(enqueue=lambda *args, **kwargs: enqueued.append((args, kwargs)))
+    item = SimpleNamespace(
+        content="follow up",
+        notification_type="command",
+        source="system",
+        sender_id="sender-1",
+        sender_name="Sender",
+        sender_avatar_url="https://avatar",
+        is_steer=True,
+        metadata={"reason": "passthrough"},
+    )
+
+    requeue_thread_input_item(queue_manager, "thread-1", item)
+
+    assert enqueued == [
+        (
+            ("follow up", "thread-1"),
+            {
+                "notification_type": "command",
+                "source": "system",
+                "sender_id": "sender-1",
+                "sender_name": "Sender",
+                "sender_avatar_url": "https://avatar",
+                "is_steer": True,
+                "metadata": {"reason": "passthrough"},
+            },
+        )
+    ]
 
 
 def _make_request(headers: dict[str, str] | None = None) -> Request:
