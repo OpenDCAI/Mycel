@@ -7,6 +7,7 @@ from typing import Literal
 import pytest
 
 from backend.threads.chat_adapters.workflow_event_inlet import (
+    make_workflow_event_notification_envelopes,
     make_workflow_event_notification_fn,
     workflow_event_runtime_notification_action,
 )
@@ -129,6 +130,33 @@ def test_workflow_event_notification_fails_loudly_on_missing_identity() -> None:
         raise AssertionError("missing workflow event identity did not fail")
 
 
+def test_workflow_event_notification_planner_selects_runtime_members() -> None:
+    members = [
+        {"user_id": "owner-1"},
+        {"user_id": "agent-1"},
+        {"user_id": "agent-without-thread"},
+        {"user_id": "external-1"},
+        {"user_id": "human-2"},
+    ]
+
+    envelopes = make_workflow_event_notification_envelopes(
+        _change("updated"),
+        members,
+        activity_reader=SimpleNamespace(list_active_threads_for_agent=lambda _agent_user_id: []),
+        thread_repo=_thread_repo("agent-1"),
+        user_repo=_users("agent-1", "agent-without-thread"),
+    )
+
+    assert [envelope.recipient.agent_user_id for envelope in envelopes] == ["agent-1", "external-1"]
+    assert [envelope.recipient.runtime_source for envelope in envelopes] == ["mycel", "external"]
+    assert envelopes[0].recipient.thread_id == "thread-agent-1"
+    assert all(envelope.sender.user_id == "owner-1" for envelope in envelopes)
+    for envelope in envelopes:
+        assert envelope.message.metadata is not None
+        assert envelope.message.metadata["event_id"] == "event-1"
+        assert envelope.message.metadata["operation"] == "updated"
+
+
 @pytest.mark.asyncio
 async def test_workflow_event_notification_fn_selects_runtime_members() -> None:
     gateway = _RecordingGateway()
@@ -180,6 +208,20 @@ async def test_workflow_event_notification_fn_keeps_identity_context() -> None:
         assert str(exc) == "Workflow event notification recipient user not found: missing-recipient"
     else:
         raise AssertionError("missing workflow event recipient did not fail")
+
+
+@pytest.mark.asyncio
+async def test_workflow_event_notification_fn_skips_gateway_when_no_runtime_recipients() -> None:
+    messaging_service = SimpleNamespace(list_chat_members=lambda _chat_id: [{"user_id": "owner-1"}, {"user_id": "human-2"}])
+    notify = make_workflow_event_notification_fn(
+        SimpleNamespace(state=SimpleNamespace(threads_runtime_state=SimpleNamespace())),
+        activity_reader=SimpleNamespace(list_active_threads_for_agent=lambda _agent_user_id: []),
+        thread_repo=_thread_repo(),
+        user_repo=_users(),
+        messaging_service=messaging_service,
+    )
+
+    await asyncio.to_thread(notify, _change("updated"))
 
 
 @pytest.mark.asyncio
