@@ -221,24 +221,24 @@ def test_wire_relationship_decision_notifications_binds_event_action(monkeypatch
     assert relationship_service.event_action is event_action
 
 
-def test_wire_chat_join_request_notifications_binds_rejection_notification_fn(monkeypatch):
-    notification_fn = object()
-    chat_join_request_service = SimpleNamespace(notification_fn=None)
+def test_wire_chat_join_request_notifications_binds_rejection_action(monkeypatch):
+    event_action = object()
+    chat_join_request_service = SimpleNamespace(event_action=None)
     activity_reader = object()
     thread_repo = object()
     user_repo = object()
 
-    def _set_notification_fn(value):
-        chat_join_request_service.notification_fn = value
+    def _add_join_request_rejected_action(value):
+        chat_join_request_service.event_action = value
 
-    chat_join_request_service.set_join_request_rejected_notification_fn = _set_notification_fn
+    chat_join_request_service.add_join_request_rejected_action = _add_join_request_rejected_action
 
     app = SimpleNamespace(state=SimpleNamespace())
 
     monkeypatch.setattr(
         chat_bootstrap,
         "make_chat_join_rejection_notification_fn",
-        lambda target_app, *, activity_reader, thread_repo, user_repo: notification_fn,
+        lambda target_app, *, activity_reader, thread_repo, user_repo: event_action,
     )
 
     chat_bootstrap.wire_chat_join_request_notifications(
@@ -249,7 +249,7 @@ def test_wire_chat_join_request_notifications_binds_rejection_notification_fn(mo
         user_repo=user_repo,
     )
 
-    assert chat_join_request_service.notification_fn is notification_fn
+    assert chat_join_request_service.event_action is event_action
 
 
 def test_wire_workflow_event_notifications_binds_event_action(monkeypatch):

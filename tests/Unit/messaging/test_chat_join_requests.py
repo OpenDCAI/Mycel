@@ -252,6 +252,22 @@ def test_chat_join_reject_notifies_requester_outside_chat_membership() -> None:
     ]
 
 
+def test_chat_join_reject_runs_each_registered_rejection_action() -> None:
+    first_notifications: list[dict] = []
+    second_notifications: list[dict] = []
+    service, _members, _requests, _messaging = _service()
+    service.add_join_request_rejected_action(first_notifications.append)
+    service.add_join_request_rejected_action(second_notifications.append)
+    pending = service.request("chat-1", "visitor-1", "please add me")
+
+    row = service.reject("chat-1", pending["id"], "owner-1")
+
+    assert row["state"] == "rejected"
+    assert first_notifications == second_notifications
+    assert first_notifications[0]["state"] == "rejected"
+    assert first_notifications[0]["decided_by_user_id"] == "owner-1"
+
+
 def test_chat_join_reject_wraps_post_commit_action_failure() -> None:
     def fail_notification(_row: dict) -> None:
         raise RuntimeError("runtime hook failed")
