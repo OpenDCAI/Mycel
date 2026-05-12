@@ -252,25 +252,25 @@ def test_wire_chat_join_request_notifications_binds_rejection_notification_fn(mo
     assert chat_join_request_service.notification_fn is notification_fn
 
 
-def test_wire_workflow_event_notifications_binds_change_fn(monkeypatch):
-    change_fn = object()
-    chat_workflow_event_service = SimpleNamespace(change_fn=None)
+def test_wire_workflow_event_notifications_binds_event_action(monkeypatch):
+    event_action = object()
+    chat_workflow_event_service = SimpleNamespace(event_action=None)
     messaging_service = object()
     activity_reader = object()
     thread_repo = object()
     user_repo = object()
 
-    def _set_change_fn(value):
-        chat_workflow_event_service.change_fn = value
+    def _add_event_change_action(value):
+        chat_workflow_event_service.event_action = value
 
-    chat_workflow_event_service.set_event_change_fn = _set_change_fn
+    chat_workflow_event_service.add_event_change_action = _add_event_change_action
 
     app = SimpleNamespace(state=SimpleNamespace())
 
     monkeypatch.setattr(
         chat_bootstrap,
         "make_workflow_event_notification_fn",
-        lambda target_app, *, activity_reader, thread_repo, user_repo, messaging_service: change_fn,
+        lambda target_app, *, activity_reader, thread_repo, user_repo, messaging_service: event_action,
     )
 
     chat_bootstrap.wire_workflow_event_notifications(
@@ -282,4 +282,4 @@ def test_wire_workflow_event_notifications_binds_change_fn(monkeypatch):
         user_repo=user_repo,
     )
 
-    assert chat_workflow_event_service.change_fn is change_fn
+    assert chat_workflow_event_service.event_action is event_action

@@ -286,7 +286,7 @@ def test_chat_workflow_event_service_emits_change_after_create_when_wired() -> N
     repo = _WorkflowEventRepo()
     changes = []
     service = ChatWorkflowEventService(repo)
-    service.set_event_change_fn(changes.append)
+    service.add_event_change_action(changes.append)
 
     event = service.create_event(
         "chat-1",
@@ -300,6 +300,27 @@ def test_chat_workflow_event_service_emits_change_after_create_when_wired() -> N
     assert changes[0].actor_user_id == "owner-1"
 
 
+def test_chat_workflow_event_service_runs_each_registered_event_action() -> None:
+    repo = _WorkflowEventRepo()
+    first_changes = []
+    second_changes = []
+    service = ChatWorkflowEventService(repo)
+    service.add_event_change_action(first_changes.append)
+    service.add_event_change_action(second_changes.append)
+
+    event = service.create_event(
+        "chat-1",
+        kind="task_proposed_review",
+        requested_by_user_id="owner-1",
+    )
+
+    assert len(first_changes) == 1
+    assert len(second_changes) == 1
+    assert first_changes[0] is second_changes[0]
+    assert first_changes[0].operation == "created"
+    assert first_changes[0].event == event
+
+
 def test_chat_workflow_event_service_reports_create_action_failure_with_persisted_event() -> None:
     repo = _WorkflowEventRepo()
     service = ChatWorkflowEventService(repo)
@@ -307,7 +328,7 @@ def test_chat_workflow_event_service_reports_create_action_failure_with_persiste
     def _fail(_change):
         raise ValueError("runtime offline")
 
-    service.set_event_change_fn(_fail)
+    service.add_event_change_action(_fail)
 
     try:
         service.create_event(
@@ -327,7 +348,7 @@ def test_chat_workflow_event_service_reports_create_action_failure_with_persiste
 def test_chat_workflow_event_service_requires_requester_for_wired_change() -> None:
     repo = _WorkflowEventRepo()
     service = ChatWorkflowEventService(repo)
-    service.set_event_change_fn(lambda _change: None)
+    service.add_event_change_action(lambda _change: None)
 
     try:
         service.create_event("chat-1", kind="task_proposed_review")
@@ -343,7 +364,7 @@ def test_chat_workflow_event_service_emits_change_after_update_when_wired() -> N
     changes = []
     service = ChatWorkflowEventService(repo)
     event = service.create_event("chat-1", kind="task_proposed_review")
-    service.set_event_change_fn(changes.append)
+    service.add_event_change_action(changes.append)
 
     updated = service.update_event(
         "chat-1",
@@ -366,7 +387,7 @@ def test_chat_workflow_event_service_reports_update_action_failure_with_persiste
     def _fail(_change):
         raise ValueError("runtime offline")
 
-    service.set_event_change_fn(_fail)
+    service.add_event_change_action(_fail)
 
     try:
         service.update_event(
@@ -389,7 +410,7 @@ def test_chat_workflow_event_service_requires_actor_for_wired_update_change() ->
     repo = _WorkflowEventRepo()
     service = ChatWorkflowEventService(repo)
     event = service.create_event("chat-1", kind="task_proposed_review")
-    service.set_event_change_fn(lambda _change: None)
+    service.add_event_change_action(lambda _change: None)
 
     try:
         service.update_event("chat-1", event["event_id"], state="settled")

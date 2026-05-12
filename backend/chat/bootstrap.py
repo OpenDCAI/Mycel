@@ -178,7 +178,7 @@ def wire_workflow_event_notifications(
     thread_repo: Any,
     user_repo: Any,
 ) -> None:
-    chat_workflow_event_service.set_event_change_fn(
+    chat_workflow_event_service.add_event_change_action(
         make_workflow_event_notification_fn(
             app,
             activity_reader=activity_reader,
