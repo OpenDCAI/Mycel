@@ -9,8 +9,8 @@ import pytest
 from backend.threads.chat_adapters.workflow_event_inlet import (
     dispatch_workflow_event_notifications,
     make_workflow_event_notification_envelope,
-    make_workflow_event_notification_envelopes,
     make_workflow_event_notification_fn,
+    plan_workflow_event_runtime_notifications,
 )
 from core.work_item.chat_workflow.service import WorkflowEventChange
 from protocols.agent_runtime import AgentChatRecipient, AgentRuntimeActor
@@ -132,7 +132,7 @@ def test_workflow_event_notification_fails_loudly_on_missing_identity() -> None:
 
 
 def test_workflow_event_notification_planner_selects_runtime_members() -> None:
-    envelopes = make_workflow_event_notification_envelopes(
+    envelopes = plan_workflow_event_runtime_notifications(
         change=_change("updated"),
         members=[
             {"user_id": "owner-1"},
