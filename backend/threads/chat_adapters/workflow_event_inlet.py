@@ -123,6 +123,8 @@ def make_workflow_event_notification_envelope(
                 "event_id": event_id,
                 "kind": kind,
                 "operation": change.operation,
+                "actor_user_id": change.actor_user_id,
+                "resource_refs": _resource_refs(event),
                 "state": state,
                 "state_version": state_version,
             },
@@ -148,6 +150,10 @@ def _required_int(event: Mapping[str, Any], key: str) -> int:
     if type(value) is not int:
         raise RuntimeError(f"Workflow event notification has invalid {key}")
     return value
+
+
+def _resource_refs(event: Mapping[str, Any]) -> list[dict[str, Any]]:
+    return [dict(ref) for ref in event.get("resource_refs") or []]
 
 
 def _member_user_id(member: Mapping[str, Any]) -> str:

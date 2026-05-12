@@ -10,7 +10,6 @@ from backend.threads.chat_adapters.chat_handler import NativeAgentChatDeliveryHa
 from backend.threads.chat_adapters.chat_runtime_services import AppAgentChatRuntimeServices
 from backend.threads.chat_adapters.external_inbox_handler import ExternalRuntimeInboxHandler
 from backend.threads.chat_adapters.gateway import NativeAgentRuntimeGateway
-from backend.threads.chat_adapters.notification_handler import NativeAgentNotificationHandler
 from backend.threads.chat_adapters.thread_handler import NativeAgentThreadInputHandler
 from backend.threads.sandbox_resolution import resolve_thread_sandbox
 from backend.threads.streaming import _ensure_thread_handlers, start_agent_run
@@ -61,7 +60,7 @@ def build_agent_runtime_state(app: Any, *, typing_tracker: Any) -> AgentRuntimeG
             "external": external_runtime_handler,
         },
         notification_handlers={
-            "mycel": NativeAgentNotificationHandler(thread_input_handler=thread_input_handler),
+            "mycel": thread_input_handler,
             "external": external_runtime_handler,
         },
         thread_input_handler=thread_input_handler,
