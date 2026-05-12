@@ -1170,8 +1170,8 @@ async def resolve_thread_permission_request(
     followup: dict[str, Any] | None = None
     if is_ask_user_question and payload.decision == "allow" and pending_request is not None and answers is not None:
         from backend.threads.chat_adapters.runtime_thread_input_action import (
-            RuntimeThreadInputAction,
             dispatch_runtime_thread_input_action,
+            internal_runtime_thread_input_action,
         )
 
         answered_payload = _build_ask_user_question_answered_payload(
@@ -1182,13 +1182,10 @@ async def resolve_thread_permission_request(
 
         followup_result = await dispatch_runtime_thread_input_action(
             app,
-            RuntimeThreadInputAction(
+            internal_runtime_thread_input_action(
                 thread_id=thread_id,
-                sender_user_id=user_id or "internal",
-                sender_user_type="system",
-                sender_display_name="Internal",
-                sender_source="internal",
-                content=_format_ask_user_question_followup(
+                user_id=user_id or "internal",
+                message=_format_ask_user_question_followup(
                     pending_request,
                     answers=answers,
                     annotations=getattr(payload, "annotations", None),

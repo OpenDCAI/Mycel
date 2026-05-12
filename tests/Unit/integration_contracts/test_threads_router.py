@@ -15,6 +15,7 @@ from langchain_core.messages import HumanMessage, SystemMessage, ToolMessage
 
 from backend.threads.chat_adapters.runtime_thread_input_action import (
     RuntimeThreadInputAction,
+    internal_runtime_thread_input_action,
     owner_runtime_thread_input_action,
 )
 from backend.web.models.requests import CreateThreadRequest, ResolvePermissionRequest, SendMessageRequest, ThreadPermissionRuleRequest
@@ -214,6 +215,27 @@ def test_owner_thread_input_action_carries_message_contract() -> None:
         attachments=["file-1"],
         metadata=None,
         enable_trajectory=True,
+    )
+
+
+def test_internal_thread_input_action_carries_followup_contract() -> None:
+    action = internal_runtime_thread_input_action(
+        thread_id="thread-1",
+        user_id="owner-1",
+        message="answer",
+        metadata={"ask_user_question_answered": {"request_id": "req-1"}},
+    )
+
+    assert action == RuntimeThreadInputAction(
+        thread_id="thread-1",
+        sender_user_id="owner-1",
+        sender_user_type="system",
+        sender_display_name="Internal",
+        sender_source="internal",
+        content="answer",
+        attachments=None,
+        metadata={"ask_user_question_answered": {"request_id": "req-1"}},
+        enable_trajectory=False,
     )
 
 

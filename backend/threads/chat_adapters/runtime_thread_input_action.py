@@ -41,6 +41,24 @@ def owner_runtime_thread_input_action(
     )
 
 
+def internal_runtime_thread_input_action(
+    *,
+    thread_id: str,
+    user_id: str,
+    message: str,
+    metadata: dict[str, Any] | None = None,
+) -> RuntimeThreadInputAction:
+    return RuntimeThreadInputAction(
+        thread_id=thread_id,
+        sender_user_id=user_id,
+        sender_user_type="system",
+        sender_display_name="Internal",
+        sender_source="internal",
+        content=message,
+        metadata=metadata,
+    )
+
+
 async def dispatch_runtime_thread_input_action(app: Any, action: RuntimeThreadInputAction):
     return await get_agent_runtime_gateway(app).dispatch_thread_input(
         AgentThreadInputEnvelope(
