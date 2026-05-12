@@ -65,3 +65,17 @@ def queue_command_thread_input(queue_manager: Any, *, thread_id: str, message: s
         queue_manager,
         queued_command_thread_input_action(thread_id=thread_id, message=message),
     )
+
+
+def requeue_thread_input_item(queue_manager: Any, *, thread_id: str, item: Any) -> None:
+    queue_manager.enqueue(
+        item.content,
+        thread_id,
+        notification_type=item.notification_type,
+        source=item.source,
+        sender_id=item.sender_id,
+        sender_name=item.sender_name,
+        sender_avatar_url=item.sender_avatar_url,
+        is_steer=item.is_steer,
+        metadata=item.metadata,
+    )

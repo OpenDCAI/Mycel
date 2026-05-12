@@ -23,9 +23,9 @@ from backend.threads.chat_adapters.runtime_thread_input_action import (
     plan_runtime_thread_input_envelope,
     queued_command_thread_input_action,
     queued_thread_input_action,
-    requeue_thread_input_item,
     runtime_thread_input_action_dispatcher,
 )
+from backend.threads.chat_adapters.thread_input_inlet import requeue_thread_input_item
 from backend.web.models.requests import CreateThreadRequest, ResolvePermissionRequest, SendMessageRequest, ThreadPermissionRuleRequest
 from backend.web.routers import threads as threads_router
 from core.runtime.loop import QueryLoop
@@ -368,7 +368,7 @@ def test_requeue_thread_input_item_preserves_queue_metadata() -> None:
         metadata={"reason": "passthrough"},
     )
 
-    requeue_thread_input_item(queue_manager, "thread-1", item)
+    requeue_thread_input_item(queue_manager, thread_id="thread-1", item=item)
 
     assert enqueued == [
         (
