@@ -20,6 +20,41 @@ def _thread_repo() -> SimpleNamespace:
     )
 
 
+def test_chat_join_rejection_notification_planner_returns_runtime_action() -> None:
+    user_repo = SimpleNamespace(
+        get_by_id=lambda uid: {
+            "owner-1": SimpleNamespace(id="owner-1", type="human", display_name="Owner", avatar=None),
+        }.get(uid)
+    )
+    planner = chat_join_inlet.chat_join_rejection_notification_action_planner(user_repo)
+
+    actions = planner(
+        {
+            "id": "chat_join:chat-1:agent-user-1",
+            "chat_id": "chat-1",
+            "requester_user_id": "agent-user-1",
+            "state": "rejected",
+            "decided_by_user_id": "owner-1",
+        }
+    )
+
+    assert len(actions) == 1
+    action = actions[0]
+    assert action.context == "Chat join rejection"
+    assert action.recipient_user_id == "agent-user-1"
+    assert action.sender_user_id == "owner-1"
+    assert action.sender_source == "chat_join"
+    assert action.event_type == "chat.join.rejected"
+    assert action.notification_type == "chat_join"
+    assert action.content == "Owner rejected your request to join chat chat-1."
+    assert action.metadata == {
+        "chat_join_request_id": "chat_join:chat-1:agent-user-1",
+        "chat_id": "chat-1",
+        "state": "rejected",
+    }
+    assert action.include_sender_avatar is True
+
+
 @pytest.mark.asyncio
 async def test_chat_join_rejection_notification_dispatches_runtime_notification_to_agent_requester() -> None:
     class RecordingGateway:

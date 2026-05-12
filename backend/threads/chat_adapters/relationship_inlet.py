@@ -1,13 +1,16 @@
 from __future__ import annotations
 
+from collections.abc import Callable
+from dataclasses import dataclass
 from typing import Any
 
 from backend.threads.chat_adapters.runtime_event_hook import make_sync_runtime_event_hook
 from backend.threads.chat_adapters.runtime_identity import display_name, require_user
 from backend.threads.chat_adapters.runtime_notification_action import (
     RuntimeNotificationAction,
-    dispatch_runtime_notification_action,
+    dispatch_runtime_notification_actions,
 )
+from core.event_actions import plan_event_actions
 from messaging.contracts import RelationshipEvent, RelationshipRow
 
 _DECISION_VERBS: dict[RelationshipEvent, str] = {
@@ -16,64 +19,102 @@ _DECISION_VERBS: dict[RelationshipEvent, str] = {
 }
 
 
+@dataclass(frozen=True)
+class RelationshipDecisionChange:
+    row: RelationshipRow
+    event: RelationshipEvent
+
+
 def make_relationship_request_notification_fn(app: Any, *, activity_reader: Any, thread_repo: Any, user_repo: Any):
+    planner = relationship_request_notification_action_planner(user_repo)
+
     async def notify_runtime(row: RelationshipRow) -> None:
-        requester_id = _requester_id(row)
-        target_id = _target_id(row, requester_id)
-        requester = require_user(user_repo, requester_id, context="Relationship request", role="requester")
-        await dispatch_runtime_notification_action(
+        actions = plan_event_actions([planner], row)
+        await dispatch_runtime_notification_actions(
             app,
-            RuntimeNotificationAction(
-                context="Relationship request",
-                recipient_user_id=target_id,
-                sender_user_id=requester_id,
-                sender_source="relationship",
-                event_type="relationship.requested",
-                notification_type="relationship",
-                content=_notification_content(
-                    display_name(requester, requester_id, context="Relationship request"),
-                    row.message,
-                ),
-                metadata={"relationship_id": row.id},
-                include_sender_avatar=True,
-            ),
+            actions,
             user_repo=user_repo,
             thread_repo=thread_repo,
             activity_reader=activity_reader,
         )
 
     return make_sync_runtime_event_hook(notify_runtime)
+
+
+def relationship_request_notification_action_planner(user_repo: Any) -> Callable[[RelationshipRow], list[RuntimeNotificationAction]]:
+    def plan(row: RelationshipRow) -> list[RuntimeNotificationAction]:
+        return [relationship_request_notification_action(row, user_repo=user_repo)]
+
+    return plan
+
+
+def relationship_request_notification_action(row: RelationshipRow, *, user_repo: Any) -> RuntimeNotificationAction:
+    requester_id = _requester_id(row)
+    target_id = _target_id(row, requester_id)
+    requester = require_user(user_repo, requester_id, context="Relationship request", role="requester")
+    return RuntimeNotificationAction(
+        context="Relationship request",
+        recipient_user_id=target_id,
+        sender_user_id=requester_id,
+        sender_source="relationship",
+        event_type="relationship.requested",
+        notification_type="relationship",
+        content=_notification_content(
+            display_name(requester, requester_id, context="Relationship request"),
+            row.message,
+        ),
+        metadata={"relationship_id": row.id},
+        include_sender_avatar=True,
+    )
 
 
 def make_relationship_decision_notification_fn(app: Any, *, activity_reader: Any, thread_repo: Any, user_repo: Any):
+    planner = relationship_decision_notification_action_planner(user_repo)
+
     async def notify_runtime(row: RelationshipRow, event: RelationshipEvent) -> None:
-        requester_id = _requester_id(row)
-        decider_id = _target_id(row, requester_id)
-        verb = _decision_verb(event)
-        decider = require_user(user_repo, decider_id, context="Relationship request", role="decider")
-        await dispatch_runtime_notification_action(
+        actions = plan_event_actions([planner], RelationshipDecisionChange(row=row, event=event))
+        await dispatch_runtime_notification_actions(
             app,
-            RuntimeNotificationAction(
-                context="Relationship request",
-                recipient_user_id=requester_id,
-                sender_user_id=decider_id,
-                sender_source="relationship",
-                event_type=f"relationship.{verb}",
-                notification_type="relationship",
-                content=(f"{display_name(decider, decider_id, context='Relationship request')} {verb} your relationship request."),
-                metadata={
-                    "relationship_id": row.id,
-                    "event": event,
-                    "state": row.state,
-                },
-                include_sender_avatar=True,
-            ),
+            actions,
             user_repo=user_repo,
             thread_repo=thread_repo,
             activity_reader=activity_reader,
         )
 
     return make_sync_runtime_event_hook(notify_runtime)
+
+
+def relationship_decision_notification_action_planner(
+    user_repo: Any,
+) -> Callable[[RelationshipDecisionChange], list[RuntimeNotificationAction]]:
+    def plan(change: RelationshipDecisionChange) -> list[RuntimeNotificationAction]:
+        return [relationship_decision_notification_action(change, user_repo=user_repo)]
+
+    return plan
+
+
+def relationship_decision_notification_action(change: RelationshipDecisionChange, *, user_repo: Any) -> RuntimeNotificationAction:
+    row = change.row
+    event = change.event
+    requester_id = _requester_id(row)
+    decider_id = _target_id(row, requester_id)
+    verb = _decision_verb(event)
+    decider = require_user(user_repo, decider_id, context="Relationship request", role="decider")
+    return RuntimeNotificationAction(
+        context="Relationship request",
+        recipient_user_id=requester_id,
+        sender_user_id=decider_id,
+        sender_source="relationship",
+        event_type=f"relationship.{verb}",
+        notification_type="relationship",
+        content=f"{display_name(decider, decider_id, context='Relationship request')} {verb} your relationship request.",
+        metadata={
+            "relationship_id": row.id,
+            "event": event,
+            "state": row.state,
+        },
+        include_sender_avatar=True,
+    )
 
 
 def _requester_id(row: RelationshipRow) -> str:
