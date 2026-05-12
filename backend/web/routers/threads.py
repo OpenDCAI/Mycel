@@ -986,8 +986,10 @@ async def send_message(
         raise HTTPException(status_code=400, detail="message cannot be empty")
 
     from backend.threads.activity_pool_service import get_or_create_agent
-    from backend.threads.chat_adapters.port import get_agent_runtime_gateway
-    from protocols.agent_runtime import AgentRuntimeActor, AgentRuntimeMessage, AgentThreadInputEnvelope
+    from backend.threads.chat_adapters.runtime_thread_input_action import (
+        dispatch_runtime_thread_input_action,
+        owner_runtime_thread_input_action,
+    )
 
     message = payload.message
     # @@@attachment-wire - sync files to sandbox and prepend paths
@@ -1002,13 +1004,15 @@ async def send_message(
             agent=agent,
         )
 
-    result = await get_agent_runtime_gateway(app).dispatch_thread_input(
-        AgentThreadInputEnvelope(
+    result = await dispatch_runtime_thread_input_action(
+        app,
+        owner_runtime_thread_input_action(
             thread_id=thread_id,
-            sender=AgentRuntimeActor(user_id=user_id, user_type="human", display_name="Owner", source="owner"),
-            message=AgentRuntimeMessage(content=message, attachments=payload.attachments or None),
+            user_id=user_id,
+            message=message,
+            attachments=payload.attachments or None,
             enable_trajectory=payload.enable_trajectory,
-        )
+        ),
     )
     return result.to_response()
 
@@ -1165,8 +1169,10 @@ async def resolve_thread_permission_request(
 
     followup: dict[str, Any] | None = None
     if is_ask_user_question and payload.decision == "allow" and pending_request is not None and answers is not None:
-        from backend.threads.chat_adapters.port import get_agent_runtime_gateway
-        from protocols.agent_runtime import AgentRuntimeActor, AgentRuntimeMessage, AgentThreadInputEnvelope
+        from backend.threads.chat_adapters.runtime_thread_input_action import (
+            RuntimeThreadInputAction,
+            dispatch_runtime_thread_input_action,
+        )
 
         answered_payload = _build_ask_user_question_answered_payload(
             pending_request,
@@ -1174,23 +1180,20 @@ async def resolve_thread_permission_request(
             annotations=getattr(payload, "annotations", None),
         )
 
-        followup_result = await get_agent_runtime_gateway(app).dispatch_thread_input(
-            AgentThreadInputEnvelope(
+        followup_result = await dispatch_runtime_thread_input_action(
+            app,
+            RuntimeThreadInputAction(
                 thread_id=thread_id,
-                sender=AgentRuntimeActor(
-                    user_id=user_id or "internal",
-                    user_type="system",
-                    display_name="Internal",
-                    source="internal",
+                sender_user_id=user_id or "internal",
+                sender_user_type="system",
+                sender_display_name="Internal",
+                sender_source="internal",
+                content=_format_ask_user_question_followup(
+                    pending_request,
+                    answers=answers,
+                    annotations=getattr(payload, "annotations", None),
                 ),
-                message=AgentRuntimeMessage(
-                    content=_format_ask_user_question_followup(
-                        pending_request,
-                        answers=answers,
-                        annotations=getattr(payload, "annotations", None),
-                    ),
-                    metadata={"ask_user_question_answered": answered_payload},
-                ),
+                metadata={"ask_user_question_answered": answered_payload},
             ),
         )
         followup = followup_result.to_response()
