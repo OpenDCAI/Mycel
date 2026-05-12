@@ -62,7 +62,7 @@ class _SlowChildAgent:
     async def _cleanup_background_runs(self):
         pass
 
-    def close(self, _cleanup_sandbox: bool = True):
+    def close(self, cleanup_sandbox: bool = True):
         self.closed = True
 
 
@@ -86,7 +86,7 @@ class _CompleteChildAgent:
     async def _cleanup_background_runs(self):
         pass
 
-    def close(self, _cleanup_sandbox: bool = True):
+    def close(self, cleanup_sandbox: bool = True):
         self.closed = True
 
 
