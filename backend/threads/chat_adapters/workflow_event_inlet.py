@@ -6,8 +6,7 @@ from typing import Any
 from backend.threads.chat_adapters.runtime_event_hook import make_sync_runtime_event_hook
 from backend.threads.chat_adapters.runtime_notification_action import (
     RuntimeNotificationAction,
-    dispatch_runtime_notification_envelopes,
-    plan_runtime_notification_envelope,
+    dispatch_runtime_notification_actions,
 )
 from core.work_item.chat_workflow.service import WorkflowEventChange
 from protocols.agent_runtime import AgentRuntimeTransport
@@ -22,40 +21,32 @@ def make_workflow_event_notification_fn(
     messaging_service: Any,
 ) -> Callable[[WorkflowEventChange], None]:
     async def notify_runtime(change: WorkflowEventChange) -> None:
-        envelopes = make_workflow_event_notification_envelopes(
+        actions = make_workflow_event_notification_actions(
             change,
             messaging_service.list_chat_members(_required_str(change.event, "chat_id")),
+        )
+        await dispatch_runtime_notification_actions(
+            app,
+            actions,
             user_repo=user_repo,
             thread_repo=thread_repo,
             activity_reader=activity_reader,
         )
-        await dispatch_runtime_notification_envelopes(app, envelopes)
 
     return make_sync_runtime_event_hook(notify_runtime)
 
 
-def make_workflow_event_notification_envelopes(
+def make_workflow_event_notification_actions(
     change: WorkflowEventChange,
     members: Sequence[Mapping[str, Any]],
-    *,
-    activity_reader: Any,
-    thread_repo: Any,
-    user_repo: Any,
-) -> list[Any]:
-    envelopes: list[Any] = []
+) -> list[RuntimeNotificationAction]:
+    actions: list[RuntimeNotificationAction] = []
     for member in members:
         recipient_user_id = _member_user_id(member)
         if recipient_user_id == change.actor_user_id:
             continue
-        envelope = plan_runtime_notification_envelope(
-            workflow_event_runtime_notification_action(change=change, recipient_user_id=recipient_user_id),
-            user_repo=user_repo,
-            thread_repo=thread_repo,
-            activity_reader=activity_reader,
-        )
-        if envelope is not None:
-            envelopes.append(envelope)
-    return envelopes
+        actions.append(workflow_event_runtime_notification_action(change=change, recipient_user_id=recipient_user_id))
+    return actions
 
 
 def workflow_event_runtime_notification_action(*, change: WorkflowEventChange, recipient_user_id: str) -> RuntimeNotificationAction:

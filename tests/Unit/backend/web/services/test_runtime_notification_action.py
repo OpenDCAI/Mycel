@@ -7,6 +7,7 @@ import pytest
 from backend.threads.chat_adapters.runtime_notification_action import (
     RuntimeNotificationAction,
     dispatch_runtime_notification_action,
+    dispatch_runtime_notification_actions,
 )
 from protocols.agent_runtime import AgentRuntimeTransport
 
@@ -76,3 +77,45 @@ async def test_runtime_notification_action_resolves_and_dispatches_to_runtime_re
     assert gateway.envelope.message.content == "Action happened."
     assert gateway.envelope.message.metadata == {"resource_id": "resource-1"}
     assert gateway.envelope.transport.delivery_id == "delivery-1"
+
+
+@pytest.mark.asyncio
+async def test_runtime_notification_actions_dispatches_only_runtime_recipients() -> None:
+    class RecordingGateway:
+        def __init__(self) -> None:
+            self.envelopes = []
+
+        async def dispatch_notification(self, envelope):
+            self.envelopes.append(envelope)
+            return SimpleNamespace(status="accepted", thread_id=envelope.recipient.thread_id)
+
+    gateway = RecordingGateway()
+
+    await dispatch_runtime_notification_actions(
+        _runtime_app(gateway),
+        [
+            RuntimeNotificationAction(
+                context="Test action",
+                recipient_user_id="agent-1",
+                sender_user_id="owner-1",
+                sender_source="workflow",
+                event_type="test.event",
+                notification_type="test",
+                content="Action happened.",
+            ),
+            RuntimeNotificationAction(
+                context="Test action",
+                recipient_user_id="owner-1",
+                sender_user_id="owner-1",
+                sender_source="workflow",
+                event_type="test.event",
+                notification_type="test",
+                content="Action happened.",
+            ),
+        ],
+        user_repo=_users(),
+        thread_repo=_thread_repo(),
+        activity_reader=SimpleNamespace(list_active_threads_for_agent=lambda _agent_user_id: []),
+    )
+
+    assert [envelope.recipient.agent_user_id for envelope in gateway.envelopes] == ["agent-1"]
