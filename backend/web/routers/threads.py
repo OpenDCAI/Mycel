@@ -1553,6 +1553,11 @@ async def _notify_task_cancelled(app: Any, thread_id: str, task_id: str, run: An
         agent = _get_agent_for_thread(app, thread_id)
         qm = getattr(agent, "queue_manager", None) if agent else None
         if qm:
+            from backend.threads.chat_adapters.runtime_thread_input_action import (
+                dispatch_queued_thread_input_action,
+                queued_command_thread_input_action,
+            )
+
             description = getattr(run, "description", "") or ""
             command = getattr(run, "command", "") or ""
             label = description or command[:80] or f"Task {task_id}"
@@ -1563,6 +1568,9 @@ async def _notify_task_cancelled(app: Any, thread_id: str, task_id: str, run: An
                 + (f"<CommandLine>{command[:200]}</CommandLine>" if command else "")
                 + "</CommandNotification>"
             )
-            qm.enqueue(notification, thread_id, notification_type="command")
+            dispatch_queued_thread_input_action(
+                qm,
+                queued_command_thread_input_action(thread_id=thread_id, message=notification),
+            )
     except Exception:
         logger.warning("Failed to enqueue cancellation notice for task %s", task_id, exc_info=True)
