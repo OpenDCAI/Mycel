@@ -77,3 +77,24 @@ def test_runtime_actions_use_shared_actor_builder() -> None:
     for path in action_files:
         text = path.read_text(encoding="utf-8")
         assert "AgentRuntimeActor" not in text, path
+
+
+def test_runtime_protocol_envelopes_are_constructed_only_at_adapter_boundaries() -> None:
+    repo_root = Path(__file__).parents[5]
+    backend_files = list((repo_root / "backend").rglob("*.py"))
+    allowed = {
+        repo_root / "backend" / "threads" / "chat_adapters" / "runtime_chat_delivery_action.py",
+        repo_root / "backend" / "threads" / "chat_adapters" / "runtime_metadata.py",
+        repo_root / "backend" / "threads" / "chat_adapters" / "runtime_notification_action.py",
+        repo_root / "backend" / "threads" / "chat_adapters" / "runtime_thread_input_action.py",
+    }
+
+    assert backend_files
+
+    for path in backend_files:
+        text = path.read_text(encoding="utf-8")
+        constructs_envelope = (
+            "AgentChatDeliveryEnvelope(" in text or "AgentRuntimeNotificationEnvelope(" in text or "AgentThreadInputEnvelope(" in text
+        )
+        if constructs_envelope:
+            assert path in allowed, path
