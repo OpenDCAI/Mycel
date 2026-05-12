@@ -7,9 +7,8 @@ from typing import Literal
 import pytest
 
 from backend.threads.chat_adapters.workflow_event_inlet import (
-    dispatch_workflow_event_notifications,
     make_workflow_event_notification_fn,
-    plan_workflow_event_runtime_notifications,
+    workflow_event_runtime_notification_action,
 )
 from core.work_item.chat_workflow.service import WorkflowEventChange
 
@@ -68,8 +67,8 @@ def _thread_repo(*agent_ids: str) -> SimpleNamespace:
     )
 
 
-def test_workflow_event_notification_is_metadata_only() -> None:
-    envelopes = plan_workflow_event_runtime_notifications(
+def test_workflow_event_notification_action_is_metadata_only() -> None:
+    action = workflow_event_runtime_notification_action(
         change=WorkflowEventChange(
             operation="created",
             event={
@@ -84,21 +83,15 @@ def test_workflow_event_notification_is_metadata_only() -> None:
             },
             actor_user_id="owner-1",
         ),
-        members=[{"user_id": "agent-1"}],
-        user_repo=_users("agent-1"),
-        thread_repo=_thread_repo("agent-1"),
-        activity_reader=SimpleNamespace(list_active_threads_for_agent=lambda _agent_user_id: []),
+        recipient_user_id="agent-1",
     )
 
-    assert len(envelopes) == 1
-    envelope = envelopes[0]
-    assert envelope.event_type == "chat.workflow.event"
-    assert envelope.notification_type == "workflow_event"
-    assert envelope.recipient.agent_user_id == "agent-1"
-    assert envelope.recipient.thread_id == "thread-agent-1"
-    assert envelope.sender.user_id == "owner-1"
-    assert envelope.message.content == "Workflow event task_proposed_review was created and is open."
-    assert envelope.message.metadata == {
+    assert action.event_type == "chat.workflow.event"
+    assert action.notification_type == "workflow_event"
+    assert action.recipient_user_id == "agent-1"
+    assert action.sender_user_id == "owner-1"
+    assert action.content == "Workflow event task_proposed_review was created and is open."
+    assert action.metadata == {
         "chat_id": "chat-1",
         "event_id": "event-1",
         "kind": "task_proposed_review",
@@ -108,15 +101,15 @@ def test_workflow_event_notification_is_metadata_only() -> None:
         "state": "open",
         "state_version": 3,
     }
-    assert envelope.transport.delivery_id == "workflow:chat-1:event-1:3"
-    assert envelope.transport.correlation_id == "workflow:chat-1:event-1"
-    assert envelope.transport.idempotency_key == "workflow:chat-1:event-1:3"
-    assert "must not leak" not in str(envelope)
+    assert action.transport.delivery_id == "workflow:chat-1:event-1:3"
+    assert action.transport.correlation_id == "workflow:chat-1:event-1"
+    assert action.transport.idempotency_key == "workflow:chat-1:event-1:3"
+    assert "must not leak" not in str(action)
 
 
 def test_workflow_event_notification_fails_loudly_on_missing_identity() -> None:
     try:
-        plan_workflow_event_runtime_notifications(
+        workflow_event_runtime_notification_action(
             change=WorkflowEventChange(
                 operation="created",
                 event={
@@ -128,10 +121,7 @@ def test_workflow_event_notification_fails_loudly_on_missing_identity() -> None:
                 },
                 actor_user_id="owner-1",
             ),
-            members=[{"user_id": "agent-1"}],
-            user_repo=_users("agent-1"),
-            thread_repo=_thread_repo("agent-1"),
-            activity_reader=SimpleNamespace(list_active_threads_for_agent=lambda _agent_user_id: []),
+            recipient_user_id="agent-1",
         )
     except RuntimeError as exc:
         assert str(exc) == "Workflow event notification is missing event_id"
@@ -139,21 +129,29 @@ def test_workflow_event_notification_fails_loudly_on_missing_identity() -> None:
         raise AssertionError("missing workflow event identity did not fail")
 
 
-def test_workflow_event_notification_planner_selects_runtime_members() -> None:
-    envelopes = plan_workflow_event_runtime_notifications(
-        change=_change("updated"),
-        members=[
+@pytest.mark.asyncio
+async def test_workflow_event_notification_fn_selects_runtime_members() -> None:
+    gateway = _RecordingGateway()
+    messaging_service = SimpleNamespace(
+        list_chat_members=lambda _chat_id: [
             {"user_id": "owner-1"},
             {"user_id": "agent-1"},
             {"user_id": "agent-without-thread"},
             {"user_id": "external-1"},
             {"user_id": "human-2"},
-        ],
-        user_repo=_users("agent-1", "agent-without-thread"),
-        thread_repo=_thread_repo("agent-1"),
+        ]
+    )
+    notify = make_workflow_event_notification_fn(
+        _runtime_app(gateway),
         activity_reader=SimpleNamespace(list_active_threads_for_agent=lambda _agent_user_id: []),
+        thread_repo=_thread_repo("agent-1"),
+        user_repo=_users("agent-1", "agent-without-thread"),
+        messaging_service=messaging_service,
     )
 
+    await asyncio.to_thread(notify, _change("updated"))
+
+    envelopes = gateway.envelopes
     assert [envelope.recipient.agent_user_id for envelope in envelopes] == ["agent-1", "external-1"]
     assert [envelope.recipient.runtime_source for envelope in envelopes] == ["mycel", "external"]
     assert envelopes[0].recipient.thread_id == "thread-agent-1"
@@ -164,35 +162,24 @@ def test_workflow_event_notification_planner_selects_runtime_members() -> None:
         assert envelope.message.metadata["operation"] == "updated"
 
 
-def test_workflow_event_notification_planner_keeps_identity_context() -> None:
+@pytest.mark.asyncio
+async def test_workflow_event_notification_fn_keeps_identity_context() -> None:
+    gateway = _RecordingGateway()
+    messaging_service = SimpleNamespace(list_chat_members=lambda _chat_id: [{"user_id": "missing-recipient"}])
+    notify = make_workflow_event_notification_fn(
+        _runtime_app(gateway),
+        activity_reader=SimpleNamespace(list_active_threads_for_agent=lambda _agent_user_id: []),
+        thread_repo=_thread_repo("agent-1"),
+        user_repo=_users("agent-1"),
+        messaging_service=messaging_service,
+    )
+
     try:
-        plan_workflow_event_runtime_notifications(
-            change=_change("updated"),
-            members=[{"user_id": "missing-recipient"}],
-            user_repo=_users("agent-1"),
-            thread_repo=_thread_repo("agent-1"),
-            activity_reader=SimpleNamespace(list_active_threads_for_agent=lambda _agent_user_id: []),
-        )
+        await asyncio.to_thread(notify, _change("updated"))
     except RuntimeError as exc:
         assert str(exc) == "Workflow event notification recipient user not found: missing-recipient"
     else:
         raise AssertionError("missing workflow event recipient did not fail")
-
-
-@pytest.mark.asyncio
-async def test_dispatch_workflow_event_notifications_executes_planned_envelopes() -> None:
-    gateway = _RecordingGateway()
-
-    await dispatch_workflow_event_notifications(
-        _runtime_app(gateway),
-        change=_change(),
-        members=[{"user_id": "owner-1"}, {"user_id": "agent-1"}],
-        user_repo=_users("agent-1"),
-        thread_repo=_thread_repo("agent-1"),
-        activity_reader=SimpleNamespace(list_active_threads_for_agent=lambda _agent_user_id: []),
-    )
-
-    assert [envelope.recipient.agent_user_id for envelope in gateway.envelopes] == ["agent-1"]
 
 
 @pytest.mark.asyncio
