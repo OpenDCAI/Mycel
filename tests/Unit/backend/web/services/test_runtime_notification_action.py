@@ -91,7 +91,7 @@ async def test_runtime_notification_actions_dispatches_only_runtime_recipients()
 
     gateway = RecordingGateway()
 
-    await dispatch_runtime_notification_actions(
+    dispatched_count = await dispatch_runtime_notification_actions(
         _runtime_app(gateway),
         [
             RuntimeNotificationAction(
@@ -118,4 +118,5 @@ async def test_runtime_notification_actions_dispatches_only_runtime_recipients()
         activity_reader=SimpleNamespace(list_active_threads_for_agent=lambda _agent_user_id: []),
     )
 
+    assert dispatched_count == 1
     assert [envelope.recipient.agent_user_id for envelope in gateway.envelopes] == ["agent-1"]

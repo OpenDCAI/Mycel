@@ -37,16 +37,14 @@ async def dispatch_runtime_notification_action(
     thread_repo: Any,
     activity_reader: Any,
 ) -> bool:
-    envelopes = plan_runtime_notification_envelopes(
+    dispatched_count = await dispatch_runtime_notification_actions(
+        app,
         [action],
         user_repo=user_repo,
         thread_repo=thread_repo,
         activity_reader=activity_reader,
     )
-    if not envelopes:
-        return False
-    await dispatch_runtime_notification_envelopes(app, envelopes)
-    return True
+    return dispatched_count > 0
 
 
 async def dispatch_runtime_notification_actions(
@@ -56,16 +54,15 @@ async def dispatch_runtime_notification_actions(
     user_repo: Any,
     thread_repo: Any,
     activity_reader: Any,
-) -> None:
-    await dispatch_runtime_notification_envelopes(
-        app,
-        plan_runtime_notification_envelopes(
-            actions,
-            user_repo=user_repo,
-            thread_repo=thread_repo,
-            activity_reader=activity_reader,
-        ),
+) -> int:
+    envelopes = plan_runtime_notification_envelopes(
+        actions,
+        user_repo=user_repo,
+        thread_repo=thread_repo,
+        activity_reader=activity_reader,
     )
+    await dispatch_runtime_notification_envelopes(app, envelopes)
+    return len(envelopes)
 
 
 async def dispatch_runtime_notification_envelopes(app: Any, envelopes: Iterable[AgentRuntimeNotificationEnvelope]) -> None:
