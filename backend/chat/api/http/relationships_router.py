@@ -11,6 +11,7 @@ from backend.chat.api.http.dependencies import (
     get_relationship_service,
 )
 from messaging.contracts import RelationshipRow
+from messaging.relationships.service import RelationshipActionError
 from messaging.relationships.state_machine import TransitionError
 
 logger = logging.getLogger(__name__)
@@ -59,6 +60,18 @@ def _row_to_dict(row: RelationshipRow, viewer_id: str) -> dict:
     }
 
 
+def _relationship_action_failure(exc: RelationshipActionError, viewer_id: str) -> HTTPException:
+    return HTTPException(
+        500,
+        {
+            "error": "relationship_action_failed",
+            "event": exc.event,
+            "relationship": _row_to_dict(exc.row, viewer_id),
+            "cause": str(exc.__cause__) if exc.__cause__ is not None else str(exc),
+        },
+    )
+
+
 @router.get("")
 def list_relationships(
     user_id: Annotated[str, Depends(get_current_user_id)],
@@ -79,6 +92,8 @@ def request_relationship(
     try:
         row = relationship_service.request(user_id, body.target_user_id, body.message)
         return _row_to_dict(row, user_id)
+    except RelationshipActionError as e:
+        raise _relationship_action_failure(e, user_id)
     except TransitionError as e:
         raise HTTPException(409, str(e))
 
@@ -96,6 +111,8 @@ def approve_relationship(
         raise HTTPException(409, "Cannot approve your own request")
     try:
         return _row_to_dict(relationship_service.approve(user_id, requester_id), user_id)
+    except RelationshipActionError as e:
+        raise _relationship_action_failure(e, user_id)
     except TransitionError as e:
         raise HTTPException(409, str(e))
 
@@ -113,6 +130,8 @@ def reject_relationship(
         raise HTTPException(409, "Cannot reject your own request")
     try:
         return _row_to_dict(relationship_service.reject(user_id, requester_id), user_id)
+    except RelationshipActionError as e:
+        raise _relationship_action_failure(e, user_id)
     except TransitionError as e:
         raise HTTPException(409, str(e))
 
