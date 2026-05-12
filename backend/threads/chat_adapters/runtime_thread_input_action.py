@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Iterable
+from collections.abc import Callable, Coroutine, Iterable
 from dataclasses import dataclass
 from typing import Any
 
@@ -94,9 +94,21 @@ def internal_runtime_thread_input_action(
     )
 
 
-async def dispatch_runtime_thread_input_action(app: Any, action: RuntimeThreadInputAction):
-    results = await dispatch_runtime_thread_input_envelopes(app, [plan_runtime_thread_input_envelope(action)])
+async def dispatch_runtime_thread_input_action(app: Any, action: RuntimeThreadInputAction) -> AgentThreadInputResult:
+    results = await runtime_thread_input_action_dispatcher(app)([action])
     return results[0]
+
+
+def runtime_thread_input_action_dispatcher(
+    app: Any,
+) -> Callable[[list[RuntimeThreadInputAction]], Coroutine[Any, Any, list[AgentThreadInputResult]]]:
+    async def dispatch_actions(actions: list[RuntimeThreadInputAction]) -> list[AgentThreadInputResult]:
+        return await dispatch_runtime_thread_input_envelopes(
+            app,
+            [plan_runtime_thread_input_envelope(action) for action in actions],
+        )
+
+    return dispatch_actions
 
 
 async def dispatch_runtime_thread_input_envelopes(
