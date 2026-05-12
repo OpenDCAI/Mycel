@@ -8,12 +8,10 @@ import pytest
 
 from backend.threads.chat_adapters.workflow_event_inlet import (
     dispatch_workflow_event_notifications,
-    make_workflow_event_notification_envelope,
     make_workflow_event_notification_fn,
     plan_workflow_event_runtime_notifications,
 )
 from core.work_item.chat_workflow.service import WorkflowEventChange
-from protocols.agent_runtime import AgentChatRecipient, AgentRuntimeActor
 
 
 def _event() -> dict[str, object]:
@@ -71,7 +69,7 @@ def _thread_repo(*agent_ids: str) -> SimpleNamespace:
 
 
 def test_workflow_event_notification_is_metadata_only() -> None:
-    envelope = make_workflow_event_notification_envelope(
+    envelopes = plan_workflow_event_runtime_notifications(
         change=WorkflowEventChange(
             operation="created",
             event={
@@ -86,13 +84,18 @@ def test_workflow_event_notification_is_metadata_only() -> None:
             },
             actor_user_id="owner-1",
         ),
-        recipient=AgentChatRecipient(agent_user_id="agent-1", runtime_source="mycel", thread_id="thread-1"),
-        sender=AgentRuntimeActor(user_id="owner-1", user_type="human", display_name="Owner", source="workflow"),
+        members=[{"user_id": "agent-1"}],
+        user_repo=_users("agent-1"),
+        thread_repo=_thread_repo("agent-1"),
+        activity_reader=SimpleNamespace(list_active_threads_for_agent=lambda _agent_user_id: []),
     )
 
+    assert len(envelopes) == 1
+    envelope = envelopes[0]
     assert envelope.event_type == "chat.workflow.event"
     assert envelope.notification_type == "workflow_event"
     assert envelope.recipient.agent_user_id == "agent-1"
+    assert envelope.recipient.thread_id == "thread-agent-1"
     assert envelope.sender.user_id == "owner-1"
     assert envelope.message.content == "Workflow event task_proposed_review was created and is open."
     assert envelope.message.metadata == {
@@ -113,7 +116,7 @@ def test_workflow_event_notification_is_metadata_only() -> None:
 
 def test_workflow_event_notification_fails_loudly_on_missing_identity() -> None:
     try:
-        make_workflow_event_notification_envelope(
+        plan_workflow_event_runtime_notifications(
             change=WorkflowEventChange(
                 operation="created",
                 event={
@@ -125,8 +128,10 @@ def test_workflow_event_notification_fails_loudly_on_missing_identity() -> None:
                 },
                 actor_user_id="owner-1",
             ),
-            recipient=AgentChatRecipient(agent_user_id="agent-1", runtime_source="mycel", thread_id="thread-1"),
-            sender=AgentRuntimeActor(user_id="owner-1", user_type="human", display_name="Owner", source="workflow"),
+            members=[{"user_id": "agent-1"}],
+            user_repo=_users("agent-1"),
+            thread_repo=_thread_repo("agent-1"),
+            activity_reader=SimpleNamespace(list_active_threads_for_agent=lambda _agent_user_id: []),
         )
     except RuntimeError as exc:
         assert str(exc) == "Workflow event notification is missing event_id"

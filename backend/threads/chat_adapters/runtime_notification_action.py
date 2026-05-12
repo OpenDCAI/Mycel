@@ -25,6 +25,7 @@ class RuntimeNotificationAction:
     metadata: dict[str, Any] | None = None
     transport: AgentRuntimeTransport = AgentRuntimeTransport()
     include_sender_avatar: bool = False
+    runtime_context: str | None = None
 
 
 async def dispatch_runtime_notification_action(
@@ -61,6 +62,7 @@ def plan_runtime_notification_action(
         thread_repo=thread_repo,
         activity_reader=activity_reader,
         context=action.context,
+        runtime_context=action.runtime_context,
     )
     if recipient is None:
         return None
