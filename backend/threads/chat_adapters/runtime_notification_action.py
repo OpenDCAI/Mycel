@@ -36,25 +36,6 @@ async def dispatch_runtime_notification_action(
     thread_repo: Any,
     activity_reader: Any,
 ) -> bool:
-    envelope = plan_runtime_notification_action(
-        action,
-        user_repo=user_repo,
-        thread_repo=thread_repo,
-        activity_reader=activity_reader,
-    )
-    if envelope is None:
-        return False
-    await get_agent_runtime_gateway(app).dispatch_notification(envelope)
-    return True
-
-
-def plan_runtime_notification_action(
-    action: RuntimeNotificationAction,
-    *,
-    user_repo: Any,
-    thread_repo: Any,
-    activity_reader: Any,
-) -> AgentRuntimeNotificationEnvelope | None:
     sender_user = require_user(user_repo, action.sender_user_id, context=action.context, role="sender")
     recipient = resolve_runtime_notification_recipient(
         action.recipient_user_id,
@@ -65,21 +46,24 @@ def plan_runtime_notification_action(
         runtime_context=action.runtime_context,
     )
     if recipient is None:
-        return None
-    return AgentRuntimeNotificationEnvelope(
-        event_type=action.event_type,
-        recipient=recipient,
-        sender=make_runtime_actor(
-            user_id=action.sender_user_id,
-            user=sender_user,
-            source=action.sender_source,
-            context=action.context,
-            include_avatar=action.include_sender_avatar,
+        return False
+    await get_agent_runtime_gateway(app).dispatch_notification(
+        AgentRuntimeNotificationEnvelope(
+            event_type=action.event_type,
+            recipient=recipient,
+            sender=make_runtime_actor(
+                user_id=action.sender_user_id,
+                user=sender_user,
+                source=action.sender_source,
+                context=action.context,
+                include_avatar=action.include_sender_avatar,
+            ),
+            message=AgentRuntimeMessage(
+                content=action.content,
+                metadata=action.metadata,
+            ),
+            notification_type=action.notification_type,
+            transport=action.transport,
         ),
-        message=AgentRuntimeMessage(
-            content=action.content,
-            metadata=action.metadata,
-        ),
-        notification_type=action.notification_type,
-        transport=action.transport,
     )
+    return True
