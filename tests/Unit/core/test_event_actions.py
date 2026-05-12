@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from core.event_actions import plan_event_actions, run_sync_actions
+from core.event_actions import plan_event_actions, run_sync_actions, single_event_action_planner
 
 
 def test_plan_event_actions_flattens_planners_in_order() -> None:
@@ -32,6 +32,12 @@ def test_plan_event_actions_snapshots_planners_before_running() -> None:
     actions = plan_event_actions(planners, "event-1")
 
     assert actions == ["first:event-1"]
+
+
+def test_single_event_action_planner_wraps_one_action_value() -> None:
+    planner = single_event_action_planner(lambda value: f"action:{value}")
+
+    assert planner("event-1") == ["action:event-1"]
 
 
 def test_run_sync_actions_runs_registered_actions_in_order() -> None:

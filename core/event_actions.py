@@ -17,6 +17,15 @@ def plan_event_actions[EventT, ActionT](
     return planned_actions
 
 
+def single_event_action_planner[EventT, ActionT](
+    action: Callable[[EventT], ActionT],
+) -> Callable[[EventT], list[ActionT]]:
+    def plan(event: EventT) -> list[ActionT]:
+        return [action(event)]
+
+    return plan
+
+
 def run_sync_actions(
     actions: Iterable[Callable[..., None]],
     /,
