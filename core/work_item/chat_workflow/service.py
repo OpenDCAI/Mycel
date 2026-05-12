@@ -5,6 +5,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any, Literal
 
+from core.event_actions import run_sync_actions
 from core.work_item.types import WorkItem
 from storage.contracts import ChatWorkflowEventRow
 
@@ -230,17 +231,16 @@ class ChatWorkflowEventService:
         event: dict[str, Any],
         actor_user_id: str | None,
     ) -> None:
-        actions = list(self._event_change_actions)
-        if not actions:
+        if not self._event_change_actions:
             return
         if actor_user_id is None:
             raise RuntimeError("Workflow event change requires actor_user_id")
-        try:
-            change = WorkflowEventChange(operation=operation, event=event, actor_user_id=actor_user_id)
-            for action in actions:
-                action(change)
-        except Exception as exc:
-            raise WorkflowEventActionError(operation=operation, event=event) from exc
+        change = WorkflowEventChange(operation=operation, event=event, actor_user_id=actor_user_id)
+        run_sync_actions(
+            self._event_change_actions,
+            change,
+            on_error=lambda _exc: WorkflowEventActionError(operation=operation, event=event),
+        )
 
     def delete_event(self, chat_id: str, event_id: str) -> None:
         self._repo.delete(chat_id, event_id)
