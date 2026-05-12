@@ -68,6 +68,20 @@ def test_chat_inlets_do_not_dispatch_runtime_gateway_directly() -> None:
         assert "AgentRuntimeNotificationEnvelope" not in text, path
 
 
+def test_chat_inlets_do_not_compose_planned_runtime_events_directly() -> None:
+    repo_root = Path(__file__).parents[5]
+    inlet_files = list((repo_root / "backend" / "threads" / "chat_adapters").glob("*_inlet.py"))
+
+    assert inlet_files
+
+    for path in inlet_files:
+        text = path.read_text(encoding="utf-8")
+        assert "runtime_event_hook" not in text, path
+        assert "runtime_event_runner" not in text, path
+        assert "make_planned_runtime_event_hook" not in text, path
+        assert "run_planned_runtime_event" not in text, path
+
+
 def test_runtime_actions_use_shared_actor_builder() -> None:
     repo_root = Path(__file__).parents[5]
     action_files = list((repo_root / "backend" / "threads" / "chat_adapters").glob("runtime_*_action.py"))
