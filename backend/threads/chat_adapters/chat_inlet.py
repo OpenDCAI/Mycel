@@ -9,21 +9,21 @@ from backend.threads.chat_adapters.runtime_chat_delivery_action import (
     RuntimeChatDeliveryAction,
     dispatch_runtime_chat_delivery_actions,
 )
-from backend.threads.chat_adapters.runtime_event_hook import make_sync_runtime_event_hook
+from backend.threads.chat_adapters.runtime_event_hook import make_planned_runtime_event_hook
 from backend.threads.chat_adapters.runtime_event_runner import run_planned_runtime_event
 from messaging.delivery.contracts import ChatDeliveryRequest
 
 
 def make_chat_delivery_fn(app: Any, *, activity_reader: Any, thread_repo: Any):
-    async def dispatch_event(request: ChatDeliveryRequest) -> None:
-        await dispatch_chat_delivery_event(
+    async def dispatch_actions(actions: list[RuntimeChatDeliveryAction]) -> int:
+        return await dispatch_runtime_chat_delivery_actions(
             app,
-            request,
+            actions,
             thread_repo=thread_repo,
             activity_reader=activity_reader,
         )
 
-    return make_sync_runtime_event_hook(dispatch_event)
+    return make_planned_runtime_event_hook(chat_delivery_runtime_action_planner(), dispatch_actions)
 
 
 async def dispatch_chat_delivery_event(
