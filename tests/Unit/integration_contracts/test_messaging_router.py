@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import inspect
+from datetime import UTC, datetime
 from types import SimpleNamespace
 
 import pytest
@@ -12,6 +13,8 @@ from backend.chat.api.http import chat_workflow_router, chats_router, relationsh
 from backend.identity.avatar.urls import avatar_url
 from backend.web.core.dependencies import get_current_user_id
 from core.work_item.chat_workflow.service import WorkflowEventActionError
+from messaging.contracts import RelationshipRow
+from messaging.relationships.service import RelationshipActionError
 from storage.contracts import ContactEdgeRow
 from storage.errors import (
     StaleChatWorkflowEventVersionError,
@@ -139,6 +142,46 @@ def test_relationship_bodies_do_not_accept_identity_fields() -> None:
         relationships_router.RelationshipActionBody.model_validate({"requester_user_id": "user-1"})
     with pytest.raises(ValidationError):
         relationships_router.RelationshipRequestBody.model_validate({"target_user_id": "user-2", "actor_" + "user_id": "user-1"})
+
+
+def test_request_relationship_action_failure_returns_persisted_relationship() -> None:
+    row = RelationshipRow(
+        id="hire_visit:human-user-1:agent-user-1",
+        user_low="agent-user-1",
+        user_high="human-user-1",
+        state="pending",
+        initiator_user_id="human-user-1",
+        message="hi",
+        created_at=datetime(2026, 4, 7, tzinfo=UTC),
+        updated_at=datetime(2026, 4, 7, 0, 0, 1, tzinfo=UTC),
+    )
+
+    def fail_request(_requester_id: str, _target_id: str, _message: str | None):
+        error = RelationshipActionError(event="request", row=row)
+        raise error from RuntimeError("runtime offline")
+
+    with pytest.raises(HTTPException) as exc_info:
+        relationships_router.request_relationship(
+            relationships_router.RelationshipRequestBody(target_user_id="agent-user-1", message="hi"),
+            user_id="human-user-1",
+            relationship_service=SimpleNamespace(request=fail_request),
+        )
+
+    assert exc_info.value.status_code == 500
+    assert exc_info.value.detail == {
+        "error": "relationship_action_failed",
+        "event": "request",
+        "relationship": {
+            "id": "hire_visit:human-user-1:agent-user-1",
+            "other_user_id": "agent-user-1",
+            "state": "pending",
+            "is_requester": True,
+            "message": "hi",
+            "created_at": "2026-04-07T00:00:00+00:00",
+            "updated_at": "2026-04-07T00:00:01+00:00",
+        },
+        "cause": "runtime offline",
+    }
 
 
 def test_chat_join_request_bodies_do_not_accept_identity_fields() -> None:

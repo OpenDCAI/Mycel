@@ -18,7 +18,7 @@ from messaging.delivery.contracts import ChatDeliveryRequest
 from messaging.delivery.dispatcher import ChatDeliveryDispatcher
 from messaging.delivery.resolver import HireVisitDeliveryResolver
 from messaging.display_user import resolve_messaging_display_user
-from messaging.relationships.service import RelationshipService
+from messaging.relationships.service import RelationshipActionError, RelationshipService
 from messaging.service import MessagingService
 from messaging.tools.chat_tool_service import ChatToolService
 from storage.contracts import ContactEdgeRow
@@ -186,6 +186,37 @@ def test_relationship_request_notifies_after_persisting_pending_row() -> None:
     assert notifications[0].initiator_user_id == "human-user-1"
 
 
+def test_relationship_request_action_failure_carries_persisted_row() -> None:
+    class _RequestRepo:
+        def get(self, _requester_id: str, _target_id: str):
+            return None
+
+        def upsert(self, _requester_id: str, _target_id: str, **fields: Any):
+            return {
+                "id": "hire_visit:agent-user-1:human-user-1",
+                "user_low": "agent-user-1",
+                "user_high": "human-user-1",
+                "kind": "hire_visit",
+                "created_at": "2026-04-07T00:00:00Z",
+                "updated_at": "2026-04-07T00:00:01Z",
+                **fields,
+            }
+
+    def fail_after_persist(_row):
+        raise RuntimeError("runtime offline")
+
+    service = RelationshipService(_RequestRepo(), on_relationship_requested=fail_after_persist)
+
+    with pytest.raises(RelationshipActionError) as exc_info:
+        service.request("human-user-1", "agent-user-1")
+
+    assert str(exc_info.value) == "Relationship action failed after request"
+    assert exc_info.value.event == "request"
+    assert exc_info.value.row.state == "pending"
+    assert exc_info.value.row.initiator_user_id == "human-user-1"
+    assert str(exc_info.value.__cause__) == "runtime offline"
+
+
 def test_relationship_approve_notifies_original_requester_after_persisting_decision() -> None:
     repo = _FakeRelationshipRepo()
     repo._existing[("agent-user-1", "human-user-1")]["state"] = "pending"
@@ -196,6 +227,24 @@ def test_relationship_approve_notifies_original_requester_after_persisting_decis
 
     assert row.state == "visit"
     assert notifications == [(row, "approve")]
+
+
+def test_relationship_decision_action_failure_carries_persisted_row_and_event() -> None:
+    repo = _FakeRelationshipRepo()
+    repo._existing[("agent-user-1", "human-user-1")]["state"] = "pending"
+
+    def fail_after_persist(_row, _event):
+        raise RuntimeError("runtime offline")
+
+    service = RelationshipService(repo, on_relationship_decided=fail_after_persist)
+
+    with pytest.raises(RelationshipActionError) as exc_info:
+        service.approve("agent-user-1", "human-user-1")
+
+    assert str(exc_info.value) == "Relationship action failed after approve"
+    assert exc_info.value.event == "approve"
+    assert exc_info.value.row.state == "visit"
+    assert str(exc_info.value.__cause__) == "runtime offline"
 
 
 def test_relationship_reject_notifies_original_requester_after_persisting_decision() -> None:
