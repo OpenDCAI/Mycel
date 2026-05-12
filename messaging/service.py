@@ -16,6 +16,7 @@ from collections.abc import Callable, Mapping
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
+from core.event_actions import run_sync_actions
 from messaging.avatars import AvatarUrlBuilder
 from messaging.contracts import ContentType, MessageType
 from messaging.delivery.dispatcher import ChatDeliveryDispatcher, ChatDeliveryFn
@@ -85,6 +86,7 @@ class MessagingService:
             delivery_resolver=delivery_resolver,
             delivery_fn=delivery_fn,
         )
+        self._chat_message_delivery_actions: list[Callable[[dict[str, Any]], None]] = [self._dispatch_chat_message_delivery]
         self._event_bus = event_bus
 
     def _normalize_message_row(self, row: dict[str, Any]) -> dict[str, Any]:
@@ -155,6 +157,9 @@ class MessagingService:
 
     def set_delivery_fn(self, fn: ChatDeliveryFn) -> None:
         self._delivery_dispatcher.set_delivery_fn(fn)
+
+    def add_chat_message_delivery_action(self, action: Callable[[dict[str, Any]], None]) -> None:
+        self._chat_message_delivery_actions.append(action)
 
     # ------------------------------------------------------------------
     # Chat lifecycle
@@ -309,19 +314,26 @@ class MessagingService:
 
         # Deliver to agent recipients
         if _should_dispatch_chat_delivery(message_type, mentions, normalized_addressed_to):
-            try:
-                self._delivery_dispatcher.dispatch(
-                    chat_id,
-                    sender_id,
-                    content,
-                    mentions or [],
-                    signal=signal,
-                    addressed_to_user_ids=normalized_addressed_to,
-                )
-            except Exception as exc:
-                raise ChatMessageDeliveryActionError(message=created) from exc
+            self._run_chat_message_delivery_actions(created)
 
         return created
+
+    def _run_chat_message_delivery_actions(self, message: dict[str, Any]) -> None:
+        run_sync_actions(
+            self._chat_message_delivery_actions,
+            message,
+            on_error=lambda _exc: ChatMessageDeliveryActionError(message=message),
+        )
+
+    def _dispatch_chat_message_delivery(self, message: dict[str, Any]) -> None:
+        self._delivery_dispatcher.dispatch(
+            str(message["chat_id"]),
+            str(message["sender_id"]),
+            str(message["content"]),
+            list(message.get("mentioned_ids") or []),
+            signal=message.get("signal"),
+            addressed_to_user_ids=list(message.get("addressed_to_user_ids") or []),
+        )
 
     def _normalize_delivery_scope(
         self,
