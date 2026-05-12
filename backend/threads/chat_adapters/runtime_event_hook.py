@@ -5,7 +5,17 @@ from collections.abc import Callable, Coroutine, Iterable
 from typing import Any
 
 
-def make_sync_runtime_event_hook[**P](async_fn: Callable[P, Coroutine[Any, Any, None]]) -> Callable[P, None]:
+async def run_planned_runtime_event[EventT, ActionT](
+    event: EventT,
+    planner: Callable[[EventT], Iterable[ActionT]],
+    dispatch_actions: Callable[[list[ActionT]], Coroutine[Any, Any, None]],
+) -> int:
+    actions = list(planner(event))
+    await dispatch_actions(actions)
+    return len(actions)
+
+
+def make_sync_runtime_event_hook[**P](async_fn: Callable[P, Coroutine[Any, Any, Any]]) -> Callable[P, None]:
     loop = asyncio.get_running_loop()
 
     def hook(*args: P.args, **kwargs: P.kwargs) -> None:
@@ -26,7 +36,6 @@ def make_sync_planned_runtime_event_hook[EventT, ActionT](
     dispatch_actions: Callable[[list[ActionT]], Coroutine[Any, Any, None]],
 ) -> Callable[[EventT], None]:
     async def run(event: EventT) -> None:
-        actions = list(planner(event))
-        await dispatch_actions(actions)
+        await run_planned_runtime_event(event, planner, dispatch_actions)
 
     return make_sync_runtime_event_hook(run)
