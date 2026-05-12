@@ -44,6 +44,64 @@ def _thread_repo() -> SimpleNamespace:
     )
 
 
+def test_relationship_request_notification_planner_returns_runtime_action() -> None:
+    user_repo = SimpleNamespace(
+        get_by_id=lambda uid: {
+            "human-user-1": SimpleNamespace(id="human-user-1", type="human", display_name="Human", avatar=None),
+        }.get(uid)
+    )
+    planner = relationship_inlet.relationship_request_notification_action_planner(user_repo)
+
+    actions = planner(_relationship_row(message="Please add me."))
+
+    assert len(actions) == 1
+    action = actions[0]
+    assert action.context == "Relationship request"
+    assert action.recipient_user_id == "agent-user-1"
+    assert action.sender_user_id == "human-user-1"
+    assert action.sender_source == "relationship"
+    assert action.event_type == "relationship.requested"
+    assert action.notification_type == "relationship"
+    assert action.content == (
+        "Human requested a relationship with you. Message: Please add me. "
+        "Review the pending relationship request in Mycel, then approve or reject it."
+    )
+    assert action.metadata == {"relationship_id": "hire_visit:agent-user-1:human-user-1"}
+    assert action.include_sender_avatar is True
+
+
+def test_relationship_decision_notification_planner_returns_runtime_action() -> None:
+    user_repo = SimpleNamespace(
+        get_by_id=lambda uid: {
+            "human-user-1": SimpleNamespace(id="human-user-1", type="human", display_name="Human", avatar=None),
+        }.get(uid)
+    )
+    planner = relationship_inlet.relationship_decision_notification_action_planner(user_repo)
+
+    actions = planner(
+        relationship_inlet.RelationshipDecisionChange(
+            row=_relationship_row(initiator_user_id="agent-user-1", state="visit"),
+            event="approve",
+        )
+    )
+
+    assert len(actions) == 1
+    action = actions[0]
+    assert action.context == "Relationship request"
+    assert action.recipient_user_id == "agent-user-1"
+    assert action.sender_user_id == "human-user-1"
+    assert action.sender_source == "relationship"
+    assert action.event_type == "relationship.approved"
+    assert action.notification_type == "relationship"
+    assert action.content == "Human approved your relationship request."
+    assert action.metadata == {
+        "relationship_id": "hire_visit:agent-user-1:human-user-1",
+        "event": "approve",
+        "state": "visit",
+    }
+    assert action.include_sender_avatar is True
+
+
 @pytest.mark.asyncio
 async def test_relationship_request_notification_dispatches_runtime_notification_to_agent_target() -> None:
     class RecordingGateway:
