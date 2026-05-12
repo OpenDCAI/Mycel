@@ -13,6 +13,7 @@ from typing import Any
 
 from core.runtime.registry import ToolEntry, ToolMode, ToolRegistry
 from core.runtime.tool_result import ToolResultEnvelope, tool_error
+from messaging.errors import ChatNotCaughtUpError
 
 logger = logging.getLogger(__name__)
 
@@ -107,8 +108,9 @@ class ChatToolService:
 
     def _display_user_type(self, user: Any, *, user_id: str) -> str:
         raw_type = getattr(user, "type", None)
-        if hasattr(raw_type, "value"):
-            raw_type = raw_type.value
+        raw_value = getattr(raw_type, "value", None)
+        if raw_value is not None:
+            raw_type = raw_value
         if not isinstance(raw_type, str) or not raw_type:
             raise RuntimeError(f"Chat user {user_id} is missing user type")
         return raw_type
@@ -443,6 +445,8 @@ class ChatToolService:
                 resolved_chat_id = chat["id"]
             else:
                 raise RuntimeError("Provide participant_id (for 1:1) or chat_id (for group)")
+            if resolved_chat_id is None:
+                raise RuntimeError("Resolved chat id is missing")
 
             # @@@attention-read-gate - a group reply must not be serialized behind
             # unrelated peer replies, but it still cannot skip direct, human, or
@@ -468,14 +472,11 @@ class ChatToolService:
                     mentions=mentions,
                     signal=effective_signal,
                 )
-            except RuntimeError as exc:
-                message = str(exc)
-                if message.startswith("Chat advanced after your last read."):
-                    return tool_error(
-                        message,
-                        metadata={"error_type": "chat_not_caught_up", "chat_id": resolved_chat_id},
-                    )
-                raise
+            except ChatNotCaughtUpError as exc:
+                return tool_error(
+                    str(exc),
+                    metadata={"error_type": "chat_not_caught_up", "chat_id": resolved_chat_id},
+                )
             return f"Message sent to {target_name}."
 
         registry.register(
