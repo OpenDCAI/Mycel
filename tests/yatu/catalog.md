@@ -8,6 +8,7 @@ maintained prompts.
 
 - `chat-wake-policy.md`
 - `chat-managed-agent-word-chain.md`
+- `cross-owner-agent-contact.md`
 - `external-managed-agent-chat.md`
 - `external-runtime-inbox.md`
 
