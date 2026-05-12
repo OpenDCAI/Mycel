@@ -9,6 +9,7 @@ import pytest
 from backend.threads.chat_adapters.workflow_event_inlet import (
     dispatch_workflow_event_notifications,
     make_workflow_event_notification_envelope,
+    make_workflow_event_notification_envelopes,
     make_workflow_event_notification_fn,
 )
 from core.work_item.chat_workflow.service import WorkflowEventChange
@@ -130,12 +131,8 @@ def test_workflow_event_notification_fails_loudly_on_missing_identity() -> None:
         raise AssertionError("missing workflow event identity did not fail")
 
 
-@pytest.mark.asyncio
-async def test_dispatch_workflow_event_notifications_fans_out_to_runtime_members() -> None:
-    gateway = _RecordingGateway()
-
-    await dispatch_workflow_event_notifications(
-        _runtime_app(gateway),
+def test_workflow_event_notification_planner_selects_runtime_members() -> None:
+    envelopes = make_workflow_event_notification_envelopes(
         change=_change("updated"),
         members=[
             {"user_id": "owner-1"},
@@ -149,12 +146,30 @@ async def test_dispatch_workflow_event_notifications_fans_out_to_runtime_members
         activity_reader=SimpleNamespace(list_active_threads_for_agent=lambda _agent_user_id: []),
     )
 
-    assert [envelope.recipient.agent_user_id for envelope in gateway.envelopes] == ["agent-1", "external-1"]
-    assert [envelope.recipient.runtime_source for envelope in gateway.envelopes] == ["mycel", "external"]
-    assert gateway.envelopes[0].recipient.thread_id == "thread-agent-1"
-    assert all(envelope.sender.user_id == "owner-1" for envelope in gateway.envelopes)
-    assert all(envelope.message.metadata["event_id"] == "event-1" for envelope in gateway.envelopes)
-    assert all(envelope.message.metadata["operation"] == "updated" for envelope in gateway.envelopes)
+    assert [envelope.recipient.agent_user_id for envelope in envelopes] == ["agent-1", "external-1"]
+    assert [envelope.recipient.runtime_source for envelope in envelopes] == ["mycel", "external"]
+    assert envelopes[0].recipient.thread_id == "thread-agent-1"
+    assert all(envelope.sender.user_id == "owner-1" for envelope in envelopes)
+    for envelope in envelopes:
+        assert envelope.message.metadata is not None
+        assert envelope.message.metadata["event_id"] == "event-1"
+        assert envelope.message.metadata["operation"] == "updated"
+
+
+@pytest.mark.asyncio
+async def test_dispatch_workflow_event_notifications_executes_planned_envelopes() -> None:
+    gateway = _RecordingGateway()
+
+    await dispatch_workflow_event_notifications(
+        _runtime_app(gateway),
+        change=_change(),
+        members=[{"user_id": "owner-1"}, {"user_id": "agent-1"}],
+        user_repo=_users("agent-1"),
+        thread_repo=_thread_repo("agent-1"),
+        activity_reader=SimpleNamespace(list_active_threads_for_agent=lambda _agent_user_id: []),
+    )
+
+    assert [envelope.recipient.agent_user_id for envelope in gateway.envelopes] == ["agent-1"]
 
 
 @pytest.mark.asyncio
