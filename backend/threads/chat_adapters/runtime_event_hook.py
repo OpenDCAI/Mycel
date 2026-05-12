@@ -2,9 +2,8 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import Callable, Coroutine, Iterable
+from dataclasses import dataclass
 from typing import Any
-
-from backend.threads.chat_adapters.runtime_event_runner import run_planned_runtime_event
 
 
 def make_sync_runtime_event_hook[**P](async_fn: Callable[P, Coroutine[Any, Any, Any]]) -> Callable[P, None]:
@@ -23,11 +22,17 @@ def make_sync_runtime_event_hook[**P](async_fn: Callable[P, Coroutine[Any, Any, 
     return hook
 
 
-def make_planned_runtime_event_hook[EventT, ActionT](
-    planner: Callable[[EventT], Iterable[ActionT]],
-    dispatch_actions: Callable[[list[ActionT]], Coroutine[Any, Any, Any]],
-) -> Callable[[EventT], None]:
-    async def dispatch_event(event: EventT) -> None:
-        await run_planned_runtime_event(event, planner, dispatch_actions)
+@dataclass(frozen=True)
+class RuntimeEventActionRoute[EventT, ActionT, ResultT]:
+    planner: Callable[[EventT], Iterable[ActionT]]
+    dispatch_actions: Callable[[list[ActionT]], Coroutine[Any, Any, ResultT]]
 
-    return make_sync_runtime_event_hook(dispatch_event)
+    async def dispatch(self, event: EventT) -> ResultT:
+        actions = list(self.planner(event))
+        return await self.dispatch_actions(actions)
+
+    def sync_hook(self) -> Callable[[EventT], None]:
+        async def dispatch_event(event: EventT) -> None:
+            await self.dispatch(event)
+
+        return make_sync_runtime_event_hook(dispatch_event)

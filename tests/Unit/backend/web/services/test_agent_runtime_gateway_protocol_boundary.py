@@ -132,6 +132,16 @@ def test_runtime_action_adapters_do_not_export_envelope_dispatch_helpers() -> No
     assert not hasattr(thread_input_action_module, "dispatch_runtime_thread_input_envelopes")
 
 
+def test_runtime_action_adapters_do_not_export_concrete_event_dispatch_helpers() -> None:
+    chat_action_module = importlib.import_module("backend.threads.chat_adapters.runtime_chat_delivery_action")
+    notification_action_module = importlib.import_module("backend.threads.chat_adapters.runtime_notification_action")
+    chat_inlet_module = importlib.import_module("backend.threads.chat_adapters.chat_inlet")
+
+    assert not hasattr(chat_action_module, "dispatch_runtime_chat_delivery_event")
+    assert not hasattr(notification_action_module, "dispatch_runtime_notification_event")
+    assert not hasattr(chat_inlet_module, "dispatch_chat_delivery_event")
+
+
 def test_runtime_protocol_envelopes_are_constructed_only_at_adapter_boundaries() -> None:
     repo_root = Path(__file__).parents[5]
     backend_files = list((repo_root / "backend").rglob("*.py"))

@@ -7,7 +7,6 @@ from typing import Any
 from backend.threads.chat_adapters.chat_notification_format import format_chat_notification
 from backend.threads.chat_adapters.runtime_chat_delivery_action import (
     RuntimeChatDeliveryAction,
-    dispatch_runtime_chat_delivery_event,
     make_runtime_chat_delivery_event_hook,
 )
 from messaging.delivery.contracts import ChatDeliveryRequest
@@ -16,22 +15,6 @@ from messaging.delivery.contracts import ChatDeliveryRequest
 def make_chat_delivery_fn(app: Any, *, activity_reader: Any, thread_repo: Any):
     return make_runtime_chat_delivery_event_hook(
         app,
-        chat_delivery_runtime_action_planner(),
-        thread_repo=thread_repo,
-        activity_reader=activity_reader,
-    )
-
-
-async def dispatch_chat_delivery_event(
-    app: Any,
-    request: ChatDeliveryRequest,
-    *,
-    activity_reader: Any,
-    thread_repo: Any,
-) -> int:
-    return await dispatch_runtime_chat_delivery_event(
-        app,
-        request,
         chat_delivery_runtime_action_planner(),
         thread_repo=thread_repo,
         activity_reader=activity_reader,
