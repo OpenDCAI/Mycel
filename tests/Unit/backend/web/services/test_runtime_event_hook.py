@@ -4,7 +4,7 @@ import asyncio
 
 import pytest
 
-from backend.threads.chat_adapters.runtime_event_hook import make_sync_runtime_event_hook
+from backend.threads.chat_adapters.runtime_event_hook import make_sync_planned_runtime_event_hook, make_sync_runtime_event_hook
 
 
 @pytest.mark.asyncio
@@ -32,3 +32,20 @@ async def test_sync_runtime_event_hook_fails_loudly_on_owner_loop_thread() -> No
         hook()
 
     assert str(exc.value) == "Sync runtime event hook cannot run on its owner event loop thread"
+
+
+@pytest.mark.asyncio
+async def test_sync_planned_runtime_event_hook_plans_and_dispatches_actions_from_worker_thread() -> None:
+    calls: list[list[str]] = []
+
+    def planner(value: str) -> list[str]:
+        return [f"planned:{value}"]
+
+    async def dispatch(actions: list[str]) -> None:
+        calls.append(actions)
+
+    hook = make_sync_planned_runtime_event_hook(planner, dispatch)
+
+    await asyncio.to_thread(hook, "event-1")
+
+    assert calls == [["planned:event-1"]]

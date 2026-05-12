@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Callable, Coroutine
+from collections.abc import Callable, Coroutine, Iterable
 from typing import Any
+
+from core.event_actions import plan_event_actions
 
 
 def make_sync_runtime_event_hook[**P](async_fn: Callable[P, Coroutine[Any, Any, None]]) -> Callable[P, None]:
@@ -19,3 +21,14 @@ def make_sync_runtime_event_hook[**P](async_fn: Callable[P, Coroutine[Any, Any, 
         future.result()
 
     return hook
+
+
+def make_sync_planned_runtime_event_hook[EventT, ActionT](
+    planner: Callable[[EventT], Iterable[ActionT]],
+    dispatch_actions: Callable[[list[ActionT]], Coroutine[Any, Any, None]],
+) -> Callable[[EventT], None]:
+    async def run(event: EventT) -> None:
+        actions = plan_event_actions([planner], event)
+        await dispatch_actions(actions)
+
+    return make_sync_runtime_event_hook(run)
