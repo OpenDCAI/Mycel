@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib
+from pathlib import Path
 from typing import get_type_hints
 
 
@@ -50,3 +51,16 @@ def test_agent_runtime_gateway_handler_injection_is_typed() -> None:
     assert "app" not in constructor_hints
     assert "AgentChatRuntimeHandler" in str(constructor_hints["chat_handlers"])
     assert constructor_hints["thread_input_handler"] == gateway_module.AgentThreadInputRuntimeHandler | None
+
+
+def test_chat_inlets_do_not_dispatch_runtime_gateway_directly() -> None:
+    repo_root = Path(__file__).parents[4]
+    inlet_files = (repo_root / "backend" / "threads" / "chat_adapters").glob("*_inlet.py")
+
+    for path in inlet_files:
+        text = path.read_text(encoding="utf-8")
+        assert "get_agent_runtime_gateway" not in text, path
+        assert ".dispatch_chat(" not in text, path
+        assert ".dispatch_notification(" not in text, path
+        assert "AgentChatDeliveryEnvelope" not in text, path
+        assert "AgentRuntimeNotificationEnvelope" not in text, path
