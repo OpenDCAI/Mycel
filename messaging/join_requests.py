@@ -26,7 +26,7 @@ class ChatJoinRequestService:
         self._members = chat_member_repo
         self._requests = chat_join_request_repo
         self._messaging = messaging_service
-        self._join_request_rejected_actions = SyncActionRegistry()
+        self._join_request_rejected_actions: SyncActionRegistry[[dict[str, Any]]] = SyncActionRegistry()
         if on_join_request_rejected is not None:
             self.add_join_request_rejected_action(on_join_request_rejected)
 
