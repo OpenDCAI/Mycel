@@ -20,6 +20,7 @@ from backend.chat.api.http.dependencies import (
 )
 from messaging.errors import ChatNotCaughtUpError
 from messaging.join_requests import ChatJoinRequestActionError
+from messaging.service import ChatMessageDeliveryActionError
 from messaging.user_ownership import is_owned_by_viewer
 
 router = APIRouter(prefix="/api/chats", tags=["chats"])
@@ -93,6 +94,18 @@ def _map_chat_join_error(exc: Exception) -> HTTPException:
     if isinstance(exc, ValueError):
         return HTTPException(409, str(exc))
     raise exc
+
+
+def _chat_message_delivery_action_failure(exc: ChatMessageDeliveryActionError) -> HTTPException:
+    cause = exc.__cause__
+    return HTTPException(
+        500,
+        {
+            "error": "chat_message_delivery_action_failed",
+            "message": exc.message,
+            "cause": str(cause) if cause is not None else str(exc),
+        },
+    )
 
 
 def _verify_user_ownership(messaging_service: Any, sender_id: str, user_id: str) -> None:
@@ -319,6 +332,8 @@ def send_message(
         )
     except ChatNotCaughtUpError as exc:
         raise HTTPException(409, "Read unread messages before sending.") from exc
+    except ChatMessageDeliveryActionError as exc:
+        raise _chat_message_delivery_action_failure(exc) from exc
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
     return messaging_service.project_message_response(msg)

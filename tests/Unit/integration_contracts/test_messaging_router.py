@@ -15,6 +15,7 @@ from backend.web.core.dependencies import get_current_user_id
 from core.work_item.chat_workflow.service import WorkflowEventActionError
 from messaging.contracts import RelationshipRow
 from messaging.relationships.service import RelationshipActionError
+from messaging.service import ChatMessageDeliveryActionError
 from storage.contracts import ContactEdgeRow
 from storage.errors import (
     StaleChatWorkflowEventVersionError,
@@ -180,6 +181,43 @@ def test_request_relationship_action_failure_returns_persisted_relationship() ->
             "created_at": "2026-04-07T00:00:00+00:00",
             "updated_at": "2026-04-07T00:00:01+00:00",
         },
+        "cause": "runtime offline",
+    }
+
+
+def test_send_message_action_failure_returns_persisted_message() -> None:
+    message = {
+        "id": "msg-1",
+        "chat_id": "chat-1",
+        "sender_id": "human-user-1",
+        "content": "hello",
+        "message_type": "human",
+        "seq": 12,
+        "created_at": "2026-04-07T00:00:00Z",
+    }
+
+    def fail_send(*_args, **_kwargs):
+        error = ChatMessageDeliveryActionError(message=message)
+        raise error from RuntimeError("runtime offline")
+
+    messaging_service = SimpleNamespace(
+        resolve_display_user=lambda uid: SimpleNamespace(id=uid, owner_user_id=None),
+        is_chat_member=lambda _chat_id, _user_id: True,
+        send=fail_send,
+    )
+
+    with pytest.raises(HTTPException) as exc_info:
+        chats_router.send_message(
+            "chat-1",
+            chats_router.SendMessageBody(content="hello"),
+            user_id="human-user-1",
+            messaging_service=messaging_service,
+        )
+
+    assert exc_info.value.status_code == 500
+    assert exc_info.value.detail == {
+        "error": "chat_message_delivery_action_failed",
+        "message": message,
         "cause": "runtime offline",
     }
 

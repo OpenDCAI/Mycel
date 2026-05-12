@@ -19,7 +19,7 @@ from messaging.delivery.dispatcher import ChatDeliveryDispatcher
 from messaging.delivery.resolver import HireVisitDeliveryResolver
 from messaging.display_user import resolve_messaging_display_user
 from messaging.relationships.service import RelationshipActionError, RelationshipService
-from messaging.service import MessagingService
+from messaging.service import ChatMessageDeliveryActionError, MessagingService
 from messaging.tools.chat_tool_service import ChatToolService
 from storage.contracts import ContactEdgeRow
 
@@ -920,6 +920,43 @@ def test_messaging_service_notification_mentions_dispatch_to_agent_recipients() 
     )
 
     assert delivered == ["managed-owner-1"]
+
+
+def test_messaging_service_send_delivery_failure_carries_persisted_message() -> None:
+    def fail_delivery(_request: ChatDeliveryRequest) -> None:
+        raise RuntimeError("runtime offline")
+
+    service = MessagingService(
+        chat_repo=SimpleNamespace(),
+        chat_member_repo=SimpleNamespace(
+            list_members=lambda _chat_id: [{"user_id": "agent-user-1"}],
+            update_last_read=lambda _chat_id, _user_id, _seq: None,
+        ),
+        messages_repo=SimpleNamespace(
+            create=lambda row: {**row, "seq": 7},
+            count_unread=lambda _chat_id, _user_id: 1,
+        ),
+        user_repo=SimpleNamespace(
+            get_by_id=lambda uid: (
+                SimpleNamespace(id="human-user-1", display_name="Human", type="human", avatar=None)
+                if uid == "human-user-1"
+                else SimpleNamespace(id="agent-user-1", display_name="Agent", type="agent", avatar=None, owner_user_id="human-user-1")
+                if uid == "agent-user-1"
+                else None
+            )
+        ),
+        delivery_fn=fail_delivery,
+    )
+
+    with pytest.raises(ChatMessageDeliveryActionError) as exc_info:
+        service.send("chat-1", "human-user-1", "hello", mentions=["agent-user-1"])
+
+    assert str(exc_info.value) == "Chat message delivery action failed after send"
+    assert exc_info.value.message["chat_id"] == "chat-1"
+    assert exc_info.value.message["sender_id"] == "human-user-1"
+    assert exc_info.value.message["content"] == "hello"
+    assert exc_info.value.message["seq"] == 7
+    assert str(exc_info.value.__cause__) == "runtime offline"
 
 
 def test_messaging_service_send_fails_before_persisting_unknown_sender() -> None:
