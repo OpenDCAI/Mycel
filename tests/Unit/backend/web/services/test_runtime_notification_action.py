@@ -10,7 +10,6 @@ from backend.threads.chat_adapters.runtime_notification_action import (
     RuntimeNotificationAction,
     dispatch_runtime_notification_actions,
     make_runtime_notification_event_hook,
-    runtime_notification_action_dispatcher,
 )
 from protocols.agent_runtime import AgentRuntimeTransport
 
@@ -114,22 +113,6 @@ async def test_runtime_notification_actions_dispatches_only_runtime_recipients()
         thread_repo=_thread_repo(),
         activity_reader=_activity_reader(),
     )
-
-    assert dispatched_count == 1
-    assert [envelope.recipient.agent_user_id for envelope in gateway.envelopes] == ["agent-1"]
-
-
-@pytest.mark.asyncio
-async def test_runtime_notification_action_dispatcher_binds_runtime_dependencies() -> None:
-    gateway = _RecordingGateway()
-    dispatch_actions = runtime_notification_action_dispatcher(
-        _runtime_app(gateway),
-        user_repo=_users(),
-        thread_repo=_thread_repo(),
-        activity_reader=_activity_reader(),
-    )
-
-    dispatched_count = await dispatch_actions([_action()])
 
     assert dispatched_count == 1
     assert [envelope.recipient.agent_user_id for envelope in gateway.envelopes] == ["agent-1"]

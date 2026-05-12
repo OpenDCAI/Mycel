@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Callable, Coroutine, Iterable
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from typing import Any
 
@@ -37,13 +37,17 @@ def make_runtime_chat_delivery_event_hook[EventT](
     thread_repo: Any,
     activity_reader: Any,
 ) -> Callable[[EventT], None]:
-    return RuntimeEventActionRoute(
-        planner=planner,
-        dispatch_actions=runtime_chat_delivery_action_dispatcher(
+    async def dispatch_actions(actions: list[RuntimeChatDeliveryAction]) -> int:
+        return await dispatch_runtime_chat_delivery_actions(
             app,
+            actions,
             thread_repo=thread_repo,
             activity_reader=activity_reader,
-        ),
+        )
+
+    return RuntimeEventActionRoute(
+        planner=planner,
+        dispatch_actions=dispatch_actions,
     ).sync_hook()
 
 
@@ -67,23 +71,6 @@ async def dispatch_runtime_chat_delivery_actions(
         await gateway.dispatch_chat(envelope)
         dispatched_count += 1
     return dispatched_count
-
-
-def runtime_chat_delivery_action_dispatcher(
-    app: Any,
-    *,
-    thread_repo: Any,
-    activity_reader: Any,
-) -> Callable[[list[RuntimeChatDeliveryAction]], Coroutine[Any, Any, int]]:
-    async def dispatch_actions(actions: list[RuntimeChatDeliveryAction]) -> int:
-        return await dispatch_runtime_chat_delivery_actions(
-            app,
-            actions,
-            thread_repo=thread_repo,
-            activity_reader=activity_reader,
-        )
-
-    return dispatch_actions
 
 
 def plan_runtime_chat_delivery_envelope(
