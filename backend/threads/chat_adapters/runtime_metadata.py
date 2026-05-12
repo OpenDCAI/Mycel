@@ -29,6 +29,28 @@ def notification_message_metadata(envelope: agent_runtime_protocol.AgentRuntimeN
     return metadata
 
 
+def thread_input_from_notification(
+    envelope: agent_runtime_protocol.AgentRuntimeNotificationEnvelope,
+) -> agent_runtime_protocol.AgentThreadInputEnvelope:
+    thread_id = envelope.recipient.thread_id
+    if not thread_id:
+        raise RuntimeError(f"Agent runtime notification recipient has no runtime thread: {envelope.recipient.agent_user_id}")
+    return agent_runtime_protocol.AgentThreadInputEnvelope(
+        thread_id=thread_id,
+        sender=envelope.sender,
+        message=agent_runtime_protocol.AgentRuntimeMessage(
+            content=envelope.message.content,
+            content_type=envelope.message.content_type,
+            message_id=envelope.message.message_id,
+            signal=envelope.message.signal,
+            created_at=envelope.message.created_at,
+            attachments=envelope.message.attachments,
+            metadata=notification_message_metadata(envelope),
+        ),
+        transport=envelope.transport,
+    )
+
+
 def thread_input_message_metadata(envelope: agent_runtime_protocol.AgentThreadInputEnvelope) -> dict[str, Any]:
     metadata = dict(envelope.message.metadata or {})
     metadata.update(transport_metadata(envelope.transport))

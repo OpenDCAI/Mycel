@@ -6,7 +6,7 @@ from typing import Any
 import pytest
 
 from backend.threads.chat_adapters.gateway import NativeAgentRuntimeGateway
-from backend.threads.chat_adapters.notification_handler import NativeAgentNotificationHandler
+from backend.threads.chat_adapters.thread_handler import NativeAgentThreadInputHandler
 from protocols.agent_runtime import AgentChatDeliveryResult, AgentRuntimeNotificationResult, AgentThreadInputResult
 
 
@@ -204,7 +204,7 @@ async def test_gateway_rejects_unregistered_notification_runtime_source() -> Non
 
 
 @pytest.mark.asyncio
-async def test_native_notification_handler_converts_to_thread_input_at_runtime_boundary() -> None:
+async def test_native_thread_input_handler_converts_notification_to_thread_input_at_runtime_boundary() -> None:
     from protocols.agent_runtime import (
         AgentChatRecipient,
         AgentRuntimeActor,
@@ -214,8 +214,17 @@ async def test_native_notification_handler_converts_to_thread_input_at_runtime_b
         AgentThreadInputEnvelope,
     )
 
-    thread_input_handler = _FakeThreadInputHandler()
-    handler = NativeAgentNotificationHandler(thread_input_handler=thread_input_handler)
+    class _CapturingThreadInputHandler(NativeAgentThreadInputHandler):
+        called_with: AgentThreadInputEnvelope | None = None
+
+        def __init__(self) -> None:
+            pass
+
+        async def dispatch(self, envelope: AgentThreadInputEnvelope) -> AgentThreadInputResult:
+            self.called_with = envelope
+            return AgentThreadInputResult(status="started", routing="direct", thread_id="thread-1")
+
+    handler = _CapturingThreadInputHandler()
     envelope = AgentRuntimeNotificationEnvelope(
         event_type="relationship.requested",
         recipient=AgentChatRecipient(agent_user_id="agent-1", runtime_source="mycel", thread_id="thread-1"),
@@ -232,7 +241,7 @@ async def test_native_notification_handler_converts_to_thread_input_at_runtime_b
     result = await handler.dispatch_notification(envelope)
 
     assert result == AgentRuntimeNotificationResult(status="accepted", thread_id="thread-1")
-    called = thread_input_handler.called_with
+    called = handler.called_with
     assert isinstance(called, AgentThreadInputEnvelope)
     assert called.thread_id == "thread-1"
     assert called.sender is envelope.sender

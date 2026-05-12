@@ -23,6 +23,7 @@ def _event() -> dict[str, object]:
         "kind": "task_proposed_review",
         "state": "open",
         "state_version": 3,
+        "resource_refs": [{"type": "task", "id": "task-1"}],
     }
 
 
@@ -99,6 +100,8 @@ def test_workflow_event_notification_is_metadata_only() -> None:
         "event_id": "event-1",
         "kind": "task_proposed_review",
         "operation": "created",
+        "actor_user_id": "owner-1",
+        "resource_refs": [{"type": "task", "id": "1"}],
         "state": "open",
         "state_version": 3,
     }
