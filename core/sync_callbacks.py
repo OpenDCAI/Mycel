@@ -1,14 +1,14 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from typing import Any
+from typing import Any, cast
 
 
-class SyncActionRegistry:
+class SyncActionRegistry[**P]:
     def __init__(self) -> None:
-        self._actions: list[Callable[..., None]] = []
+        self._actions: list[Callable[P, None]] = []
 
-    def add(self, action: Callable[..., None]) -> None:
+    def add(self, action: Callable[P, None]) -> None:
         self._actions.append(action)
 
     def has_actions(self) -> bool:
@@ -25,6 +25,6 @@ class SyncActionRegistry:
             return
         try:
             for action in current_actions:
-                action(*args)
+                cast(Callable[..., None], action)(*args)
         except Exception as exc:
             raise on_error(exc) from exc

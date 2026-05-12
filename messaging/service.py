@@ -92,10 +92,10 @@ class MessagingService:
             delivery_resolver=delivery_resolver,
             delivery_fn=delivery_fn,
         )
-        self._chat_message_delivery_actions = SyncActionRegistry()
+        self._chat_message_delivery_actions: SyncActionRegistry[[dict[str, Any]]] = SyncActionRegistry()
         self._chat_message_delivery_actions.add(self._dispatch_chat_message_delivery)
         self._event_bus = event_bus
-        self._chat_message_event_actions = SyncActionRegistry()
+        self._chat_message_event_actions: SyncActionRegistry[[dict[str, Any]]] = SyncActionRegistry()
         if event_bus is not None:
             self._chat_message_event_actions.add(self._publish_chat_message_event)
 

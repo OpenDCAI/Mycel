@@ -138,7 +138,7 @@ class ChatTaskService:
 class ChatWorkflowEventService:
     def __init__(self, event_repo: Any) -> None:
         self._repo = event_repo
-        self._event_change_actions = SyncActionRegistry()
+        self._event_change_actions: SyncActionRegistry[[WorkflowEventChange]] = SyncActionRegistry()
 
     def add_event_change_action(self, action: Callable[[WorkflowEventChange], None]) -> None:
         self._event_change_actions.add(action)

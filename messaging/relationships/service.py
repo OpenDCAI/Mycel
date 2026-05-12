@@ -31,8 +31,8 @@ class RelationshipService:
         on_relationship_decided: Callable[[RelationshipRow, RelationshipEvent], None] | None = None,
     ) -> None:
         self._repo = relationship_repo
-        self._relationship_request_actions = SyncActionRegistry()
-        self._relationship_decision_actions = SyncActionRegistry()
+        self._relationship_request_actions: SyncActionRegistry[[RelationshipRow]] = SyncActionRegistry()
+        self._relationship_decision_actions: SyncActionRegistry[[RelationshipRow, RelationshipEvent]] = SyncActionRegistry()
         if on_relationship_requested is not None:
             self.add_relationship_request_action(on_relationship_requested)
         if on_relationship_decided is not None:
