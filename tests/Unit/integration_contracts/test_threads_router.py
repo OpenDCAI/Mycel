@@ -24,6 +24,7 @@ from backend.threads.chat_adapters.runtime_thread_input_action import (
     queued_command_thread_input_action,
     queued_thread_input_action,
     requeue_thread_input_item,
+    runtime_thread_input_action_dispatcher,
 )
 from backend.web.models.requests import CreateThreadRequest, ResolvePermissionRequest, SendMessageRequest, ThreadPermissionRuleRequest
 from backend.web.routers import threads as threads_router
@@ -292,6 +293,33 @@ async def test_runtime_thread_input_envelopes_dispatch_through_gateway() -> None
     )
 
     assert captured == [envelope]
+
+
+@pytest.mark.asyncio
+async def test_runtime_thread_input_action_dispatcher_binds_runtime_gateway() -> None:
+    from protocols.agent_runtime import AgentThreadInputResult
+
+    captured: list[Any] = []
+
+    class _Gateway:
+        async def dispatch_thread_input(self, envelope: Any) -> AgentThreadInputResult:
+            captured.append(envelope)
+            return AgentThreadInputResult(status="started", routing="direct", thread_id="thread-1")
+
+    action = internal_runtime_thread_input_action(
+        thread_id="thread-1",
+        user_id="owner-1",
+        message="answer",
+        metadata={"request_id": "req-1"},
+    )
+    dispatch_actions = runtime_thread_input_action_dispatcher(
+        SimpleNamespace(state=SimpleNamespace(threads_runtime_state=SimpleNamespace(agent_runtime_gateway=_Gateway()))),
+    )
+
+    results = await dispatch_actions([action])
+
+    assert [result.to_response() for result in results] == [{"status": "started", "routing": "direct", "thread_id": "thread-1"}]
+    assert captured == [plan_runtime_thread_input_envelope(action)]
 
 
 def test_queued_thread_input_action_enqueues_steer_message() -> None:
