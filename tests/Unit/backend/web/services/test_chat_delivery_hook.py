@@ -6,6 +6,8 @@ from types import SimpleNamespace
 import pytest
 
 from backend.threads.chat_adapters import chat_inlet as owner_chat_inlet
+from backend.threads.chat_adapters.chat_notification_format import format_chat_notification
+from backend.threads.chat_adapters.runtime_chat_delivery_action import RuntimeChatDeliveryAction
 from messaging.delivery.dispatcher import ChatDeliveryRequest
 
 
@@ -23,6 +25,37 @@ def _hook_app(gateway: object) -> SimpleNamespace:
                 list_by_agent_user=lambda uid: [default_thread] if uid == "agent-user-1" else [],
             ),
         )
+    )
+
+
+def test_chat_delivery_request_builds_runtime_action() -> None:
+    action = owner_chat_inlet.chat_delivery_runtime_action(
+        ChatDeliveryRequest(
+            recipient_id="agent-user-1",
+            recipient_user=SimpleNamespace(id="agent-user-1", type="agent"),
+            content="hello",
+            sender_name="Human",
+            sender_type="human",
+            chat_id="chat-1",
+            sender_id="human-user-1",
+            sender_avatar_url=None,
+            unread_count=3,
+            signal=None,
+        )
+    )
+
+    assert action == RuntimeChatDeliveryAction(
+        chat_id="chat-1",
+        recipient_id="agent-user-1",
+        recipient_user_id="agent-user-1",
+        recipient_user_type="agent",
+        sender_id="human-user-1",
+        sender_type="human",
+        sender_name="Human",
+        sender_avatar_url=None,
+        content=format_chat_notification("Human", "chat-1", 3, signal=None),
+        raw_content="hello",
+        signal=None,
     )
 
 
