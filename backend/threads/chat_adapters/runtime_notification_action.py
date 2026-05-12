@@ -4,8 +4,8 @@ from dataclasses import dataclass
 from typing import Any
 
 from backend.threads.chat_adapters.port import get_agent_runtime_gateway
-from backend.threads.chat_adapters.runtime_identity import make_runtime_actor, require_user, user_type
-from backend.threads.chat_adapters.runtime_recipient import select_runtime_notification_recipient
+from backend.threads.chat_adapters.runtime_identity import make_runtime_actor, require_user
+from backend.threads.chat_adapters.runtime_recipient import resolve_runtime_notification_recipient
 from protocols.agent_runtime import (
     AgentRuntimeMessage,
     AgentRuntimeNotificationEnvelope,
@@ -55,10 +55,9 @@ def plan_runtime_notification_action(
     activity_reader: Any,
 ) -> AgentRuntimeNotificationEnvelope | None:
     sender_user = require_user(user_repo, action.sender_user_id, context=action.context, role="sender")
-    recipient_user = require_user(user_repo, action.recipient_user_id, context=action.context, role="recipient")
-    recipient = select_runtime_notification_recipient(
+    recipient = resolve_runtime_notification_recipient(
         action.recipient_user_id,
-        user_type(recipient_user, action.recipient_user_id, context=action.context),
+        user_repo=user_repo,
         thread_repo=thread_repo,
         activity_reader=activity_reader,
         context=action.context,
