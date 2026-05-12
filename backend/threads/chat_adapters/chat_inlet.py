@@ -10,7 +10,6 @@ from backend.threads.chat_adapters.runtime_chat_delivery_action import (
     dispatch_runtime_chat_delivery_actions,
 )
 from backend.threads.chat_adapters.runtime_event_hook import make_sync_planned_runtime_event_hook
-from core.event_actions import single_event_action_planner
 from messaging.delivery.contracts import ChatDeliveryRequest
 
 
@@ -29,7 +28,10 @@ def make_chat_delivery_fn(app: Any, *, activity_reader: Any, thread_repo: Any):
 
 
 def chat_delivery_runtime_action_planner() -> Callable[[ChatDeliveryRequest], list[RuntimeChatDeliveryAction]]:
-    return single_event_action_planner(chat_delivery_runtime_action)
+    def plan(request: ChatDeliveryRequest) -> list[RuntimeChatDeliveryAction]:
+        return [chat_delivery_runtime_action(request)]
+
+    return plan
 
 
 def chat_delivery_runtime_action(request: ChatDeliveryRequest) -> RuntimeChatDeliveryAction:

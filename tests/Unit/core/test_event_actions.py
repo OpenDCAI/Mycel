@@ -2,13 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from core.event_actions import run_sync_actions, single_event_action_planner
-
-
-def test_single_event_action_planner_wraps_one_action_value() -> None:
-    planner = single_event_action_planner(lambda value: f"action:{value}")
-
-    assert planner("event-1") == ["action:event-1"]
+from core.event_actions import run_sync_actions
 
 
 def test_run_sync_actions_runs_registered_actions_in_order() -> None:

@@ -9,7 +9,6 @@ from backend.threads.chat_adapters.runtime_notification_action import (
     RuntimeNotificationAction,
     make_runtime_notification_event_hook,
 )
-from core.event_actions import single_event_action_planner
 from messaging.contracts import RelationshipEvent, RelationshipRow
 
 _DECISION_VERBS: dict[RelationshipEvent, str] = {
@@ -36,10 +35,10 @@ def make_relationship_request_notification_fn(app: Any, *, activity_reader: Any,
 
 
 def relationship_request_notification_action_planner(user_repo: Any) -> Callable[[RelationshipRow], list[RuntimeNotificationAction]]:
-    def make_action(row: RelationshipRow) -> RuntimeNotificationAction:
-        return relationship_request_notification_action(row, user_repo=user_repo)
+    def plan(row: RelationshipRow) -> list[RuntimeNotificationAction]:
+        return [relationship_request_notification_action(row, user_repo=user_repo)]
 
-    return single_event_action_planner(make_action)
+    return plan
 
 
 def relationship_request_notification_action(row: RelationshipRow, *, user_repo: Any) -> RuntimeNotificationAction:
@@ -81,10 +80,10 @@ def make_relationship_decision_notification_fn(app: Any, *, activity_reader: Any
 def relationship_decision_notification_action_planner(
     user_repo: Any,
 ) -> Callable[[RelationshipDecisionChange], list[RuntimeNotificationAction]]:
-    def make_action(change: RelationshipDecisionChange) -> RuntimeNotificationAction:
-        return relationship_decision_notification_action(change, user_repo=user_repo)
+    def plan(change: RelationshipDecisionChange) -> list[RuntimeNotificationAction]:
+        return [relationship_decision_notification_action(change, user_repo=user_repo)]
 
-    return single_event_action_planner(make_action)
+    return plan
 
 
 def relationship_decision_notification_action(change: RelationshipDecisionChange, *, user_repo: Any) -> RuntimeNotificationAction:
