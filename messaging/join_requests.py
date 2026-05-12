@@ -39,11 +39,12 @@ class ChatJoinRequestService:
             raise ValueError("Already a participant of this chat")
         row = self._requests.upsert_request(chat_id, requester_user_id, message=message)
         owner_id = chat.created_by_user_id
-        self._messaging.send(
-            chat_id,
-            requester_user_id,
-            self._request_notification(requester_user_id, message),
-            message_type="notification",
+        self._send_notification_action(
+            action="request_notification",
+            row=row,
+            chat_id=chat_id,
+            sender_id=requester_user_id,
+            content=self._request_notification(requester_user_id, message),
             mentions=[owner_id],
         )
         return self._project_request(row)
@@ -81,11 +82,12 @@ class ChatJoinRequestService:
         requester_user_id = request["requester_user_id"]
         self._members.add_member(chat_id, requester_user_id)
         row = self._requests.set_state(request_id, state="approved", decided_by_user_id=approver_user_id)
-        self._messaging.send(
-            chat_id,
-            approver_user_id,
-            f"Approved chat join request for {requester_user_id}.",
-            message_type="notification",
+        self._send_notification_action(
+            action="approve_notification",
+            row=row,
+            chat_id=chat_id,
+            sender_id=approver_user_id,
+            content=f"Approved chat join request for {requester_user_id}.",
             mentions=[requester_user_id],
         )
         return self._project_request(row)
@@ -95,15 +97,37 @@ class ChatJoinRequestService:
         request = self._require_pending_request(chat_id, request_id)
         requester_user_id = request["requester_user_id"]
         row = self._requests.set_state(request_id, state="rejected", decided_by_user_id=rejecter_user_id)
-        self._messaging.send(
-            chat_id,
-            rejecter_user_id,
-            f"Rejected chat join request for {requester_user_id}.",
-            message_type="notification",
+        self._send_notification_action(
+            action="reject_notification",
+            row=row,
+            chat_id=chat_id,
+            sender_id=rejecter_user_id,
+            content=f"Rejected chat join request for {requester_user_id}.",
             mentions=[requester_user_id],
         )
         self._run_join_request_rejected_actions(row)
         return self._project_request(row)
+
+    def _send_notification_action(
+        self,
+        *,
+        action: str,
+        row: dict[str, Any],
+        chat_id: str,
+        sender_id: str,
+        content: str,
+        mentions: list[str],
+    ) -> None:
+        try:
+            self._messaging.send(
+                chat_id,
+                sender_id,
+                content,
+                message_type="notification",
+                mentions=mentions,
+            )
+        except Exception as exc:
+            raise ChatJoinRequestActionError(action=action, row=row) from exc
 
     def _run_join_request_rejected_actions(self, row: dict[str, Any]) -> None:
         run_sync_actions(

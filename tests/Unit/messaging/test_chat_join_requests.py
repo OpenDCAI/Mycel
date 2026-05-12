@@ -52,8 +52,11 @@ class _Requests:
 class _Messaging:
     def __init__(self) -> None:
         self.sent: list[tuple[str, str, str, str, list[str] | None]] = []
+        self.fail_send = False
 
     def send(self, chat_id: str, sender_id: str, content: str, *, message_type: str, mentions=None) -> dict:
+        if self.fail_send:
+            raise RuntimeError("notification delivery failed")
         self.sent.append((chat_id, sender_id, content, message_type, mentions))
         return {"id": "msg-1"}
 
@@ -196,6 +199,44 @@ def test_chat_join_approve_requires_owner_and_adds_member_before_notification() 
     )
 
 
+def test_chat_join_request_wraps_notification_failure_after_pending_row() -> None:
+    service, _members, requests, messaging = _service()
+    messaging.fail_send = True
+
+    with pytest.raises(ChatJoinRequestActionError) as exc_info:
+        service.request("chat-1", "visitor-1", "please add me")
+
+    exc = exc_info.value
+    assert exc.action == "request_notification"
+    assert exc.row == {
+        "id": "chat_join:chat-1:visitor-1",
+        "chat_id": "chat-1",
+        "requester_user_id": "visitor-1",
+        "state": "pending",
+        "message": "please add me",
+        "created_at": 1.0,
+        "updated_at": 1.0,
+    }
+    assert requests.rows["chat_join:chat-1:visitor-1"]["state"] == "pending"
+    assert str(exc.__cause__) == "notification delivery failed"
+
+
+def test_chat_join_approve_wraps_notification_failure_after_member_and_row_update() -> None:
+    service, members, _requests, messaging = _service()
+    pending = service.request("chat-1", "visitor-1", "please add me")
+    messaging.fail_send = True
+
+    with pytest.raises(ChatJoinRequestActionError) as exc_info:
+        service.approve("chat-1", pending["id"], "owner-1")
+
+    exc = exc_info.value
+    assert exc.action == "approve_notification"
+    assert exc.row["state"] == "approved"
+    assert exc.row["decided_by_user_id"] == "owner-1"
+    assert members.added == [("chat-1", "visitor-1")]
+    assert str(exc.__cause__) == "notification delivery failed"
+
+
 def test_chat_owner_can_add_member_without_join_request() -> None:
     service, members, _requests, messaging = _service()
 
@@ -298,6 +339,23 @@ def test_chat_join_reject_wraps_post_commit_action_failure() -> None:
         "notification",
         ["visitor-1"],
     )
+
+
+def test_chat_join_reject_wraps_notification_failure_before_registered_actions() -> None:
+    notified: list[dict] = []
+    service, _members, _requests, messaging = _service(on_join_request_rejected=notified.append)
+    pending = service.request("chat-1", "visitor-1", "please add me")
+    messaging.fail_send = True
+
+    with pytest.raises(ChatJoinRequestActionError) as exc_info:
+        service.reject("chat-1", pending["id"], "owner-1")
+
+    exc = exc_info.value
+    assert exc.action == "reject_notification"
+    assert exc.row["state"] == "rejected"
+    assert exc.row["decided_by_user_id"] == "owner-1"
+    assert str(exc.__cause__) == "notification delivery failed"
+    assert notified == []
 
 
 def test_chat_join_approve_rejects_non_owner() -> None:
