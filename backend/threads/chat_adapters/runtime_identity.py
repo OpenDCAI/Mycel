@@ -36,10 +36,27 @@ def make_runtime_actor(
     context: str,
     include_avatar: bool = False,
 ) -> AgentRuntimeActor:
-    return AgentRuntimeActor(
+    return runtime_actor(
         user_id=user_id,
         user_type=user_type(user, user_id, context=context),
         display_name=display_name(user, user_id, context=context),
         avatar_url=avatar_url(user_id, bool(getattr(user, "avatar", None))) if include_avatar else None,
+        source=source,
+    )
+
+
+def runtime_actor(
+    *,
+    user_id: str,
+    user_type: str,
+    display_name: str,
+    source: str,
+    avatar_url: str | None = None,
+) -> AgentRuntimeActor:
+    return AgentRuntimeActor(
+        user_id=user_id,
+        user_type=user_type,
+        display_name=display_name,
+        avatar_url=avatar_url,
         source=source,
     )
