@@ -37,16 +37,35 @@ async def dispatch_runtime_notification_action(
     thread_repo: Any,
     activity_reader: Any,
 ) -> bool:
-    envelope = plan_runtime_notification_envelope(
-        action,
+    envelopes = plan_runtime_notification_envelopes(
+        [action],
         user_repo=user_repo,
         thread_repo=thread_repo,
         activity_reader=activity_reader,
     )
-    if envelope is None:
+    if not envelopes:
         return False
-    await dispatch_runtime_notification_envelopes(app, [envelope])
+    await dispatch_runtime_notification_envelopes(app, envelopes)
     return True
+
+
+async def dispatch_runtime_notification_actions(
+    app: Any,
+    actions: Iterable[RuntimeNotificationAction],
+    *,
+    user_repo: Any,
+    thread_repo: Any,
+    activity_reader: Any,
+) -> None:
+    await dispatch_runtime_notification_envelopes(
+        app,
+        plan_runtime_notification_envelopes(
+            actions,
+            user_repo=user_repo,
+            thread_repo=thread_repo,
+            activity_reader=activity_reader,
+        ),
+    )
 
 
 async def dispatch_runtime_notification_envelopes(app: Any, envelopes: Iterable[AgentRuntimeNotificationEnvelope]) -> None:
@@ -56,6 +75,26 @@ async def dispatch_runtime_notification_envelopes(app: Any, envelopes: Iterable[
     gateway = get_agent_runtime_gateway(app)
     for envelope in current_envelopes:
         await gateway.dispatch_notification(envelope)
+
+
+def plan_runtime_notification_envelopes(
+    actions: Iterable[RuntimeNotificationAction],
+    *,
+    user_repo: Any,
+    thread_repo: Any,
+    activity_reader: Any,
+) -> list[AgentRuntimeNotificationEnvelope]:
+    envelopes: list[AgentRuntimeNotificationEnvelope] = []
+    for action in actions:
+        envelope = plan_runtime_notification_envelope(
+            action,
+            user_repo=user_repo,
+            thread_repo=thread_repo,
+            activity_reader=activity_reader,
+        )
+        if envelope is not None:
+            envelopes.append(envelope)
+    return envelopes
 
 
 def plan_runtime_notification_envelope(

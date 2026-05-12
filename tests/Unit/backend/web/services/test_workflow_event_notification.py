@@ -7,7 +7,7 @@ from typing import Literal
 import pytest
 
 from backend.threads.chat_adapters.workflow_event_inlet import (
-    make_workflow_event_notification_envelopes,
+    make_workflow_event_notification_actions,
     make_workflow_event_notification_fn,
     workflow_event_runtime_notification_action,
 )
@@ -130,7 +130,7 @@ def test_workflow_event_notification_fails_loudly_on_missing_identity() -> None:
         raise AssertionError("missing workflow event identity did not fail")
 
 
-def test_workflow_event_notification_planner_selects_runtime_members() -> None:
+def test_workflow_event_notification_planner_selects_recipient_actions() -> None:
     members = [
         {"user_id": "owner-1"},
         {"user_id": "agent-1"},
@@ -139,22 +139,17 @@ def test_workflow_event_notification_planner_selects_runtime_members() -> None:
         {"user_id": "human-2"},
     ]
 
-    envelopes = make_workflow_event_notification_envelopes(
+    actions = make_workflow_event_notification_actions(
         _change("updated"),
         members,
-        activity_reader=SimpleNamespace(list_active_threads_for_agent=lambda _agent_user_id: []),
-        thread_repo=_thread_repo("agent-1"),
-        user_repo=_users("agent-1", "agent-without-thread"),
     )
 
-    assert [envelope.recipient.agent_user_id for envelope in envelopes] == ["agent-1", "external-1"]
-    assert [envelope.recipient.runtime_source for envelope in envelopes] == ["mycel", "external"]
-    assert envelopes[0].recipient.thread_id == "thread-agent-1"
-    assert all(envelope.sender.user_id == "owner-1" for envelope in envelopes)
-    for envelope in envelopes:
-        assert envelope.message.metadata is not None
-        assert envelope.message.metadata["event_id"] == "event-1"
-        assert envelope.message.metadata["operation"] == "updated"
+    assert [action.recipient_user_id for action in actions] == ["agent-1", "agent-without-thread", "external-1", "human-2"]
+    assert all(action.sender_user_id == "owner-1" for action in actions)
+    for action in actions:
+        assert action.metadata is not None
+        assert action.metadata["event_id"] == "event-1"
+        assert action.metadata["operation"] == "updated"
 
 
 @pytest.mark.asyncio
