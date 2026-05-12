@@ -58,6 +58,7 @@ class TestConsumeFollowupQueue:
                     "notification_type": "steer",
                     "sender_name": None,
                     "sender_avatar_url": None,
+                    "sender_id": None,
                     "is_steer": False,
                 },
             )

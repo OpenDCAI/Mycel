@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import sqlite3
 import threading
 from pathlib import Path
@@ -36,14 +37,26 @@ class SQLiteQueueRepo:
         source: str | None = None,
         sender_id: str | None = None,
         sender_name: str | None = None,
+        metadata: dict[str, Any] | None = None,
     ) -> None:
         with self._lock:
             self._conn.execute(
-                "INSERT INTO message_queue (thread_id, content, notification_type, source, sender_id, sender_name)"
-                " VALUES (?, ?, ?, ?, ?, ?)",
-                (thread_id, content, notification_type, source, sender_id, sender_name),
+                "INSERT INTO message_queue (thread_id, content, notification_type, source, sender_id, sender_name, metadata_json)"
+                " VALUES (?, ?, ?, ?, ?, ?, ?)",
+                (thread_id, content, notification_type, source, sender_id, sender_name, json.dumps(metadata) if metadata else None),
             )
             self._conn.commit()
+
+    def _hydrate_item(self, row: sqlite3.Row | tuple[Any, ...]) -> QueueItem:
+        metadata = json.loads(row[5]) if row[5] else None
+        return QueueItem(
+            content=row[0],
+            notification_type=row[1],
+            source=row[2],
+            sender_id=row[3],
+            sender_name=row[4],
+            metadata=metadata,
+        )
 
     def dequeue(self, thread_id: str) -> QueueItem | None:
         with self._lock:
@@ -56,11 +69,11 @@ class SQLiteQueueRepo:
             row = self._conn.execute(
                 "DELETE FROM message_queue "
                 "WHERE id = (SELECT MIN(id) FROM message_queue WHERE thread_id = ?) "
-                "RETURNING content, notification_type, source, sender_id, sender_name",
+                "RETURNING content, notification_type, source, sender_id, sender_name, metadata_json",
                 (thread_id,),
             ).fetchone()
             self._conn.commit()
-            return QueueItem(content=row[0], notification_type=row[1], source=row[2], sender_id=row[3], sender_name=row[4]) if row else None
+            return self._hydrate_item(row) if row else None
 
     def drain_all(self, thread_id: str) -> list[QueueItem]:
         with self._lock:
@@ -71,14 +84,12 @@ class SQLiteQueueRepo:
             if has_row is None:
                 return []
             rows = self._conn.execute(
-                "DELETE FROM message_queue WHERE thread_id = ? RETURNING content, notification_type, id, source, sender_id, sender_name",
+                "DELETE FROM message_queue WHERE thread_id = ? "
+                "RETURNING content, notification_type, id, source, sender_id, sender_name, metadata_json",
                 (thread_id,),
             ).fetchall()
             self._conn.commit()
-        return [
-            QueueItem(content=r[0], notification_type=r[1], source=r[3], sender_id=r[4], sender_name=r[5])
-            for r in sorted(rows, key=lambda r: r[2])
-        ]
+        return [self._hydrate_item((r[0], r[1], r[3], r[4], r[5], r[6])) for r in sorted(rows, key=lambda r: r[2])]
 
     def peek(self, thread_id: str) -> bool:
         with self._lock:
@@ -122,8 +133,12 @@ class SQLiteQueueRepo:
             "  source            TEXT,"
             "  sender_id         TEXT,"
             "  sender_name       TEXT,"
+            "  metadata_json     TEXT,"
             "  created_at        TEXT DEFAULT (datetime('now'))"
             ")"
         )
+        columns = {row[1] for row in self._conn.execute("PRAGMA table_info(message_queue)").fetchall()}
+        if "metadata_json" not in columns:
+            self._conn.execute("ALTER TABLE message_queue ADD COLUMN metadata_json TEXT")
         self._conn.execute("CREATE INDEX IF NOT EXISTS idx_mq_thread ON message_queue (thread_id, id)")
         self._conn.commit()

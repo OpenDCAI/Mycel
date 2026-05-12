@@ -4,6 +4,7 @@ import logging
 import threading
 from collections.abc import Callable
 from pathlib import Path
+from typing import Any
 
 from storage.contracts import NotificationType, QueueItem, QueueRepo
 from storage.runtime import build_queue_repo, uses_supabase_runtime_defaults
@@ -37,6 +38,7 @@ class MessageQueueManager:
         sender_name: str | None = None,
         sender_avatar_url: str | None = None,
         is_steer: bool = False,
+        metadata: dict[str, Any] | None = None,
         wake: bool = True,
     ) -> None:
         self._repo.enqueue(
@@ -46,6 +48,7 @@ class MessageQueueManager:
             source=source,
             sender_id=sender_id,
             sender_name=sender_name,
+            metadata=metadata,
         )
         if not wake:
             return
@@ -62,6 +65,7 @@ class MessageQueueManager:
                         sender_name=sender_name,
                         sender_avatar_url=sender_avatar_url,
                         is_steer=is_steer,
+                        metadata=metadata,
                     )
                 )
             except Exception:

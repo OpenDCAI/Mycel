@@ -32,11 +32,13 @@ def test_supabase_queue_repo_enqueue_persists_sender_user_id() -> None:
         source="owner",
         sender_id="user-1",
         sender_name="Alice",
+        metadata={"event_type": "thread.input", "delivery_id": "delivery-1"},
     )
 
     row = tables["agent.message_queue"][0]
     assert row["thread_id"] == "thread-1"
     assert row["sender_user_id"] == "user-1"
+    assert row["metadata_json"] == {"event_type": "thread.input", "delivery_id": "delivery-1"}
     assert "sender_id" not in row
 
 
@@ -51,6 +53,7 @@ def test_supabase_queue_repo_dequeue_maps_sender_user_id_to_sender_id() -> None:
                 "source": "owner",
                 "sender_user_id": "user-1",
                 "sender_name": "Alice",
+                "metadata_json": {"event_type": "thread.input"},
             }
         ]
     }
@@ -60,6 +63,7 @@ def test_supabase_queue_repo_dequeue_maps_sender_user_id_to_sender_id() -> None:
 
     assert item is not None
     assert item.sender_id == "user-1"
+    assert item.metadata == {"event_type": "thread.input"}
     assert tables["agent.message_queue"] == []
 
 
@@ -74,6 +78,7 @@ def test_supabase_queue_repo_drain_all_maps_sender_user_id_to_sender_id() -> Non
                 "source": "owner",
                 "sender_user_id": "user-1",
                 "sender_name": "Alice",
+                "metadata_json": {"event_type": "thread.input"},
             },
             {
                 "id": 2,
@@ -83,6 +88,7 @@ def test_supabase_queue_repo_drain_all_maps_sender_user_id_to_sender_id() -> Non
                 "source": "external",
                 "sender_user_id": "user-2",
                 "sender_name": "Bob",
+                "metadata_json": {"event_type": "agent.done"},
             },
         ]
     }
@@ -91,6 +97,7 @@ def test_supabase_queue_repo_drain_all_maps_sender_user_id_to_sender_id() -> Non
     items = repo.drain_all("thread-1")
 
     assert [item.sender_id for item in items] == ["user-1", "user-2"]
+    assert [item.metadata for item in items] == [{"event_type": "thread.input"}, {"event_type": "agent.done"}]
     assert tables["agent.message_queue"] == []
 
 

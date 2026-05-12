@@ -123,6 +123,7 @@ async def flush_cancelled_owner_steers(
             sender_name=item.sender_name,
             sender_avatar_url=item.sender_avatar_url,
             is_steer=item.is_steer,
+            metadata=item.metadata,
         )
 
 
@@ -147,6 +148,7 @@ async def emit_queued_terminal_followups(
                 sender_name=item.sender_name,
                 sender_avatar_url=item.sender_avatar_url,
                 is_steer=item.is_steer,
+                metadata=item.metadata,
             )
         for item in extra_terminal:
             await emit(

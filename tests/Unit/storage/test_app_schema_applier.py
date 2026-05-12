@@ -32,6 +32,7 @@ def test_applier_uses_manifest_order() -> None:
         "storage/schema/chat_message_delivery_scope.sql",
         "storage/schema/chat_workflow_state_and_tasks.sql",
         "storage/schema/external_user_creator.sql",
+        "storage/schema/message_queue_metadata.sql",
         "storage/schema/relationship_pair_constraint.sql",
         "storage/schema/relationship_request_message.sql",
         "storage/schema/sandbox_control_plane_supabase.sql",

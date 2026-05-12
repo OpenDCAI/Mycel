@@ -558,6 +558,7 @@ CREATE TABLE agent.message_queue (
     source text,
     sender_user_id text,
     sender_name text,
+    metadata_json jsonb DEFAULT '{}'::jsonb NOT NULL,
     created_at timestamp with time zone DEFAULT now()
 );
 

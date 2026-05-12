@@ -4,6 +4,8 @@ from typing import Any
 
 from protocols import agent_runtime as agent_runtime_protocol
 
+from .runtime_metadata import notification_message_metadata
+
 
 class NativeAgentNotificationHandler:
     def __init__(self, *, thread_input_handler: Any) -> None:
@@ -19,7 +21,15 @@ class NativeAgentNotificationHandler:
             agent_runtime_protocol.AgentThreadInputEnvelope(
                 thread_id=thread_id,
                 sender=envelope.sender,
-                message=envelope.message,
+                message=agent_runtime_protocol.AgentRuntimeMessage(
+                    content=envelope.message.content,
+                    content_type=envelope.message.content_type,
+                    message_id=envelope.message.message_id,
+                    signal=envelope.message.signal,
+                    created_at=envelope.message.created_at,
+                    attachments=envelope.message.attachments,
+                    metadata=notification_message_metadata(envelope),
+                ),
                 transport=envelope.transport,
             )
         )

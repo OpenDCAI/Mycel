@@ -4,6 +4,7 @@ import logging
 from typing import Any
 
 from core.runtime.middleware.monitor import AgentState
+from core.runtime.queue_metadata import queue_item_message_metadata
 
 logger = logging.getLogger(__name__)
 
@@ -31,18 +32,22 @@ async def consume_followup_queue(agent: Any, thread_id: str, app: Any) -> None:
             thread_id,
             item.content,
             app,
-            message_metadata={
-                "source": item.source or "system",
-                "notification_type": item.notification_type,
-                "sender_name": item.sender_name,
-                "sender_avatar_url": item.sender_avatar_url,
-                "is_steer": getattr(item, "is_steer", False),
-            },
+            message_metadata=queue_item_message_metadata(item),
         )
     except Exception:
         logger.exception("Failed to consume followup queue for thread %s", thread_id)
         if item:
             try:
-                app.state.queue_manager.enqueue(item.content, thread_id, notification_type=item.notification_type)
+                app.state.queue_manager.enqueue(
+                    item.content,
+                    thread_id,
+                    notification_type=item.notification_type,
+                    source=item.source,
+                    sender_id=item.sender_id,
+                    sender_name=item.sender_name,
+                    sender_avatar_url=item.sender_avatar_url,
+                    is_steer=item.is_steer,
+                    metadata=item.metadata,
+                )
             except Exception:
                 logger.error("Failed to re-enqueue followup for thread %s — message lost: %.200s", thread_id, item.content)

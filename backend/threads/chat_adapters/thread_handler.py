@@ -6,6 +6,8 @@ from typing import Any
 from core.runtime.middleware.monitor import AgentState
 from protocols import agent_runtime as agent_runtime_protocol
 
+from .runtime_metadata import thread_input_message_metadata, thread_input_metadata, thread_input_notification_type
+
 
 class NativeAgentThreadInputHandler:
     def __init__(
@@ -48,16 +50,21 @@ class NativeAgentThreadInputHandler:
                 return agent_runtime_protocol.AgentThreadInputResult(status="cancelled", routing="cancelled", thread_id=thread_id)
 
             state = agent.runtime.current_state
+            meta = thread_input_metadata(envelope)
+            queue_metadata = thread_input_message_metadata(envelope)
+            notification_type = thread_input_notification_type(envelope)
 
             if state == AgentState.ACTIVE:
                 qm.enqueue(
                     envelope.message.content,
                     thread_id,
-                    "steer",
+                    notification_type,
                     source=envelope.sender.source,
+                    sender_id=envelope.sender.user_id,
                     sender_name=envelope.sender.display_name,
                     sender_avatar_url=envelope.sender.avatar_url,
                     is_steer=True,
+                    metadata=queue_metadata,
                 )
                 return agent_runtime_protocol.AgentThreadInputResult(status="injected", routing="steer", thread_id=thread_id)
 
@@ -69,22 +76,15 @@ class NativeAgentThreadInputHandler:
                     qm.enqueue(
                         envelope.message.content,
                         thread_id,
-                        "steer",
+                        notification_type,
                         source=envelope.sender.source,
+                        sender_id=envelope.sender.user_id,
                         sender_name=envelope.sender.display_name,
                         sender_avatar_url=envelope.sender.avatar_url,
                         is_steer=True,
+                        metadata=queue_metadata,
                     )
                     return agent_runtime_protocol.AgentThreadInputResult(status="injected", routing="steer", thread_id=thread_id)
-                meta = {
-                    "source": envelope.sender.source,
-                    "sender_name": envelope.sender.display_name,
-                    "sender_avatar_url": envelope.sender.avatar_url,
-                }
-                if envelope.message.metadata:
-                    meta.update(envelope.message.metadata)
-                if envelope.message.attachments:
-                    meta["attachments"] = envelope.message.attachments
                 run_id = self._start_agent_run(
                     agent,
                     thread_id,

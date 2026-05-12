@@ -17,6 +17,7 @@
     "chat_message_delivery_scope.sql",
     "chat_workflow_state_and_tasks.sql",
     "external_user_creator.sql",
+    "message_queue_metadata.sql",
     "relationship_pair_constraint.sql",
     "relationship_request_message.sql",
     "sandbox_control_plane_supabase.sql",
