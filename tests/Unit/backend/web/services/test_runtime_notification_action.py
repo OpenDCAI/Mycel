@@ -9,7 +9,6 @@ import pytest
 from backend.threads.chat_adapters.runtime_notification_action import (
     RuntimeNotificationAction,
     dispatch_runtime_notification_actions,
-    dispatch_runtime_notification_event,
     make_runtime_notification_event_hook,
     runtime_notification_action_dispatcher,
 )
@@ -137,25 +136,12 @@ async def test_runtime_notification_action_dispatcher_binds_runtime_dependencies
 
 
 @pytest.mark.asyncio
-async def test_runtime_notification_event_and_hook_plan_and_dispatch_actions() -> None:
+async def test_runtime_notification_hook_plans_and_dispatches_actions() -> None:
     gateway = _RecordingGateway()
 
     def planner(value: str) -> list[RuntimeNotificationAction]:
         return [_action(context="Test hook", content=f"Action {value}.")]
 
-    dispatched_count = await dispatch_runtime_notification_event(
-        _runtime_app(gateway),
-        "event-1",
-        planner,
-        user_repo=_users(),
-        thread_repo=_thread_repo(),
-        activity_reader=_activity_reader(),
-    )
-
-    assert dispatched_count == 1
-    assert [envelope.message.content for envelope in gateway.envelopes] == ["Action event-1."]
-
-    gateway.envelopes.clear()
     hook = make_runtime_notification_event_hook(
         _runtime_app(gateway),
         planner,
