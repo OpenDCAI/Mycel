@@ -74,6 +74,7 @@ async def dispatch_runtime_chat_delivery_actions(
     thread_repo: Any,
     activity_reader: Any,
 ) -> int:
+    gateway = get_agent_runtime_gateway(app)
     dispatched_count = 0
     for action in actions:
         envelope = plan_runtime_chat_delivery_envelope(
@@ -83,7 +84,7 @@ async def dispatch_runtime_chat_delivery_actions(
         )
         if envelope is None:
             continue
-        await dispatch_runtime_chat_delivery_envelopes(app, [envelope])
+        await gateway.dispatch_chat(envelope)
         dispatched_count += 1
     return dispatched_count
 
@@ -103,15 +104,6 @@ def runtime_chat_delivery_action_dispatcher(
         )
 
     return dispatch_actions
-
-
-async def dispatch_runtime_chat_delivery_envelopes(app: Any, envelopes: Iterable[AgentChatDeliveryEnvelope]) -> None:
-    current_envelopes = list(envelopes)
-    if not current_envelopes:
-        return
-    gateway = get_agent_runtime_gateway(app)
-    for envelope in current_envelopes:
-        await gateway.dispatch_chat(envelope)
 
 
 def plan_runtime_chat_delivery_envelope(
