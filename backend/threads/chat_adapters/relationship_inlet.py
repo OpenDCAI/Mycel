@@ -1,11 +1,10 @@
 from __future__ import annotations
 
 import asyncio
-from enum import Enum
 from typing import Any
 
-from backend.identity.avatar.urls import avatar_url
 from backend.threads.chat_adapters.port import get_agent_runtime_gateway
+from backend.threads.chat_adapters.runtime_identity import display_name, make_runtime_actor, require_user, user_type
 from backend.threads.chat_adapters.runtime_recipient import select_runtime_notification_recipient
 from messaging.contracts import RelationshipEvent, RelationshipRow
 from protocols.agent_runtime import (
@@ -27,9 +26,9 @@ def make_relationship_request_notification_fn(app: Any, *, activity_reader: Any,
     async def notify_runtime(row: RelationshipRow) -> None:
         requester_id = _requester_id(row)
         target_id = _target_id(row, requester_id)
-        requester = _require_user(user_repo, requester_id, "requester")
-        target = _require_user(user_repo, target_id, "target")
-        target_type = _user_type(target, target_id)
+        requester = require_user(user_repo, requester_id, context="Relationship request", role="requester")
+        target = require_user(user_repo, target_id, context="Relationship request", role="target")
+        target_type = user_type(target, target_id, context="Relationship request")
         recipient = select_runtime_notification_recipient(
             target_id,
             target_type,
@@ -42,16 +41,16 @@ def make_relationship_request_notification_fn(app: Any, *, activity_reader: Any,
         await _dispatch_notification(
             app,
             recipient=recipient,
-            sender=AgentRuntimeActor(
+            sender=make_runtime_actor(
                 user_id=requester_id,
-                user_type=_user_type(requester, requester_id),
-                display_name=_display_name(requester, requester_id),
-                avatar_url=avatar_url(requester_id, bool(getattr(requester, "avatar", None))),
+                user=requester,
                 source="relationship",
+                context="Relationship request",
+                include_avatar=True,
             ),
             message=AgentRuntimeMessage(
                 content=_notification_content(
-                    _display_name(requester, requester_id),
+                    display_name(requester, requester_id, context="Relationship request"),
                     row.message,
                 ),
                 metadata={"relationship_id": row.id},
@@ -72,9 +71,9 @@ def make_relationship_decision_notification_fn(app: Any, *, activity_reader: Any
     async def notify_runtime(row: RelationshipRow, event: RelationshipEvent) -> None:
         requester_id = _requester_id(row)
         decider_id = _target_id(row, requester_id)
-        requester = _require_user(user_repo, requester_id, "requester")
-        decider = _require_user(user_repo, decider_id, "decider")
-        requester_type = _user_type(requester, requester_id)
+        requester = require_user(user_repo, requester_id, context="Relationship request", role="requester")
+        decider = require_user(user_repo, decider_id, context="Relationship request", role="decider")
+        requester_type = user_type(requester, requester_id, context="Relationship request")
         recipient = select_runtime_notification_recipient(
             requester_id,
             requester_type,
@@ -87,15 +86,18 @@ def make_relationship_decision_notification_fn(app: Any, *, activity_reader: Any
         await _dispatch_notification(
             app,
             recipient=recipient,
-            sender=AgentRuntimeActor(
+            sender=make_runtime_actor(
                 user_id=decider_id,
-                user_type=_user_type(decider, decider_id),
-                display_name=_display_name(decider, decider_id),
-                avatar_url=avatar_url(decider_id, bool(getattr(decider, "avatar", None))),
+                user=decider,
                 source="relationship",
+                context="Relationship request",
+                include_avatar=True,
             ),
             message=AgentRuntimeMessage(
-                content=f"{_display_name(decider, decider_id)} {_decision_verb(event)} your relationship request.",
+                content=(
+                    f"{display_name(decider, decider_id, context='Relationship request')} "
+                    f"{_decision_verb(event)} your relationship request."
+                ),
                 metadata={
                     "relationship_id": row.id,
                     "event": event,
@@ -143,27 +145,6 @@ def _target_id(row: RelationshipRow, requester_id: str) -> str:
     if requester_id == row.user_high:
         return row.user_low
     raise RuntimeError(f"Relationship request initiator is not a party: {row.id}")
-
-
-def _require_user(user_repo: Any, user_id: str, role: str) -> Any:
-    user = user_repo.get_by_id(user_id)
-    if user is None:
-        raise RuntimeError(f"Relationship request {role} user not found: {user_id}")
-    return user
-
-
-def _user_type(user: Any, user_id: str) -> str:
-    raw_type = getattr(user, "type", None)
-    if raw_type is None:
-        raise RuntimeError(f"Relationship request user is missing type: {user_id}")
-    return raw_type.value if isinstance(raw_type, Enum) else str(raw_type)
-
-
-def _display_name(user: Any, user_id: str) -> str:
-    display_name = getattr(user, "display_name", None)
-    if display_name is None:
-        raise RuntimeError(f"Relationship request user is missing display name: {user_id}")
-    return str(display_name)
 
 
 def _notification_content(requester_name: str, message: str | None) -> str:

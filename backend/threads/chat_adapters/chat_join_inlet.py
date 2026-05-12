@@ -1,14 +1,12 @@
 from __future__ import annotations
 
 import asyncio
-from enum import Enum
 from typing import Any
 
-from backend.identity.avatar.urls import avatar_url
 from backend.threads.chat_adapters.port import get_agent_runtime_gateway
+from backend.threads.chat_adapters.runtime_identity import display_name, make_runtime_actor, require_user, user_type
 from backend.threads.chat_adapters.runtime_recipient import select_runtime_notification_recipient
 from protocols.agent_runtime import (
-    AgentRuntimeActor,
     AgentRuntimeMessage,
     AgentRuntimeNotificationEnvelope,
 )
@@ -21,10 +19,10 @@ def make_chat_join_rejection_notification_fn(app: Any, *, activity_reader: Any, 
         requester_id = _required_str(row, "requester_user_id")
         decider_id = _required_str(row, "decided_by_user_id")
         chat_id = _required_str(row, "chat_id")
-        requester = _require_user(user_repo, requester_id, "requester")
-        decider = _require_user(user_repo, decider_id, "decider")
-        requester_type = _user_type(requester, requester_id)
-        content = f"{_display_name(decider, decider_id)} rejected your request to join chat {chat_id}."
+        requester = require_user(user_repo, requester_id, context="Chat join rejection", role="requester")
+        decider = require_user(user_repo, decider_id, context="Chat join rejection", role="decider")
+        requester_type = user_type(requester, requester_id, context="Chat join rejection")
+        content = f"{display_name(decider, decider_id, context='Chat join rejection')} rejected your request to join chat {chat_id}."
         metadata = {
             "chat_join_request_id": _required_str(row, "id"),
             "chat_id": chat_id,
@@ -43,12 +41,12 @@ def make_chat_join_rejection_notification_fn(app: Any, *, activity_reader: Any, 
             AgentRuntimeNotificationEnvelope(
                 event_type="chat.join.rejected",
                 recipient=recipient,
-                sender=AgentRuntimeActor(
+                sender=make_runtime_actor(
                     user_id=decider_id,
-                    user_type=_user_type(decider, decider_id),
-                    display_name=_display_name(decider, decider_id),
-                    avatar_url=avatar_url(decider_id, bool(getattr(decider, "avatar", None))),
+                    user=decider,
                     source="chat_join",
+                    context="Chat join rejection",
+                    include_avatar=True,
                 ),
                 message=AgentRuntimeMessage(
                     content=content,
@@ -70,24 +68,3 @@ def _required_str(row: dict[str, Any], key: str) -> str:
     if not value:
         raise RuntimeError(f"Chat join rejection row is missing {key}: {row.get('id') or '<missing>'}")
     return str(value)
-
-
-def _require_user(user_repo: Any, user_id: str, role: str) -> Any:
-    user = user_repo.get_by_id(user_id)
-    if user is None:
-        raise RuntimeError(f"Chat join rejection {role} user not found: {user_id}")
-    return user
-
-
-def _user_type(user: Any, user_id: str) -> str:
-    raw_type = getattr(user, "type", None)
-    if raw_type is None:
-        raise RuntimeError(f"Chat join rejection user is missing type: {user_id}")
-    return raw_type.value if isinstance(raw_type, Enum) else str(raw_type)
-
-
-def _display_name(user: Any, user_id: str) -> str:
-    display_name = getattr(user, "display_name", None)
-    if display_name is None:
-        raise RuntimeError(f"Chat join rejection user is missing display name: {user_id}")
-    return str(display_name)
