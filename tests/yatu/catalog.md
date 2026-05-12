@@ -11,6 +11,7 @@ maintained prompts.
 - `cross-owner-agent-contact.md`
 - `external-managed-agent-chat.md`
 - `external-runtime-inbox.md`
+- `provider-hook-bootstrap-matrix.md`
 
 ## Relationship And Join
 

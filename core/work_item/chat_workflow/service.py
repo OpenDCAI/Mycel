@@ -161,12 +161,7 @@ class ChatWorkflowEventService:
         final_state: dict[str, Any] | None = None,
         metadata: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
-        change_fn = self._event_change_fn
-        actor_user_id: str | None = None
-        if change_fn is not None:
-            if requested_by_user_id is None:
-                raise RuntimeError("Workflow event change requires requested_by_user_id")
-            actor_user_id = requested_by_user_id
+        actor_user_id = self._event_change_actor(requested_by_user_id, field="requested_by_user_id")
         event = ChatWorkflowEventRow(
             chat_id=chat_id,
             event_id=self._repo.next_id(chat_id),
@@ -182,19 +177,7 @@ class ChatWorkflowEventService:
         )
         self._repo.insert(chat_id, event)
         response = _event_response(event)
-        if change_fn is not None:
-            if actor_user_id is None:
-                raise RuntimeError("Workflow event change requires requested_by_user_id")
-            try:
-                change_fn(
-                    WorkflowEventChange(
-                        operation="created",
-                        event=response,
-                        actor_user_id=actor_user_id,
-                    )
-                )
-            except Exception as exc:
-                raise WorkflowEventActionError(operation="created", event=response) from exc
+        self._emit_event_change(operation="created", event=response, actor_user_id=actor_user_id)
         return response
 
     def update_event(
@@ -211,12 +194,7 @@ class ChatWorkflowEventService:
         expected_state_version: int | None = None,
         updated_by_user_id: str | None = None,
     ) -> dict[str, Any] | None:
-        change_fn = self._event_change_fn
-        actor_user_id: str | None = None
-        if change_fn is not None:
-            if updated_by_user_id is None:
-                raise RuntimeError("Workflow event change requires updated_by_user_id")
-            actor_user_id = updated_by_user_id
+        actor_user_id = self._event_change_actor(updated_by_user_id, field="updated_by_user_id")
         event = self._repo.get(chat_id, event_id)
         if event is None:
             return None
@@ -235,20 +213,32 @@ class ChatWorkflowEventService:
             event.settled_at = settled_at
         updated = self._repo.update(chat_id, event, expected_state_version=expected_state_version)
         response = _event_response(updated)
-        if change_fn is not None:
-            if actor_user_id is None:
-                raise RuntimeError("Workflow event change requires updated_by_user_id")
-            try:
-                change_fn(
-                    WorkflowEventChange(
-                        operation="updated",
-                        event=response,
-                        actor_user_id=actor_user_id,
-                    )
-                )
-            except Exception as exc:
-                raise WorkflowEventActionError(operation="updated", event=response) from exc
+        self._emit_event_change(operation="updated", event=response, actor_user_id=actor_user_id)
         return response
+
+    def _event_change_actor(self, actor_user_id: str | None, *, field: str) -> str | None:
+        if self._event_change_fn is None:
+            return None
+        if actor_user_id is None:
+            raise RuntimeError(f"Workflow event change requires {field}")
+        return actor_user_id
+
+    def _emit_event_change(
+        self,
+        *,
+        operation: Literal["created", "updated"],
+        event: dict[str, Any],
+        actor_user_id: str | None,
+    ) -> None:
+        change_fn = self._event_change_fn
+        if change_fn is None:
+            return
+        if actor_user_id is None:
+            raise RuntimeError("Workflow event change requires actor_user_id")
+        try:
+            change_fn(WorkflowEventChange(operation=operation, event=event, actor_user_id=actor_user_id))
+        except Exception as exc:
+            raise WorkflowEventActionError(operation=operation, event=event) from exc
 
     def delete_event(self, chat_id: str, event_id: str) -> None:
         self._repo.delete(chat_id, event_id)
