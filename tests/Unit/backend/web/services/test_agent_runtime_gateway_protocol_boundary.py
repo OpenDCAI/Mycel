@@ -54,8 +54,10 @@ def test_agent_runtime_gateway_handler_injection_is_typed() -> None:
 
 
 def test_chat_inlets_do_not_dispatch_runtime_gateway_directly() -> None:
-    repo_root = Path(__file__).parents[4]
-    inlet_files = (repo_root / "backend" / "threads" / "chat_adapters").glob("*_inlet.py")
+    repo_root = Path(__file__).parents[5]
+    inlet_files = list((repo_root / "backend" / "threads" / "chat_adapters").glob("*_inlet.py"))
+
+    assert inlet_files
 
     for path in inlet_files:
         text = path.read_text(encoding="utf-8")
@@ -64,3 +66,14 @@ def test_chat_inlets_do_not_dispatch_runtime_gateway_directly() -> None:
         assert ".dispatch_notification(" not in text, path
         assert "AgentChatDeliveryEnvelope" not in text, path
         assert "AgentRuntimeNotificationEnvelope" not in text, path
+
+
+def test_runtime_actions_use_shared_actor_builder() -> None:
+    repo_root = Path(__file__).parents[5]
+    action_files = list((repo_root / "backend" / "threads" / "chat_adapters").glob("runtime_*_action.py"))
+
+    assert action_files
+
+    for path in action_files:
+        text = path.read_text(encoding="utf-8")
+        assert "AgentRuntimeActor" not in text, path

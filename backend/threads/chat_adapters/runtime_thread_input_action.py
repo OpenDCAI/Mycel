@@ -4,7 +4,8 @@ from dataclasses import dataclass
 from typing import Any
 
 from backend.threads.chat_adapters.port import get_agent_runtime_gateway
-from protocols.agent_runtime import AgentRuntimeActor, AgentRuntimeMessage, AgentThreadInputEnvelope
+from backend.threads.chat_adapters.runtime_identity import runtime_actor
+from protocols.agent_runtime import AgentRuntimeMessage, AgentThreadInputEnvelope
 
 
 @dataclass(frozen=True)
@@ -44,7 +45,7 @@ async def dispatch_runtime_thread_input_action(app: Any, action: RuntimeThreadIn
     return await get_agent_runtime_gateway(app).dispatch_thread_input(
         AgentThreadInputEnvelope(
             thread_id=action.thread_id,
-            sender=AgentRuntimeActor(
+            sender=runtime_actor(
                 user_id=action.sender_user_id,
                 user_type=action.sender_user_type,
                 display_name=action.sender_display_name,

@@ -4,11 +4,11 @@ from dataclasses import dataclass
 from typing import Any
 
 from backend.threads.chat_adapters.port import get_agent_runtime_gateway
+from backend.threads.chat_adapters.runtime_identity import runtime_actor
 from backend.threads.chat_adapters.runtime_recipient import resolve_runtime_chat_delivery_recipient
 from protocols.agent_runtime import (
     AgentChatContext,
     AgentChatDeliveryEnvelope,
-    AgentRuntimeActor,
     AgentRuntimeMessage,
 )
 
@@ -46,7 +46,7 @@ async def dispatch_runtime_chat_delivery_action(
     await get_agent_runtime_gateway(app).dispatch_chat(
         AgentChatDeliveryEnvelope(
             chat=AgentChatContext(chat_id=action.chat_id),
-            sender=AgentRuntimeActor(
+            sender=runtime_actor(
                 user_id=action.sender_id,
                 user_type=action.sender_type,
                 display_name=action.sender_name,
