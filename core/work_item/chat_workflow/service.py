@@ -130,10 +130,10 @@ class ChatTaskService:
 class ChatWorkflowEventService:
     def __init__(self, event_repo: Any) -> None:
         self._repo = event_repo
-        self._event_notification_fn: Callable[[WorkflowEventChange], None] | None = None
+        self._event_change_fn: Callable[[WorkflowEventChange], None] | None = None
 
-    def set_event_notification_fn(self, notification_fn: Callable[[WorkflowEventChange], None]) -> None:
-        self._event_notification_fn = notification_fn
+    def set_event_change_fn(self, change_fn: Callable[[WorkflowEventChange], None]) -> None:
+        self._event_change_fn = change_fn
 
     def list_events(self, chat_id: str) -> list[dict[str, Any]]:
         return [_event_response(event) for event in self._repo.list_all(chat_id)]
@@ -169,10 +169,10 @@ class ChatWorkflowEventService:
         )
         self._repo.insert(chat_id, event)
         response = _event_response(event)
-        if self._event_notification_fn is not None:
+        if self._event_change_fn is not None:
             if requested_by_user_id is None:
-                raise RuntimeError("Workflow event notification requires requested_by_user_id")
-            self._event_notification_fn(
+                raise RuntimeError("Workflow event change requires requested_by_user_id")
+            self._event_change_fn(
                 WorkflowEventChange(
                     operation="created",
                     event=response,
@@ -213,10 +213,10 @@ class ChatWorkflowEventService:
             event.settled_at = settled_at
         updated = self._repo.update(chat_id, event, expected_state_version=expected_state_version)
         response = _event_response(updated)
-        if self._event_notification_fn is not None:
+        if self._event_change_fn is not None:
             if updated_by_user_id is None:
-                raise RuntimeError("Workflow event update notification requires updated_by_user_id")
-            self._event_notification_fn(
+                raise RuntimeError("Workflow event change requires updated_by_user_id")
+            self._event_change_fn(
                 WorkflowEventChange(
                     operation="updated",
                     event=response,

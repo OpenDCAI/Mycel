@@ -120,7 +120,8 @@ def test_attach_chat_runtime_requires_explicit_user_repo_and_thread_repo():
     )
 
     try:
-        chat_bootstrap.attach_chat_runtime(app, storage_container)
+        attach = getattr(chat_bootstrap, "attach_chat_runtime")
+        attach(app, storage_container)
     except TypeError as exc:
         message = str(exc)
         assert "user_repo" in message
@@ -251,25 +252,25 @@ def test_wire_chat_join_request_notifications_binds_rejection_notification_fn(mo
     assert chat_join_request_service.notification_fn is notification_fn
 
 
-def test_wire_workflow_event_notifications_binds_notification_fn(monkeypatch):
-    notification_fn = object()
-    chat_workflow_event_service = SimpleNamespace(notification_fn=None)
+def test_wire_workflow_event_notifications_binds_change_fn(monkeypatch):
+    change_fn = object()
+    chat_workflow_event_service = SimpleNamespace(change_fn=None)
     messaging_service = object()
     activity_reader = object()
     thread_repo = object()
     user_repo = object()
 
-    def _set_notification_fn(value):
-        chat_workflow_event_service.notification_fn = value
+    def _set_change_fn(value):
+        chat_workflow_event_service.change_fn = value
 
-    chat_workflow_event_service.set_event_notification_fn = _set_notification_fn
+    chat_workflow_event_service.set_event_change_fn = _set_change_fn
 
     app = SimpleNamespace(state=SimpleNamespace())
 
     monkeypatch.setattr(
         chat_bootstrap,
         "make_workflow_event_notification_fn",
-        lambda target_app, *, activity_reader, thread_repo, user_repo, messaging_service: notification_fn,
+        lambda target_app, *, activity_reader, thread_repo, user_repo, messaging_service: change_fn,
     )
 
     chat_bootstrap.wire_workflow_event_notifications(
@@ -281,4 +282,4 @@ def test_wire_workflow_event_notifications_binds_notification_fn(monkeypatch):
         user_repo=user_repo,
     )
 
-    assert chat_workflow_event_service.notification_fn is notification_fn
+    assert chat_workflow_event_service.change_fn is change_fn
