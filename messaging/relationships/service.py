@@ -6,7 +6,7 @@ import logging
 from collections.abc import Callable
 from typing import Any
 
-from core.event_actions import run_sync_actions
+from core.sync_callbacks import run_sync_callbacks
 from messaging.contracts import RelationshipEvent, RelationshipRow, RelationshipState
 from messaging.relationships.state_machine import transition
 
@@ -106,14 +106,14 @@ class RelationshipService:
         return row
 
     def _run_request_actions(self, row: RelationshipRow) -> None:
-        run_sync_actions(
+        run_sync_callbacks(
             self._relationship_request_actions,
             row,
             on_error=lambda _exc: RelationshipActionError(event="request", row=row),
         )
 
     def _run_decision_actions(self, event: RelationshipEvent, row: RelationshipRow) -> None:
-        run_sync_actions(
+        run_sync_callbacks(
             self._relationship_decision_actions,
             row,
             event,
