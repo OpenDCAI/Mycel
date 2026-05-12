@@ -4,11 +4,10 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
-from backend.threads.chat_adapters.runtime_event_hook import make_sync_planned_runtime_event_hook
 from backend.threads.chat_adapters.runtime_identity import display_name, require_user
 from backend.threads.chat_adapters.runtime_notification_action import (
     RuntimeNotificationAction,
-    dispatch_runtime_notification_actions,
+    make_runtime_notification_event_hook,
 )
 from core.event_actions import single_event_action_planner
 from messaging.contracts import RelationshipEvent, RelationshipRow
@@ -27,17 +26,13 @@ class RelationshipDecisionChange:
 
 def make_relationship_request_notification_fn(app: Any, *, activity_reader: Any, thread_repo: Any, user_repo: Any):
     planner = relationship_request_notification_action_planner(user_repo)
-
-    async def dispatch_actions(actions: list[RuntimeNotificationAction]) -> None:
-        await dispatch_runtime_notification_actions(
-            app,
-            actions,
-            user_repo=user_repo,
-            thread_repo=thread_repo,
-            activity_reader=activity_reader,
-        )
-
-    return make_sync_planned_runtime_event_hook(planner, dispatch_actions)
+    return make_runtime_notification_event_hook(
+        app,
+        planner,
+        user_repo=user_repo,
+        thread_repo=thread_repo,
+        activity_reader=activity_reader,
+    )
 
 
 def relationship_request_notification_action_planner(user_repo: Any) -> Callable[[RelationshipRow], list[RuntimeNotificationAction]]:
@@ -69,17 +64,13 @@ def relationship_request_notification_action(row: RelationshipRow, *, user_repo:
 
 def make_relationship_decision_notification_fn(app: Any, *, activity_reader: Any, thread_repo: Any, user_repo: Any):
     planner = relationship_decision_notification_action_planner(user_repo)
-
-    async def dispatch_actions(actions: list[RuntimeNotificationAction]) -> None:
-        await dispatch_runtime_notification_actions(
-            app,
-            actions,
-            user_repo=user_repo,
-            thread_repo=thread_repo,
-            activity_reader=activity_reader,
-        )
-
-    planned_hook = make_sync_planned_runtime_event_hook(planner, dispatch_actions)
+    planned_hook = make_runtime_notification_event_hook(
+        app,
+        planner,
+        user_repo=user_repo,
+        thread_repo=thread_repo,
+        activity_reader=activity_reader,
+    )
 
     def notify_runtime(row: RelationshipRow, event: RelationshipEvent) -> None:
         planned_hook(RelationshipDecisionChange(row=row, event=event))
