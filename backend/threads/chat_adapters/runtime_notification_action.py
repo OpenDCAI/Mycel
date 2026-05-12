@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Callable, Coroutine, Iterable
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from typing import Any
 
@@ -38,24 +38,6 @@ def make_runtime_notification_event_hook[EventT](
     thread_repo: Any,
     activity_reader: Any,
 ) -> Callable[[EventT], None]:
-    return RuntimeEventActionRoute(
-        planner=planner,
-        dispatch_actions=runtime_notification_action_dispatcher(
-            app,
-            user_repo=user_repo,
-            thread_repo=thread_repo,
-            activity_reader=activity_reader,
-        ),
-    ).sync_hook()
-
-
-def runtime_notification_action_dispatcher(
-    app: Any,
-    *,
-    user_repo: Any,
-    thread_repo: Any,
-    activity_reader: Any,
-) -> Callable[[list[RuntimeNotificationAction]], Coroutine[Any, Any, int]]:
     async def dispatch_actions(actions: list[RuntimeNotificationAction]) -> int:
         return await dispatch_runtime_notification_actions(
             app,
@@ -65,7 +47,10 @@ def runtime_notification_action_dispatcher(
             activity_reader=activity_reader,
         )
 
-    return dispatch_actions
+    return RuntimeEventActionRoute(
+        planner=planner,
+        dispatch_actions=dispatch_actions,
+    ).sync_hook()
 
 
 async def dispatch_runtime_notification_actions(
