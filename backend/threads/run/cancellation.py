@@ -2,6 +2,7 @@ import asyncio
 import json
 from typing import Any
 
+from backend.threads.chat_adapters.runtime_thread_input_action import requeue_thread_input_item
 from core.runtime.notifications import is_terminal_background_notification
 
 
@@ -114,17 +115,7 @@ async def flush_cancelled_owner_steers(
     await persist_cancelled_owner_steers(agent=agent, config=config, items=owner_steers)
 
     for item in passthrough:
-        qm.enqueue(
-            item.content,
-            thread_id,
-            notification_type=item.notification_type,
-            source=item.source,
-            sender_id=item.sender_id,
-            sender_name=item.sender_name,
-            sender_avatar_url=item.sender_avatar_url,
-            is_steer=item.is_steer,
-            metadata=item.metadata,
-        )
+        requeue_thread_input_item(qm, thread_id, item)
 
 
 async def emit_queued_terminal_followups(
@@ -139,17 +130,7 @@ async def emit_queued_terminal_followups(
         queued_items = app.state.queue_manager.drain_all(thread_id)
         extra_terminal, passthrough = partition_terminal_followups(queued_items)
         for item in passthrough:
-            app.state.queue_manager.enqueue(
-                item.content,
-                thread_id,
-                notification_type=item.notification_type,
-                source=item.source,
-                sender_id=item.sender_id,
-                sender_name=item.sender_name,
-                sender_avatar_url=item.sender_avatar_url,
-                is_steer=item.is_steer,
-                metadata=item.metadata,
-            )
+            requeue_thread_input_item(app.state.queue_manager, thread_id, item)
         for item in extra_terminal:
             await emit(
                 {

@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from backend.threads.chat_adapters.runtime_thread_input_action import requeue_thread_input_item
 from core.runtime.middleware.monitor import AgentState
 from core.runtime.queue_metadata import queue_item_message_metadata
 
@@ -38,16 +39,6 @@ async def consume_followup_queue(agent: Any, thread_id: str, app: Any) -> None:
         logger.exception("Failed to consume followup queue for thread %s", thread_id)
         if item:
             try:
-                app.state.queue_manager.enqueue(
-                    item.content,
-                    thread_id,
-                    notification_type=item.notification_type,
-                    source=item.source,
-                    sender_id=item.sender_id,
-                    sender_name=item.sender_name,
-                    sender_avatar_url=item.sender_avatar_url,
-                    is_steer=item.is_steer,
-                    metadata=item.metadata,
-                )
+                requeue_thread_input_item(app.state.queue_manager, thread_id, item)
             except Exception:
                 logger.error("Failed to re-enqueue followup for thread %s — message lost: %.200s", thread_id, item.content)
