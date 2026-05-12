@@ -13,6 +13,10 @@ import pytest
 from fastapi import Request
 from langchain_core.messages import HumanMessage, SystemMessage, ToolMessage
 
+from backend.threads.chat_adapters.runtime_thread_input_action import (
+    RuntimeThreadInputAction,
+    owner_runtime_thread_input_action,
+)
 from backend.web.models.requests import CreateThreadRequest, ResolvePermissionRequest, SendMessageRequest, ThreadPermissionRuleRequest
 from backend.web.routers import threads as threads_router
 from core.runtime.loop import QueryLoop
@@ -189,6 +193,28 @@ async def test_send_message_passes_enable_trajectory_to_agent_runtime_gateway() 
 
     assert result == {"status": "started", "routing": "direct", "thread_id": "thread-1"}
     assert captured[0].enable_trajectory is True
+
+
+def test_owner_thread_input_action_carries_message_contract() -> None:
+    action = owner_runtime_thread_input_action(
+        thread_id="thread-1",
+        user_id="owner-1",
+        message="hello",
+        attachments=["file-1"],
+        enable_trajectory=True,
+    )
+
+    assert action == RuntimeThreadInputAction(
+        thread_id="thread-1",
+        sender_user_id="owner-1",
+        sender_user_type="human",
+        sender_display_name="Owner",
+        sender_source="owner",
+        content="hello",
+        attachments=["file-1"],
+        metadata=None,
+        enable_trajectory=True,
+    )
 
 
 def _make_request(headers: dict[str, str] | None = None) -> Request:
