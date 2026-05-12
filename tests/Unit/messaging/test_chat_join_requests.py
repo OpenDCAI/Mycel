@@ -4,7 +4,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from messaging.join_requests import ChatJoinRequestService
+from messaging.join_requests import ChatJoinRequestActionError, ChatJoinRequestService
 
 
 class _Members:
@@ -250,6 +250,38 @@ def test_chat_join_reject_notifies_requester_outside_chat_membership() -> None:
             "decided_by_user_id": "owner-1",
         }
     ]
+
+
+def test_chat_join_reject_wraps_post_commit_action_failure() -> None:
+    def fail_notification(_row: dict) -> None:
+        raise RuntimeError("runtime hook failed")
+
+    service, _members, _requests, messaging = _service(on_join_request_rejected=fail_notification)
+    pending = service.request("chat-1", "visitor-1", "please add me")
+
+    with pytest.raises(ChatJoinRequestActionError) as exc_info:
+        service.reject("chat-1", pending["id"], "owner-1")
+
+    exc = exc_info.value
+    assert exc.action == "reject"
+    assert exc.row == {
+        "id": "chat_join:chat-1:visitor-1",
+        "chat_id": "chat-1",
+        "requester_user_id": "visitor-1",
+        "state": "rejected",
+        "message": "please add me",
+        "created_at": 1.0,
+        "updated_at": 2.0,
+        "decided_by_user_id": "owner-1",
+    }
+    assert str(exc.__cause__) == "runtime hook failed"
+    assert messaging.sent[-1] == (
+        "chat-1",
+        "owner-1",
+        "Rejected chat join request for visitor-1.",
+        "notification",
+        ["visitor-1"],
+    )
 
 
 def test_chat_join_approve_rejects_non_owner() -> None:
