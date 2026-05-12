@@ -132,6 +132,16 @@ def test_runtime_action_adapters_do_not_export_envelope_dispatch_helpers() -> No
     assert not hasattr(thread_input_action_module, "dispatch_runtime_thread_input_envelopes")
 
 
+def test_runtime_action_adapters_do_not_export_batch_envelope_planners() -> None:
+    chat_action_module = importlib.import_module("backend.threads.chat_adapters.runtime_chat_delivery_action")
+    notification_action_module = importlib.import_module("backend.threads.chat_adapters.runtime_notification_action")
+    thread_input_action_module = importlib.import_module("backend.threads.chat_adapters.runtime_thread_input_action")
+
+    assert not hasattr(chat_action_module, "plan_runtime_chat_delivery_envelopes")
+    assert not hasattr(notification_action_module, "plan_runtime_notification_envelopes")
+    assert not hasattr(thread_input_action_module, "plan_runtime_thread_input_envelopes")
+
+
 def test_runtime_action_adapters_do_not_export_concrete_event_dispatch_helpers() -> None:
     chat_action_module = importlib.import_module("backend.threads.chat_adapters.runtime_chat_delivery_action")
     notification_action_module = importlib.import_module("backend.threads.chat_adapters.runtime_notification_action")
