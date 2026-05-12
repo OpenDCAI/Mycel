@@ -19,6 +19,7 @@ from backend.threads.chat_adapters.runtime_thread_input_action import (
     dispatch_queued_thread_input_action,
     internal_runtime_thread_input_action,
     owner_runtime_thread_input_action,
+    queued_command_thread_input_action,
     queued_thread_input_action,
 )
 from backend.web.models.requests import CreateThreadRequest, ResolvePermissionRequest, SendMessageRequest, ThreadPermissionRuleRequest
@@ -253,6 +254,24 @@ def test_queued_thread_input_action_enqueues_steer_message() -> None:
 
     assert action == QueuedThreadInputAction(thread_id="thread-1", content="follow up", notification_type="steer")
     assert enqueued == [("follow up", "thread-1", "steer")]
+    assert result == {"status": "queued", "thread_id": "thread-1"}
+
+
+def test_queued_command_thread_input_action_enqueues_command_message() -> None:
+    enqueued: list[tuple[str, str, str]] = []
+    queue_manager = SimpleNamespace(
+        enqueue=lambda content, thread_id, notification_type: enqueued.append((content, thread_id, notification_type))
+    )
+    action = queued_command_thread_input_action(thread_id="thread-1", message="<CommandNotification />")
+
+    result = dispatch_queued_thread_input_action(queue_manager, action)
+
+    assert action == QueuedThreadInputAction(
+        thread_id="thread-1",
+        content="<CommandNotification />",
+        notification_type="command",
+    )
+    assert enqueued == [("<CommandNotification />", "thread-1", "command")]
     assert result == {"status": "queued", "thread_id": "thread-1"}
 
 
