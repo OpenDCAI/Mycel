@@ -34,6 +34,10 @@ def _change(operation: Literal["created", "updated"] = "created") -> WorkflowEve
     )
 
 
+def _members(*user_ids: str) -> list[dict[str, str]]:
+    return [{"user_id": user_id} for user_id in user_ids]
+
+
 class _RecordingGateway:
     def __init__(self) -> None:
         self.envelopes = []
@@ -45,6 +49,10 @@ class _RecordingGateway:
 
 def _runtime_app(gateway: _RecordingGateway) -> SimpleNamespace:
     return SimpleNamespace(state=SimpleNamespace(threads_runtime_state=SimpleNamespace(agent_runtime_gateway=gateway)))
+
+
+def _activity_reader() -> SimpleNamespace:
+    return SimpleNamespace(list_active_threads_for_agent=lambda _agent_user_id: [])
 
 
 def _users(*agent_ids: str):
@@ -132,17 +140,9 @@ def test_workflow_event_notification_fails_loudly_on_missing_identity() -> None:
 
 
 def test_workflow_event_notification_planner_selects_recipient_actions() -> None:
-    members = [
-        {"user_id": "owner-1"},
-        {"user_id": "agent-1"},
-        {"user_id": "agent-without-thread"},
-        {"user_id": "external-1"},
-        {"user_id": "human-2"},
-    ]
-
     actions = make_workflow_event_notification_actions(
         _change("updated"),
-        members,
+        _members("owner-1", "agent-1", "agent-without-thread", "external-1", "human-2"),
     )
 
     assert [action.recipient_user_id for action in actions] == ["agent-1", "agent-without-thread", "external-1", "human-2"]
@@ -158,7 +158,7 @@ def test_workflow_event_notification_action_planner_reads_chat_members() -> None
 
     def list_chat_members(chat_id: str) -> list[dict[str, str]]:
         seen_chat_ids.append(chat_id)
-        return [{"user_id": "owner-1"}, {"user_id": "agent-1"}]
+        return _members("owner-1", "agent-1")
 
     planner = workflow_event_notification_action_planner(SimpleNamespace(list_chat_members=list_chat_members))
 
@@ -174,17 +174,17 @@ def test_workflow_event_notification_action_planner_reads_chat_members() -> None
 async def test_workflow_event_notification_fn_selects_runtime_members() -> None:
     gateway = _RecordingGateway()
     messaging_service = SimpleNamespace(
-        list_chat_members=lambda _chat_id: [
-            {"user_id": "owner-1"},
-            {"user_id": "agent-1"},
-            {"user_id": "agent-without-thread"},
-            {"user_id": "external-1"},
-            {"user_id": "human-2"},
-        ]
+        list_chat_members=lambda _chat_id: _members(
+            "owner-1",
+            "agent-1",
+            "agent-without-thread",
+            "external-1",
+            "human-2",
+        )
     )
     notify = make_workflow_event_notification_fn(
         _runtime_app(gateway),
-        activity_reader=SimpleNamespace(list_active_threads_for_agent=lambda _agent_user_id: []),
+        activity_reader=_activity_reader(),
         thread_repo=_thread_repo("agent-1"),
         user_repo=_users("agent-1", "agent-without-thread"),
         messaging_service=messaging_service,
@@ -205,10 +205,10 @@ async def test_workflow_event_notification_fn_selects_runtime_members() -> None:
 @pytest.mark.asyncio
 async def test_workflow_event_notification_fn_keeps_identity_context() -> None:
     gateway = _RecordingGateway()
-    messaging_service = SimpleNamespace(list_chat_members=lambda _chat_id: [{"user_id": "missing-recipient"}])
+    messaging_service = SimpleNamespace(list_chat_members=lambda _chat_id: _members("missing-recipient"))
     notify = make_workflow_event_notification_fn(
         _runtime_app(gateway),
-        activity_reader=SimpleNamespace(list_active_threads_for_agent=lambda _agent_user_id: []),
+        activity_reader=_activity_reader(),
         thread_repo=_thread_repo("agent-1"),
         user_repo=_users("agent-1"),
         messaging_service=messaging_service,
@@ -224,10 +224,10 @@ async def test_workflow_event_notification_fn_keeps_identity_context() -> None:
 
 @pytest.mark.asyncio
 async def test_workflow_event_notification_fn_skips_gateway_when_no_runtime_recipients() -> None:
-    messaging_service = SimpleNamespace(list_chat_members=lambda _chat_id: [{"user_id": "owner-1"}, {"user_id": "human-2"}])
+    messaging_service = SimpleNamespace(list_chat_members=lambda _chat_id: _members("owner-1", "human-2"))
     notify = make_workflow_event_notification_fn(
         SimpleNamespace(state=SimpleNamespace(threads_runtime_state=SimpleNamespace())),
-        activity_reader=SimpleNamespace(list_active_threads_for_agent=lambda _agent_user_id: []),
+        activity_reader=_activity_reader(),
         thread_repo=_thread_repo(),
         user_repo=_users(),
         messaging_service=messaging_service,

@@ -67,22 +67,6 @@ async def dispatch_runtime_chat_delivery_event[EventT](
     )
 
 
-async def dispatch_runtime_chat_delivery_action(
-    app: Any,
-    action: RuntimeChatDeliveryAction,
-    *,
-    thread_repo: Any,
-    activity_reader: Any,
-) -> bool:
-    dispatched_count = await dispatch_runtime_chat_delivery_actions(
-        app,
-        [action],
-        thread_repo=thread_repo,
-        activity_reader=activity_reader,
-    )
-    return dispatched_count > 0
-
-
 async def dispatch_runtime_chat_delivery_actions(
     app: Any,
     actions: Iterable[RuntimeChatDeliveryAction],

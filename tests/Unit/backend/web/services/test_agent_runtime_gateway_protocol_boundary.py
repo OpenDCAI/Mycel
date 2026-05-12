@@ -114,6 +114,14 @@ def test_runtime_actions_use_shared_actor_builder() -> None:
         assert "AgentRuntimeActor" not in text, path
 
 
+def test_runtime_action_adapters_do_not_export_unused_single_dispatch_helpers() -> None:
+    chat_action_module = importlib.import_module("backend.threads.chat_adapters.runtime_chat_delivery_action")
+    notification_action_module = importlib.import_module("backend.threads.chat_adapters.runtime_notification_action")
+
+    assert not hasattr(chat_action_module, "dispatch_runtime_chat_delivery_action")
+    assert not hasattr(notification_action_module, "dispatch_runtime_notification_action")
+
+
 def test_runtime_protocol_envelopes_are_constructed_only_at_adapter_boundaries() -> None:
     repo_root = Path(__file__).parents[5]
     backend_files = list((repo_root / "backend").rglob("*.py"))

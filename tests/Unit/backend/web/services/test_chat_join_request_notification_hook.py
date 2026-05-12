@@ -37,6 +37,16 @@ def _user_repo(*users: SimpleNamespace) -> SimpleNamespace:
     return SimpleNamespace(get_by_id=lambda uid: rows.get(uid))
 
 
+def _join_request(requester_user_id: str = "agent-user-1") -> dict[str, str]:
+    return {
+        "id": f"chat_join:chat-1:{requester_user_id}",
+        "chat_id": "chat-1",
+        "requester_user_id": requester_user_id,
+        "state": "rejected",
+        "decided_by_user_id": "owner-1",
+    }
+
+
 class _RecordingGateway:
     def __init__(self) -> None:
         self.envelopes = []
@@ -56,15 +66,7 @@ def test_chat_join_rejection_notification_planner_returns_runtime_action() -> No
     user_repo = _user_repo(_user("owner-1", "human", "Owner"))
     planner = chat_join_inlet.chat_join_rejection_notification_action_planner(user_repo)
 
-    actions = planner(
-        {
-            "id": "chat_join:chat-1:agent-user-1",
-            "chat_id": "chat-1",
-            "requester_user_id": "agent-user-1",
-            "state": "rejected",
-            "decided_by_user_id": "owner-1",
-        }
-    )
+    actions = planner(_join_request())
 
     assert len(actions) == 1
     action = actions[0]
@@ -94,16 +96,7 @@ async def test_chat_join_rejection_notification_dispatches_runtime_notification_
         user_repo=user_repo,
     )
 
-    await asyncio.to_thread(
-        notify,
-        {
-            "id": "chat_join:chat-1:agent-user-1",
-            "chat_id": "chat-1",
-            "requester_user_id": "agent-user-1",
-            "state": "rejected",
-            "decided_by_user_id": "owner-1",
-        },
-    )
+    await asyncio.to_thread(notify, _join_request())
 
     envelope = _only_envelope(gateway)
     assert envelope.recipient.agent_user_id == "agent-user-1"
@@ -134,16 +127,7 @@ async def test_chat_join_rejection_notification_dispatches_runtime_notification_
         user_repo=user_repo,
     )
 
-    await asyncio.to_thread(
-        notify,
-        {
-            "id": "chat_join:chat-1:external-user-1",
-            "chat_id": "chat-1",
-            "requester_user_id": "external-user-1",
-            "state": "rejected",
-            "decided_by_user_id": "owner-1",
-        },
-    )
+    await asyncio.to_thread(notify, _join_request("external-user-1"))
 
     envelope = _only_envelope(gateway)
     assert envelope.recipient.agent_user_id == "external-user-1"
@@ -173,16 +157,7 @@ async def test_chat_join_rejection_notification_skips_agent_wake_when_no_runtime
         user_repo=user_repo,
     )
 
-    await asyncio.to_thread(
-        notify,
-        {
-            "id": "chat_join:chat-1:agent-user-1",
-            "chat_id": "chat-1",
-            "requester_user_id": "agent-user-1",
-            "state": "rejected",
-            "decided_by_user_id": "owner-1",
-        },
-    )
+    await asyncio.to_thread(notify, _join_request())
 
     assert gateway.envelopes == []
 
@@ -198,15 +173,6 @@ async def test_chat_join_rejection_notification_ignores_human_requester() -> Non
         user_repo=user_repo,
     )
 
-    await asyncio.to_thread(
-        notify,
-        {
-            "id": "chat_join:chat-1:human-1",
-            "chat_id": "chat-1",
-            "requester_user_id": "human-1",
-            "state": "rejected",
-            "decided_by_user_id": "owner-1",
-        },
-    )
+    await asyncio.to_thread(notify, _join_request("human-1"))
 
     assert gateway.envelopes == []
