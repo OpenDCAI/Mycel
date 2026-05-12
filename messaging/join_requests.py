@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from core.sync_callbacks import run_sync_callbacks
+from core.sync_callbacks import SyncActionRegistry
 
 
 class ChatJoinRequestActionError(RuntimeError):
@@ -26,12 +26,12 @@ class ChatJoinRequestService:
         self._members = chat_member_repo
         self._requests = chat_join_request_repo
         self._messaging = messaging_service
-        self._join_request_rejected_actions: list[Any] = []
+        self._join_request_rejected_actions = SyncActionRegistry()
         if on_join_request_rejected is not None:
             self.add_join_request_rejected_action(on_join_request_rejected)
 
     def add_join_request_rejected_action(self, action: Any) -> None:
-        self._join_request_rejected_actions.append(action)
+        self._join_request_rejected_actions.add(action)
 
     def request(self, chat_id: str, requester_user_id: str, message: str | None = None) -> dict[str, Any]:
         chat = self._require_joinable_chat(chat_id)
@@ -130,8 +130,7 @@ class ChatJoinRequestService:
             raise ChatJoinRequestActionError(action=action, row=row) from exc
 
     def _run_join_request_rejected_actions(self, row: dict[str, Any]) -> None:
-        run_sync_callbacks(
-            self._join_request_rejected_actions,
+        self._join_request_rejected_actions.run(
             row,
             on_error=lambda _exc: ChatJoinRequestActionError(action="reject", row=row),
         )

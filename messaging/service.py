@@ -16,7 +16,7 @@ from collections.abc import Callable, Mapping
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
-from core.sync_callbacks import run_sync_callbacks
+from core.sync_callbacks import SyncActionRegistry
 from messaging.avatars import AvatarUrlBuilder
 from messaging.contracts import ContentType, MessageType
 from messaging.delivery.dispatcher import ChatDeliveryDispatcher, ChatDeliveryFn
@@ -92,11 +92,12 @@ class MessagingService:
             delivery_resolver=delivery_resolver,
             delivery_fn=delivery_fn,
         )
-        self._chat_message_delivery_actions: list[Callable[[dict[str, Any]], None]] = [self._dispatch_chat_message_delivery]
+        self._chat_message_delivery_actions = SyncActionRegistry()
+        self._chat_message_delivery_actions.add(self._dispatch_chat_message_delivery)
         self._event_bus = event_bus
-        self._chat_message_event_actions: list[Callable[[dict[str, Any]], None]] = []
+        self._chat_message_event_actions = SyncActionRegistry()
         if event_bus is not None:
-            self._chat_message_event_actions.append(self._publish_chat_message_event)
+            self._chat_message_event_actions.add(self._publish_chat_message_event)
 
     def _normalize_message_row(self, row: dict[str, Any]) -> dict[str, Any]:
         return {
@@ -168,7 +169,7 @@ class MessagingService:
         self._delivery_dispatcher.set_delivery_fn(fn)
 
     def add_chat_message_delivery_action(self, action: Callable[[dict[str, Any]], None]) -> None:
-        self._chat_message_delivery_actions.append(action)
+        self._chat_message_delivery_actions.add(action)
 
     # ------------------------------------------------------------------
     # Chat lifecycle
@@ -321,15 +322,13 @@ class MessagingService:
         return created
 
     def _run_chat_message_event_actions(self, message: dict[str, Any]) -> None:
-        run_sync_callbacks(
-            self._chat_message_event_actions,
+        self._chat_message_event_actions.run(
             message,
             on_error=lambda _exc: ChatMessageEventActionError(message=message),
         )
 
     def _run_chat_message_delivery_actions(self, message: dict[str, Any]) -> None:
-        run_sync_callbacks(
-            self._chat_message_delivery_actions,
+        self._chat_message_delivery_actions.run(
             message,
             on_error=lambda _exc: ChatMessageDeliveryActionError(message=message),
         )

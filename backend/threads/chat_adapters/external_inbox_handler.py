@@ -3,7 +3,6 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from core.sync_callbacks import run_sync_callbacks
 from protocols import agent_runtime as agent_runtime_protocol
 
 
@@ -58,11 +57,10 @@ class ExternalRuntimeInboxHandler:
             wake=self._wake_bus is None and wake,
         )
         if self._wake_bus is not None and wake:
-            run_sync_callbacks(
-                [self._wake_bus.publish],
-                inbox_id,
-                on_error=lambda _exc: ExternalRuntimeInboxActionError(inbox_id=inbox_id, notification_type=notification_type),
-            )
+            try:
+                self._wake_bus.publish(inbox_id)
+            except Exception as exc:
+                raise ExternalRuntimeInboxActionError(inbox_id=inbox_id, notification_type=notification_type) from exc
 
     async def dispatch_notification(
         self, envelope: agent_runtime_protocol.AgentRuntimeNotificationEnvelope

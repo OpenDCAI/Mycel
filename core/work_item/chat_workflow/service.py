@@ -5,7 +5,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any, Literal
 
-from core.sync_callbacks import run_sync_callbacks
+from core.sync_callbacks import SyncActionRegistry
 from core.work_item.types import WorkItem
 from storage.contracts import ChatWorkflowEventRow
 
@@ -138,10 +138,10 @@ class ChatTaskService:
 class ChatWorkflowEventService:
     def __init__(self, event_repo: Any) -> None:
         self._repo = event_repo
-        self._event_change_actions: list[Callable[[WorkflowEventChange], None]] = []
+        self._event_change_actions = SyncActionRegistry()
 
     def add_event_change_action(self, action: Callable[[WorkflowEventChange], None]) -> None:
-        self._event_change_actions.append(action)
+        self._event_change_actions.add(action)
 
     def list_events(self, chat_id: str) -> list[dict[str, Any]]:
         return [_event_response(event) for event in self._repo.list_all(chat_id)]
@@ -218,7 +218,7 @@ class ChatWorkflowEventService:
         return response
 
     def _event_change_actor(self, actor_user_id: str | None, *, field: str) -> str | None:
-        if not self._event_change_actions:
+        if not self._event_change_actions.has_actions():
             return None
         if actor_user_id is None:
             raise RuntimeError(f"Workflow event change requires {field}")
@@ -231,13 +231,12 @@ class ChatWorkflowEventService:
         event: dict[str, Any],
         actor_user_id: str | None,
     ) -> None:
-        if not self._event_change_actions:
+        if not self._event_change_actions.has_actions():
             return
         if actor_user_id is None:
             raise RuntimeError("Workflow event change requires actor_user_id")
         change = WorkflowEventChange(operation=operation, event=event, actor_user_id=actor_user_id)
-        run_sync_callbacks(
-            self._event_change_actions,
+        self._event_change_actions.run(
             change,
             on_error=lambda _exc: WorkflowEventActionError(operation=operation, event=event),
         )

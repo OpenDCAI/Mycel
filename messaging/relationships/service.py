@@ -6,7 +6,7 @@ import logging
 from collections.abc import Callable
 from typing import Any
 
-from core.sync_callbacks import run_sync_callbacks
+from core.sync_callbacks import SyncActionRegistry
 from messaging.contracts import RelationshipEvent, RelationshipRow, RelationshipState
 from messaging.relationships.state_machine import transition
 
@@ -31,18 +31,18 @@ class RelationshipService:
         on_relationship_decided: Callable[[RelationshipRow, RelationshipEvent], None] | None = None,
     ) -> None:
         self._repo = relationship_repo
-        self._relationship_request_actions: list[Callable[[RelationshipRow], None]] = []
-        self._relationship_decision_actions: list[Callable[[RelationshipRow, RelationshipEvent], None]] = []
+        self._relationship_request_actions = SyncActionRegistry()
+        self._relationship_decision_actions = SyncActionRegistry()
         if on_relationship_requested is not None:
             self.add_relationship_request_action(on_relationship_requested)
         if on_relationship_decided is not None:
             self.add_relationship_decision_action(on_relationship_decided)
 
     def add_relationship_request_action(self, action: Callable[[RelationshipRow], None]) -> None:
-        self._relationship_request_actions.append(action)
+        self._relationship_request_actions.add(action)
 
     def add_relationship_decision_action(self, action: Callable[[RelationshipRow, RelationshipEvent], None]) -> None:
-        self._relationship_decision_actions.append(action)
+        self._relationship_decision_actions.add(action)
 
     def apply_event(
         self,
@@ -106,15 +106,13 @@ class RelationshipService:
         return row
 
     def _run_request_actions(self, row: RelationshipRow) -> None:
-        run_sync_callbacks(
-            self._relationship_request_actions,
+        self._relationship_request_actions.run(
             row,
             on_error=lambda _exc: RelationshipActionError(event="request", row=row),
         )
 
     def _run_decision_actions(self, event: RelationshipEvent, row: RelationshipRow) -> None:
-        run_sync_callbacks(
-            self._relationship_decision_actions,
+        self._relationship_decision_actions.run(
             row,
             event,
             on_error=lambda _exc: RelationshipActionError(event=event, row=row),
