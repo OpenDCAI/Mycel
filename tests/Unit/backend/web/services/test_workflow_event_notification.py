@@ -159,6 +159,21 @@ def test_workflow_event_notification_planner_selects_runtime_members() -> None:
         assert envelope.message.metadata["operation"] == "updated"
 
 
+def test_workflow_event_notification_planner_keeps_identity_context() -> None:
+    try:
+        plan_workflow_event_runtime_notifications(
+            change=_change("updated"),
+            members=[{"user_id": "missing-recipient"}],
+            user_repo=_users("agent-1"),
+            thread_repo=_thread_repo("agent-1"),
+            activity_reader=SimpleNamespace(list_active_threads_for_agent=lambda _agent_user_id: []),
+        )
+    except RuntimeError as exc:
+        assert str(exc) == "Workflow event notification recipient user not found: missing-recipient"
+    else:
+        raise AssertionError("missing workflow event recipient did not fail")
+
+
 @pytest.mark.asyncio
 async def test_dispatch_workflow_event_notifications_executes_planned_envelopes() -> None:
     gateway = _RecordingGateway()
