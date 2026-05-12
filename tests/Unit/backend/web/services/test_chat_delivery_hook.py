@@ -59,6 +59,30 @@ def test_chat_delivery_request_builds_runtime_action() -> None:
     )
 
 
+def test_chat_delivery_action_planner_returns_runtime_action() -> None:
+    planner = owner_chat_inlet.chat_delivery_runtime_action_planner()
+
+    actions = planner(
+        ChatDeliveryRequest(
+            recipient_id="agent-user-1",
+            recipient_user=SimpleNamespace(id="agent-user-1", type="agent"),
+            content="hello",
+            sender_name="Human",
+            sender_type="human",
+            chat_id="chat-1",
+            sender_id="human-user-1",
+            sender_avatar_url=None,
+            unread_count=2,
+            signal=None,
+        )
+    )
+
+    assert len(actions) == 1
+    assert actions[0].recipient_user_id == "agent-user-1"
+    assert actions[0].content == format_chat_notification("Human", "chat-1", 2, signal=None)
+    assert actions[0].raw_content == "hello"
+
+
 @pytest.mark.asyncio
 async def test_chat_delivery_hook_propagates_runtime_gateway_failures() -> None:
     class FailingGateway:
