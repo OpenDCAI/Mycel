@@ -138,8 +138,6 @@ def test_build_agent_runtime_state_does_not_write_top_level_activity_reader(monk
 
     monkeypatch.setattr(runtime_bootstrap, "AppRuntimeThreadActivityReader", lambda **_kwargs: activity_reader)
     monkeypatch.setattr(runtime_bootstrap, "NativeAgentRuntimeGateway", lambda **_kwargs: gateway)
-    monkeypatch.setattr(runtime_bootstrap, "NativeAgentChatDeliveryHandler", lambda **_kwargs: object())
-    monkeypatch.setattr(runtime_bootstrap, "AppAgentChatRuntimeServices", lambda *args, **kwargs: object())
     monkeypatch.setattr(runtime_bootstrap, "NativeAgentThreadInputHandler", lambda *args, **kwargs: object())
     monkeypatch.setattr(
         runtime_bootstrap,
