@@ -25,18 +25,6 @@ class ExternalRuntimeInboxHandler:
         self._queue_manager = queue_manager
         self._wake_bus = wake_bus
 
-    async def dispatch(self, envelope: agent_runtime_protocol.AgentChatDeliveryEnvelope) -> agent_runtime_protocol.AgentChatDeliveryResult:
-        inbox_id = external_inbox_key(envelope.recipient.agent_user_id)
-        self._enqueue_external_inbox_action(
-            inbox_id=inbox_id,
-            content=json.dumps({"event_type": "chat.message", "chat_id": envelope.chat.chat_id}, ensure_ascii=False, separators=(",", ":")),
-            notification_type="chat",
-            sender_id=envelope.sender.user_id,
-            sender_name=envelope.sender.display_name,
-            wake=envelope.wake,
-        )
-        return agent_runtime_protocol.AgentChatDeliveryResult(status="accepted", thread_id=inbox_id)
-
     def _enqueue_external_inbox_action(
         self,
         *,
@@ -66,14 +54,7 @@ class ExternalRuntimeInboxHandler:
         self, envelope: agent_runtime_protocol.AgentRuntimeNotificationEnvelope
     ) -> agent_runtime_protocol.AgentRuntimeNotificationResult:
         inbox_id = external_inbox_key(envelope.recipient.agent_user_id)
-        payload = {
-            "event_type": envelope.event_type,
-            "sender_id": envelope.sender.user_id,
-            "sender_name": envelope.sender.display_name,
-            "summary": envelope.message.content,
-        }
-        if envelope.message.metadata:
-            payload.update(envelope.message.metadata)
+        payload = _notification_payload(envelope)
         payload.update(_transport_payload(envelope.transport))
         self._enqueue_external_inbox_action(
             inbox_id=inbox_id,
@@ -84,6 +65,23 @@ class ExternalRuntimeInboxHandler:
             wake=envelope.wake,
         )
         return agent_runtime_protocol.AgentRuntimeNotificationResult(status="accepted", thread_id=inbox_id)
+
+
+def _notification_payload(envelope: agent_runtime_protocol.AgentRuntimeNotificationEnvelope) -> dict[str, Any]:
+    metadata = dict(envelope.message.metadata or {})
+    if envelope.notification_type == "chat":
+        chat_id = metadata.get("chat_id")
+        if chat_id is None:
+            raise RuntimeError("External chat notification is missing chat_id metadata")
+        return {"event_type": envelope.event_type, "chat_id": str(chat_id)}
+    payload = {
+        "event_type": envelope.event_type,
+        "sender_id": envelope.sender.user_id,
+        "sender_name": envelope.sender.display_name,
+        "summary": envelope.message.content,
+    }
+    payload.update(metadata)
+    return payload
 
 
 def _transport_payload(transport: agent_runtime_protocol.AgentRuntimeTransport) -> dict[str, str]:
