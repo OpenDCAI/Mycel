@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Iterator
 from types import SimpleNamespace
 from typing import Literal
 
@@ -140,9 +141,11 @@ def test_workflow_event_notification_fails_loudly_on_missing_identity() -> None:
 
 
 def test_workflow_event_notification_planner_selects_recipient_actions() -> None:
-    actions = make_workflow_event_notification_actions(
-        _change("updated"),
-        _members("owner-1", "agent-1", "agent-without-thread", "external-1", "human-2"),
+    actions = list(
+        make_workflow_event_notification_actions(
+            _change("updated"),
+            _members("owner-1", "agent-1", "agent-without-thread", "external-1", "human-2"),
+        )
     )
 
     assert [action.recipient_user_id for action in actions] == ["agent-1", "agent-without-thread", "external-1", "human-2"]
@@ -151,6 +154,26 @@ def test_workflow_event_notification_planner_selects_recipient_actions() -> None
         assert action.metadata is not None
         assert action.metadata["event_id"] == "event-1"
         assert action.metadata["operation"] == "updated"
+
+
+def test_workflow_event_notification_actions_are_planned_lazily() -> None:
+    events: list[str] = []
+
+    def members() -> Iterator[dict[str, str]]:
+        events.append("members-start")
+        yield {"user_id": "owner-1"}
+        events.append("after-owner")
+        yield {"user_id": "agent-1"}
+        events.append("after-agent")
+        yield {"user_id": "agent-2"}
+
+    actions = make_workflow_event_notification_actions(_change("updated"), members())
+    events.append("before-first-action")
+
+    first = next(iter(actions))
+
+    assert first.recipient_user_id == "agent-1"
+    assert events == ["before-first-action", "members-start", "after-owner"]
 
 
 def test_workflow_event_notification_action_planner_reads_chat_members() -> None:
@@ -162,7 +185,7 @@ def test_workflow_event_notification_action_planner_reads_chat_members() -> None
 
     planner = workflow_event_notification_action_planner(SimpleNamespace(list_chat_members=list_chat_members))
 
-    actions = planner(_change("updated"))
+    actions = list(planner(_change("updated")))
 
     assert seen_chat_ids == ["chat-1"]
     assert [action.recipient_user_id for action in actions] == ["agent-1"]
