@@ -60,7 +60,7 @@ async def dispatch_runtime_actions(
             continue
         if gateway is None:
             gateway = get_agent_runtime_gateway(app)
-        await dispatch_runtime_action_envelope(gateway, envelope)
+        await _dispatch_runtime_action_envelope(gateway, envelope)
         dispatched_count += 1
     return dispatched_count
 
@@ -103,7 +103,7 @@ async def dispatch_runtime_action(
     )
     if envelope is None:
         return None
-    return await dispatch_runtime_action_envelope(get_agent_runtime_gateway(app), envelope)
+    return await _dispatch_runtime_action_envelope(get_agent_runtime_gateway(app), envelope)
 
 
 @overload
@@ -146,7 +146,7 @@ def plan_runtime_action_envelope(
     raise TypeError(f"Unsupported runtime action: {type(action).__name__}")
 
 
-async def dispatch_runtime_action_envelope(gateway: Any, envelope: RuntimeActionEnvelope) -> RuntimeActionResult:
+async def _dispatch_runtime_action_envelope(gateway: Any, envelope: RuntimeActionEnvelope) -> RuntimeActionResult:
     if isinstance(envelope, AgentRuntimeNotificationEnvelope):
         return await gateway.dispatch_notification(envelope)
     if isinstance(envelope, AgentThreadInputEnvelope):
