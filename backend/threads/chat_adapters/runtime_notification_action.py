@@ -5,7 +5,6 @@ from dataclasses import dataclass
 from typing import Any
 
 from backend.threads.chat_adapters.port import get_agent_runtime_gateway
-from backend.threads.chat_adapters.runtime_event_action_route import RuntimeEventActionRoute
 from backend.threads.chat_adapters.runtime_identity import make_runtime_actor, require_user
 from backend.threads.chat_adapters.runtime_recipient import resolve_runtime_notification_recipient
 from backend.threads.chat_adapters.runtime_sync_event_hook import make_sync_runtime_event_hook
@@ -48,11 +47,10 @@ def make_runtime_notification_event_hook[EventT](
             activity_reader=activity_reader,
         )
 
-    route = RuntimeEventActionRoute(
-        planner=planner,
-        dispatch_actions=dispatch_actions,
-    )
-    return make_sync_runtime_event_hook(route.dispatch)
+    async def dispatch_event(event: EventT) -> int:
+        return await dispatch_actions(planner(event))
+
+    return make_sync_runtime_event_hook(dispatch_event)
 
 
 async def dispatch_runtime_notification_actions(
