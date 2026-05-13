@@ -138,9 +138,11 @@ def test_chat_delivery_adapter_is_not_a_separate_runtime_action_module() -> None
 
 
 def test_runtime_action_adapters_do_not_export_envelope_dispatch_helpers() -> None:
+    runtime_action_module = importlib.import_module("backend.threads.chat_adapters.runtime_action")
     notification_action_module = importlib.import_module("backend.threads.chat_adapters.runtime_notification_action")
     thread_input_action_module = importlib.import_module("backend.threads.chat_adapters.runtime_thread_input_action")
 
+    assert not hasattr(runtime_action_module, "dispatch_runtime_action_envelope")
     assert not hasattr(notification_action_module, "dispatch_runtime_notification_envelopes")
     assert not hasattr(thread_input_action_module, "dispatch_runtime_thread_input_envelopes")
 
