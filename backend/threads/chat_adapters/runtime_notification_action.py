@@ -24,6 +24,7 @@ class RuntimeNotificationAction:
     event_type: str
     notification_type: str
     content: str
+    signal: str | None = None
     metadata: dict[str, Any] | None = None
     transport: AgentRuntimeTransport = AgentRuntimeTransport()
     include_sender_avatar: bool = False
@@ -106,6 +107,7 @@ def plan_runtime_notification_envelope(
         ),
         message=AgentRuntimeMessage(
             content=action.content,
+            signal=action.signal,
             metadata=action.metadata,
         ),
         notification_type=action.notification_type,

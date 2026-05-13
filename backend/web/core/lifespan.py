@@ -3,6 +3,7 @@ import os
 from contextlib import asynccontextmanager, suppress
 from dataclasses import is_dataclass, replace
 from types import SimpleNamespace
+from typing import Any
 
 from fastapi import FastAPI
 from psycopg import AsyncConnection
@@ -49,9 +50,9 @@ async def lifespan(app: FastAPI):
     from backend.bootstrap.storage import attach_runtime_storage_state
     from backend.identity.auth.runtime_bootstrap import attach_auth_runtime_state
 
-    runtime_storage = attach_runtime_storage_state(app)
+    runtime_storage: Any = attach_runtime_storage_state(app)
     _supabase_client = runtime_storage.supabase_client
-    storage_container = runtime_storage.storage_container
+    storage_container: Any = runtime_storage.storage_container
 
     app.state.user_repo = storage_container.user_repo()
     app.state.thread_repo = storage_container.thread_repo()
@@ -113,6 +114,7 @@ async def lifespan(app: FastAPI):
         messaging_service=chat_runtime.messaging_service,
         activity_reader=threads_runtime.activity_reader,
         thread_repo=app.state.thread_repo,
+        user_repo=app.state.user_repo,
     )
     wire_relationship_request_notifications(
         app,

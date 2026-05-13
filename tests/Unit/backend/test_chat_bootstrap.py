@@ -135,6 +135,7 @@ def test_wire_chat_delivery_binds_delivery_fn(monkeypatch):
     messaging_service = SimpleNamespace(delivery_fn=None)
     activity_reader = object()
     thread_repo = object()
+    user_repo = object()
 
     def _set_delivery_fn(value):
         messaging_service.delivery_fn = value
@@ -146,7 +147,7 @@ def test_wire_chat_delivery_binds_delivery_fn(monkeypatch):
     monkeypatch.setattr(
         chat_bootstrap,
         "make_chat_delivery_fn",
-        lambda target_app, *, activity_reader, thread_repo: delivery_fn,
+        lambda target_app, *, activity_reader, thread_repo, user_repo: delivery_fn,
     )
 
     chat_bootstrap.wire_chat_delivery(
@@ -154,6 +155,7 @@ def test_wire_chat_delivery_binds_delivery_fn(monkeypatch):
         messaging_service=messaging_service,
         activity_reader=activity_reader,
         thread_repo=thread_repo,
+        user_repo=user_repo,
     )
 
     assert messaging_service.delivery_fn is delivery_fn
