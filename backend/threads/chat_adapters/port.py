@@ -3,8 +3,6 @@ from __future__ import annotations
 from typing import Any, Protocol
 
 from protocols.agent_runtime import (
-    AgentChatDeliveryEnvelope,
-    AgentChatDeliveryResult,
     AgentRuntimeNotificationEnvelope,
     AgentRuntimeNotificationResult,
     AgentThreadInputEnvelope,
@@ -13,8 +11,6 @@ from protocols.agent_runtime import (
 
 
 class AgentRuntimeGatewayPort(Protocol):
-    async def dispatch_chat(self, envelope: AgentChatDeliveryEnvelope) -> AgentChatDeliveryResult: ...
-
     async def dispatch_notification(self, envelope: AgentRuntimeNotificationEnvelope) -> AgentRuntimeNotificationResult: ...
 
     async def dispatch_thread_input(self, envelope: AgentThreadInputEnvelope) -> AgentThreadInputResult: ...

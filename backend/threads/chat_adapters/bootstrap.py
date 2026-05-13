@@ -6,13 +6,11 @@ from typing import Any
 from backend.monitor.infrastructure.resources.resource_overview_cache import clear_resource_overview_cache
 from backend.threads.activity_pool_service import get_or_create_agent
 from backend.threads.chat_adapters.activity_reader import AppRuntimeThreadActivityReader
-from backend.threads.chat_adapters.chat_handler import NativeAgentChatDeliveryHandler
-from backend.threads.chat_adapters.chat_runtime_services import AppAgentChatRuntimeServices
 from backend.threads.chat_adapters.external_inbox_handler import ExternalRuntimeInboxHandler
 from backend.threads.chat_adapters.gateway import NativeAgentRuntimeGateway
 from backend.threads.chat_adapters.thread_handler import NativeAgentThreadInputHandler
 from backend.threads.sandbox_resolution import resolve_thread_sandbox
-from backend.threads.streaming import _ensure_thread_handlers, start_agent_run
+from backend.threads.streaming import start_agent_run
 
 
 @dataclass(frozen=True)
@@ -40,25 +38,9 @@ def build_agent_runtime_state(app: Any, *, typing_tracker: Any) -> AgentRuntimeG
         resolve_thread_sandbox=resolve_thread_sandbox,
         start_agent_run=start_agent_run,
         clear_resource_overview_cache=clear_resource_overview_cache,
+        typing_tracker=typing_tracker,
     )
     gateway = NativeAgentRuntimeGateway(
-        chat_handlers={
-            "mycel": NativeAgentChatDeliveryHandler(
-                runtime_services=AppAgentChatRuntimeServices(
-                    app,
-                    # @@@chat-runtime-borrowed-typing-tracker - threads runtime
-                    # consumes chat-owned typing state, but the borrow happens at
-                    # bootstrap so this gateway builder does not reach back
-                    # through app.state for chat truth on its own.
-                    typing_tracker=typing_tracker,
-                    queue_manager=app.state.queue_manager,
-                    get_or_create_agent=get_or_create_agent,
-                    resolve_thread_sandbox=resolve_thread_sandbox,
-                    ensure_thread_handlers=_ensure_thread_handlers,
-                ),
-            ),
-            "external": external_runtime_handler,
-        },
         notification_handlers={
             "external": external_runtime_handler,
         },

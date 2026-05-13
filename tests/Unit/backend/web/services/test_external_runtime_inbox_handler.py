@@ -11,8 +11,6 @@ from backend.threads.chat_adapters.external_inbox_handler import (
     external_inbox_key,
 )
 from protocols.agent_runtime import (
-    AgentChatContext,
-    AgentChatDeliveryEnvelope,
     AgentChatRecipient,
     AgentRuntimeActor,
     AgentRuntimeMessage,
@@ -34,15 +32,6 @@ class _FailingWakeBus:
         raise RuntimeError("wake publish failed")
 
 
-def _envelope() -> AgentChatDeliveryEnvelope:
-    return AgentChatDeliveryEnvelope(
-        chat=AgentChatContext(chat_id="chat-1"),
-        sender=AgentRuntimeActor(user_id="human-user-1", user_type="human", display_name="Human"),
-        recipient=AgentChatRecipient(agent_user_id="external-user-1", runtime_source="external"),
-        message=AgentRuntimeMessage(content="<system-reminder>managed runtime prompt must not leak</system-reminder>"),
-    )
-
-
 def _queueing_handler(wake_bus: object) -> tuple[ExternalRuntimeInboxHandler, list[tuple[str, str, str, dict]]]:
     enqueued: list[tuple[str, str, str, dict]] = []
     handler = ExternalRuntimeInboxHandler(
@@ -58,13 +47,15 @@ def _notification_envelope(
     *,
     message: AgentRuntimeMessage,
     transport: AgentRuntimeTransport | None = None,
+    event_type: str = "relationship.requested",
+    notification_type: str = "relationship",
 ) -> AgentRuntimeNotificationEnvelope:
     return AgentRuntimeNotificationEnvelope(
-        event_type="relationship.requested",
+        event_type=event_type,
         recipient=AgentChatRecipient(agent_user_id="external-user-1", runtime_source="external"),
         sender=AgentRuntimeActor(user_id="human-user-1", user_type="human", display_name="Human", source="relationship"),
         message=message,
-        notification_type="relationship",
+        notification_type=notification_type,
         transport=transport or AgentRuntimeTransport(),
     )
 
@@ -73,8 +64,16 @@ def _notification_envelope(
 async def test_external_runtime_inbox_handler_queues_chat_wake_token_only() -> None:
     wake_bus = _RecordingWakeBus()
     handler, enqueued = _queueing_handler(wake_bus)
+    envelope = _notification_envelope(
+        event_type="chat.message",
+        notification_type="chat",
+        message=AgentRuntimeMessage(
+            content="<system-reminder>managed runtime prompt must not leak</system-reminder>",
+            metadata={"chat_id": "chat-1"},
+        ),
+    )
 
-    result = await handler.dispatch(_envelope())
+    result = await handler.dispatch_notification(envelope)
 
     assert result.status == "accepted"
     assert result.thread_id == external_inbox_key("external-user-1")
@@ -95,9 +94,14 @@ async def test_external_runtime_inbox_handler_queues_chat_wake_token_only() -> N
 @pytest.mark.asyncio
 async def test_external_runtime_inbox_handler_wraps_chat_wake_failure_after_enqueue() -> None:
     handler, enqueued = _queueing_handler(_FailingWakeBus())
+    envelope = _notification_envelope(
+        event_type="chat.message",
+        notification_type="chat",
+        message=AgentRuntimeMessage(content="chat prompt", metadata={"chat_id": "chat-1"}),
+    )
 
     with pytest.raises(ExternalRuntimeInboxActionError) as exc_info:
-        await handler.dispatch(_envelope())
+        await handler.dispatch_notification(envelope)
 
     assert len(enqueued) == 1
     assert exc_info.value.inbox_id == "external:external-user-1"

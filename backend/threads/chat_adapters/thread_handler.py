@@ -22,6 +22,7 @@ class NativeAgentThreadInputHandler:
         resolve_thread_sandbox: Any,
         start_agent_run: Any,
         clear_resource_overview_cache: Any,
+        typing_tracker: Any | None = None,
     ) -> None:
         self._app = app
         self._queue_manager = queue_manager
@@ -32,6 +33,7 @@ class NativeAgentThreadInputHandler:
         self._resolve_thread_sandbox = resolve_thread_sandbox
         self._start_agent_run = start_agent_run
         self._clear_resource_overview_cache = clear_resource_overview_cache
+        self._typing_tracker = typing_tracker
 
     async def dispatch(self, envelope: agent_runtime_protocol.AgentThreadInputEnvelope) -> agent_runtime_protocol.AgentThreadInputResult:
         thread_id = envelope.thread_id
@@ -53,6 +55,7 @@ class NativeAgentThreadInputHandler:
             meta = thread_input_metadata(envelope)
             queue_metadata = thread_input_message_metadata(envelope)
             notification_type = thread_input_notification_type(envelope)
+            self._start_chat_notification(envelope, notification_type)
 
             if state == AgentState.ACTIVE:
                 qm.enqueue(
@@ -100,3 +103,13 @@ class NativeAgentThreadInputHandler:
         finally:
             if startup_cancel is not None and self._thread_tasks.get(thread_id) is startup_cancel:
                 self._thread_tasks.pop(thread_id, None)
+
+    def _start_chat_notification(self, envelope: agent_runtime_protocol.AgentThreadInputEnvelope, notification_type: str) -> None:
+        if notification_type != "chat" or self._typing_tracker is None:
+            return
+        metadata = envelope.message.metadata or {}
+        chat_id = metadata.get("chat_id")
+        recipient_user_id = metadata.get("recipient_user_id")
+        if chat_id is None or recipient_user_id is None:
+            raise RuntimeError("Chat thread input notification is missing chat_id or recipient_user_id metadata")
+        self._typing_tracker.start_chat(envelope.thread_id, str(chat_id), str(recipient_user_id))

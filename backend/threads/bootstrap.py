@@ -77,13 +77,6 @@ class ExternalOnlyRuntimeGateway:
     def __init__(self, handler: ExternalRuntimeInboxHandler) -> None:
         self._handler = handler
 
-    async def dispatch_chat(
-        self, envelope: agent_runtime_protocol.AgentChatDeliveryEnvelope
-    ) -> agent_runtime_protocol.AgentChatDeliveryResult:
-        if envelope.recipient.runtime_source != "external":
-            raise RuntimeError("Communication profile only supports external runtime chat delivery")
-        return await self._handler.dispatch(envelope)
-
     async def dispatch_notification(
         self,
         envelope: agent_runtime_protocol.AgentRuntimeNotificationEnvelope,

@@ -23,7 +23,6 @@ def test_provider_webhooks_are_not_mycel_event_action_entrypoint() -> None:
     forbidden_modules = (
         "backend.messaging",
         "backend.threads.chat_adapters.runtime_notification_action",
-        "backend.threads.chat_adapters.runtime_chat_delivery_action",
         "core.after_commit_actions",
         "messaging.service",
     )

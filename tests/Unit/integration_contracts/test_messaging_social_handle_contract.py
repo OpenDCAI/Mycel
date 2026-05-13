@@ -3550,11 +3550,12 @@ def test_same_owner_group_delivery_keeps_muted_recipients_out_of_runtime_queue()
 async def test_agent_runtime_gateway_uses_recipient_social_user_id_for_thread_lookup_and_passes_through_envelope_content(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    started, unread_calls, enqueued = await _run_chat_delivery(monkeypatch, chat_id="chat-1", unread_count=7)
+    started, unread_calls, enqueued, direct_runs = await _run_chat_delivery(monkeypatch, chat_id="chat-1", unread_count=7)
 
     assert started == [("thread-1", "chat-1", "agent-user-1")]
     assert unread_calls == []
-    assert enqueued == [("Human|chat-1|7|ping", "thread-1", "human-user-1", "Human")]
+    assert enqueued == []
+    assert direct_runs == [("thread-1", "Human|chat-1|7|ping")]
 
 
 @pytest.mark.asyncio
@@ -3573,6 +3574,12 @@ async def test_recipient_thread_resolution_requires_current_thread_repo_contract
             thread_tasks={},
             thread_locks={},
             thread_locks_guard=asyncio.Lock(),
+            user_repo=SimpleNamespace(
+                get_by_id=lambda user_id: {
+                    "agent-user-1": SimpleNamespace(id="agent-user-1", type="agent", display_name="Agent", avatar=None),
+                    "human-user-1": SimpleNamespace(id="human-user-1", type="human", display_name="Human", avatar=None),
+                }.get(user_id)
+            ),
         )
     )
     runtime_state = build_agent_runtime_state(app, typing_tracker=SimpleNamespace(start_chat=lambda *_args, **_kwargs: None))
@@ -3588,6 +3595,7 @@ async def test_recipient_thread_resolution_requires_current_thread_repo_contract
                 app,
                 activity_reader=runtime_state.activity_reader,
                 thread_repo=app.state.thread_repo,
+                user_repo=app.state.user_repo,
             ),
             ChatDeliveryRequest(
                 recipient_id="agent-user-1",
@@ -3611,19 +3619,39 @@ async def _run_chat_delivery(
     pool: dict[str, Any] | None = None,
     chat_id: str,
     unread_count: int,
-) -> tuple[list[tuple[str, str, str]], list[tuple[str, str]], list[tuple[str, str, str | None, str | None]]]:
+) -> tuple[
+    list[tuple[str, str, str]],
+    list[tuple[str, str]],
+    list[tuple[str, str, str | None, str | None]],
+    list[tuple[str, str]],
+]:
     started: list[tuple[str, str, str]] = []
     unread_calls: list[tuple[str, str]] = []
     enqueued: list[tuple[str, str, str | None, str | None]] = []
+    direct_runs: list[tuple[str, str]] = []
+
+    class _FakeRuntime:
+        def __init__(self, state: AgentState = AgentState.IDLE) -> None:
+            self.current_state = state
+
+        def transition(self, next_state: AgentState) -> bool:
+            self.current_state = next_state
+            return True
 
     async def _fake_get_or_create_agent(_app, _sandbox_type: str, *, thread_id: str):
-        return SimpleNamespace(id=f"agent-for-{thread_id}")
+        agent = _app.state.agent_pool.get(f"{thread_id}:local")
+        if agent is not None:
+            return SimpleNamespace(id=f"agent-for-{thread_id}", runtime=_FakeRuntime(agent.runtime.current_state))
+        return SimpleNamespace(id=f"agent-for-{thread_id}", runtime=_FakeRuntime())
 
     monkeypatch.setattr("backend.threads.chat_adapters.bootstrap.get_or_create_agent", _fake_get_or_create_agent)
     monkeypatch.setattr("backend.threads.chat_adapters.bootstrap.resolve_thread_sandbox", lambda _app, _thread_id: "local")
-    monkeypatch.setattr("backend.threads.chat_adapters.bootstrap._ensure_thread_handlers", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(
-        "backend.threads.chat_adapters.runtime_chat_delivery_action.format_chat_notification",
+        "backend.threads.chat_adapters.bootstrap.start_agent_run",
+        lambda _agent, thread_id, content, *_args, **_kwargs: direct_runs.append((thread_id, content)) or "run-1",
+    )
+    monkeypatch.setattr(
+        "backend.threads.chat_adapters.chat_inlet.format_chat_notification",
         lambda sender_name, chat_id, unread_count, signal=None: f"{sender_name}|{chat_id}|{unread_count}|{signal}",
     )
 
@@ -3648,6 +3676,12 @@ async def _run_chat_delivery(
             thread_tasks={},
             thread_locks={},
             thread_locks_guard=asyncio.Lock(),
+            user_repo=SimpleNamespace(
+                get_by_id=lambda user_id: {
+                    "agent-user-1": SimpleNamespace(id="agent-user-1", type="agent", display_name="Agent", avatar=None),
+                    "human-user-1": SimpleNamespace(id="human-user-1", type="human", display_name="Human", avatar=None),
+                }.get(user_id)
+            ),
         )
     )
     runtime_state = build_agent_runtime_state(
@@ -3665,6 +3699,7 @@ async def _run_chat_delivery(
             app,
             activity_reader=runtime_state.activity_reader,
             thread_repo=app.state.thread_repo,
+            user_repo=app.state.user_repo,
         ),
         ChatDeliveryRequest(
             recipient_id="agent-user-1",
@@ -3680,7 +3715,7 @@ async def _run_chat_delivery(
         ),
     )
 
-    return started, unread_calls, enqueued
+    return started, unread_calls, enqueued, direct_runs
 
 
 @pytest.mark.asyncio
@@ -3752,7 +3787,7 @@ async def test_agent_runtime_gateway_prefers_latest_live_child_thread_over_activ
     unread_count,
     expected_thread_id,
 ) -> None:
-    started, _, enqueued = await _run_chat_delivery(
+    started, _, enqueued, direct_runs = await _run_chat_delivery(
         monkeypatch,
         threads=threads,
         pool=pool,
@@ -3761,4 +3796,9 @@ async def test_agent_runtime_gateway_prefers_latest_live_child_thread_over_activ
     )
 
     assert started == [(expected_thread_id, chat_id, "agent-user-1")]
-    assert enqueued == [(f"Human|{chat_id}|{unread_count}|ping", expected_thread_id, "human-user-1", "Human")]
+    if pool[f"{expected_thread_id}:local"].runtime.current_state == AgentState.ACTIVE:
+        assert enqueued == [(f"Human|{chat_id}|{unread_count}|ping", expected_thread_id, "human-user-1", "Human")]
+        assert direct_runs == []
+    else:
+        assert enqueued == []
+        assert direct_runs == [(expected_thread_id, f"Human|{chat_id}|{unread_count}|ping")]

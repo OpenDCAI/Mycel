@@ -182,10 +182,11 @@ async def test_web_lifespan_wires_chat_delivery_after_threads_runtime(monkeypatc
         app.state.agent_pool = {}
         return SimpleNamespace(activity_reader=returned_activity_reader)
 
-    def _wire_chat_delivery(_app, *, messaging_service, activity_reader, thread_repo):
+    def _wire_chat_delivery(_app, *, messaging_service, activity_reader, thread_repo, user_repo):
         call_log.append("wire-chat")
         assert messaging_service is returned_messaging_service
         assert activity_reader is returned_activity_reader
+        assert user_repo is app.state.user_repo
 
     def _wire_relationship_request_notifications(_app, *, relationship_service, activity_reader, thread_repo, user_repo):
         call_log.append("wire-relationship")
@@ -356,10 +357,11 @@ async def test_communication_lifespan_uses_external_inbox_runtime_without_manage
     def _attach_threads_runtime(*_args, **_kwargs):
         raise AssertionError("communication profile must not bootstrap managed-agent threads runtime")
 
-    def _wire_chat_delivery(_app, *, messaging_service, activity_reader, thread_repo):
+    def _wire_chat_delivery(_app, *, messaging_service, activity_reader, thread_repo, user_repo):
         call_log.append("wire-chat")
         assert messaging_service is returned_messaging_service
         assert activity_reader is None
+        assert user_repo is app.state.user_repo
 
     def _wire_relationship_request_notifications(_app, *, relationship_service, activity_reader, thread_repo, user_repo):
         call_log.append("wire-relationship")
