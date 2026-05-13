@@ -152,12 +152,14 @@ def test_runtime_action_adapters_do_not_export_concrete_event_dispatch_helpers()
     assert not hasattr(chat_inlet_module, "dispatch_chat_delivery_event")
 
 
-def test_chat_and_notification_action_adapters_do_not_export_dispatcher_factories() -> None:
+def test_runtime_action_adapters_do_not_export_dispatcher_factories() -> None:
     chat_action_module = importlib.import_module("backend.threads.chat_adapters.runtime_chat_delivery_action")
     notification_action_module = importlib.import_module("backend.threads.chat_adapters.runtime_notification_action")
+    thread_input_action_module = importlib.import_module("backend.threads.chat_adapters.runtime_thread_input_action")
 
     assert not hasattr(chat_action_module, "runtime_chat_delivery_action_dispatcher")
     assert not hasattr(notification_action_module, "runtime_notification_action_dispatcher")
+    assert not hasattr(thread_input_action_module, "runtime_thread_input_action_dispatcher")
 
 
 def test_runtime_protocol_envelopes_are_constructed_only_at_adapter_boundaries() -> None:
