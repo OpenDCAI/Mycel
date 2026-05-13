@@ -1,13 +1,15 @@
 from __future__ import annotations
 
-from collections.abc import Callable, Iterable
-from dataclasses import dataclass
+from collections.abc import Callable
+from enum import Enum
 from typing import Any
 
+from backend.threads.chat_adapters.chat_notification_format import format_chat_notification
 from backend.threads.chat_adapters.port import get_agent_runtime_gateway
 from backend.threads.chat_adapters.runtime_identity import runtime_actor
 from backend.threads.chat_adapters.runtime_recipient import resolve_runtime_chat_delivery_recipient
 from backend.threads.chat_adapters.runtime_sync_event_hook import make_blocking_runtime_event_hook
+from messaging.delivery.contracts import ChatDeliveryRequest
 from protocols.agent_runtime import (
     AgentChatContext,
     AgentChatDeliveryEnvelope,
@@ -15,93 +17,72 @@ from protocols.agent_runtime import (
 )
 
 
-@dataclass(frozen=True)
-class RuntimeChatDeliveryAction:
-    chat_id: str
-    recipient_id: str
-    recipient_user_id: str
-    recipient_user_type: str
-    sender_id: str
-    sender_type: str
-    sender_name: str
-    sender_avatar_url: str | None
-    content: str
-    raw_content: str
-    signal: str | None
-
-
-def make_runtime_chat_delivery_event_hook[EventT](
+def make_runtime_chat_delivery_event_hook(
     app: Any,
-    planner: Callable[[EventT], Iterable[RuntimeChatDeliveryAction]],
     *,
     thread_repo: Any,
     activity_reader: Any,
-) -> Callable[[EventT], None]:
-    async def dispatch_event(event: EventT) -> int:
-        return await dispatch_runtime_chat_delivery_actions(
-            app,
-            planner(event),
-            thread_repo=thread_repo,
-            activity_reader=activity_reader,
-        )
-
-    return make_blocking_runtime_event_hook(dispatch_event)
-
-
-async def dispatch_runtime_chat_delivery_actions(
-    app: Any,
-    actions: Iterable[RuntimeChatDeliveryAction],
-    *,
-    thread_repo: Any,
-    activity_reader: Any,
-) -> int:
-    gateway = None
-    dispatched_count = 0
-    for action in actions:
+) -> Callable[[ChatDeliveryRequest], None]:
+    async def dispatch_event(request: ChatDeliveryRequest) -> int:
         envelope = plan_runtime_chat_delivery_envelope(
-            action,
+            request,
             thread_repo=thread_repo,
             activity_reader=activity_reader,
         )
         if envelope is None:
-            continue
-        if gateway is None:
-            gateway = get_agent_runtime_gateway(app)
+            return 0
+        gateway = get_agent_runtime_gateway(app)
         await gateway.dispatch_chat(envelope)
-        dispatched_count += 1
-    return dispatched_count
+        return 1
+
+    return make_blocking_runtime_event_hook(dispatch_event)
 
 
 def plan_runtime_chat_delivery_envelope(
-    action: RuntimeChatDeliveryAction,
+    request: ChatDeliveryRequest,
     *,
     thread_repo: Any,
     activity_reader: Any,
 ) -> AgentChatDeliveryEnvelope | None:
+    raw_recipient_type = getattr(request.recipient_user, "type", None)
+    if raw_recipient_type is None:
+        raise RuntimeError(f"Chat delivery recipient is missing user type: {request.recipient_id}")
+    recipient_user_type = raw_recipient_type.value if isinstance(raw_recipient_type, Enum) else str(raw_recipient_type)
+    recipient_user_id = getattr(request.recipient_user, "id", None)
+    if recipient_user_id is None:
+        raise RuntimeError(f"Chat delivery recipient is missing user id: {request.recipient_id}")
     recipient = resolve_runtime_chat_delivery_recipient(
-        action.recipient_id,
-        action.recipient_user_type,
+        request.recipient_id,
+        recipient_user_type,
         thread_repo=thread_repo,
         activity_reader=activity_reader,
     )
     if recipient is None:
         return None
+    # @@@chat-rendered-content - runtime handlers should enqueue the already rendered
+    # chat reminder content; chat-specific unread/rendering belongs on the upstream delivery path.
+    rendered_content = format_chat_notification(
+        request.sender_name,
+        request.chat_id,
+        request.unread_count,
+        signal=request.signal,
+    )
     return AgentChatDeliveryEnvelope(
-        chat=AgentChatContext(chat_id=action.chat_id),
+        chat=AgentChatContext(chat_id=request.chat_id),
         sender=runtime_actor(
-            user_id=action.sender_id,
-            user_type=action.sender_type,
-            display_name=action.sender_name,
-            avatar_url=action.sender_avatar_url,
+            user_id=request.sender_id,
+            user_type=request.sender_type,
+            display_name=request.sender_name,
+            avatar_url=request.sender_avatar_url,
             source="chat",
         ),
         recipient=recipient,
-        message=AgentRuntimeMessage(content=action.content, signal=action.signal),
+        message=AgentRuntimeMessage(content=rendered_content, signal=request.signal),
         extensions={
             "mycel": {
-                "recipient_user_id": action.recipient_user_id,
-                "recipient_user_type": action.recipient_user_type,
-                "raw_content": action.raw_content,
+                "recipient_user_id": recipient_user_id,
+                "recipient_user_type": recipient_user_type,
+                "raw_content": request.content,
             }
         },
     )

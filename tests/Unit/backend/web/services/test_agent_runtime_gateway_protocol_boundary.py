@@ -123,6 +123,13 @@ def test_runtime_action_adapters_do_not_export_unused_single_dispatch_helpers() 
     assert not hasattr(notification_action_module, "dispatch_runtime_notification_action")
 
 
+def test_chat_delivery_adapter_does_not_publish_fake_fanout_action_surface() -> None:
+    chat_action_module = importlib.import_module("backend.threads.chat_adapters.runtime_chat_delivery_action")
+
+    assert not hasattr(chat_action_module, "RuntimeChatDeliveryAction")
+    assert not hasattr(chat_action_module, "dispatch_runtime_chat_delivery_actions")
+
+
 def test_runtime_action_adapters_do_not_export_envelope_dispatch_helpers() -> None:
     chat_action_module = importlib.import_module("backend.threads.chat_adapters.runtime_chat_delivery_action")
     notification_action_module = importlib.import_module("backend.threads.chat_adapters.runtime_notification_action")

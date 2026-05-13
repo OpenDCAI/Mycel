@@ -3623,7 +3623,7 @@ async def _run_chat_delivery(
     monkeypatch.setattr("backend.threads.chat_adapters.bootstrap.resolve_thread_sandbox", lambda _app, _thread_id: "local")
     monkeypatch.setattr("backend.threads.chat_adapters.bootstrap._ensure_thread_handlers", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(
-        "backend.threads.chat_adapters.chat_inlet.format_chat_notification",
+        "backend.threads.chat_adapters.runtime_chat_delivery_action.format_chat_notification",
         lambda sender_name, chat_id, unread_count, signal=None: f"{sender_name}|{chat_id}|{unread_count}|{signal}",
     )
 
