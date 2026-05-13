@@ -270,6 +270,21 @@ async def test_chat_delivery_hook_skips_agent_wake_when_no_runtime_thread() -> N
 
 
 @pytest.mark.asyncio
+async def test_chat_delivery_actions_skip_without_borrowing_gateway_when_no_runtime_thread() -> None:
+    app_without_gateway = SimpleNamespace(state=SimpleNamespace())
+    thread_repo = SimpleNamespace(get_by_user_id=lambda _uid: None, list_by_agent_user=lambda _uid: [])
+
+    dispatched_count = await dispatch_runtime_chat_delivery_actions(
+        app_without_gateway,
+        [_runtime_chat_action()],
+        thread_repo=thread_repo,
+        activity_reader=SimpleNamespace(list_active_threads_for_agent=lambda _agent_user_id: []),
+    )
+
+    assert dispatched_count == 0
+
+
+@pytest.mark.asyncio
 async def test_chat_delivery_hook_routes_external_user_to_external_runtime_without_thread() -> None:
     class RecordingGateway:
         envelope = None
