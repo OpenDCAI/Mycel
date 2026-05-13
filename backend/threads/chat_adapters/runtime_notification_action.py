@@ -38,7 +38,7 @@ def make_runtime_notification_event_hook[EventT](
     thread_repo: Any,
     activity_reader: Any,
 ) -> Callable[[EventT], None]:
-    async def dispatch_actions(actions: list[RuntimeNotificationAction]) -> int:
+    async def dispatch_actions(actions: Iterable[RuntimeNotificationAction]) -> int:
         return await dispatch_runtime_notification_actions(
             app,
             actions,

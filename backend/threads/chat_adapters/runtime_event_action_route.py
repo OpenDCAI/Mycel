@@ -9,11 +9,10 @@ from typing import Any
 @dataclass(frozen=True)
 class RuntimeEventActionRoute[EventT, ActionT, ResultT]:
     planner: Callable[[EventT], Iterable[ActionT]]
-    dispatch_actions: Callable[[list[ActionT]], Coroutine[Any, Any, ResultT]]
+    dispatch_actions: Callable[[Iterable[ActionT]], Coroutine[Any, Any, ResultT]]
 
     async def dispatch(self, event: EventT) -> ResultT:
-        actions = list(self.planner(event))
-        return await self.dispatch_actions(actions)
+        return await self.dispatch_actions(self.planner(event))
 
     def sync_hook(self) -> Callable[[EventT], None]:
         loop = asyncio.get_running_loop()

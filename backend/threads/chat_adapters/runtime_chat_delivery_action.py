@@ -37,7 +37,7 @@ def make_runtime_chat_delivery_event_hook[EventT](
     thread_repo: Any,
     activity_reader: Any,
 ) -> Callable[[EventT], None]:
-    async def dispatch_actions(actions: list[RuntimeChatDeliveryAction]) -> int:
+    async def dispatch_actions(actions: Iterable[RuntimeChatDeliveryAction]) -> int:
         return await dispatch_runtime_chat_delivery_actions(
             app,
             actions,
