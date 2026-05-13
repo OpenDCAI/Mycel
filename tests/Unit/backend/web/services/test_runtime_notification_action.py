@@ -6,11 +6,8 @@ from typing import Any
 
 import pytest
 
-from backend.threads.chat_adapters.runtime_notification_action import (
-    RuntimeNotificationAction,
-    dispatch_runtime_notification_actions,
-    make_runtime_notification_event_hook,
-)
+from backend.threads.chat_adapters.runtime_action import dispatch_runtime_actions, make_runtime_action_event_hook
+from backend.threads.chat_adapters.runtime_notification_action import RuntimeNotificationAction
 from protocols.agent_runtime import AgentRuntimeTransport
 
 
@@ -65,7 +62,7 @@ def _action(**overrides) -> RuntimeNotificationAction:
 async def test_runtime_notification_action_resolves_and_dispatches_to_runtime_recipient() -> None:
     gateway = _RecordingGateway()
 
-    dispatched_count = await dispatch_runtime_notification_actions(
+    dispatched_count = await dispatch_runtime_actions(
         _runtime_app(gateway),
         [
             _action(
@@ -101,7 +98,7 @@ async def test_runtime_notification_action_resolves_and_dispatches_to_runtime_re
 async def test_runtime_notification_actions_dispatches_only_runtime_recipients() -> None:
     gateway = _RecordingGateway()
 
-    dispatched_count = await dispatch_runtime_notification_actions(
+    dispatched_count = await dispatch_runtime_actions(
         _runtime_app(gateway),
         [
             _action(),
@@ -125,7 +122,7 @@ async def test_runtime_notification_hook_plans_and_dispatches_actions() -> None:
     def planner(value: str) -> list[RuntimeNotificationAction]:
         return [_action(context="Test hook", content=f"Action {value}.")]
 
-    hook = make_runtime_notification_event_hook(
+    hook = make_runtime_action_event_hook(
         _runtime_app(gateway),
         planner,
         user_repo=_users(),

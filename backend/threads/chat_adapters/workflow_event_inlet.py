@@ -3,10 +3,8 @@ from __future__ import annotations
 from collections.abc import Callable, Iterable, Mapping
 from typing import Any
 
-from backend.threads.chat_adapters.runtime_notification_action import (
-    RuntimeNotificationAction,
-    make_runtime_notification_event_hook,
-)
+from backend.threads.chat_adapters.runtime_action import make_runtime_action_event_hook
+from backend.threads.chat_adapters.runtime_notification_action import RuntimeNotificationAction
 from core.work_item.chat_workflow.service import WorkflowEventChange
 from protocols.agent_runtime import AgentRuntimeTransport
 
@@ -20,7 +18,7 @@ def make_workflow_event_notification_fn(
     messaging_service: Any,
 ) -> Callable[[WorkflowEventChange], None]:
     planner = workflow_event_notification_action_planner(messaging_service)
-    return make_runtime_notification_event_hook(
+    return make_runtime_action_event_hook(
         app,
         planner,
         user_repo=user_repo,

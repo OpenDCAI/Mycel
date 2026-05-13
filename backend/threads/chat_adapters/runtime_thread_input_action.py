@@ -3,9 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from backend.threads.chat_adapters.port import get_agent_runtime_gateway
 from backend.threads.chat_adapters.runtime_identity import runtime_actor
-from protocols.agent_runtime import AgentRuntimeMessage, AgentThreadInputEnvelope, AgentThreadInputResult
+from protocols.agent_runtime import AgentRuntimeMessage, AgentThreadInputEnvelope
 
 
 @dataclass(frozen=True)
@@ -77,11 +76,6 @@ def internal_runtime_thread_input_action(
         content=message,
         metadata=metadata,
     )
-
-
-async def dispatch_runtime_thread_input_action(app: Any, action: RuntimeThreadInputAction) -> AgentThreadInputResult:
-    gateway = get_agent_runtime_gateway(app)
-    return await gateway.dispatch_thread_input(plan_runtime_thread_input_envelope(action))
 
 
 def plan_runtime_thread_input_envelope(action: RuntimeThreadInputAction) -> AgentThreadInputEnvelope:

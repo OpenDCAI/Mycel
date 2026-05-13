@@ -3,16 +3,14 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any
 
+from backend.threads.chat_adapters.runtime_action import make_runtime_action_event_hook
 from backend.threads.chat_adapters.runtime_identity import display_name, require_user
-from backend.threads.chat_adapters.runtime_notification_action import (
-    RuntimeNotificationAction,
-    make_runtime_notification_event_hook,
-)
+from backend.threads.chat_adapters.runtime_notification_action import RuntimeNotificationAction
 
 
 def make_chat_join_rejection_notification_fn(app: Any, *, activity_reader: Any, thread_repo: Any, user_repo: Any):
     planner = chat_join_rejection_notification_action_planner(user_repo)
-    return make_runtime_notification_event_hook(
+    return make_runtime_action_event_hook(
         app,
         planner,
         user_repo=user_repo,

@@ -4,12 +4,13 @@ from collections.abc import Iterable
 from typing import Any
 
 from backend.threads.chat_adapters.chat_notification_format import format_chat_notification
-from backend.threads.chat_adapters.runtime_notification_action import RuntimeNotificationAction, make_runtime_notification_event_hook
+from backend.threads.chat_adapters.runtime_action import make_runtime_action_event_hook
+from backend.threads.chat_adapters.runtime_notification_action import RuntimeNotificationAction
 from messaging.delivery.contracts import ChatDeliveryRequest
 
 
 def make_chat_delivery_fn(app: Any, *, activity_reader: Any, thread_repo: Any, user_repo: Any):
-    return make_runtime_notification_event_hook(
+    return make_runtime_action_event_hook(
         app,
         chat_delivery_runtime_notification_actions,
         thread_repo=thread_repo,

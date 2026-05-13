@@ -4,11 +4,9 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
+from backend.threads.chat_adapters.runtime_action import make_runtime_action_event_hook
 from backend.threads.chat_adapters.runtime_identity import display_name, require_user
-from backend.threads.chat_adapters.runtime_notification_action import (
-    RuntimeNotificationAction,
-    make_runtime_notification_event_hook,
-)
+from backend.threads.chat_adapters.runtime_notification_action import RuntimeNotificationAction
 from messaging.contracts import RelationshipEvent, RelationshipRow
 
 _DECISION_VERBS: dict[RelationshipEvent, str] = {
@@ -25,7 +23,7 @@ class RelationshipDecisionChange:
 
 def make_relationship_request_notification_fn(app: Any, *, activity_reader: Any, thread_repo: Any, user_repo: Any):
     planner = relationship_request_notification_action_planner(user_repo)
-    return make_runtime_notification_event_hook(
+    return make_runtime_action_event_hook(
         app,
         planner,
         user_repo=user_repo,
@@ -63,7 +61,7 @@ def relationship_request_notification_action(row: RelationshipRow, *, user_repo:
 
 def make_relationship_decision_notification_fn(app: Any, *, activity_reader: Any, thread_repo: Any, user_repo: Any):
     planner = relationship_decision_notification_action_planner(user_repo)
-    planned_hook = make_runtime_notification_event_hook(
+    planned_hook = make_runtime_action_event_hook(
         app,
         planner,
         user_repo=user_repo,
