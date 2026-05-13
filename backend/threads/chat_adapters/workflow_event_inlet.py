@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Iterable, Mapping
 from typing import Any
 
 from backend.threads.chat_adapters.runtime_notification_action import (
@@ -29,8 +29,10 @@ def make_workflow_event_notification_fn(
     )
 
 
-def workflow_event_notification_action_planner(messaging_service: Any) -> Callable[[WorkflowEventChange], list[RuntimeNotificationAction]]:
-    def plan(change: WorkflowEventChange) -> list[RuntimeNotificationAction]:
+def workflow_event_notification_action_planner(
+    messaging_service: Any,
+) -> Callable[[WorkflowEventChange], Iterable[RuntimeNotificationAction]]:
+    def plan(change: WorkflowEventChange) -> Iterable[RuntimeNotificationAction]:
         return make_workflow_event_notification_actions(
             change,
             messaging_service.list_chat_members(_required_str(change.event, "chat_id")),
@@ -41,15 +43,13 @@ def workflow_event_notification_action_planner(messaging_service: Any) -> Callab
 
 def make_workflow_event_notification_actions(
     change: WorkflowEventChange,
-    members: Sequence[Mapping[str, Any]],
-) -> list[RuntimeNotificationAction]:
-    actions: list[RuntimeNotificationAction] = []
+    members: Iterable[Mapping[str, Any]],
+) -> Iterable[RuntimeNotificationAction]:
     for member in members:
         recipient_user_id = _member_user_id(member)
         if recipient_user_id == change.actor_user_id:
             continue
-        actions.append(workflow_event_runtime_notification_action(change=change, recipient_user_id=recipient_user_id))
-    return actions
+        yield workflow_event_runtime_notification_action(change=change, recipient_user_id=recipient_user_id)
 
 
 def workflow_event_runtime_notification_action(*, change: WorkflowEventChange, recipient_user_id: str) -> RuntimeNotificationAction:
