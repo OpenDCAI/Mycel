@@ -4,24 +4,7 @@ import asyncio
 
 import pytest
 
-from backend.threads.chat_adapters.runtime_event_action_route import (
-    RuntimeEventActionRoute,
-    make_sync_runtime_event_hook,
-)
-
-
-@pytest.mark.asyncio
-async def test_sync_runtime_event_hook_runs_coroutine_from_worker_thread() -> None:
-    calls: list[str] = []
-
-    async def record(value: str) -> None:
-        calls.append(value)
-
-    hook = make_sync_runtime_event_hook(record)
-
-    await asyncio.to_thread(hook, "ok")
-
-    assert calls == ["ok"]
+from backend.threads.chat_adapters.runtime_event_action_route import RuntimeEventActionRoute
 
 
 @pytest.mark.asyncio
@@ -61,13 +44,16 @@ async def test_runtime_event_action_route_sync_hook_runs_from_worker_thread() ->
 
 
 @pytest.mark.asyncio
-async def test_sync_runtime_event_hook_fails_loudly_on_owner_loop_thread() -> None:
-    async def noop() -> None:
+async def test_runtime_event_action_route_sync_hook_fails_loudly_on_owner_loop_thread() -> None:
+    def planner(value: str) -> list[str]:
+        return [value]
+
+    async def dispatch_actions(_actions: list[str]) -> None:
         return None
 
-    hook = make_sync_runtime_event_hook(noop)
+    hook = RuntimeEventActionRoute(planner=planner, dispatch_actions=dispatch_actions).sync_hook()
 
     with pytest.raises(RuntimeError) as exc:
-        hook()
+        hook("event-1")
 
     assert str(exc.value) == "Sync runtime event hook cannot run on its owner event loop thread"

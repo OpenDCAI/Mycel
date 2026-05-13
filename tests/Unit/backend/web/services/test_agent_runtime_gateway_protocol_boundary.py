@@ -167,6 +167,12 @@ def test_runtime_event_action_route_is_not_published_from_hook_module() -> None:
     assert importlib.util.find_spec("backend.threads.chat_adapters.runtime_event_hook") is None
 
 
+def test_runtime_event_action_route_does_not_export_sync_hook_helper() -> None:
+    route_module = importlib.import_module("backend.threads.chat_adapters.runtime_event_action_route")
+
+    assert not hasattr(route_module, "make_sync_runtime_event_hook")
+
+
 def test_runtime_protocol_envelopes_are_constructed_only_at_adapter_boundaries() -> None:
     repo_root = Path(__file__).parents[5]
     backend_files = list((repo_root / "backend").rglob("*.py"))
