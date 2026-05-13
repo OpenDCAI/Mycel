@@ -7,7 +7,7 @@ from typing import Any
 from backend.threads.chat_adapters.port import get_agent_runtime_gateway
 from backend.threads.chat_adapters.runtime_identity import make_runtime_actor, require_user
 from backend.threads.chat_adapters.runtime_recipient import resolve_runtime_notification_recipient
-from backend.threads.chat_adapters.runtime_sync_event_hook import make_sync_runtime_event_hook
+from backend.threads.chat_adapters.runtime_sync_event_hook import make_blocking_runtime_event_hook
 from protocols.agent_runtime import (
     AgentRuntimeMessage,
     AgentRuntimeNotificationEnvelope,
@@ -38,19 +38,16 @@ def make_runtime_notification_event_hook[EventT](
     thread_repo: Any,
     activity_reader: Any,
 ) -> Callable[[EventT], None]:
-    async def dispatch_actions(actions: Iterable[RuntimeNotificationAction]) -> int:
+    async def dispatch_event(event: EventT) -> int:
         return await dispatch_runtime_notification_actions(
             app,
-            actions,
+            planner(event),
             user_repo=user_repo,
             thread_repo=thread_repo,
             activity_reader=activity_reader,
         )
 
-    async def dispatch_event(event: EventT) -> int:
-        return await dispatch_actions(planner(event))
-
-    return make_sync_runtime_event_hook(dispatch_event)
+    return make_blocking_runtime_event_hook(dispatch_event)
 
 
 async def dispatch_runtime_notification_actions(

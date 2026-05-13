@@ -5,7 +5,7 @@ from collections.abc import Callable, Coroutine
 from typing import Any
 
 
-def make_sync_runtime_event_hook[EventT](
+def make_blocking_runtime_event_hook[EventT](
     dispatch_event: Callable[[EventT], Coroutine[Any, Any, Any]],
 ) -> Callable[[EventT], None]:
     loop = asyncio.get_running_loop()
@@ -16,7 +16,7 @@ def make_sync_runtime_event_hook[EventT](
         except RuntimeError:
             current_loop = None
         if current_loop is loop:
-            raise RuntimeError("Sync runtime event hook cannot run on its owner event loop thread")
+            raise RuntimeError("Blocking runtime event hook cannot run on its owner event loop thread")
         future = asyncio.run_coroutine_threadsafe(dispatch_event(event), loop)
         future.result()
 

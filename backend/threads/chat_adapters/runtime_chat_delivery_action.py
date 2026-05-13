@@ -7,7 +7,7 @@ from typing import Any
 from backend.threads.chat_adapters.port import get_agent_runtime_gateway
 from backend.threads.chat_adapters.runtime_identity import runtime_actor
 from backend.threads.chat_adapters.runtime_recipient import resolve_runtime_chat_delivery_recipient
-from backend.threads.chat_adapters.runtime_sync_event_hook import make_sync_runtime_event_hook
+from backend.threads.chat_adapters.runtime_sync_event_hook import make_blocking_runtime_event_hook
 from protocols.agent_runtime import (
     AgentChatContext,
     AgentChatDeliveryEnvelope,
@@ -37,18 +37,15 @@ def make_runtime_chat_delivery_event_hook[EventT](
     thread_repo: Any,
     activity_reader: Any,
 ) -> Callable[[EventT], None]:
-    async def dispatch_actions(actions: Iterable[RuntimeChatDeliveryAction]) -> int:
+    async def dispatch_event(event: EventT) -> int:
         return await dispatch_runtime_chat_delivery_actions(
             app,
-            actions,
+            planner(event),
             thread_repo=thread_repo,
             activity_reader=activity_reader,
         )
 
-    async def dispatch_event(event: EventT) -> int:
-        return await dispatch_actions(planner(event))
-
-    return make_sync_runtime_event_hook(dispatch_event)
+    return make_blocking_runtime_event_hook(dispatch_event)
 
 
 async def dispatch_runtime_chat_delivery_actions(
