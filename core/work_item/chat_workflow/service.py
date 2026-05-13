@@ -5,7 +5,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any, Literal
 
-from core.sync_callbacks import SyncActionRegistry
+from core.after_commit_actions import AfterCommitActions
 from core.work_item.types import WorkItem
 from storage.contracts import ChatWorkflowEventRow
 
@@ -138,7 +138,7 @@ class ChatTaskService:
 class ChatWorkflowEventService:
     def __init__(self, event_repo: Any) -> None:
         self._repo = event_repo
-        self._event_change_actions: SyncActionRegistry[[WorkflowEventChange]] = SyncActionRegistry()
+        self._event_change_actions: AfterCommitActions[[WorkflowEventChange]] = AfterCommitActions()
 
     def add_event_change_action(self, action: Callable[[WorkflowEventChange], None]) -> None:
         self._event_change_actions.add(action)
