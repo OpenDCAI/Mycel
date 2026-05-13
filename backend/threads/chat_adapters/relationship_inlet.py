@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
@@ -22,21 +21,16 @@ class RelationshipDecisionChange:
 
 
 def make_relationship_request_notification_fn(app: Any, *, activity_reader: Any, thread_repo: Any, user_repo: Any):
-    planner = relationship_request_notification_action_planner(user_repo)
+    def plan(row: RelationshipRow) -> list[RuntimeNotificationAction]:
+        return [relationship_request_notification_action(row, user_repo=user_repo)]
+
     return make_runtime_action_event_hook(
         app,
-        planner,
+        plan,
         user_repo=user_repo,
         thread_repo=thread_repo,
         activity_reader=activity_reader,
     )
-
-
-def relationship_request_notification_action_planner(user_repo: Any) -> Callable[[RelationshipRow], list[RuntimeNotificationAction]]:
-    def plan(row: RelationshipRow) -> list[RuntimeNotificationAction]:
-        return [relationship_request_notification_action(row, user_repo=user_repo)]
-
-    return plan
 
 
 def relationship_request_notification_action(row: RelationshipRow, *, user_repo: Any) -> RuntimeNotificationAction:
@@ -60,10 +54,12 @@ def relationship_request_notification_action(row: RelationshipRow, *, user_repo:
 
 
 def make_relationship_decision_notification_fn(app: Any, *, activity_reader: Any, thread_repo: Any, user_repo: Any):
-    planner = relationship_decision_notification_action_planner(user_repo)
+    def plan(change: RelationshipDecisionChange) -> list[RuntimeNotificationAction]:
+        return [relationship_decision_notification_action(change, user_repo=user_repo)]
+
     planned_hook = make_runtime_action_event_hook(
         app,
-        planner,
+        plan,
         user_repo=user_repo,
         thread_repo=thread_repo,
         activity_reader=activity_reader,
@@ -73,15 +69,6 @@ def make_relationship_decision_notification_fn(app: Any, *, activity_reader: Any
         planned_hook(RelationshipDecisionChange(row=row, event=event))
 
     return notify_runtime
-
-
-def relationship_decision_notification_action_planner(
-    user_repo: Any,
-) -> Callable[[RelationshipDecisionChange], list[RuntimeNotificationAction]]:
-    def plan(change: RelationshipDecisionChange) -> list[RuntimeNotificationAction]:
-        return [relationship_decision_notification_action(change, user_repo=user_repo)]
-
-    return plan
 
 
 def relationship_decision_notification_action(change: RelationshipDecisionChange, *, user_repo: Any) -> RuntimeNotificationAction:

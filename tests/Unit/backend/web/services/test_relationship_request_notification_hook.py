@@ -76,14 +76,14 @@ def _only_envelope(gateway: _RecordingGateway):
     return gateway.envelopes[0]
 
 
-def test_relationship_request_notification_planner_returns_runtime_action() -> None:
+def test_relationship_request_notification_action_carries_runtime_contract() -> None:
     user_repo = _user_repo(_user("human-user-1", "human", "Human"))
-    planner = relationship_inlet.relationship_request_notification_action_planner(user_repo)
 
-    actions = planner(_relationship_row(message="Please add me."))
+    action = relationship_inlet.relationship_request_notification_action(
+        _relationship_row(message="Please add me."),
+        user_repo=user_repo,
+    )
 
-    assert len(actions) == 1
-    action = actions[0]
     assert action.context == "Relationship request"
     assert action.recipient_user_id == "agent-user-1"
     assert action.sender_user_id == "human-user-1"
@@ -98,19 +98,17 @@ def test_relationship_request_notification_planner_returns_runtime_action() -> N
     assert action.include_sender_avatar is True
 
 
-def test_relationship_decision_notification_planner_returns_runtime_action() -> None:
+def test_relationship_decision_notification_action_carries_runtime_contract() -> None:
     user_repo = _user_repo(_user("human-user-1", "human", "Human"))
-    planner = relationship_inlet.relationship_decision_notification_action_planner(user_repo)
 
-    actions = planner(
+    action = relationship_inlet.relationship_decision_notification_action(
         relationship_inlet.RelationshipDecisionChange(
             row=_relationship_row(initiator_user_id="agent-user-1", state="visit"),
             event="approve",
-        )
+        ),
+        user_repo=user_repo,
     )
 
-    assert len(actions) == 1
-    action = actions[0]
     assert action.context == "Relationship request"
     assert action.recipient_user_id == "agent-user-1"
     assert action.sender_user_id == "human-user-1"
