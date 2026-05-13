@@ -4,7 +4,7 @@ import asyncio
 
 import pytest
 
-from backend.threads.chat_adapters.runtime_event_hook import (
+from backend.threads.chat_adapters.runtime_event_action_route import (
     RuntimeEventActionRoute,
     make_sync_runtime_event_hook,
 )
