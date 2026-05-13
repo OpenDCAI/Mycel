@@ -1,10 +1,16 @@
+"""Synchronous after-commit action fanout.
+
+Actions here must finish before the producer API call returns. External events
+such as hook failures or scheduler ticks are not after-commit actions.
+"""
+
 from __future__ import annotations
 
 from collections.abc import Callable
 from typing import Any, cast
 
 
-class SyncActionRegistry[**P]:
+class AfterCommitActions[**P]:
     def __init__(self) -> None:
         self._actions: list[Callable[P, None]] = []
 

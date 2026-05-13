@@ -16,7 +16,7 @@ from collections.abc import Callable, Mapping
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
-from core.sync_callbacks import SyncActionRegistry
+from core.after_commit_actions import AfterCommitActions
 from messaging.avatars import AvatarUrlBuilder
 from messaging.contracts import ContentType, MessageType
 from messaging.delivery.dispatcher import ChatDeliveryDispatcher, ChatDeliveryFn
@@ -92,10 +92,10 @@ class MessagingService:
             delivery_resolver=delivery_resolver,
             delivery_fn=delivery_fn,
         )
-        self._chat_message_delivery_actions: SyncActionRegistry[[dict[str, Any]]] = SyncActionRegistry()
+        self._chat_message_delivery_actions: AfterCommitActions[[dict[str, Any]]] = AfterCommitActions()
         self._chat_message_delivery_actions.add(self._dispatch_chat_message_delivery)
         self._event_bus = event_bus
-        self._chat_message_event_actions: SyncActionRegistry[[dict[str, Any]]] = SyncActionRegistry()
+        self._chat_message_event_actions: AfterCommitActions[[dict[str, Any]]] = AfterCommitActions()
         if event_bus is not None:
             self._chat_message_event_actions.add(self._publish_chat_message_event)
 

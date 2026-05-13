@@ -6,7 +6,7 @@ import logging
 from collections.abc import Callable
 from typing import Any
 
-from core.sync_callbacks import SyncActionRegistry
+from core.after_commit_actions import AfterCommitActions
 from messaging.contracts import RelationshipEvent, RelationshipRow, RelationshipState
 from messaging.relationships.state_machine import transition
 
@@ -31,8 +31,8 @@ class RelationshipService:
         on_relationship_decided: Callable[[RelationshipRow, RelationshipEvent], None] | None = None,
     ) -> None:
         self._repo = relationship_repo
-        self._relationship_request_actions: SyncActionRegistry[[RelationshipRow]] = SyncActionRegistry()
-        self._relationship_decision_actions: SyncActionRegistry[[RelationshipRow, RelationshipEvent]] = SyncActionRegistry()
+        self._relationship_request_actions: AfterCommitActions[[RelationshipRow]] = AfterCommitActions()
+        self._relationship_decision_actions: AfterCommitActions[[RelationshipRow, RelationshipEvent]] = AfterCommitActions()
         if on_relationship_requested is not None:
             self.add_relationship_request_action(on_relationship_requested)
         if on_relationship_decided is not None:
