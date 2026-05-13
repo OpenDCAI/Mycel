@@ -71,7 +71,6 @@ class MessagingService:
         relationship_service: Any | None = None,
         delivery_resolver: Any | None = None,
         delivery_fn: ChatDeliveryFn | None = None,
-        delivery_dispatcher: ChatDeliveryDispatcher | None = None,
         event_bus: Any | None = None,
         *,
         avatar_url_builder: AvatarUrlBuilder | None = None,
@@ -84,7 +83,7 @@ class MessagingService:
         self._contact_repo = contact_repo
         self._relationship_service = relationship_service
         self._avatar_url_builder = avatar_url_builder
-        self._delivery_dispatcher = delivery_dispatcher or ChatDeliveryDispatcher(
+        self._delivery_dispatcher = ChatDeliveryDispatcher(
             chat_member_repo=chat_member_repo,
             user_repo=user_repo,
             avatar_url_builder=avatar_url_builder,
