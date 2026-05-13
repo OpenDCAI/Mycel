@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from backend.threads.chat_adapters.port import get_agent_runtime_gateway
-from backend.threads.chat_adapters.runtime_event_hook import RuntimeEventActionRoute
+from backend.threads.chat_adapters.runtime_event_action_route import RuntimeEventActionRoute
 from backend.threads.chat_adapters.runtime_identity import make_runtime_actor, require_user
 from backend.threads.chat_adapters.runtime_recipient import resolve_runtime_notification_recipient
 from protocols.agent_runtime import (

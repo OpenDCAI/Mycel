@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib
+import importlib.util
 from pathlib import Path
 from typing import get_type_hints
 
@@ -160,6 +161,10 @@ def test_runtime_action_adapters_do_not_export_dispatcher_factories() -> None:
     assert not hasattr(chat_action_module, "runtime_chat_delivery_action_dispatcher")
     assert not hasattr(notification_action_module, "runtime_notification_action_dispatcher")
     assert not hasattr(thread_input_action_module, "runtime_thread_input_action_dispatcher")
+
+
+def test_runtime_event_action_route_is_not_published_from_hook_module() -> None:
+    assert importlib.util.find_spec("backend.threads.chat_adapters.runtime_event_hook") is None
 
 
 def test_runtime_protocol_envelopes_are_constructed_only_at_adapter_boundaries() -> None:
