@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from typing import Any
 
 
-def make_sync_runtime_event_hook[**P](async_fn: Callable[P, Coroutine[Any, Any, Any]]) -> Callable[P, None]:
+def _make_sync_runtime_event_hook[**P](async_fn: Callable[P, Coroutine[Any, Any, Any]]) -> Callable[P, None]:
     loop = asyncio.get_running_loop()
 
     def hook(*args: P.args, **kwargs: P.kwargs) -> None:
@@ -35,4 +35,4 @@ class RuntimeEventActionRoute[EventT, ActionT, ResultT]:
         async def dispatch_event(event: EventT) -> None:
             await self.dispatch(event)
 
-        return make_sync_runtime_event_hook(dispatch_event)
+        return _make_sync_runtime_event_hook(dispatch_event)
