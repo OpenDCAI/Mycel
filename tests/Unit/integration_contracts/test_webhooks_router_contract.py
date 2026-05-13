@@ -1,8 +1,41 @@
 from __future__ import annotations
 
+from types import ModuleType
+
 import pytest
 
 from backend.web.routers import webhooks
+
+
+def _module_name(value: object) -> str | None:
+    module_name = getattr(value, "__module__", None)
+    if isinstance(module_name, str):
+        return module_name
+    if isinstance(value, ModuleType):
+        return value.__name__
+    return None
+
+
+def test_provider_webhooks_are_not_mycel_event_action_entrypoint() -> None:
+    assert webhooks.WEBHOOK_EVENT_ENTRYPOINT_BOUNDARY == "sandbox-provider-observation-only"
+    assert "sandbox provider observation only" in (webhooks.__doc__ or "").lower()
+
+    forbidden_modules = (
+        "backend.messaging",
+        "backend.threads.chat_adapters.runtime_notification_action",
+        "backend.threads.chat_adapters.runtime_chat_delivery_action",
+        "core.after_commit_actions",
+        "messaging.service",
+    )
+    offenders = {
+        name: module_name
+        for name, value in vars(webhooks).items()
+        if not name.startswith("__")
+        if (module_name := _module_name(value)) is not None
+        if module_name.startswith(forbidden_modules)
+    }
+
+    assert offenders == {}
 
 
 @pytest.mark.asyncio
