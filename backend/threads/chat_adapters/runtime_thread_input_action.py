@@ -3,9 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from backend.threads.chat_adapters.port import get_agent_runtime_gateway
 from backend.threads.chat_adapters.runtime_identity import runtime_actor
-from protocols.agent_runtime import AgentRuntimeMessage, AgentThreadInputEnvelope, AgentThreadInputResult
+from protocols.agent_runtime import AgentRuntimeMessage, AgentThreadInputEnvelope
 
 
 @dataclass(frozen=True)
@@ -19,26 +18,6 @@ class RuntimeThreadInputAction:
     attachments: list[str] | None = None
     metadata: dict[str, Any] | None = None
     enable_trajectory: bool = False
-
-
-@dataclass(frozen=True)
-class QueuedThreadInputAction:
-    thread_id: str
-    content: str
-    notification_type: str = "steer"
-
-
-def queued_thread_input_action(*, thread_id: str, message: str) -> QueuedThreadInputAction:
-    return QueuedThreadInputAction(thread_id=thread_id, content=message)
-
-
-def queued_command_thread_input_action(*, thread_id: str, message: str) -> QueuedThreadInputAction:
-    return QueuedThreadInputAction(thread_id=thread_id, content=message, notification_type="command")
-
-
-def dispatch_queued_thread_input_action(queue_manager: Any, action: QueuedThreadInputAction) -> dict[str, str]:
-    queue_manager.enqueue(action.content, action.thread_id, notification_type=action.notification_type)
-    return {"status": "queued", "thread_id": action.thread_id}
 
 
 def owner_runtime_thread_input_action(
@@ -77,11 +56,6 @@ def internal_runtime_thread_input_action(
         content=message,
         metadata=metadata,
     )
-
-
-async def dispatch_runtime_thread_input_action(app: Any, action: RuntimeThreadInputAction) -> AgentThreadInputResult:
-    gateway = get_agent_runtime_gateway(app)
-    return await gateway.dispatch_thread_input(plan_runtime_thread_input_envelope(action))
 
 
 def plan_runtime_thread_input_envelope(action: RuntimeThreadInputAction) -> AgentThreadInputEnvelope:

@@ -62,14 +62,11 @@ def _only_envelope(gateway: _RecordingGateway):
     return gateway.envelopes[0]
 
 
-def test_chat_join_rejection_notification_planner_returns_runtime_action() -> None:
+def test_chat_join_rejection_notification_action_carries_runtime_contract() -> None:
     user_repo = _user_repo(_user("owner-1", "human", "Owner"))
-    planner = chat_join_inlet.chat_join_rejection_notification_action_planner(user_repo)
 
-    actions = planner(_join_request())
+    action = chat_join_inlet.chat_join_rejection_notification_action(_join_request(), user_repo=user_repo)
 
-    assert len(actions) == 1
-    action = actions[0]
     assert action.context == "Chat join rejection"
     assert action.recipient_user_id == "agent-user-1"
     assert action.sender_user_id == "owner-1"
