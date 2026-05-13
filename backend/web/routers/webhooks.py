@@ -1,3 +1,10 @@
+"""Sandbox provider observation only.
+
+This router records provider webhook payloads and observes matched sandbox
+runtime state. It is not the Mycel event/action entrypoint for chat, user,
+notification, or runtime-inbox automation.
+"""
+
 import asyncio
 from typing import Any
 
@@ -7,6 +14,9 @@ from backend.sandboxes.inventory import init_providers_and_managers
 from sandbox.runtime_handle import sandbox_runtime_from_row
 from storage.container_cache import get_storage_container as _get_container
 from storage.runtime import build_sandbox_runtime_repo as make_sandbox_runtime_repo
+
+# @@@webhook-not-mycel-event-entrypoint - Keep provider webhooks out of chat/user event-action automation.
+WEBHOOK_EVENT_ENTRYPOINT_BOUNDARY = "sandbox-provider-observation-only"
 
 router = APIRouter(prefix="/api/webhooks", tags=["webhooks"])
 

@@ -2,6 +2,8 @@
 
 Actions here must finish before the producer API call returns. External events
 such as hook failures or scheduler ticks are not after-commit actions.
+`backend.web.routers.webhooks` is sandbox provider observation, not a shortcut
+around that boundary.
 """
 
 from __future__ import annotations
