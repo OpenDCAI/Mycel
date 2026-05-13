@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from types import SimpleNamespace
+from typing import assert_type
 
 import pytest
 
@@ -97,4 +98,5 @@ async def test_runtime_action_returns_thread_input_result() -> None:
         ),
     )
 
+    assert_type(result, AgentThreadInputResult)
     assert result == AgentThreadInputResult(status="started", routing="direct", thread_id="thread-1")

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Iterable
-from typing import Any
+from typing import Any, overload
 
 from backend.threads.chat_adapters.port import get_agent_runtime_gateway
 from backend.threads.chat_adapters.runtime_notification_action import RuntimeNotificationAction, plan_runtime_notification_envelope
@@ -63,6 +63,28 @@ async def dispatch_runtime_actions(
         await dispatch_runtime_action_envelope(gateway, envelope)
         dispatched_count += 1
     return dispatched_count
+
+
+@overload
+async def dispatch_runtime_action(
+    app: Any,
+    action: RuntimeThreadInputAction,
+    *,
+    user_repo: Any = None,
+    thread_repo: Any = None,
+    activity_reader: Any = None,
+) -> AgentThreadInputResult: ...
+
+
+@overload
+async def dispatch_runtime_action(
+    app: Any,
+    action: RuntimeNotificationAction,
+    *,
+    user_repo: Any = None,
+    thread_repo: Any = None,
+    activity_reader: Any = None,
+) -> AgentRuntimeNotificationResult | None: ...
 
 
 async def dispatch_runtime_action(
