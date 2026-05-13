@@ -7,12 +7,6 @@ from typing import Any, Literal
 
 
 @dataclass(frozen=True)
-class AgentChatContext:
-    chat_id: str
-    title: str | None = None
-
-
-@dataclass(frozen=True)
 class AgentRuntimeActor:
     user_id: str
     user_type: str
@@ -47,19 +41,6 @@ class AgentRuntimeTransport:
 
 
 @dataclass(frozen=True)
-class AgentChatDeliveryEnvelope:
-    chat: AgentChatContext
-    sender: AgentRuntimeActor
-    recipient: AgentChatRecipient
-    message: AgentRuntimeMessage
-    wake: bool = True
-    transport: AgentRuntimeTransport = AgentRuntimeTransport()
-    protocol_version: Literal["agent.chat.delivery.v1"] = "agent.chat.delivery.v1"
-    event_type: Literal["chat.message"] = "chat.message"
-    extensions: dict[str, Any] | None = None
-
-
-@dataclass(frozen=True)
 class AgentRuntimeNotificationEnvelope:
     event_type: str
     recipient: AgentChatRecipient
@@ -81,12 +62,6 @@ class AgentThreadInputEnvelope:
     enable_trajectory: bool = False
     protocol_version: Literal["agent.thread.input.v1"] = "agent.thread.input.v1"
     event_type: Literal["thread.input"] = "thread.input"
-
-
-@dataclass(frozen=True)
-class AgentChatDeliveryResult:
-    status: Literal["accepted"]
-    thread_id: str
 
 
 @dataclass(frozen=True)

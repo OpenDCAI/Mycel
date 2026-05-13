@@ -6,16 +6,16 @@ from pathlib import Path
 from typing import get_type_hints
 
 
-def test_agent_runtime_chat_and_thread_inputs_share_message_protocol_objects() -> None:
+def test_agent_runtime_notification_and_thread_inputs_share_message_protocol_objects() -> None:
     protocol_module = importlib.import_module("protocols.agent_runtime")
 
-    chat_fields = get_type_hints(protocol_module.AgentChatDeliveryEnvelope)
+    notification_fields = get_type_hints(protocol_module.AgentRuntimeNotificationEnvelope)
     thread_fields = get_type_hints(protocol_module.AgentThreadInputEnvelope)
 
-    assert chat_fields["sender"] is protocol_module.AgentRuntimeActor
-    assert chat_fields["message"] is protocol_module.AgentRuntimeMessage
-    assert chat_fields["transport"] is protocol_module.AgentRuntimeTransport
-    assert chat_fields["wake"] is bool
+    assert notification_fields["sender"] is protocol_module.AgentRuntimeActor
+    assert notification_fields["message"] is protocol_module.AgentRuntimeMessage
+    assert notification_fields["transport"] is protocol_module.AgentRuntimeTransport
+    assert notification_fields["wake"] is bool
     assert thread_fields["sender"] is protocol_module.AgentRuntimeActor
     assert thread_fields["message"] is protocol_module.AgentRuntimeMessage
     assert thread_fields["transport"] is protocol_module.AgentRuntimeTransport
@@ -50,8 +50,20 @@ def test_agent_runtime_gateway_handler_injection_is_typed() -> None:
     constructor_hints = get_type_hints(gateway_module.NativeAgentRuntimeGateway.__init__)
 
     assert "app" not in constructor_hints
-    assert "AgentChatRuntimeHandler" in str(constructor_hints["chat_handlers"])
+    assert "AgentRuntimeNotificationHandler" in str(constructor_hints["notification_handlers"])
     assert constructor_hints["thread_input_handler"] == gateway_module.AgentThreadInputRuntimeHandler | None
+
+
+def test_agent_runtime_gateway_does_not_publish_chat_delivery_dispatch_surface() -> None:
+    gateway_module = importlib.import_module("backend.threads.chat_adapters.gateway")
+    port_module = importlib.import_module("backend.threads.chat_adapters.port")
+
+    constructor_hints = get_type_hints(gateway_module.NativeAgentRuntimeGateway.__init__)
+
+    assert "chat_handlers" not in constructor_hints
+    assert not hasattr(gateway_module, "AgentChatRuntimeHandler")
+    assert not hasattr(gateway_module.NativeAgentRuntimeGateway, "dispatch_chat")
+    assert not hasattr(port_module.AgentRuntimeGatewayPort, "dispatch_chat")
 
 
 def test_chat_inlets_do_not_dispatch_runtime_gateway_directly() -> None:
@@ -116,56 +128,43 @@ def test_runtime_actions_use_shared_actor_builder() -> None:
 
 
 def test_runtime_action_adapters_do_not_export_unused_single_dispatch_helpers() -> None:
-    chat_action_module = importlib.import_module("backend.threads.chat_adapters.runtime_chat_delivery_action")
     notification_action_module = importlib.import_module("backend.threads.chat_adapters.runtime_notification_action")
 
-    assert not hasattr(chat_action_module, "dispatch_runtime_chat_delivery_action")
     assert not hasattr(notification_action_module, "dispatch_runtime_notification_action")
 
 
-def test_chat_delivery_adapter_does_not_publish_fake_fanout_action_surface() -> None:
-    chat_action_module = importlib.import_module("backend.threads.chat_adapters.runtime_chat_delivery_action")
-
-    assert not hasattr(chat_action_module, "RuntimeChatDeliveryAction")
-    assert not hasattr(chat_action_module, "dispatch_runtime_chat_delivery_actions")
+def test_chat_delivery_adapter_is_not_a_separate_runtime_action_module() -> None:
+    assert importlib.util.find_spec("backend.threads.chat_adapters.runtime_chat_delivery_action") is None
 
 
 def test_runtime_action_adapters_do_not_export_envelope_dispatch_helpers() -> None:
-    chat_action_module = importlib.import_module("backend.threads.chat_adapters.runtime_chat_delivery_action")
     notification_action_module = importlib.import_module("backend.threads.chat_adapters.runtime_notification_action")
     thread_input_action_module = importlib.import_module("backend.threads.chat_adapters.runtime_thread_input_action")
 
-    assert not hasattr(chat_action_module, "dispatch_runtime_chat_delivery_envelopes")
     assert not hasattr(notification_action_module, "dispatch_runtime_notification_envelopes")
     assert not hasattr(thread_input_action_module, "dispatch_runtime_thread_input_envelopes")
 
 
 def test_runtime_action_adapters_do_not_export_batch_envelope_planners() -> None:
-    chat_action_module = importlib.import_module("backend.threads.chat_adapters.runtime_chat_delivery_action")
     notification_action_module = importlib.import_module("backend.threads.chat_adapters.runtime_notification_action")
     thread_input_action_module = importlib.import_module("backend.threads.chat_adapters.runtime_thread_input_action")
 
-    assert not hasattr(chat_action_module, "plan_runtime_chat_delivery_envelopes")
     assert not hasattr(notification_action_module, "plan_runtime_notification_envelopes")
     assert not hasattr(thread_input_action_module, "plan_runtime_thread_input_envelopes")
 
 
 def test_runtime_action_adapters_do_not_export_concrete_event_dispatch_helpers() -> None:
-    chat_action_module = importlib.import_module("backend.threads.chat_adapters.runtime_chat_delivery_action")
     notification_action_module = importlib.import_module("backend.threads.chat_adapters.runtime_notification_action")
     chat_inlet_module = importlib.import_module("backend.threads.chat_adapters.chat_inlet")
 
-    assert not hasattr(chat_action_module, "dispatch_runtime_chat_delivery_event")
     assert not hasattr(notification_action_module, "dispatch_runtime_notification_event")
     assert not hasattr(chat_inlet_module, "dispatch_chat_delivery_event")
 
 
 def test_runtime_action_adapters_do_not_export_dispatcher_factories() -> None:
-    chat_action_module = importlib.import_module("backend.threads.chat_adapters.runtime_chat_delivery_action")
     notification_action_module = importlib.import_module("backend.threads.chat_adapters.runtime_notification_action")
     thread_input_action_module = importlib.import_module("backend.threads.chat_adapters.runtime_thread_input_action")
 
-    assert not hasattr(chat_action_module, "runtime_chat_delivery_action_dispatcher")
     assert not hasattr(notification_action_module, "runtime_notification_action_dispatcher")
     assert not hasattr(thread_input_action_module, "runtime_thread_input_action_dispatcher")
 
@@ -182,7 +181,6 @@ def test_runtime_protocol_envelopes_are_constructed_only_at_adapter_boundaries()
     repo_root = Path(__file__).parents[5]
     backend_files = list((repo_root / "backend").rglob("*.py"))
     allowed = {
-        repo_root / "backend" / "threads" / "chat_adapters" / "runtime_chat_delivery_action.py",
         repo_root / "backend" / "threads" / "chat_adapters" / "runtime_metadata.py",
         repo_root / "backend" / "threads" / "chat_adapters" / "runtime_notification_action.py",
         repo_root / "backend" / "threads" / "chat_adapters" / "runtime_thread_input_action.py",
@@ -192,8 +190,6 @@ def test_runtime_protocol_envelopes_are_constructed_only_at_adapter_boundaries()
 
     for path in backend_files:
         text = path.read_text(encoding="utf-8")
-        constructs_envelope = (
-            "AgentChatDeliveryEnvelope(" in text or "AgentRuntimeNotificationEnvelope(" in text or "AgentThreadInputEnvelope(" in text
-        )
+        constructs_envelope = "AgentRuntimeNotificationEnvelope(" in text or "AgentThreadInputEnvelope(" in text
         if constructs_envelope:
             assert path in allowed, path
