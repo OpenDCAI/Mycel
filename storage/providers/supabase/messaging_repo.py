@@ -1,0 +1,435 @@
+from __future__ import annotations
+
+import logging
+import time
+from datetime import UTC, datetime, timedelta
+from typing import Any
+
+from messaging._utils import now_iso
+from messaging.contracts import RelationshipState
+from storage.errors import StorageConflictError
+from storage.providers.supabase import _query as q
+
+logger = logging.getLogger(__name__)
+
+_SCHEMA = "chat"
+
+
+class SupabaseChatMemberRepo:
+    def __init__(self, client: Any) -> None:
+        self._client = client
+
+    def close(self) -> None:
+        pass
+
+    def add_member(self, chat_id: str, user_id: str) -> None:
+        self._t().upsert(
+            {"chat_id": chat_id, "user_id": user_id, "role": "member", "joined_at": time.time()},
+            on_conflict="chat_id,user_id",
+        ).execute()
+
+    def list_members(self, chat_id: str) -> list[dict[str, Any]]:
+        res = self._t().select("*").eq("chat_id", chat_id).execute()
+        return res.data or []
+
+    def list_chats_for_user(self, user_id: str) -> list[str]:
+        res = self._t().select("chat_id").eq("user_id", user_id).execute()
+        return [r["chat_id"] for r in (res.data or [])]
+
+    def list_members_for_chats(self, chat_ids: list[str]) -> list[dict[str, Any]]:
+        if not chat_ids:
+            return []
+        return q.rows_in_chunks(
+            lambda: self._t().select("chat_id,user_id,last_read_seq"),
+            "chat_id",
+            chat_ids,
+            "chat member repo",
+            "list_members_for_chats",
+        )
+
+    def is_member(self, chat_id: str, user_id: str) -> bool:
+        res = self._t().select("user_id").eq("chat_id", chat_id).eq("user_id", user_id).limit(1).execute()
+        return bool(res.data)
+
+    def find_chat_between(self, user_a: str, user_b: str) -> str | None:
+        chats_a = set(self.list_chats_for_user(user_a))
+        chats_b = set(self.list_chats_for_user(user_b))
+        candidates: list[dict[str, Any]] = []
+        for chat_id in chats_a & chats_b:
+            members = self.list_members(chat_id)
+            chat = self._chat_row(chat_id)
+            if len(members) == 2 and chat and chat.get("type") == "direct":
+                candidates.append(chat)
+        if not candidates:
+            return None
+        candidates.sort(key=lambda row: (float(row.get("created_at") or 0), str(row.get("id") or "")))
+        return str(candidates[0]["id"])
+
+    def _chat_row(self, chat_id: str) -> dict[str, Any] | None:
+        res = (
+            q.schema_table(self._client, _SCHEMA, "chats", "chat member repo")
+            .select("id,type,created_at")
+            .eq("id", chat_id)
+            .limit(1)
+            .execute()
+        )
+        return res.data[0] if res.data else None
+
+    def update_last_read(self, chat_id: str, user_id: str, last_read_seq: int) -> None:
+        (
+            self._t()
+            .update({"last_read_seq": last_read_seq})
+            .eq("chat_id", chat_id)
+            .eq("user_id", user_id)
+            .lt("last_read_seq", int(last_read_seq))
+            .execute()
+        )
+
+    def last_read_seq(self, chat_id: str, user_id: str) -> int:
+        member_res = self._t().select("last_read_seq").eq("chat_id", chat_id).eq("user_id", user_id).limit(1).execute()
+        if not member_res.data:
+            return 0
+        return int(member_res.data[0].get("last_read_seq") or 0)
+
+    def update_mute(self, chat_id: str, user_id: str, muted: bool, mute_until: str | None = None) -> None:
+        self._t().update({"muted": int(muted), "mute_until": mute_until}).eq("chat_id", chat_id).eq("user_id", user_id).execute()
+
+    def _t(self) -> Any:
+        return q.schema_table(self._client, _SCHEMA, "chat_members", "chat member repo")
+
+
+class SupabaseChatJoinRequestRepo:
+    def __init__(self, client: Any) -> None:
+        self._client = client
+
+    def close(self) -> None:
+        pass
+
+    def _request_id(self, chat_id: str, requester_user_id: str) -> str:
+        return f"chat_join:{chat_id}:{requester_user_id}"
+
+    def upsert_request(self, chat_id: str, requester_user_id: str, *, message: str | None = None) -> dict[str, Any]:
+        now = time.time()
+        payload = {
+            "id": self._request_id(chat_id, requester_user_id),
+            "chat_id": chat_id,
+            "requester_user_id": requester_user_id,
+            "state": "pending",
+            "message": message,
+            "decided_by_user_id": None,
+            "decided_at": None,
+            "created_at": now,
+            "updated_at": now,
+        }
+        res = self._t().upsert(payload, on_conflict="chat_id,requester_user_id").execute()
+        return (res.data or [payload])[0]
+
+    def get_by_id(self, request_id: str) -> dict[str, Any] | None:
+        res = self._t().select("*").eq("id", request_id).limit(1).execute()
+        return res.data[0] if res.data else None
+
+    def list_for_chat(self, chat_id: str) -> list[dict[str, Any]]:
+        res = self._t().select("*").eq("chat_id", chat_id).execute()
+        return res.data or []
+
+    def set_state(self, request_id: str, *, state: str, decided_by_user_id: str) -> dict[str, Any]:
+        now = time.time()
+        payload = {
+            "state": state,
+            "decided_by_user_id": decided_by_user_id,
+            "decided_at": now,
+            "updated_at": now,
+        }
+        res = self._t().update(payload).eq("id", request_id).execute()
+        if not res.data:
+            raise RuntimeError(f"Chat join request not found: {request_id}")
+        return res.data[0]
+
+    def _t(self) -> Any:
+        return q.schema_table(self._client, _SCHEMA, "join_requests", "chat join request repo")
+
+
+class SupabaseMessagesRepo:
+    def __init__(self, client: Any) -> None:
+        self._client = client
+
+    def close(self) -> None:
+        pass
+
+    def create(self, row: dict[str, Any], expected_read_seq: int | None = None) -> dict[str, Any]:
+        now = time.time()
+        if expected_read_seq is None:
+            seq_response = q.schema_rpc(
+                self._client,
+                _SCHEMA,
+                "increment_chat_message_seq",
+                {"p_chat_id": row["chat_id"]},
+                "messages repo",
+            ).execute()
+            seq_data = seq_response.data
+            if not seq_data:
+                raise RuntimeError("Supabase messages repo expected increment_chat_message_seq RPC data.")
+            if isinstance(seq_data, int):
+                seq = seq_data
+            else:
+                seq_row = seq_data[0]
+                seq = seq_row["increment_chat_message_seq"] if isinstance(seq_row, dict) else seq_row
+        else:
+            # @@@caught-up-send-cas - agent chat sends must prove the sender is still
+            # acting on the latest seen chat state; otherwise sibling actors can fork
+            # the conversation from the same stale history.
+            next_seq = int(expected_read_seq) + 1
+            update_res = (
+                self._chats_t()
+                .update({"next_message_seq": next_seq, "updated_at": now})
+                .eq("id", row["chat_id"])
+                .eq("next_message_seq", int(expected_read_seq))
+                .execute()
+            )
+            if not update_res.data:
+                raise StorageConflictError(f"Chat advanced after your last read. Call read_messages(chat_id='{row['chat_id']}') first.")
+            seq = next_seq
+        payload = {**row, "seq": int(seq)}
+        res = self._t().insert(payload).execute()
+        if expected_read_seq is None:
+            self._chats_t().update({"updated_at": now}).eq("id", row["chat_id"]).execute()
+        return res.data[0] if res.data else payload
+
+    def get_by_id(self, message_id: str) -> dict[str, Any] | None:
+        res = self._t().select("*").eq("id", message_id).limit(1).execute()
+        return res.data[0] if res.data else None
+
+    def list_by_chat(
+        self, chat_id: str, *, limit: int = 50, before: str | None = None, viewer_id: str | None = None
+    ) -> list[dict[str, Any]]:
+        q = self._t().select("*").eq("chat_id", chat_id).is_("deleted_at", "null")
+        if before:
+            q = q.lt("seq", int(before))
+        q = q.order("seq", desc=True)
+        if viewer_id is None:
+            q = q.limit(limit)
+        res = q.execute()
+        rows = list(reversed(res.data or []))
+        if viewer_id:
+            rows = [r for r in rows if viewer_id not in (r.get("deleted_for") or [])]
+            rows = rows[-limit:]
+        return rows
+
+    def list_latest_by_chat_ids(self, chat_ids: list[str], *, viewer_id: str | None = None) -> dict[str, dict[str, Any]]:
+        if not chat_ids:
+            return {}
+        latest_by_chat: dict[str, dict[str, Any]] = {}
+        rows = q.rows_in_chunks(
+            lambda: q.order(
+                self._t().select("*").is_("deleted_at", "null"),
+                "seq",
+                desc=True,
+                repo="messages repo",
+                operation="list_latest_by_chat_ids",
+            ),
+            "chat_id",
+            chat_ids,
+            "messages repo",
+            "list_latest_by_chat_ids",
+        )
+        for row in rows:
+            chat_id = str(row.get("chat_id") or "")
+            if viewer_id and viewer_id in (row.get("deleted_for") or []):
+                continue
+            if chat_id and chat_id not in latest_by_chat:
+                latest_by_chat[chat_id] = row
+        return latest_by_chat
+
+    def list_unread(self, chat_id: str, user_id: str) -> list[dict[str, Any]]:
+        last_read_seq = self._last_read_seq(chat_id, user_id)
+
+        q = self._t().select("*").eq("chat_id", chat_id).neq("sender_user_id", user_id).is_("deleted_at", "null")
+        if last_read_seq > 0:
+            q = q.gt("seq", last_read_seq)
+        res = q.order("seq", desc=False).execute()
+        rows = res.data or []
+        return [r for r in rows if self._is_unread_for(r, user_id) and user_id not in (r.get("deleted_for") or [])]
+
+    def count_unread(self, chat_id: str, user_id: str) -> int:
+        return len(self.list_unread(chat_id, user_id))
+
+    def count_unread_by_chat_ids(self, user_id: str, last_read_by_chat: dict[str, int]) -> dict[str, int]:
+        if not last_read_by_chat:
+            return {}
+        counts = {chat_id: 0 for chat_id in last_read_by_chat}
+        min_last_read_seq = min(last_read_by_chat.values())
+
+        def unread_query():
+            query = self._t().select("*").neq("sender_user_id", user_id).is_("deleted_at", "null")
+            if min_last_read_seq > 0:
+                query = query.gt("seq", min_last_read_seq)
+            return query
+
+        for row in q.rows_in_chunks(unread_query, "chat_id", list(last_read_by_chat), "messages repo", "count_unread_by_chat_ids"):
+            chat_id = str(row.get("chat_id") or "")
+            if int(row.get("seq") or 0) <= last_read_by_chat.get(chat_id, 0):
+                continue
+            if not self._is_unread_for(row, user_id):
+                continue
+            if user_id in (row.get("deleted_for") or []):
+                continue
+            counts[chat_id] += 1
+        return counts
+
+    def _is_unread_for(self, row: dict[str, Any], user_id: str) -> bool:
+        scope = str(row.get("delivery_scope") or "broadcast")
+        if scope != "addressed":
+            return True
+        return user_id in self._addressed_to_user_ids(row)
+
+    def _addressed_to_user_ids(self, row: dict[str, Any]) -> list[str]:
+        value = row.get("addressed_to_user_ids_json")
+        if value is None:
+            value = row.get("addressed_to_user_ids")
+        if value is None:
+            return []
+        if not isinstance(value, list):
+            raise RuntimeError(f"Message {row.get('id') or '<missing>'} has invalid addressed recipient list")
+        return [str(item) for item in value]
+
+    def _last_read_seq(self, chat_id: str, user_id: str) -> int:
+        member_res = self._members_t().select("last_read_seq").eq("chat_id", chat_id).eq("user_id", user_id).limit(1).execute()
+        if not member_res.data:
+            return 0
+        return int(member_res.data[0].get("last_read_seq") or 0)
+
+    def retract(self, message_id: str, sender_id: str) -> bool:
+        msg = self.get_by_id(message_id)
+        if not msg or msg.get("sender_user_id") != sender_id:
+            return False
+        created = msg.get("created_at")
+        if created:
+            try:
+                created_dt = datetime.fromisoformat(created.replace("Z", "+00:00"))
+                if datetime.now(tz=UTC) - created_dt > timedelta(minutes=2):
+                    return False
+            except (ValueError, AttributeError):
+                pass
+        self._t().update({"retracted_at": now_iso(), "content": "[已撤回]"}).eq("id", message_id).execute()
+        return True
+
+    def delete_for(self, message_id: str, user_id: str) -> None:
+        msg = self.get_by_id(message_id)
+        if not msg:
+            return
+        deleted_for = list(msg.get("deleted_for") or [])
+        if user_id not in deleted_for:
+            deleted_for.append(user_id)
+        self._t().update({"deleted_for": deleted_for}).eq("id", message_id).execute()
+
+    def search(self, query: str, *, chat_id: str, limit: int = 50) -> list[dict[str, Any]]:
+        q = self._t().select("*").ilike("content", f"%{query}%").is_("deleted_at", "null")
+        q = q.eq("chat_id", chat_id)
+        res = q.order("seq", desc=False).limit(limit).execute()
+        return res.data or []
+
+    def list_by_time_range(
+        self, chat_id: str, *, after: str | None = None, before: str | None = None, limit: int = 100
+    ) -> list[dict[str, Any]]:
+        q = self._t().select("*").eq("chat_id", chat_id).is_("deleted_at", "null")
+        if after:
+            q = q.gte("created_at", after)
+        if before:
+            q = q.lte("created_at", before)
+        res = q.order("created_at", desc=False).limit(limit).execute()
+        return res.data or []
+
+    def _t(self) -> Any:
+        return q.schema_table(self._client, _SCHEMA, "messages", "messages repo")
+
+    def _chats_t(self) -> Any:
+        return q.schema_table(self._client, _SCHEMA, "chats", "messages repo")
+
+    def _members_t(self) -> Any:
+        return q.schema_table(self._client, _SCHEMA, "chat_members", "messages repo")
+
+
+class SupabaseRelationshipRepo:
+    def __init__(self, client: Any) -> None:
+        self._client = client
+
+    def close(self) -> None:
+        pass
+
+    def _ordered(self, a: str, b: str) -> tuple[str, str]:
+        return (a, b) if a < b else (b, a)
+
+    def _relationship_id(self, user_low: str, user_high: str, kind: str = "hire_visit") -> str:
+        return f"{kind}:{user_low}:{user_high}"
+
+    def _normalize(self, row: dict[str, Any]) -> dict[str, Any]:
+        normalized = dict(row)
+        normalized.setdefault("kind", "hire_visit")
+        normalized.setdefault("id", self._relationship_id(normalized["user_low"], normalized["user_high"], normalized["kind"]))
+        return normalized
+
+    def get(self, user_a: str, user_b: str) -> dict[str, Any] | None:
+        user_low, user_high = self._ordered(user_a, user_b)
+        res = self._t().select("*").eq("user_low", user_low).eq("user_high", user_high).eq("kind", "hire_visit").limit(1).execute()
+        if not res.data:
+            return None
+        return self._normalize(res.data[0])
+
+    def get_by_id(self, relationship_id: str) -> dict[str, Any] | None:
+        parts = relationship_id.split(":", 2)
+        if len(parts) != 3:
+            return None
+        kind, user_low, user_high = parts
+        res = self._t().select("*").eq("user_low", user_low).eq("user_high", user_high).eq("kind", kind).limit(1).execute()
+        if not res.data:
+            return None
+        return self._normalize(res.data[0])
+
+    def upsert(
+        self,
+        user_a: str,
+        user_b: str,
+        *,
+        state: RelationshipState,
+        initiator_user_id: str | None,
+        message: str | None = None,
+    ) -> dict[str, Any]:
+        user_low, user_high = self._ordered(user_a, user_b)
+        existing = self.get(user_a, user_b)
+        now = time.time()
+        message_update = {"message": message} if message is not None else {}
+        if existing:
+            relationship_updates = {"state": state, "initiator_user_id": initiator_user_id, **message_update}
+            if state == "none":
+                (self._t().delete().eq("user_low", user_low).eq("user_high", user_high).eq("kind", "hire_visit").execute())
+                return self._normalize({**existing, "updated_at": now, **relationship_updates})
+            res = (
+                self._t()
+                .update({"updated_at": now, **relationship_updates})
+                .eq("user_low", user_low)
+                .eq("user_high", user_high)
+                .eq("kind", "hire_visit")
+                .execute()
+            )
+            return self._normalize(res.data[0] if res.data else {**existing, "updated_at": now, **relationship_updates})
+
+        row = {
+            "user_low": user_low,
+            "user_high": user_high,
+            "kind": "hire_visit",
+            "created_at": now,
+            "updated_at": now,
+            "state": state,
+            "initiator_user_id": initiator_user_id,
+            "message": message,
+        }
+        res = self._t().insert(row).execute()
+        return self._normalize(res.data[0] if res.data else row)
+
+    def list_for_user(self, user_id: str) -> list[dict[str, Any]]:
+        # Single query with OR filter
+        res = self._t().select("*").or_(f"user_low.eq.{user_id},user_high.eq.{user_id}").execute()
+        return [self._normalize(raw) for raw in (res.data or [])]
+
+    def _t(self) -> Any:
+        return q.schema_table(self._client, _SCHEMA, "relationships", "relationship repo")

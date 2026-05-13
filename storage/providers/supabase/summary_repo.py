@@ -1,5 +1,3 @@
-"""Supabase repository for summaries persistence operations."""
-
 from __future__ import annotations
 
 from typing import Any
@@ -11,8 +9,6 @@ _TABLE = "summaries"
 
 
 class SupabaseSummaryRepo:
-    """Minimal summary repository backed by a Supabase client."""
-
     def __init__(self, client: Any) -> None:
         self._client = q.validate_client(client, _REPO)
 
@@ -20,8 +16,7 @@ class SupabaseSummaryRepo:
         return None
 
     def ensure_tables(self) -> None:
-        """Supabase schema is managed via migrations, not runtime DDL."""
-        return None
+        """Supabase schema is managed outside request-time DDL."""
 
     def save_summary(
         self,
@@ -98,7 +93,7 @@ class SupabaseSummaryRepo:
         self._t().delete().eq("thread_id", thread_id).execute()
 
     def _t(self) -> Any:
-        return self._client.table(_TABLE)
+        return q.schema_table(self._client, "agent", _TABLE, _REPO)
 
     def _required(self, row: dict[str, Any], field: str, operation: str) -> Any:
         value = row.get(field)

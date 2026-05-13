@@ -11,25 +11,25 @@ import { useState } from "react";
 interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  memberId: string;
+  agentId: string;
   update: UpdateAvailable;
-  memberName: string;
+  agentName: string;
 }
 
-export default function UpdateDialog({ open, onOpenChange, memberId, update, memberName }: Props) {
+export default function UpdateDialog({ open, onOpenChange, agentId, update, agentName }: Props) {
   const upgrade = useMarketplaceStore((s) => s.upgrade);
-  const fetchMembers = useAppStore((s) => s.fetchMembers);
+  const fetchAgents = useAppStore((s) => s.fetchAgents);
   const [upgrading, setUpgrading] = useState(false);
 
   const handleUpgrade = async () => {
     try {
       setUpgrading(true);
-      await upgrade(memberId, update.marketplace_item_id);
-      await fetchMembers();
-      toast.success(`${memberName} updated to v${update.latest_version}`);
+      await upgrade(agentId, update.marketplace_item_id);
+      await fetchAgents();
+      toast.success(`${agentName} 已更新到 v${update.latest_version}`);
       onOpenChange(false);
     } catch (e) {
-      toast.error(`Update failed: ${e instanceof Error ? e.message : "unknown error"}`);
+      toast.error(`更新失败：${e instanceof Error ? e.message : "未知错误"}`);
     } finally {
       setUpgrading(false);
     }
@@ -44,9 +44,9 @@ export default function UpdateDialog({ open, onOpenChange, memberId, update, mem
               <RefreshCw className="w-4 h-4 text-primary" />
             </div>
             <div>
-              <DialogTitle className="text-base">更新 {memberName}</DialogTitle>
+              <DialogTitle className="text-base">更新 {agentName}</DialogTitle>
               <DialogDescription className="text-xs mt-0.5">
-                <span className="font-mono text-foreground">v{update.installed_version}</span> → <span className="font-mono text-primary">v{update.latest_version}</span>
+                <span className="font-mono text-foreground">v{update.source_version}</span> → <span className="font-mono text-primary">v{update.latest_version}</span>
               </DialogDescription>
             </div>
           </div>
@@ -55,12 +55,12 @@ export default function UpdateDialog({ open, onOpenChange, memberId, update, mem
         <div className="py-3 space-y-3">
           {update.release_notes && (
             <div>
-              <p className="text-xs font-medium text-foreground mb-1">Release Notes</p>
+              <p className="text-xs font-medium text-foreground mb-1">更新说明</p>
               <p className="text-sm text-muted-foreground whitespace-pre-wrap">{update.release_notes}</p>
             </div>
           )}
           <div className="p-3 rounded-lg bg-warning/5 border border-warning/20">
-            <p className="text-xs text-warning">This will overwrite your local configuration. Any local modifications will be lost.</p>
+            <p className="text-xs text-warning">这会覆盖本地 Agent 配置，请确认当前改动已经保留。</p>
           </div>
         </div>
 

@@ -1,18 +1,5 @@
-"""Sandbox — infrastructure layer for execution environments.
-
-Usage:
-    from sandbox import create_sandbox, Sandbox, SandboxConfig
-
-    config = SandboxConfig.load("agentbay")
-    sbx = create_sandbox(config, db_path=db_path)
-
-    FileSystemMiddleware(backend=sbx.fs())
-    CommandMiddleware(executor=sbx.shell())
-"""
-
 from __future__ import annotations
 
-import logging
 import os
 from pathlib import Path
 
@@ -20,25 +7,17 @@ from sandbox.base import LocalSandbox, RemoteSandbox, Sandbox
 from sandbox.config import SandboxConfig, resolve_sandbox_name
 from sandbox.thread_context import get_current_thread_id, set_current_thread_id
 
-logger = logging.getLogger(__name__)
-
 
 def create_sandbox(
     config: SandboxConfig,
     workspace_root: str | None = None,
     db_path: Path | None = None,
+    thread_repo=None,
 ) -> Sandbox:
-    """Factory: create a Sandbox from config.
-
-    Args:
-        config: SandboxConfig (from SandboxConfig.load() or inline)
-        workspace_root: Fallback working dir for LocalSandbox
-        db_path: SQLite path for session tracking
-    """
     p = config.provider
 
     if p == "local":
-        return LocalSandbox(workspace_root=workspace_root or str(Path.cwd()), db_path=db_path)
+        return LocalSandbox(workspace_root=workspace_root or str(Path.cwd()), db_path=db_path, thread_repo=thread_repo)
 
     if p == "agentbay":
         from sandbox.providers.agentbay import AgentBayProvider
@@ -47,7 +26,6 @@ def create_sandbox(
         api_key = ab.api_key or os.getenv("AGENTBAY_API_KEY")
         if not api_key:
             raise ValueError("AgentBay sandbox requires AGENTBAY_API_KEY")
-        logger.info("[AgentBaySandbox] Initialized (region=%s)", ab.region_id)
         return RemoteSandbox(
             provider=AgentBayProvider(
                 api_key=api_key,
@@ -59,6 +37,7 @@ def create_sandbox(
             config=config,
             default_cwd=ab.context_path,
             db_path=db_path,
+            thread_repo=thread_repo,
             name=config.name,
             working_dir=ab.context_path,
             env_label="Remote Linux sandbox (Ubuntu)",
@@ -68,12 +47,12 @@ def create_sandbox(
         from sandbox.providers.docker import DockerProvider
 
         dc = config.docker
-        logger.info("[DockerSandbox] Initialized (image=%s)", dc.image)
         return RemoteSandbox(
             provider=DockerProvider(image=dc.image, mount_path=dc.mount_path, provider_name=config.name),
             config=config,
             default_cwd=dc.mount_path,
             db_path=db_path,
+            thread_repo=thread_repo,
             name=config.name,
             working_dir=dc.mount_path,
             env_label="Local Docker sandbox (Ubuntu)",
@@ -86,7 +65,6 @@ def create_sandbox(
         api_key = e.api_key or os.getenv("E2B_API_KEY")
         if not api_key:
             raise ValueError("E2B sandbox requires E2B_API_KEY")
-        logger.info("[E2BSandbox] Initialized (template=%s)", e.template)
         return RemoteSandbox(
             provider=E2BProvider(
                 api_key=api_key,
@@ -98,6 +76,7 @@ def create_sandbox(
             config=config,
             default_cwd=e.cwd,
             db_path=db_path,
+            thread_repo=thread_repo,
             name=config.name,
             working_dir=e.cwd,
             env_label="Remote Linux sandbox (E2B)",
@@ -110,7 +89,6 @@ def create_sandbox(
         api_key = dt.api_key or os.getenv("DAYTONA_API_KEY")
         if not api_key:
             raise ValueError("Daytona sandbox requires DAYTONA_API_KEY")
-        logger.info("[DaytonaSandbox] Initialized (target=%s)", dt.target)
         return RemoteSandbox(
             provider=DaytonaProvider(
                 api_key=api_key,
@@ -122,6 +100,7 @@ def create_sandbox(
             config=config,
             default_cwd=dt.cwd,
             db_path=db_path,
+            thread_repo=thread_repo,
             name=config.name,
             working_dir=dt.cwd,
             env_label="Remote Linux sandbox (Daytona)",

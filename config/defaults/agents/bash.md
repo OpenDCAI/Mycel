@@ -2,8 +2,7 @@
 name: bash
 description: 执行终端命令。用于：git 操作、运行测试、安装依赖、构建项目
 tools:
-  - run_command
-  - command_status
+  - Bash
 ---
 
 # Bash Agent

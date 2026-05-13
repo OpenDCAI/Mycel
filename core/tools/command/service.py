@@ -1,26 +1,18 @@
-"""Command Service - registers Bash tool with ToolRegistry.
-
-Tools:
-- Bash: Execute shell commands (parameter names aligned to CC)
-
-Parameter mapping from old run_command:
-- CommandLine -> command
-- Blocking -> run_in_background (semantics inverted)
-- Timeout (seconds) -> timeout (milliseconds, default 120000)
-- Cwd -> removed
-"""
-
 from __future__ import annotations
 
 import asyncio
 import json
 import logging
+from collections.abc import Awaitable, Callable
 from pathlib import Path
 from typing import Any
 
-from core.runtime.registry import ToolEntry, ToolMode, ToolRegistry
-from core.tools.command.base import BaseExecutor
+from core.runtime.registry import ToolEntry, ToolMode, ToolRegistry, make_tool_schema
+from core.runtime.tool_result import ToolResultEnvelope, tool_permission_denied
+from core.tools.command.base import describe_execution_exception
 from core.tools.command.dispatcher import get_executor
+from protocols.event_bus import EventBusFactory
+from sandbox.interfaces.executor import BaseExecutor
 
 logger = logging.getLogger(__name__)
 
@@ -28,8 +20,6 @@ DEFAULT_TIMEOUT_MS = 120_000
 
 
 class CommandService:
-    """Registers Bash tool into ToolRegistry."""
-
     def __init__(
         self,
         registry: ToolRegistry,
@@ -40,12 +30,14 @@ class CommandService:
         executor: BaseExecutor | None = None,
         queue_manager: Any = None,
         background_runs: dict | None = None,
+        event_bus_factory: EventBusFactory | None = None,
     ):
         self.workspace_root = Path(workspace_root).resolve()
         self.hooks = hooks or []
         self.env = env
         self._queue_manager = queue_manager
         self._background_runs = background_runs  # shared with AgentService
+        self._event_bus_factory = event_bus_factory
 
         if executor is not None:
             self._executor = executor
@@ -61,35 +53,39 @@ class CommandService:
             ToolEntry(
                 name="Bash",
                 mode=ToolMode.INLINE,
-                schema={
-                    "name": "Bash",
-                    "description": ("Execute shell command. OS auto-detects shell (mac->zsh, linux->bash, win->powershell)."),
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "command": {
-                                "type": "string",
-                                "description": "Command to execute",
-                            },
-                            "description": {
-                                "type": "string",
-                                "description": (
-                                    "Human-readable description of what this command does. "
-                                    "Required when run_in_background is true; shown in the background task indicator."
-                                ),
-                            },
-                            "run_in_background": {
-                                "type": "boolean",
-                                "description": "Run in background (default: false). Returns task ID for status queries.",
-                            },
-                            "timeout": {
-                                "type": "integer",
-                                "description": "Timeout in milliseconds (default: 120000)",
-                            },
+                schema=make_tool_schema(
+                    name="Bash",
+                    description=(
+                        "Execute shell command (zsh on macOS, bash on Linux, PowerShell on Windows). "
+                        "Default timeout 120s (max 600s). Dangerous commands are blocked. "
+                        "Prefer dedicated tools over Bash: Read over cat, Grep over grep/rg, Glob over find/ls, Edit over sed/awk."
+                    ),
+                    properties={
+                        "command": {
+                            "type": "string",
+                            "description": "Command to execute",
+                            "minLength": 1,
                         },
-                        "required": ["command"],
+                        "description": {
+                            "type": "string",
+                            "description": (
+                                "Human-readable description of what this command does. "
+                                "Required when run_in_background is true; shown in the background task indicator."
+                            ),
+                        },
+                        "run_in_background": {
+                            "type": "boolean",
+                            "description": "Run in background (default: false). Returns task ID for status queries.",
+                        },
+                        "timeout": {
+                            "type": "integer",
+                            "description": "Timeout in milliseconds (default: 120000)",
+                            "minimum": 1,
+                            "maximum": 600000,
+                        },
                     },
-                },
+                    required=["command"],
+                ),
                 handler=self._bash,
                 source="CommandService",
             )
@@ -113,18 +109,20 @@ class CommandService:
         description: str = "",
         run_in_background: bool = False,
         timeout: int = DEFAULT_TIMEOUT_MS,
-    ) -> str:
+    ) -> str | ToolResultEnvelope:
         allowed, error_msg = self._check_hooks(command)
         if not allowed:
-            return error_msg
+            return tool_permission_denied(
+                error_msg,
+                metadata={"policy": "command_hook"},
+            )
 
         work_dir = None if self._executor.runtime_owns_cwd else str(self.workspace_root)
         timeout_secs = timeout / 1000.0
 
         if not run_in_background:
             return await self._execute_blocking(command, work_dir, timeout_secs)
-        else:
-            return await self._execute_async(command, work_dir, timeout_secs, description=description)
+        return await self._execute_async(command, work_dir, timeout_secs, description=description)
 
     async def _execute_blocking(self, command: str, work_dir: str | None, timeout_secs: float) -> str:
         try:
@@ -135,7 +133,7 @@ class CommandService:
                 env=self.env,
             )
         except Exception as e:
-            return f"Error executing command: {e}"
+            return f"Error executing command: {describe_execution_exception(e)}"
         return result.to_tool_result()
 
     async def _execute_async(self, command: str, work_dir: str | None, timeout_secs: float, description: str = "") -> str:
@@ -146,7 +144,7 @@ class CommandService:
                 env=self.env,
             )
         except Exception as e:
-            return f"Error starting async command: {e}"
+            return f"Error starting async command: {describe_execution_exception(e)}"
 
         task_id = async_cmd.command_id
 
@@ -155,30 +153,22 @@ class CommandService:
 
             self._background_runs[task_id] = _BashBackgroundRun(async_cmd, command, description=description)
 
-        # Build emit_fn for SSE task lifecycle events
-        emit_fn = None
+        emit_fn: Callable[[dict[str, Any]], Awaitable[None] | None] | None = None
         parent_thread_id = None
-        try:
-            from backend.web.event_bus import get_event_bus
-            from sandbox.thread_context import get_current_thread_id
+        from sandbox.thread_context import get_current_thread_id
 
-            parent_thread_id = get_current_thread_id()
-            logger.debug("[CommandService] _execute_async: parent_thread_id=%s task_id=%s", parent_thread_id, task_id)
-            if parent_thread_id:
-                event_bus = get_event_bus()
-                emit_fn = event_bus.make_emitter(
-                    thread_id=parent_thread_id,
-                    agent_id=task_id,
-                    agent_name=f"bash-{task_id[:8]}",
-                )
-        except ImportError:
-            logger.debug("[CommandService] backend.web.event_bus not available")
-        except Exception as e:
-            logger.warning("[CommandService] emit_fn setup failed: %s", e)
+        parent_thread_id = get_current_thread_id()
+        if parent_thread_id and self._event_bus_factory is not None:
+            event_bus = self._event_bus_factory()
+            emit_fn = event_bus.make_emitter(
+                thread_id=parent_thread_id,
+                agent_id=task_id,
+                agent_name=f"bash-{task_id[:8]}",
+            )
 
         # Emit task_start so the frontend dot lights up immediately
         if emit_fn is not None:
-            await emit_fn(
+            emission = emit_fn(
                 {
                     "event": "task_start",
                     "data": json.dumps(
@@ -193,6 +183,8 @@ class CommandService:
                     ),
                 }
             )
+            if asyncio.iscoroutine(emission):
+                await emission
 
         if parent_thread_id:
             asyncio.create_task(
@@ -207,12 +199,15 @@ class CommandService:
         async_cmd: Any,
         command: str,
         parent_thread_id: str,
-        emit_fn: Any = None,
+        emit_fn: Callable[[dict[str, Any]], Awaitable[None] | None] | None = None,
         description: str = "",
     ) -> None:
-        """Poll until async command finishes, then enqueue CommandNotification."""
         while not async_cmd.done:
             await asyncio.sleep(1)
+
+        if getattr(async_cmd, "cancelled", False):
+            return
+
         from core.agents.service import _BashBackgroundRun
 
         result = _BashBackgroundRun(async_cmd, command).get_result() or ""
@@ -220,7 +215,7 @@ class CommandService:
         # Emit task_done so the frontend dot updates in real time
         if emit_fn is not None:
             try:
-                await emit_fn(
+                emission = emit_fn(
                     {
                         "event": "task_done",
                         "data": json.dumps(
@@ -232,8 +227,10 @@ class CommandService:
                         ),
                     }
                 )
+                if asyncio.iscoroutine(emission):
+                    await emission
             except Exception:
-                pass
+                logger.exception("Failed to emit background command task_error event for task %s", task_id)
 
         if self._queue_manager:
             from core.runtime.middleware.queue.formatters import format_command_notification

@@ -1,10 +1,22 @@
 import { useCallback, useEffect, useState } from "react";
+import { asRecord, recordString } from "@/lib/records";
+import { authFetch } from "../store/auth-store";
 
-export interface UserSettings {
+interface UserSettings {
   default_workspace: string | null;
   recent_workspaces: string[];
   default_model: string;
   enabled_models: string[];
+}
+
+function isActiveNewChatRoute(): boolean {
+  const path = window.location.pathname.replace(/\/+$/, "");
+  return path.startsWith("/chat/hire");
+}
+
+function errorDetail(value: unknown): string | undefined {
+  const payload = asRecord(value);
+  return payload ? recordString(payload, "detail") : undefined;
 }
 
 export function useWorkspaceSettings() {
@@ -13,13 +25,17 @@ export function useWorkspaceSettings() {
 
   const loadSettings = useCallback(async (signal?: AbortSignal) => {
     try {
-      const response = await fetch("/api/settings", { signal });
+      const response = await authFetch("/api/settings", { signal });
       if (response.ok) {
         const data = await response.json();
         setSettings(data);
       }
     } catch (err) {
       if (err instanceof DOMException && err.name === "AbortError") return;
+      // @@@workspace-settings-route-teardown - this hook currently powers the
+      // new-chat hire flow. If navigation already left /chat/hire, a failed
+      // settings load is stale UI noise and should not be surfaced.
+      if (!isActiveNewChatRoute()) return;
       console.error("Failed to load settings:", err);
     } finally {
       if (!signal?.aborted) {
@@ -29,7 +45,7 @@ export function useWorkspaceSettings() {
   }, []);
 
   async function setDefaultWorkspace(workspace: string): Promise<void> {
-    const response = await fetch("/api/settings/workspace", {
+    const response = await authFetch("/api/settings/workspace", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ workspace }),
@@ -37,7 +53,7 @@ export function useWorkspaceSettings() {
 
     if (!response.ok) {
       const data = await response.json();
-      throw new Error(data.detail || "Failed to set workspace");
+      throw new Error(errorDetail(data) || "Failed to set workspace");
     }
 
     await loadSettings();
@@ -45,7 +61,7 @@ export function useWorkspaceSettings() {
 
   async function addRecentWorkspace(workspace: string): Promise<void> {
     try {
-      await fetch("/api/settings/workspace/recent", {
+      await authFetch("/api/settings/workspace/recent", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ workspace }),

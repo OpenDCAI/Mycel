@@ -1,8 +1,3 @@
-"""Pytest configuration for Leon tests.
-
-Ensures the project root is in sys.path so imports work correctly.
-"""
-
 import gc
 import sys
 import time
@@ -10,10 +5,22 @@ from pathlib import Path
 
 import pytest
 
-# Add project root to sys.path
+from sandbox.thread_context import set_current_messages, set_current_run_id, set_current_thread_id
+
 project_root = Path(__file__).parent.parent
 if str(project_root) not in sys.path:
     sys.path.insert(0, str(project_root))
+
+
+@pytest.fixture(autouse=True)
+def clean_sandbox_thread_context():
+    set_current_thread_id("")
+    set_current_run_id("")
+    set_current_messages([])
+    yield
+    set_current_thread_id("")
+    set_current_run_id("")
+    set_current_messages([])
 
 
 def _unlink_db(db_path: Path) -> None:
@@ -41,7 +48,6 @@ def _unlink_db(db_path: Path) -> None:
 
 @pytest.fixture
 def temp_db(tmp_path):
-    """Provide a temporary SQLite database path with Windows-safe cleanup."""
     db_path = tmp_path / "test.db"
     yield db_path
     _unlink_db(db_path)

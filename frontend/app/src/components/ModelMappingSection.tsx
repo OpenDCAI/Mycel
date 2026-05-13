@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { FEEDBACK_NORMAL } from "@/styles/ux-timing";
+import { authFetch } from "@/store/auth-store";
 
 interface VirtualModel {
   id: string;
@@ -21,6 +22,11 @@ interface ModelMappingSectionProps {
   onUpdate: (mapping: Record<string, string>) => void;
 }
 
+function isActiveSettingsRoute(): boolean {
+  const path = window.location.pathname.replace(/\/+$/, "");
+  return path === "/settings";
+}
+
 export default function ModelMappingSection({
   virtualModels,
   availableModels,
@@ -30,28 +36,38 @@ export default function ModelMappingSection({
 }: ModelMappingSectionProps) {
   const [saving, setSaving] = useState(false);
   const [successMessage, setSuccessMessage] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const handleMappingChange = async (virtualId: string, modelId: string) => {
     const newMapping = { ...modelMapping, [virtualId]: modelId };
-    onUpdate(newMapping);
 
     setSaving(true);
+    setErrorMessage(null);
     try {
-      await fetch("/api/settings/model-mapping", {
+      const response = await authFetch("/api/settings/model-mapping", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ mapping: { [virtualId]: { model: modelId } } }),
       });
+      if (!response.ok) throw new Error(`API ${response.status}: ${await response.text()}`);
+      onUpdate(newMapping);
       setSuccessMessage(true);
       setTimeout(() => setSuccessMessage(false), FEEDBACK_NORMAL);
     } catch (error) {
+      // @@@mapping-route-teardown - mapping saves can resolve after navigation
+      // already left /settings. Only log while the settings route is still
+      // active; otherwise this is stale UI noise.
+      if (!isActiveSettingsRoute()) return;
       console.error("Failed to save mapping:", error);
+      setErrorMessage(`保存失败：${error instanceof Error ? error.message : String(error)}`);
     } finally {
       setSaving(false);
     }
   };
 
-  const enabledModelsList = availableModels.filter((m) => enabledModels.includes(m.id));
+  const mappingTargets = new Set(Object.values(modelMapping).filter(Boolean));
+  const selectableModelIds = new Set([...enabledModels, ...mappingTargets]);
+  const enabledModelsList = availableModels.filter((m) => selectableModelIds.has(m.id));
 
   return (
     <div className="space-y-4 relative">
@@ -74,6 +90,11 @@ export default function ModelMappingSection({
           </div>
         )}
       </div>
+      {errorMessage && (
+        <div className="rounded-lg border border-destructive/20 bg-destructive/5 px-3 py-2 text-xs text-destructive">
+          {errorMessage}
+        </div>
+      )}
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         {virtualModels.map((vm, index) => {

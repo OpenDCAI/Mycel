@@ -54,30 +54,13 @@ keywords: [deployment, install, production, Docker, configuration, troubleshooti
 
 ## Configuration
 
-### User config directory
+### Runtime configuration
 
-Mycel stores configuration in `~/.leon/`:
-
-```
-~/.leon/
-├── config.env          # API keys and base URL
-├── runtime.json        # Runtime behavior
-├── models.json         # LLM providers and model mapping
-├── observation.json    # Tracing (Langfuse / LangSmith)
-├── sandboxes/          # Sandbox provider configs
-│   ├── docker.json
-│   ├── e2b.json
-│   └── daytona.json
-├── members/            # Agent member bundles
-├── skills/             # Skill directories
-├── leon.db             # Thread history and agent state
-├── chat.db             # Social layer (chats, entities)
-└── sandbox.db          # Sandbox session tracking
-```
+Mycel service configuration comes from process environment variables and explicit server configuration. Agent configs, Skills, threads, Library resources, and user profiles are product state and are stored through the configured backend storage.
 
 ### Quick setup
 
-Create `~/.leon/config.env` manually:
+Export variables in the shell or point `ENV_FILE` at an explicit env file:
 
 ```env
 ANTHROPIC_API_KEY=sk-ant-xxx
@@ -88,6 +71,39 @@ ANTHROPIC_API_KEY=sk-ant-xxx
 ```
 
 ## Starting services
+
+### Local communication backend
+
+The previous `deploy/local-communication/compose.yml` path has been removed because it booted from a hand-written schema fork. Treat it as historical proof only, not as a valid self-hosting contract.
+
+`deploy/cli-minimal/compose.yml` is the current CLI-minimal local communication
+profile. It reuses the formal Mycel app schema/init path, runs PostgreSQL plus
+PostgREST, exposes `/rest/v1/*` through a thin nginx gateway, and starts the
+backend with `MYCEL_RUNTIME_PROFILE=communication`.
+
+It is not the full Mycel platform. Full deployment is still represented by the
+root `docker-compose.yml` plus operator-managed Supabase/Coolify configuration,
+not by a `deploy/full` public self-hosting contract.
+
+Start the local-only profile:
+
+```bash
+python3 deploy/cli-minimal/generate-env.py > deploy/cli-minimal/.env
+docker compose --env-file deploy/cli-minimal/.env -f deploy/cli-minimal/compose.yml up
+```
+
+To let another machine connect, publish an explicit URL and point `cel` at it:
+
+```bash
+python3 deploy/cli-minimal/generate-env.py \
+  --bind-host 0.0.0.0 \
+  --public-url http://<host-or-lan-ip>:8042 \
+  > deploy/cli-minimal/.env
+docker compose --env-file deploy/cli-minimal/.env -f deploy/cli-minimal/compose.yml up
+cel connect http://<host-or-lan-ip>:8042
+```
+
+### Full development stack
 
 ```bash
 # Terminal 1: backend
@@ -113,7 +129,7 @@ See [Sandbox](/en/sandbox) for full provider configuration. Quick reference:
 
 ### Docker
 
-Create `~/.leon/sandboxes/docker.json`:
+Set `LEON_SANDBOXES_DIR` to your sandbox provider config directory, then create `docker.json` in that directory:
 
 ```json
 {
@@ -222,20 +238,15 @@ Open the Web UI at `http://localhost:5173`, register an account, and confirm the
 
 ### Database
 
-Mycel uses SQLite by default. For production:
+Mycel runtime storage is explicit. Full production deployments should provide their own managed Supabase-compatible storage and secrets.
 
-```bash
-# Backup regularly
-cp ~/.leon/leon.db ~/.leon/leon.db.backup
-```
-
-Multi-user deployments may require PostgreSQL — this requires code changes to the storage layer.
+Back up the configured database with the tools for that database.
 
 ### Security
 
-- Store API keys in `~/.leon/config.env`, never in code or version control
+- Store API keys in the deployment secret store or an explicit env file, never in code or version control
 - Use `${VAR}` substitution in JSON config files instead of hardcoding keys
-- Restrict file permissions: `chmod 600 ~/.leon/config.env`
+- Restrict env file permissions when using one: `chmod 600 /path/to/mycel.env`
 - The `block_dangerous_commands` setting (default: `true`) prevents `rm -rf` and similar shell commands
 
 ### Proxy environments
@@ -264,7 +275,7 @@ env -u ALL_PROXY -u all_proxy uv run python -m backend.web.main
   </Accordion>
 
   <Accordion title="Docker provider hangs">
-    Proxy environment variables inherited by the Docker CLI. Mycel strips these automatically, but if issues persist, check the `docker_host` config field in `~/.leon/sandboxes/docker.json`.
+    Proxy environment variables inherited by the Docker CLI. Mycel strips these automatically, but if issues persist, check the `docker_host` config field in `$LEON_SANDBOXES_DIR/docker.json`.
   </Accordion>
 
   <Accordion title="Daytona PTY bootstrap fails">

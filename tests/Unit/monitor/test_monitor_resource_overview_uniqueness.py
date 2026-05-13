@@ -1,0 +1,881 @@
+import backend.sandboxes.resources.common as neutral_resource_common
+import backend.sandboxes.resources.common as resource_common
+import backend.sandboxes.resources.projection as resource_projection_service
+import backend.sandboxes.resources.provider_boundary as resource_provider_boundary_service
+from backend.monitor.infrastructure.read_models import resource_read_service as monitor_resource_read_service
+from storage import runtime as storage_runtime
+
+SANDBOX_RUNTIME_KEY = "sandbox_runtime_" + "id"
+
+
+class _FakeRepo:
+    def __init__(self, rows, sandbox_threads=None, instance_ids=None):
+        self._rows = rows
+        self._sandbox_threads = sandbox_threads or {}
+        self._instance_ids = instance_ids or {}
+
+    def query_resource_rows(self):
+        return list(self._rows)
+
+    def query_sandbox_threads(self, sandbox_id: str):
+        return [{"thread_id": tid} for tid in self._sandbox_threads.get(sandbox_id, [])]
+
+    def query_sandbox_instance_ids(self, sandbox_ids: list[str]):
+        return {sandbox_id: self._instance_ids.get(sandbox_id) for sandbox_id in sandbox_ids}
+
+    def close(self):
+        pass
+
+
+class _FakeThreadRepo:
+    def __init__(self, rows):
+        self._rows = rows
+
+    def get_by_id(self, thread_id: str):
+        return self._rows.get(thread_id)
+
+    def list_by_ids(self, thread_ids: list[str]):
+        return [{"id": thread_id, **row} for thread_id, row in self._rows.items() if thread_id in set(thread_ids)]
+
+    def close(self):
+        pass
+
+
+class _FakeUser:
+    def __init__(self, user_id: str, display_name: str, avatar: str | None = None):
+        self.id = user_id
+        self.display_name = display_name
+        self.avatar = avatar
+
+
+class _FakeUserRepo:
+    def __init__(self, users):
+        self._users = users
+
+    def list_all(self):
+        return list(self._users)
+
+    def close(self):
+        pass
+
+
+def _patch_daytona_projection(monkeypatch, repo, owners, *, console_url=None):
+    monkeypatch.setattr(monitor_resource_read_service, "make_sandbox_monitor_repo", lambda: repo)
+    monkeypatch.setattr(
+        resource_provider_boundary_service,
+        "available_sandbox_types",
+        lambda: [{"name": "daytona_selfhost", "available": True}],
+    )
+    monkeypatch.setattr(resource_projection_service, "resolve_provider_name", lambda *_args, **_kwargs: "daytona")
+    monkeypatch.setattr(resource_projection_service, "_resolve_console_url", lambda *_args, **_kwargs: console_url)
+    monkeypatch.setattr(
+        resource_projection_service,
+        "_resolve_instance_capabilities",
+        lambda _config_name: (resource_common.empty_capabilities(), None),
+    )
+    monkeypatch.setattr(resource_projection_service, "_thread_owners", owners)
+    monkeypatch.setattr(monitor_resource_read_service, "list_resource_snapshots_by_sandbox", lambda _resource_rows: {})
+
+
+def test_resource_projection_row_identity_prefers_unbound_provider_runtime_identity() -> None:
+    resource_row = {
+        "session_id": "provider-session-1",
+        "thread_id": "thread-1",
+        "sandbox_id": None,
+        SANDBOX_RUNTIME_KEY: "runtime-1",
+    }
+
+    assert resource_projection_service._resource_row_identity(resource_row) == "provider-session-1"
+    assert resource_projection_service._resource_running_identity(resource_row) == ""
+
+
+def test_resource_projection_uses_resource_row_projection_seam() -> None:
+    rows = [
+        {
+            "provider": "daytona_selfhost",
+            "session_id": "provider-session-1",
+            "thread_id": "thread-parent",
+            "sandbox_id": "sandbox-a",
+            SANDBOX_RUNTIME_KEY: "runtime-a",
+            "observed_state": "running",
+            "desired_state": "running",
+            "created_at": "2026-04-08T00:00:00",
+        }
+    ]
+
+    projected = resource_projection_service._project_user_visible_resource_rows(_FakeRepo(rows), rows)
+
+    assert projected == rows
+
+
+def test_list_resource_providers_deduplicates_terminal_derived_rows(monkeypatch):
+    rows = [
+        {
+            "provider": "local",
+            "session_id": None,
+            "thread_id": "thread-1",
+            "sandbox_id": "sandbox-1",
+            SANDBOX_RUNTIME_KEY: "runtime-1",
+            "observed_state": "running",
+            "desired_state": "running",
+            "created_at": "2026-04-04T00:00:00",
+        },
+        {
+            "provider": "local",
+            "session_id": None,
+            "thread_id": "thread-1",
+            "sandbox_id": "sandbox-1",
+            SANDBOX_RUNTIME_KEY: "runtime-1",
+            "observed_state": "running",
+            "desired_state": "running",
+            "created_at": "2026-04-04T00:00:00",
+        },
+    ]
+
+    monkeypatch.setattr(monitor_resource_read_service, "make_sandbox_monitor_repo", lambda: _FakeRepo(rows))
+    monkeypatch.setattr(
+        resource_provider_boundary_service,
+        "available_sandbox_types",
+        lambda: [{"name": "local", "available": True}],
+    )
+    monkeypatch.setattr(
+        resource_projection_service,
+        "_resolve_instance_capabilities",
+        lambda _config_name: (resource_common.empty_capabilities(), None),
+    )
+    monkeypatch.setattr(
+        resource_projection_service,
+        "_thread_owners",
+        lambda thread_ids: {tid: {"agent_user_id": "agent-1", "agent_name": "Toad", "avatar_url": None} for tid in thread_ids},
+    )
+    monkeypatch.setattr(monitor_resource_read_service, "list_resource_snapshots_by_sandbox", lambda _resource_rows: {})
+
+    payload = resource_projection_service.list_resource_providers()
+    local = payload["providers"][0]
+
+    assert local["telemetry"]["running"]["used"] == 1
+    assert local["resource_rows"] == [
+        {
+            "id": "sandbox-1:thread-1",
+            "sandboxId": "sandbox-1",
+            "threadId": "thread-1",
+            "agentUserId": "agent-1",
+            "agentName": "Toad",
+            "avatarUrl": None,
+            "status": "running",
+            "startedAt": "2026-04-04T00:00:00",
+            "metrics": None,
+        }
+    ]
+
+
+def test_list_resource_providers_keeps_card_cpu_contract_for_remote_provider(monkeypatch):
+    rows = [
+        {
+            "provider": "agentbay",
+            "session_id": None,
+            "thread_id": None,
+            "sandbox_id": "sandbox-1",
+            SANDBOX_RUNTIME_KEY: "runtime-1",
+            "observed_state": "paused",
+            "desired_state": "paused",
+            "created_at": "2026-04-04T00:00:00",
+        }
+    ]
+
+    monkeypatch.setattr(monitor_resource_read_service, "make_sandbox_monitor_repo", lambda: _FakeRepo(rows))
+    monkeypatch.setattr(
+        resource_provider_boundary_service,
+        "available_sandbox_types",
+        lambda: [{"name": "agentbay", "available": True}],
+    )
+    monkeypatch.setattr(
+        resource_projection_service,
+        "_resolve_instance_capabilities",
+        lambda _config_name: (resource_common.empty_capabilities(), None),
+    )
+    monkeypatch.setattr(resource_projection_service, "resolve_provider_name", lambda *_args, **_kwargs: "agentbay")
+    monkeypatch.setattr(resource_projection_service, "_resolve_console_url", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(resource_projection_service, "_thread_owners", lambda thread_ids: {})
+    monkeypatch.setattr(monitor_resource_read_service, "list_resource_snapshots_by_sandbox", lambda _resource_rows: {})
+
+    payload = resource_projection_service.list_resource_providers()
+
+    assert payload["providers"][0]["id"] == "agentbay"
+    assert payload["providers"][0]["cardCpu"] == {
+        "used": None,
+        "limit": None,
+        "unit": "%",
+        "source": "derived",
+        "freshness": "live",
+    }
+
+
+def test_list_resource_providers_counts_running_sandboxes_once_when_runtime_residue_duplicates(monkeypatch):
+    rows = [
+        {
+            "provider": "local",
+            "session_id": None,
+            "thread_id": "thread-1",
+            "sandbox_id": "sandbox-1",
+            SANDBOX_RUNTIME_KEY: "runtime-old",
+            "observed_state": "running",
+            "desired_state": "running",
+            "created_at": "2026-04-04T00:00:00",
+        },
+        {
+            "provider": "local",
+            "session_id": None,
+            "thread_id": "thread-1",
+            "sandbox_id": "sandbox-1",
+            SANDBOX_RUNTIME_KEY: "runtime-new",
+            "observed_state": "running",
+            "desired_state": "running",
+            "created_at": "2026-04-04T00:00:01",
+        },
+    ]
+
+    monkeypatch.setattr(monitor_resource_read_service, "make_sandbox_monitor_repo", lambda: _FakeRepo(rows))
+    monkeypatch.setattr(
+        resource_provider_boundary_service,
+        "available_sandbox_types",
+        lambda: [{"name": "local", "available": True}],
+    )
+    monkeypatch.setattr(
+        resource_projection_service,
+        "_resolve_instance_capabilities",
+        lambda _config_name: (resource_common.empty_capabilities(), None),
+    )
+    monkeypatch.setattr(
+        resource_projection_service,
+        "_thread_owners",
+        lambda thread_ids: {tid: {"agent_user_id": "agent-1", "agent_name": "Toad", "avatar_url": None} for tid in thread_ids},
+    )
+    monkeypatch.setattr(monitor_resource_read_service, "list_resource_snapshots_by_sandbox", lambda _resource_rows: {})
+
+    payload = resource_projection_service.list_resource_providers()
+    local = payload["providers"][0]
+
+    assert local["telemetry"]["running"]["used"] == 1
+    assert payload["summary"]["running_resource_rows"] == 1
+    assert [resource_row["id"] for resource_row in local["resource_rows"]] == ["sandbox-1:thread-1"]
+
+
+def test_list_resource_providers_resolves_owner_metadata_from_runtime_storage(monkeypatch):
+    rows = [
+        {
+            "provider": "daytona",
+            "session_id": "sess-1",
+            "thread_id": "thread-supabase",
+            "sandbox_id": "sandbox-1",
+            SANDBOX_RUNTIME_KEY: "runtime-1",
+            "observed_state": "running",
+            "desired_state": "running",
+            "created_at": "2026-04-04T00:00:00",
+        },
+    ]
+
+    monkeypatch.setattr(monitor_resource_read_service, "make_sandbox_monitor_repo", lambda: _FakeRepo(rows))
+    monkeypatch.setattr(
+        resource_provider_boundary_service,
+        "available_sandbox_types",
+        lambda: [{"name": "daytona", "available": True}],
+    )
+    monkeypatch.setattr(resource_projection_service, "resolve_provider_name", lambda *_args, **_kwargs: "daytona")
+    monkeypatch.setattr(resource_projection_service, "_resolve_console_url", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(
+        resource_projection_service,
+        "_resolve_instance_capabilities",
+        lambda _config_name: (resource_common.empty_capabilities(), None),
+    )
+    monkeypatch.setattr(
+        neutral_resource_common,
+        "build_thread_repo",
+        lambda **_kwargs: _FakeThreadRepo({"thread-supabase": {"agent_user_id": "agent-1"}}),
+    )
+    monkeypatch.setattr(
+        neutral_resource_common,
+        "build_user_repo",
+        lambda **_kwargs: _FakeUserRepo([_FakeUser("agent-1", "Toad")]),
+    )
+    monkeypatch.setattr(monitor_resource_read_service, "list_resource_snapshots_by_sandbox", lambda _resource_rows: {})
+
+    payload = resource_projection_service.list_resource_providers()
+
+    assert payload["providers"][0]["resource_rows"] == [
+        {
+            "id": "sandbox-1:thread-supabase",
+            "sandboxId": "sandbox-1",
+            "threadId": "thread-supabase",
+            "agentUserId": "agent-1",
+            "agentName": "Toad",
+            "avatarUrl": None,
+            "status": "running",
+            "startedAt": "2026-04-04T00:00:00",
+            "metrics": None,
+        }
+    ]
+
+
+def test_list_resource_providers_hides_subagent_threads(monkeypatch):
+    rows = [
+        {
+            "provider": "daytona",
+            "session_id": "sess-parent",
+            "thread_id": "thread-parent",
+            "sandbox_id": "sandbox-parent",
+            SANDBOX_RUNTIME_KEY: "runtime-parent",
+            "observed_state": "running",
+            "desired_state": "running",
+            "created_at": "2026-04-04T00:00:00",
+        },
+        {
+            "provider": "daytona",
+            "session_id": "sess-child",
+            "thread_id": "subagent-deadbeef",
+            "sandbox_id": "sandbox-child",
+            SANDBOX_RUNTIME_KEY: "runtime-child",
+            "observed_state": "running",
+            "desired_state": "running",
+            "created_at": "2026-04-04T00:00:01",
+        },
+    ]
+
+    monkeypatch.setattr(monitor_resource_read_service, "make_sandbox_monitor_repo", lambda: _FakeRepo(rows))
+    monkeypatch.setattr(
+        resource_provider_boundary_service,
+        "available_sandbox_types",
+        lambda: [{"name": "daytona", "available": True}],
+    )
+    monkeypatch.setattr(resource_projection_service, "resolve_provider_name", lambda *_args, **_kwargs: "daytona")
+    monkeypatch.setattr(resource_projection_service, "_resolve_console_url", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(
+        resource_projection_service,
+        "_resolve_instance_capabilities",
+        lambda _config_name: (resource_common.empty_capabilities(), None),
+    )
+    monkeypatch.setattr(
+        resource_projection_service,
+        "_thread_owners",
+        lambda thread_ids: {tid: {"agent_user_id": tid, "agent_name": tid, "avatar_url": None} for tid in thread_ids},
+    )
+    monkeypatch.setattr(monitor_resource_read_service, "list_resource_snapshots_by_sandbox", lambda _resource_rows: {})
+
+    payload = resource_projection_service.list_resource_providers()
+    resource_rows = payload["providers"][0]["resource_rows"]
+
+    assert [resource_row["threadId"] for resource_row in resource_rows] == ["thread-parent"]
+    assert payload["summary"]["running_resource_rows"] == 1
+
+
+def test_list_resource_providers_projects_visible_parent_when_raw_monitor_row_is_subagent(monkeypatch):
+    rows = [
+        {
+            "provider": "daytona_selfhost",
+            "session_id": None,
+            "thread_id": "subagent-deadbeef",
+            "sandbox_id": "sandbox-1",
+            SANDBOX_RUNTIME_KEY: "runtime-1",
+            "observed_state": "paused",
+            "desired_state": "paused",
+            "created_at": "2026-04-04T00:00:00",
+        },
+    ]
+
+    monkeypatch.setattr(
+        monitor_resource_read_service,
+        "make_sandbox_monitor_repo",
+        lambda: _FakeRepo(rows, sandbox_threads={"sandbox-1": ["subagent-deadbeef", "thread-parent"]}),
+    )
+    monkeypatch.setattr(
+        resource_provider_boundary_service,
+        "available_sandbox_types",
+        lambda: [{"name": "daytona_selfhost", "available": True}],
+    )
+    monkeypatch.setattr(resource_projection_service, "resolve_provider_name", lambda *_args, **_kwargs: "daytona")
+    monkeypatch.setattr(resource_projection_service, "_resolve_console_url", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(
+        resource_projection_service,
+        "_resolve_instance_capabilities",
+        lambda _config_name: (resource_common.empty_capabilities(), None),
+    )
+    monkeypatch.setattr(
+        resource_projection_service,
+        "_thread_owners",
+        lambda thread_ids: {tid: {"agent_user_id": "agent-1", "agent_name": "Morel", "avatar_url": None} for tid in thread_ids},
+    )
+    monkeypatch.setattr(monitor_resource_read_service, "list_resource_snapshots_by_sandbox", lambda _resource_rows: {})
+
+    payload = resource_projection_service.list_resource_providers()
+    resource_rows = payload["providers"][0]["resource_rows"]
+
+    assert resource_rows == [
+        {
+            "id": "sandbox-1:thread-parent",
+            "sandboxId": "sandbox-1",
+            "threadId": "thread-parent",
+            "agentUserId": "agent-1",
+            "agentName": "Morel",
+            "avatarUrl": None,
+            "status": "paused",
+            "startedAt": "2026-04-04T00:00:00",
+            "metrics": None,
+        }
+    ]
+
+
+def test_list_resource_providers_projects_hidden_rows_by_sandbox_not_lease(monkeypatch):
+    rows = [
+        {
+            "provider": "daytona_selfhost",
+            "session_id": None,
+            "thread_id": "subagent-a",
+            "sandbox_id": "sandbox-a",
+            SANDBOX_RUNTIME_KEY: "shared-runtime",
+            "observed_state": "paused",
+            "desired_state": "paused",
+            "created_at": "2026-04-04T00:00:00",
+        },
+        {
+            "provider": "daytona_selfhost",
+            "session_id": None,
+            "thread_id": "subagent-b",
+            "sandbox_id": "sandbox-b",
+            SANDBOX_RUNTIME_KEY: "shared-runtime",
+            "observed_state": "paused",
+            "desired_state": "paused",
+            "created_at": "2026-04-04T00:00:01",
+        },
+    ]
+    repo = _FakeRepo(
+        rows,
+        sandbox_threads={
+            "sandbox-a": ["subagent-a", "thread-parent-a"],
+            "sandbox-b": ["subagent-b", "thread-parent-b"],
+        },
+    )
+    _patch_daytona_projection(
+        monkeypatch,
+        repo,
+        lambda thread_ids: {tid: {"agent_user_id": tid, "agent_name": tid, "avatar_url": None} for tid in thread_ids},
+    )
+
+    payload = resource_projection_service.list_resource_providers()
+    resource_rows = payload["providers"][0]["resource_rows"]
+
+    assert [(resource_row["sandboxId"], resource_row["threadId"]) for resource_row in resource_rows] == [
+        ("sandbox-a", "thread-parent-a"),
+        ("sandbox-b", "thread-parent-b"),
+    ]
+
+
+def test_list_resource_providers_uses_canonical_sandbox_visible_parent_projection(monkeypatch):
+    rows = [
+        {
+            "provider": "daytona_selfhost",
+            "session_id": None,
+            "thread_id": "subagent-deadbeef",
+            "sandbox_id": "sandbox-1",
+            SANDBOX_RUNTIME_KEY: "runtime-1",
+            "observed_state": "paused",
+            "desired_state": "paused",
+            "created_at": "2026-04-04T00:00:00",
+        },
+    ]
+
+    monkeypatch.setattr(
+        monitor_resource_read_service,
+        "make_sandbox_monitor_repo",
+        lambda: _FakeRepo(rows, sandbox_threads={"sandbox-1": ["subagent-deadbeef", "thread-parent"]}),
+    )
+    monkeypatch.setattr(
+        resource_provider_boundary_service,
+        "available_sandbox_types",
+        lambda: [{"name": "daytona_selfhost", "available": True}],
+    )
+    monkeypatch.setattr(resource_projection_service, "resolve_provider_name", lambda *_args, **_kwargs: "daytona")
+    monkeypatch.setattr(resource_projection_service, "_resolve_console_url", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(
+        resource_projection_service,
+        "_resolve_instance_capabilities",
+        lambda _config_name: (resource_common.empty_capabilities(), None),
+    )
+    monkeypatch.setattr(
+        resource_projection_service,
+        "_thread_owners",
+        lambda thread_ids: {tid: {"agent_user_id": "agent-1", "agent_name": "Morel", "avatar_url": None} for tid in thread_ids},
+    )
+    monkeypatch.setattr(monitor_resource_read_service, "list_resource_snapshots_by_sandbox", lambda _resource_rows: {})
+
+    payload = resource_projection_service.list_resource_providers()
+    resource_rows = payload["providers"][0]["resource_rows"]
+
+    assert resource_rows == [
+        {
+            "id": "sandbox-1:thread-parent",
+            "sandboxId": "sandbox-1",
+            "threadId": "thread-parent",
+            "agentUserId": "agent-1",
+            "agentName": "Morel",
+            "avatarUrl": None,
+            "status": "paused",
+            "startedAt": "2026-04-04T00:00:00",
+            "metrics": None,
+        }
+    ]
+
+
+def test_list_resource_providers_drops_subagent_rows_without_sandbox_id(monkeypatch):
+    rows = [
+        {
+            "provider": "daytona_selfhost",
+            "session_id": None,
+            "thread_id": "subagent-deadbeef",
+            "sandbox_id": None,
+            SANDBOX_RUNTIME_KEY: "runtime-1",
+            "observed_state": "paused",
+            "desired_state": "paused",
+            "created_at": "2026-04-04T00:00:00",
+        },
+    ]
+
+    monkeypatch.setattr(
+        monitor_resource_read_service,
+        "make_sandbox_monitor_repo",
+        lambda: _FakeRepo(rows),
+    )
+    monkeypatch.setattr(
+        resource_provider_boundary_service,
+        "available_sandbox_types",
+        lambda: [{"name": "daytona_selfhost", "available": True}],
+    )
+    monkeypatch.setattr(resource_projection_service, "resolve_provider_name", lambda *_args, **_kwargs: "daytona")
+    monkeypatch.setattr(resource_projection_service, "_resolve_console_url", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(
+        resource_projection_service,
+        "_resolve_instance_capabilities",
+        lambda _config_name: (resource_common.empty_capabilities(), None),
+    )
+    monkeypatch.setattr(resource_projection_service, "_thread_owners", lambda _thread_ids: {})
+    monkeypatch.setattr(monitor_resource_read_service, "list_resource_snapshots_by_sandbox", lambda _resource_rows: {})
+
+    payload = resource_projection_service.list_resource_providers()
+
+    assert payload["providers"][0]["resource_rows"] == []
+    assert payload["summary"]["running_resource_rows"] == 0
+
+
+def test_list_resource_providers_drops_visible_lease_only_rows_without_sandbox_id(monkeypatch):
+    rows = [
+        {
+            "provider": "daytona_selfhost",
+            "session_id": None,
+            "thread_id": "thread-parent",
+            "sandbox_id": None,
+            SANDBOX_RUNTIME_KEY: "runtime-1",
+            "observed_state": "running",
+            "desired_state": "running",
+            "created_at": "2026-04-04T00:00:00",
+        },
+    ]
+
+    _patch_daytona_projection(
+        monkeypatch,
+        _FakeRepo(rows),
+        lambda thread_ids: {tid: {"agent_user_id": "agent-1", "agent_name": "Toad", "avatar_url": None} for tid in thread_ids},
+    )
+
+    payload = resource_projection_service.list_resource_providers()
+
+    assert payload["providers"][0]["resource_rows"] == []
+    assert payload["summary"]["running_resource_rows"] == 0
+
+
+def test_list_resource_providers_deduplicates_same_runtime_thread_even_with_distinct_provider_ids(monkeypatch):
+    rows = [
+        {
+            "provider": "daytona_selfhost",
+            "session_id": "sess-a",
+            "thread_id": "thread-parent",
+            "sandbox_id": "sandbox-1",
+            SANDBOX_RUNTIME_KEY: "runtime-1",
+            "observed_state": "running",
+            "desired_state": "running",
+            "created_at": "2026-04-04T00:00:00",
+        },
+        {
+            "provider": "daytona_selfhost",
+            "session_id": "sess-b",
+            "thread_id": "thread-parent",
+            "sandbox_id": "sandbox-1",
+            SANDBOX_RUNTIME_KEY: "runtime-1",
+            "observed_state": "running",
+            "desired_state": "running",
+            "created_at": "2026-04-04T00:00:01",
+        },
+    ]
+
+    _patch_daytona_projection(
+        monkeypatch,
+        _FakeRepo(rows),
+        lambda thread_ids: {tid: {"agent_user_id": "agent-1", "agent_name": "Toad", "avatar_url": None} for tid in thread_ids},
+    )
+
+    payload = resource_projection_service.list_resource_providers()
+    resource_rows = payload["providers"][0]["resource_rows"]
+
+    assert resource_rows == [
+        {
+            "id": "sandbox-1:thread-parent",
+            "sandboxId": "sandbox-1",
+            "threadId": "thread-parent",
+            "agentUserId": "agent-1",
+            "agentName": "Toad",
+            "avatarUrl": None,
+            "status": "running",
+            "startedAt": "2026-04-04T00:00:00",
+            "metrics": None,
+        }
+    ]
+
+
+def test_list_resource_providers_keeps_remote_runtime_id_actor_first(monkeypatch):
+    rows = [
+        {
+            "provider": "daytona_selfhost",
+            "session_id": "provider-session-1",
+            "thread_id": "thread-remote",
+            "sandbox_id": "sandbox-remote",
+            SANDBOX_RUNTIME_KEY: "runtime-remote",
+            "observed_state": "running",
+            "desired_state": "running",
+            "created_at": "2026-04-08T00:00:00",
+        },
+    ]
+
+    _patch_daytona_projection(
+        monkeypatch,
+        _FakeRepo(rows, instance_ids={"sandbox-remote": "provider-session-1"}),
+        lambda thread_ids: {
+            tid: {
+                "agent_user_id": "agent-remote",
+                "agent_name": "Remote Agent",
+                "avatar_url": "/api/users/agent-remote/avatar",
+            }
+            for tid in thread_ids
+        },
+        console_url="https://example.com/daytona",
+    )
+
+    payload = resource_projection_service.list_resource_providers()
+    provider = payload["providers"][0]
+    resource_row = provider["resource_rows"][0]
+
+    assert provider["consoleUrl"] == "https://example.com/daytona"
+    assert resource_row["runtimeId"] == "provider-session-1"
+    assert resource_row["agentUserId"] == "agent-remote"
+    assert resource_row["agentName"] == "Remote Agent"
+    assert resource_row["avatarUrl"] == "/api/users/agent-remote/avatar"
+    assert "memberId" not in resource_row
+    assert "memberName" not in resource_row
+
+
+def test_list_resource_providers_uses_batch_runtime_lookup_for_remote_sandboxes(monkeypatch):
+    rows = [
+        {
+            "provider": "daytona_selfhost",
+            "session_id": None,
+            "thread_id": "thread-a",
+            "sandbox_id": "sandbox-a",
+            SANDBOX_RUNTIME_KEY: "runtime-a",
+            "observed_state": "detached",
+            "desired_state": "running",
+            "created_at": "2026-04-08T00:00:00",
+        },
+        {
+            "provider": "daytona_selfhost",
+            "session_id": None,
+            "thread_id": "thread-b",
+            "sandbox_id": "sandbox-b",
+            SANDBOX_RUNTIME_KEY: "runtime-b",
+            "observed_state": "detached",
+            "desired_state": "running",
+            "created_at": "2026-04-08T00:00:01",
+        },
+    ]
+
+    class _BatchOnlyRepo(_FakeRepo):
+        def __init__(self):
+            super().__init__(rows, instance_ids={"sandbox-a": "runtime-a", "sandbox-b": "runtime-b"})
+            self.batch_calls: list[list[str]] = []
+
+        def query_sandbox_instance_ids(self, sandbox_ids: list[str]):
+            self.batch_calls.append(list(sandbox_ids))
+            return super().query_sandbox_instance_ids(sandbox_ids)
+
+    repo = _BatchOnlyRepo()
+    _patch_daytona_projection(
+        monkeypatch,
+        repo,
+        lambda thread_ids: {tid: {"agent_user_id": f"agent-{tid}", "agent_name": tid, "avatar_url": None} for tid in thread_ids},
+    )
+
+    payload = resource_projection_service.list_resource_providers()
+    resource_rows = payload["providers"][0]["resource_rows"]
+
+    assert [resource_row["runtimeId"] for resource_row in resource_rows] == ["runtime-a", "runtime-b"]
+    assert repo.batch_calls == [["sandbox-a", "sandbox-b"]]
+
+
+def test_visible_resource_row_stats_uses_sandbox_keyed_runtime_lookup(monkeypatch):
+    rows = [
+        {
+            "provider": "daytona_selfhost",
+            "session_id": None,
+            "thread_id": "thread-a",
+            "sandbox_id": "sandbox-a",
+            SANDBOX_RUNTIME_KEY: "runtime-a",
+            "observed_state": "detached",
+            "desired_state": "running",
+            "created_at": "2026-04-08T00:00:00",
+        },
+    ]
+
+    monkeypatch.setattr(
+        monitor_resource_read_service,
+        "make_sandbox_monitor_repo",
+        lambda: _FakeRepo(rows, instance_ids={"sandbox-a": "runtime-a"}),
+    )
+    monkeypatch.setattr(monitor_resource_read_service, "list_resource_snapshots_by_sandbox", lambda _resource_rows: {})
+
+    stats = resource_projection_service.visible_resource_row_stats()
+
+    assert stats == {"daytona_selfhost": {"resource_rows": 1, "running": 1}}
+
+
+def test_visible_resource_row_stats_counts_running_sandbox_once_when_runtime_residue_duplicates(monkeypatch):
+    rows = [
+        {
+            "provider": "daytona_selfhost",
+            "session_id": None,
+            "thread_id": "thread-a",
+            "sandbox_id": "sandbox-a",
+            SANDBOX_RUNTIME_KEY: "runtime-old",
+            "observed_state": "running",
+            "desired_state": "running",
+            "created_at": "2026-04-08T00:00:00",
+        },
+        {
+            "provider": "daytona_selfhost",
+            "session_id": None,
+            "thread_id": "thread-a",
+            "sandbox_id": "sandbox-a",
+            SANDBOX_RUNTIME_KEY: "runtime-new",
+            "observed_state": "running",
+            "desired_state": "running",
+            "created_at": "2026-04-08T00:00:01",
+        },
+    ]
+
+    monkeypatch.setattr(monitor_resource_read_service, "make_sandbox_monitor_repo", lambda: _FakeRepo(rows))
+    monkeypatch.setattr(monitor_resource_read_service, "list_resource_snapshots_by_sandbox", lambda _resource_rows: {})
+
+    stats = resource_projection_service.visible_resource_row_stats()
+
+    assert stats == {"daytona_selfhost": {"resource_rows": 1, "running": 1}}
+
+
+def test_list_resource_snapshots_by_sandbox_prefers_repo_sandbox_wrapper(monkeypatch):
+    snapshot_input_rows = [
+        {
+            "sandbox_id": "sandbox-a",
+        },
+    ]
+
+    class _SandboxWrappedRepo:
+        def close(self):
+            return None
+
+        def list_snapshots_by_sandbox_ids(self, items):
+            assert items == snapshot_input_rows
+            return {"sandbox-a": {"sandbox_id": "sandbox-a", "cpu_used": 11}}
+
+    monkeypatch.setattr(storage_runtime, "build_resource_snapshot_repo", lambda **_kwargs: _SandboxWrappedRepo())
+
+    snapshot_by_sandbox = storage_runtime.list_resource_snapshots_by_sandbox(snapshot_input_rows)
+
+    assert snapshot_by_sandbox == {"sandbox-a": {"sandbox_id": "sandbox-a", "cpu_used": 11}}
+
+
+def test_list_resource_providers_passes_sandbox_keyed_snapshots_to_provider_telemetry(monkeypatch):
+    rows = [
+        {
+            "provider": "daytona_selfhost",
+            "session_id": None,
+            "thread_id": "thread-a",
+            "sandbox_id": "sandbox-a",
+            SANDBOX_RUNTIME_KEY: "runtime-a",
+            "observed_state": "running",
+            "desired_state": "running",
+            "created_at": "2026-04-08T00:00:00",
+        },
+    ]
+
+    _patch_daytona_projection(
+        monkeypatch,
+        _FakeRepo(rows),
+        lambda thread_ids: {tid: {"agent_user_id": f"agent-{tid}", "agent_name": tid, "avatar_url": None} for tid in thread_ids},
+    )
+    monkeypatch.setattr(
+        monitor_resource_read_service,
+        "list_resource_snapshots_by_sandbox",
+        lambda _resource_rows: {"sandbox-a": {"sandbox_id": "sandbox-a", "cpu_used": 11}},
+    )
+
+    captured: dict[str, object] = {}
+
+    def _fake_aggregate_provider_telemetry(*, provider_resource_rows, running_count, snapshot_by_sandbox):
+        captured["provider_resource_rows"] = provider_resource_rows
+        captured["running_count"] = running_count
+        captured["snapshot_keys"] = sorted(snapshot_by_sandbox.keys())
+        return {
+            "running": {"used": running_count},
+            "cpu": {"used": 11},
+            "memory": {"used": None},
+            "disk": {"used": None},
+        }
+
+    monkeypatch.setattr(resource_projection_service, "_aggregate_provider_telemetry", _fake_aggregate_provider_telemetry)
+
+    payload = resource_projection_service.list_resource_providers()
+
+    assert captured["snapshot_keys"] == ["sandbox-a"]
+    assert payload["providers"][0]["telemetry"]["cpu"]["used"] == 11
+
+
+def test_load_visible_resource_runtime_returns_only_sandbox_keyed_snapshots(monkeypatch):
+    rows = [
+        {
+            "provider": "daytona_selfhost",
+            "session_id": None,
+            "thread_id": "thread-a",
+            "sandbox_id": "sandbox-a",
+            SANDBOX_RUNTIME_KEY: "runtime-a",
+            "observed_state": "running",
+            "desired_state": "running",
+            "created_at": "2026-04-08T00:00:00",
+        },
+    ]
+
+    monkeypatch.setattr(monitor_resource_read_service, "make_sandbox_monitor_repo", lambda: _FakeRepo(rows))
+    monkeypatch.setattr(
+        monitor_resource_read_service,
+        "list_resource_snapshots_by_sandbox",
+        lambda resource_rows: {"sandbox-a": {"sandbox_id": "sandbox-a", "cpu_used": 11}},
+    )
+
+    resource_rows, runtime_ids, snapshot_by_sandbox = resource_projection_service._load_visible_resource_runtime()
+
+    assert [resource_row["sandbox_id"] for resource_row in resource_rows] == ["sandbox-a"]
+    assert runtime_ids == {"sandbox-a": None}
+    assert snapshot_by_sandbox == {"sandbox-a": {"sandbox_id": "sandbox-a", "cpu_used": 11}}

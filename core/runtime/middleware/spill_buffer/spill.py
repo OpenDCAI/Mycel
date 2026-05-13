@@ -1,13 +1,19 @@
-"""Core spill logic: detect oversized content, write to disk, return preview."""
-
 from __future__ import annotations
 
-import os
+import posixpath
 from typing import Any
 
-from core.tools.filesystem.backend import FileSystemBackend
+from sandbox.interfaces.filesystem import FileSystemBackend
 
 PREVIEW_BYTES = 2048
+
+
+def _format_preview(content: str) -> str:
+    preview = content[:PREVIEW_BYTES]
+    cutoff = preview.rfind("\n")
+    if cutoff >= PREVIEW_BYTES // 2:
+        return preview[:cutoff]
+    return preview
 
 
 def spill_if_needed(
@@ -17,18 +23,6 @@ def spill_if_needed(
     fs_backend: FileSystemBackend,
     workspace_root: str,
 ) -> Any:
-    """Replace oversized string content with a preview + on-disk path.
-
-    Args:
-        content: Tool output (only strings are checked).
-        threshold_bytes: Max byte size before spilling.
-        tool_call_id: Used to derive the spill filename.
-        fs_backend: Backend for writing the full output to disk.
-        workspace_root: Root directory for the .leon/tool-results/ folder.
-
-    Returns:
-        Original content if within threshold, otherwise a preview string.
-    """
     if not isinstance(content, str):
         return content
 
@@ -36,8 +30,8 @@ def spill_if_needed(
     if size <= threshold_bytes:
         return content
 
-    spill_dir = os.path.join(workspace_root, ".leon", "tool-results")
-    spill_path = os.path.join(spill_dir, f"{tool_call_id}.txt")
+    spill_dir = posixpath.join(workspace_root, ".leon", "tool-results")
+    spill_path = posixpath.join(spill_dir, f"{tool_call_id}.txt")
 
     write_note = ""
     try:
@@ -50,10 +44,15 @@ def spill_if_needed(
         write_note = f"\n\n(Warning: failed to save full output to disk: {exc})"
         spill_path = "<write failed>"
 
-    preview = content[:PREVIEW_BYTES]
+    # @@@persisted-output-wrapper - te-03 is about durable handoff semantics,
+    # not "shorter string". The model must see an explicit persisted artifact
+    # boundary plus the re-read path, otherwise we silently amputate context.
+    preview = _format_preview(content)
     return (
-        f"Output too large ({size} bytes). Full output saved to: {spill_path}"
-        f"\n\nUse read_file to view specific sections with offset and limit parameters."
-        f"\n\nPreview (first {PREVIEW_BYTES} bytes):\n{preview}\n..."
-        f"{write_note}"
+        f'<persisted-output path="{spill_path}" bytes="{size}">'
+        f"\nSize: {size} bytes"
+        f"\nUse Read to inspect the full persisted output."
+        f"\nPreview (first {PREVIEW_BYTES} bytes):\n{preview}\n..."
+        f"{write_note}\n"
+        f"</persisted-output>"
     )

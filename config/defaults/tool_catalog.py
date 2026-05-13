@@ -1,7 +1,7 @@
 """Tool catalog — single source of truth for all available agent tools.
 
 Each entry is a ToolDef with fully-typed fields.  The catalog is the
-authoritative registry consumed by member_service to build tool lists
+authoritative registry consumed by agent_user_service to build tool lists
 for the panel UI.
 
 Adding a new tool:  append an entry below.
@@ -21,10 +21,10 @@ class ToolGroup(StrEnum):
     COMMAND = "command"
     WEB = "web"
     AGENT = "agent"
+    CHAT = "chat"
     TODO = "todo"
     SKILLS = "skills"
     SYSTEM = "system"
-    TASKBOARD = "taskboard"
 
 
 class ToolMode(StrEnum):
@@ -39,7 +39,7 @@ class ToolDef(BaseModel):
     desc: str
     group: ToolGroup
     mode: ToolMode = ToolMode.INLINE
-    default: bool = True  # False → off by default in new member configs
+    default: bool = True  # False -> off by default in new agent configs
 
 
 # ── Catalog ────────────────────────────────────────────────────────────────
@@ -62,7 +62,13 @@ TOOLS: list[ToolDef] = [
     ToolDef(name="TaskOutput", desc="获取后台任务输出", group=ToolGroup.AGENT),
     ToolDef(name="TaskStop", desc="停止后台任务", group=ToolGroup.AGENT),
     ToolDef(name="Agent", desc="启动子 Agent 执行任务", group=ToolGroup.AGENT),
-    ToolDef(name="SendMessage", desc="向其他 Agent 发送消息", group=ToolGroup.AGENT),
+    ToolDef(name="SendMessage", desc="向运行中的 Agent 发送排队消息", group=ToolGroup.AGENT),
+    # chat
+    ToolDef(name="list_chats", desc="列出当前实体可访问的聊天会话", group=ToolGroup.CHAT),
+    ToolDef(name="create_group_chat", desc="创建由当前实体拥有的群聊", group=ToolGroup.CHAT),
+    ToolDef(name="read_messages", desc="读取聊天消息并标记为已读", group=ToolGroup.CHAT),
+    ToolDef(name="send_message", desc="向聊天对象发送消息", group=ToolGroup.CHAT),
+    ToolDef(name="search_messages", desc="搜索历史聊天消息", group=ToolGroup.CHAT),
     # todo
     ToolDef(name="TaskCreate", desc="创建待办任务", group=ToolGroup.TODO, mode=ToolMode.DEFERRED),
     ToolDef(name="TaskGet", desc="获取任务详情", group=ToolGroup.TODO, mode=ToolMode.DEFERRED),
@@ -72,14 +78,26 @@ TOOLS: list[ToolDef] = [
     ToolDef(name="load_skill", desc="加载 Skill", group=ToolGroup.SKILLS),
     # system
     ToolDef(name="tool_search", desc="搜索可用工具", group=ToolGroup.SYSTEM),
-    # taskboard — all off by default; enable on dedicated scheduler members
-    ToolDef(name="ListBoardTasks", desc="列出任务板上的任务", group=ToolGroup.TASKBOARD, default=False),
-    ToolDef(name="ClaimTask", desc="认领一个任务板任务", group=ToolGroup.TASKBOARD, default=False),
-    ToolDef(name="UpdateTaskProgress", desc="更新任务进度", group=ToolGroup.TASKBOARD, default=False),
-    ToolDef(name="CompleteTask", desc="将任务标记为完成", group=ToolGroup.TASKBOARD, default=False),
-    ToolDef(name="FailTask", desc="将任务标记为失败", group=ToolGroup.TASKBOARD, default=False),
-    ToolDef(name="CreateBoardTask", desc="在任务板上创建新任务（调度派发）", group=ToolGroup.TASKBOARD, default=False),
+    ToolDef(name="LSP", desc="Language Server Protocol 操作", group=ToolGroup.SYSTEM, mode=ToolMode.DEFERRED, default=False),
 ]
 
 # Fast lookup: name → ToolDef
 TOOLS_BY_NAME: dict[str, ToolDef] = {t.name: t for t in TOOLS}
+
+
+def tool_enabled_for_agent(tool_name: str, *, configured_tools: list[str] | None, runtime: dict[str, object] | None) -> bool:
+    runtime = runtime or {}
+    runtime_key = f"tools:{tool_name}"
+    override = runtime.get(runtime_key)
+    if isinstance(override, dict) and "enabled" in override:
+        enabled = override["enabled"]
+        if not isinstance(enabled, bool):
+            raise RuntimeError("Tool runtime override enabled must be a boolean")
+        return enabled
+
+    tools = ["*"] if configured_tools is None else configured_tools
+    if tools == ["*"]:
+        return True
+    if tool_name in tools:
+        return True
+    return False

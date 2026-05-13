@@ -1,5 +1,3 @@
-"""Jupyter Notebook reader - parses .ipynb cell by cell."""
-
 from __future__ import annotations
 
 import json
@@ -14,18 +12,6 @@ def read_notebook(
     start_cell: int | None = None,
     limit_cells: int | None = None,
 ) -> ReadResult:
-    """
-    Read Jupyter Notebook with cell-based pagination.
-
-    Args:
-        path: Absolute path to .ipynb file
-        limits: ReadLimits configuration (max_chars applies to total output)
-        start_cell: Start cell (0-indexed, None = start from cell 0)
-        limit_cells: Number of cells to read (None = default 50 cells)
-
-    Returns:
-        ReadResult with formatted cells and metadata
-    """
     stat = path.stat()
     result = ReadResult(
         file_path=str(path),
@@ -56,7 +42,7 @@ def read_notebook(
         result.error = f"Start cell {start_cell} exceeds total cells {total_cells}"
         return result
 
-    effective_limit = limit_cells if limit_cells else 50
+    effective_limit = limit_cells or 50
     end_idx = min(start_idx + effective_limit, total_cells)
 
     output_parts: list[str] = []
@@ -96,14 +82,10 @@ def read_notebook(
 
 
 def _format_cell(cell: dict, cell_num: int, total_cells: int) -> str:
-    """Format a single notebook cell."""
     cell_type = cell.get("cell_type", "unknown")
     source = cell.get("source", [])
 
-    if isinstance(source, list):
-        source_text = "".join(source)
-    else:
-        source_text = str(source)
+    source_text = "".join(source) if isinstance(source, list) else str(source)
 
     parts = [
         f"\n{'─' * 60}",
@@ -134,7 +116,6 @@ def _format_cell(cell: dict, cell_num: int, total_cells: int) -> str:
 
 
 def _format_output(output: dict) -> str:
-    """Format a cell output."""
     output_type = output.get("output_type", "")
 
     if output_type == "stream":

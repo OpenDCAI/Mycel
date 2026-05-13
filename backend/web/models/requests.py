@@ -1,28 +1,17 @@
-"""Pydantic request models for Leon web API."""
+from typing import Any, Literal
 
-from typing import Literal
-
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from sandbox.config import MountSpec
 
 
-class RecipeSnapshotRequest(BaseModel):
-    id: str
-    name: str
-    provider_type: str
-    desc: str | None = None
-    features: dict[str, bool] = Field(default_factory=dict)
-    configurable_features: dict[str, bool] = Field(default_factory=dict)
-    feature_options: list[dict] = Field(default_factory=list)
-    builtin: bool | None = None
-
-
 class CreateThreadRequest(BaseModel):
-    member_id: str  # which agent template to create thread from
+    model_config = ConfigDict(extra="forbid")
+
+    agent_user_id: str
     sandbox: str = "local"
-    recipe: RecipeSnapshotRequest | None = None
-    lease_id: str | None = None
+    sandbox_template_id: str | None = None
+    existing_sandbox_id: str | None = None
     cwd: str | None = None
     model: str | None = None
     agent: str | None = None
@@ -30,17 +19,7 @@ class CreateThreadRequest(BaseModel):
 
 
 class ResolveMainThreadRequest(BaseModel):
-    member_id: str
-
-
-class SaveThreadLaunchConfigRequest(BaseModel):
-    member_id: str
-    create_mode: Literal["new", "existing"]
-    provider_config: str
-    recipe: RecipeSnapshotRequest | None = None
-    lease_id: str | None = None
-    model: str | None = None
-    workspace: str | None = None
+    agent_user_id: str
 
 
 class RunRequest(BaseModel):
@@ -52,4 +31,24 @@ class RunRequest(BaseModel):
 
 class SendMessageRequest(BaseModel):
     message: str
+    enable_trajectory: bool = False
     attachments: list[str] = Field(default_factory=list)
+
+
+class AskUserAnswerRequest(BaseModel):
+    header: str | None = None
+    question: str | None = None
+    selected_options: list[str] = Field(default_factory=list)
+    free_text: str | None = None
+
+
+class ResolvePermissionRequest(BaseModel):
+    decision: Literal["allow", "deny"]
+    message: str | None = None
+    answers: list[AskUserAnswerRequest] | None = None
+    annotations: dict[str, Any] | None = None
+
+
+class ThreadPermissionRuleRequest(BaseModel):
+    behavior: Literal["allow", "deny", "ask"]
+    tool_name: str

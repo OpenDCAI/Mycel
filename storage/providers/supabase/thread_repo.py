@@ -1,24 +1,29 @@
-"""Supabase repository for threads."""
-
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from typing import Any
 
 from storage.providers.supabase import _query as q
 
 _REPO = "thread repo"
+_SCHEMA = "agent"
 _TABLE = "threads"
 
 _COLS = (
     "id",
-    "member_id",
+    "agent_user_id",
+    "owner_user_id",
+    "current_workspace_id",
     "sandbox_type",
     "model",
     "cwd",
-    "observation_provider",
+    "status",
+    "run_status",
     "is_main",
     "branch_index",
     "created_at",
+    "updated_at",
+    "last_active_at",
 )
 
 
@@ -26,7 +31,7 @@ def _validate_thread_identity(*, is_main: bool, branch_index: int) -> None:
     if branch_index < 0:
         raise ValueError(f"branch_index must be >= 0, got {branch_index}")
     if is_main and branch_index != 0:
-        raise ValueError(f"Main thread must have branch_index=0, got {branch_index}")
+        raise ValueError(f"Default thread must have branch_index=0, got {branch_index}")
     if not is_main and branch_index == 0:
         raise ValueError("Child thread must have branch_index>0")
 
@@ -36,6 +41,14 @@ def _to_dict(row: dict[str, Any]) -> dict[str, Any]:
     result["is_main"] = bool(result["is_main"])
     result["branch_index"] = int(result["branch_index"]) if result["branch_index"] is not None else 0
     return result
+
+
+def _to_timestamptz(value: float | str | None) -> str | None:
+    if value is None:
+        return None
+    if isinstance(value, str):
+        return value
+    return datetime.fromtimestamp(value, UTC).isoformat()
 
 
 class SupabaseThreadRepo:
@@ -48,26 +61,42 @@ class SupabaseThreadRepo:
     def create(
         self,
         thread_id: str,
-        member_id: str,
+        agent_user_id: str,
         sandbox_type: str,
         cwd: str | None = None,
         created_at: float = 0,
-        **extra: Any,
+        *,
+        model: str | None = None,
+        is_main: bool,
+        branch_index: int,
+        owner_user_id: str,
+        status: str = "active",
+        updated_at: float | None = None,
+        last_active_at: float | None = None,
+        current_workspace_id: str,
     ) -> None:
-        is_main = bool(extra.get("is_main", False))
-        branch_index = int(extra["branch_index"])
         _validate_thread_identity(is_main=is_main, branch_index=branch_index)
+        if not owner_user_id.strip():
+            raise ValueError("owner_user_id is required for agent.threads create")
+        if not current_workspace_id.strip():
+            raise ValueError("current_workspace_id is required for agent.threads create")
+        created_at_value = _to_timestamptz(created_at)
+        updated_at_value = _to_timestamptz(updated_at) if updated_at is not None else created_at_value
         self._t().insert(
             {
                 "id": thread_id,
-                "member_id": member_id,
+                "agent_user_id": agent_user_id,
+                "owner_user_id": owner_user_id,
+                "current_workspace_id": current_workspace_id,
                 "sandbox_type": sandbox_type,
                 "cwd": cwd,
-                "model": extra.get("model"),
-                "observation_provider": extra.get("observation_provider"),
+                "model": model,
+                "status": status,
                 "is_main": int(is_main),
                 "branch_index": branch_index,
-                "created_at": created_at,
+                "created_at": created_at_value,
+                "updated_at": updated_at_value,
+                "last_active_at": _to_timestamptz(last_active_at),
             }
         ).execute()
 
@@ -79,121 +108,139 @@ class SupabaseThreadRepo:
             return None
         return _to_dict(rows[0])
 
-    def get_main_thread(self, member_id: str) -> dict[str, Any] | None:
+    def list_by_ids(self, thread_ids: list[str]) -> list[dict[str, Any]]:
+        ordered_ids: list[str] = []
+        seen: set[str] = set()
+        for thread_id in thread_ids:
+            normalized = str(thread_id or "").strip()
+            if not normalized or normalized in seen:
+                continue
+            seen.add(normalized)
+            ordered_ids.append(normalized)
+        if not ordered_ids:
+            return []
         select = ", ".join(_COLS)
-        response = self._t().select(select).eq("member_id", member_id).eq("is_main", 1).execute()
-        rows = q.rows(response, _REPO, "get_main_thread")
+        rows = q.rows_in_chunks(lambda: self._t().select(select), "id", ordered_ids, _REPO, "list_by_ids")
+        normalized_rows = [_to_dict(row) for row in rows]
+        indexed = {row["id"]: row for row in normalized_rows}
+        return [indexed[thread_id] for thread_id in ordered_ids if thread_id in indexed]
+
+    def get_by_user_id(self, user_id: str) -> dict[str, Any] | None:
+        select = ", ".join(_COLS)
+        # @@@agent-user-thread-lookup - social/user-facing lookups must resolve to the
+        # representative main thread, not an arbitrary branch, once one agent can own
+        # multiple thread rows.
+        response = self._t().select(select).eq("agent_user_id", user_id).eq("is_main", 1).execute()
+        rows = q.rows(response, _REPO, "get_by_user_id")
         if not rows:
             return None
         return _to_dict(rows[0])
 
-    def get_next_branch_index(self, member_id: str) -> int:
-        response = self._t().select("branch_index").eq("member_id", member_id).execute()
+    def get_default_thread(self, agent_user_id: str) -> dict[str, Any] | None:
+        select = ", ".join(_COLS)
+        response = self._t().select(select).eq("agent_user_id", agent_user_id).eq("is_main", 1).execute()
+        rows = q.rows(response, _REPO, "get_default_thread")
+        if not rows:
+            return None
+        return _to_dict(rows[0])
+
+    def list_default_threads(self, agent_user_ids: list[str]) -> dict[str, dict[str, Any]]:
+        ordered_ids: list[str] = []
+        seen: set[str] = set()
+        for agent_user_id in agent_user_ids:
+            normalized = str(agent_user_id or "").strip()
+            if not normalized or normalized in seen:
+                continue
+            seen.add(normalized)
+            ordered_ids.append(normalized)
+        if not ordered_ids:
+            return {}
+        select = ", ".join(_COLS)
+        rows = q.rows_in_chunks(
+            lambda: self._t().select(select).eq("is_main", 1),
+            "agent_user_id",
+            ordered_ids,
+            _REPO,
+            "list_default_threads",
+        )
+        return {str(row["agent_user_id"]): _to_dict(row) for row in rows}
+
+    def get_next_branch_index(self, agent_user_id: str) -> int:
+        response = self._t().select("branch_index").eq("agent_user_id", agent_user_id).execute()
         rows = q.rows(response, _REPO, "get_next_branch_index")
         if not rows:
             return 1
         max_idx = max((int(r["branch_index"]) for r in rows if r.get("branch_index") is not None), default=0)
         return max_idx + 1
 
-    def list_by_member(self, member_id: str) -> list[dict[str, Any]]:
+    def list_by_agent_user(self, agent_user_id: str) -> list[dict[str, Any]]:
         select = ", ".join(_COLS)
         query = q.order(
             q.order(
-                self._t().select(select).eq("member_id", member_id),
+                self._t().select(select).eq("agent_user_id", agent_user_id),
                 "branch_index",
                 desc=False,
                 repo=_REPO,
-                operation="list_by_member",
+                operation="list_by_agent_user",
             ),
             "created_at",
             desc=False,
             repo=_REPO,
-            operation="list_by_member",
+            operation="list_by_agent_user",
         )
-        rows = q.rows(query.execute(), _REPO, "list_by_member")
+        rows = q.rows(query.execute(), _REPO, "list_by_agent_user")
         return [_to_dict(r) for r in rows]
 
     def list_by_owner_user_id(self, owner_user_id: str) -> list[dict[str, Any]]:
-        """Return all threads owned by this user via a two-step query (members JOIN threads).
-
-        Supabase PostgREST foreign-table embed syntax is used to avoid raw SQL.
-        We query members for the owner, then fetch threads for those member IDs.
-        """
-        # Step 1: get member IDs for this owner
-        mem_response = self._client.table("members").select("id, name, avatar").eq("owner_user_id", owner_user_id).execute()
-        member_rows = q.rows(mem_response, _REPO, "list_by_owner_user_id:members")
-        if not member_rows:
+        user_response = (
+            q.schema_table(self._client, "identity", "users", _REPO)
+            .select("id, display_name, avatar")
+            .eq("owner_user_id", owner_user_id)
+            .execute()
+        )
+        user_rows = q.rows(user_response, _REPO, "list_by_owner_user_id:users")
+        if not user_rows:
             return []
 
-        member_map: dict[str, dict[str, Any]] = {r["id"]: r for r in member_rows}
-        member_ids = list(member_map.keys())
+        user_map: dict[str, dict[str, Any]] = {r["id"]: r for r in user_rows}
+        agent_user_ids = list(user_map.keys())
 
-        # Step 2: get threads for those members
         thread_cols = ", ".join(_COLS)
-        query = q.order(
-            q.order(
-                q.in_(self._t().select(thread_cols), "member_id", member_ids, _REPO, "list_by_owner_user_id"),
-                "is_main",
-                desc=True,
+        thread_rows = q.rows_in_chunks(
+            lambda: q.order(
+                q.order(
+                    self._t().select(thread_cols),
+                    "is_main",
+                    desc=True,
+                    repo=_REPO,
+                    operation="list_by_owner_user_id",
+                ),
+                "created_at",
+                desc=False,
                 repo=_REPO,
                 operation="list_by_owner_user_id",
             ),
-            "created_at",
-            desc=False,
-            repo=_REPO,
-            operation="list_by_owner_user_id",
+            "agent_user_id",
+            agent_user_ids,
+            _REPO,
+            "list_by_owner_user_id:threads",
         )
-        thread_rows = q.rows(query.execute(), _REPO, "list_by_owner_user_id:threads")
-
-        # Step 3: enrich with member_name, member_avatar; entity_name via entities table
-        # Entity id = member_id in the new model, so look up entities by member_id
-        member_ids = list({r["member_id"] for r in thread_rows if r.get("member_id")})
-        entity_map: dict[str, str] = {}
-        if member_ids:
-            ent_response = q.in_(
-                self._client.table("entities").select("id, name"),
-                "id",
-                member_ids,
-                _REPO,
-                "list_by_owner_user_id:entities",
-            ).execute()
-            ent_rows = q.rows(ent_response, _REPO, "list_by_owner_user_id:entities")
-            for er in ent_rows:
-                if er.get("id"):
-                    entity_map[er["id"]] = er.get("name", "")
 
         result: list[dict[str, Any]] = []
         for raw in thread_rows:
             d = _to_dict(raw)
-            mid = d["member_id"]
-            member_info = member_map.get(mid, {})
-            d["member_name"] = member_info.get("name")
-            d["member_avatar"] = member_info.get("avatar")
-            d["entity_name"] = entity_map.get(mid)
+            agent_user_id = d["agent_user_id"]
+            agent_info = user_map.get(agent_user_id, {})
+            d["agent_name"] = agent_info.get("display_name")
+            d["agent_avatar"] = agent_info.get("avatar")
             result.append(d)
         return result
 
-    def update(self, thread_id: str, **fields: Any) -> None:
-        allowed = {"sandbox_type", "model", "cwd", "observation_provider", "is_main", "branch_index"}
-        updates = {k: v for k, v in fields.items() if k in allowed}
-        if not updates:
-            return
-        next_is_main = bool(updates["is_main"]) if "is_main" in updates else None
-        next_branch_index = int(updates["branch_index"]) if "branch_index" in updates else None
-        if next_is_main is not None or next_branch_index is not None:
-            current = self.get_by_id(thread_id)
-            if current is None:
-                raise ValueError(f"Thread {thread_id} not found")
-            _validate_thread_identity(
-                is_main=next_is_main if next_is_main is not None else bool(current["is_main"]),
-                branch_index=next_branch_index if next_branch_index is not None else int(current["branch_index"]),
-            )
-        if "is_main" in updates:
-            updates["is_main"] = int(bool(updates["is_main"]))
-        self._t().update(updates).eq("id", thread_id).execute()
+    def update(self, thread_id: str, *, model: str) -> None:
+        self._t().update({"model": model}).eq("id", thread_id).execute()
 
     def delete(self, thread_id: str) -> None:
         self._t().delete().eq("id", thread_id).execute()
 
     def _t(self) -> Any:
-        return self._client.table(_TABLE)
+        return q.schema_table(self._client, _SCHEMA, _TABLE, _REPO)

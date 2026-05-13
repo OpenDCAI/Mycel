@@ -1,8 +1,8 @@
-import { useCallback, useEffect, useReducer, useRef } from "react";
+import { useCallback, useEffect, useReducer, useState } from "react";
 import { getThreadRuntime, streamThreadEvents, type StreamStatus } from "../api";
 import type { StreamEvent } from "../api/types";
 
-export type ConnectionPhase =
+type ConnectionPhase =
   | "idle"            // not connected
   | "connecting"      // establishing SSE
   | "connected"       // receiving events, may or may not be running
@@ -35,11 +35,11 @@ class ThreadConnectionManager {
   private threadId = "";
   private ac: AbortController | null = null;
   private version = 0;
-  // @@@dedup-events — track seen seqs in a set (not monotonic max) because
-  // activity_sink and run emit write to thread_buf concurrently, so events
-  // can arrive out of seq order.  A monotonic lastSeenSeq would wrongly skip
-  // lower-seq events that arrive after a higher-seq one.
-  private seenSeqs = new Set<number>();
+  // @@@dedup-events - dedupe by event-type+seq, not raw seq alone. Backend
+  // derived display_delta events intentionally reuse the source event _seq, so
+  // seq-only dedupe would drop the UI-driving delta right after user_message /
+  // run_start and make the thread look frozen until a manual refresh.
+  private seenEventKeys = new Set<string>();
   private subscribers = new Set<(event: StreamEvent) => void>();
   private listener: (() => void) | null = null; // React re-render trigger
   private refreshThreads: (() => Promise<void>) | null = null;
@@ -90,14 +90,15 @@ class ThreadConnectionManager {
             // can open duplicate SSE connections in dev; both deliver the same events).
             const d = (event.data ?? {}) as { _seq?: number };
             if (typeof d._seq === "number") {
-              if (this.seenSeqs.has(d._seq)) {
+              const eventKey = `${event.type}:${d._seq}`;
+              if (this.seenEventKeys.has(eventKey)) {
                 return;
               }
-              this.seenSeqs.add(d._seq);
+              this.seenEventKeys.add(eventKey);
               // Cap set size to prevent unbounded growth
-              if (this.seenSeqs.size > 5000) {
-                const sorted = [...this.seenSeqs].sort((a, b) => a - b);
-                for (let i = 0; i < 2500; i++) this.seenSeqs.delete(sorted[i]);
+              if (this.seenEventKeys.size > 5000) {
+                const oldKeys = [...this.seenEventKeys];
+                for (let i = 0; i < 2500; i++) this.seenEventKeys.delete(oldKeys[i]);
               }
             }
             if (event.type === "status" && event.data) {
@@ -201,12 +202,11 @@ export function useThreadStream(
 ): UseThreadStreamResult {
   const { loading, refreshThreads, runStarted } = deps;
   const [, rerender] = useReducer((x: number) => x + 1, 0);
-  const mgrRef = useRef<ThreadConnectionManager | null>(null);
-  if (!mgrRef.current) mgrRef.current = new ThreadConnectionManager();
-  const mgr = mgrRef.current;
+  const [mgr] = useState(() => new ThreadConnectionManager());
 
-  // Keep refreshThreads callback up-to-date without re-creating the manager
-  mgr.setRefreshThreads(refreshThreads);
+  useEffect(() => {
+    mgr.setRefreshThreads(refreshThreads);
+  }, [mgr, refreshThreads]);
 
   // State changes → re-render; dispose on unmount
   useEffect(() => {
@@ -216,14 +216,14 @@ export function useThreadStream(
 
   // Connection lifecycle — driven by threadId/loading/runStarted
   useEffect(() => {
-    if (loading) return;
+    if (loading || !threadId) return;
     if (runStarted) {
       mgr.initForNewRun(threadId);
     } else {
       mgr.initFromRuntime(threadId);
     }
     return () => mgr.disconnect();
-  }, [mgr, threadId, loading]);
+  }, [mgr, threadId, loading, runStarted]);
 
   // Tab visibility: reconnect on error when tab becomes visible
   useEffect(() => {

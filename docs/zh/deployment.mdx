@@ -54,30 +54,13 @@ keywords: [部署, 安装, 生产, Docker, 配置, 故障排查]
 
 ## 配置
 
-### 用户配置目录
+### 运行时配置
 
-Mycel 配置存储在 `~/.leon/`：
-
-```
-~/.leon/
-├── config.env          # API Key 和 Base URL
-├── runtime.json        # 运行时行为
-├── models.json         # LLM 提供商和模型映射
-├── observation.json    # 追踪配置（Langfuse / LangSmith）
-├── sandboxes/          # 沙箱提供商配置
-│   ├── docker.json
-│   ├── e2b.json
-│   └── daytona.json
-├── members/            # Agent Member 文件包
-├── skills/             # Skill 目录
-├── leon.db             # Thread 历史和 Agent 状态
-├── chat.db             # 社交层（聊天、Entity）
-└── sandbox.db          # 沙箱会话追踪
-```
+Mycel 服务配置来自进程环境变量和显式 server 配置。Agent config、Skill、thread、Library resource、用户 profile 都是产品状态，必须通过已配置的后端存储保存。
 
 ### 快速配置
 
-手动创建 `~/.leon/config.env`：
+在 shell 中导出变量，或用 `ENV_FILE` 指向一个明确的 env 文件：
 
 ```env
 ANTHROPIC_API_KEY=sk-ant-xxx
@@ -88,6 +71,34 @@ ANTHROPIC_API_KEY=sk-ant-xxx
 ```
 
 ## 启动服务
+
+### 本地通信后端
+
+之前的 `deploy/local-communication/compose.yml` 路径已经移除，因为它从手写 schema 分叉启动。那条路径只能作为历史证明，不能作为自部署契约。
+
+`deploy/cli-minimal/compose.yml` 是当前的 CLI-minimal 本地通信配置形态。它复用正式 Mycel app schema/init path，运行 PostgreSQL + PostgREST，通过很薄的 nginx gateway 暴露 `/rest/v1/*`，并用 `MYCEL_RUNTIME_PROFILE=communication` 启动后端。
+
+它不是完整 Mycel 平台。完整部署目前仍由根目录 `docker-compose.yml` 加 operator 管理的 Supabase/Coolify 配置表示，还没有被提升为 `deploy/full` 这个公开自部署契约。
+
+启动仅本机访问的配置形态：
+
+```bash
+python3 deploy/cli-minimal/generate-env.py > deploy/cli-minimal/.env
+docker compose --env-file deploy/cli-minimal/.env -f deploy/cli-minimal/compose.yml up
+```
+
+如果要让另一台机器连接，显式发布 URL，然后让 `cel` 连接它：
+
+```bash
+python3 deploy/cli-minimal/generate-env.py \
+  --bind-host 0.0.0.0 \
+  --public-url http://<host-or-lan-ip>:8042 \
+  > deploy/cli-minimal/.env
+docker compose --env-file deploy/cli-minimal/.env -f deploy/cli-minimal/compose.yml up
+cel connect http://<host-or-lan-ip>:8042
+```
+
+### 完整开发栈
 
 ```bash
 # 终端 1：后端
@@ -113,7 +124,7 @@ LEON_BACKEND_PORT=9000 uv run python -m backend.web.main
 
 ### Docker
 
-创建 `~/.leon/sandboxes/docker.json`：
+设置 `LEON_SANDBOXES_DIR` 指向沙箱提供商配置目录，然后在该目录下创建 `docker.json`：
 
 ```json
 {
@@ -222,20 +233,15 @@ Daytona Proxy（端口 4000）必须从 Runner 可访问，文件操作依赖它
 
 ### 数据库
 
-Mycel 默认使用 SQLite。生产环境建议：
+Mycel runtime storage 是显式配置的。当前本地通信 compose 使用 PostgreSQL 和 PostgREST，并通过与线上后端相同的 Supabase-style storage client 访问。完整生产部署应提供自己的 Supabase-compatible storage 和密钥。
 
-```bash
-# 定期备份
-cp ~/.leon/leon.db ~/.leon/leon.db.backup
-```
-
-多用户部署可能需要 PostgreSQL — 需要对存储层进行代码改动。
+请使用对应数据库的工具进行备份。不要把本地通信 compose 的数据当成生产存储。
 
 ### 安全
 
-- API Key 存储在 `~/.leon/config.env`，不要写入代码或版本控制
+- API Key 存储在部署密钥系统或明确指定的 env 文件中，不要写入代码或版本控制
 - 在 JSON 配置文件中使用 `${VAR}` 引用而不是硬编码 Key
-- 限制文件权限：`chmod 600 ~/.leon/config.env`
+- 使用 env 文件时限制文件权限：`chmod 600 /path/to/mycel.env`
 - `block_dangerous_commands` 配置项（默认 `true`）可屏蔽 `rm -rf` 等危险命令
 
 ### 代理环境
@@ -264,7 +270,7 @@ env -u ALL_PROXY -u all_proxy uv run python -m backend.web.main
   </Accordion>
 
   <Accordion title="Docker 提供商卡住">
-    Docker CLI 继承了代理环境变量。Mycel 会自动清理这些变量，若问题仍然存在，检查 `~/.leon/sandboxes/docker.json` 中的 `docker_host` 配置。
+    Docker CLI 继承了代理环境变量。Mycel 会自动清理这些变量，若问题仍然存在，检查 `$LEON_SANDBOXES_DIR/docker.json` 中的 `docker_host` 配置。
   </Accordion>
 
   <Accordion title="Daytona PTY bootstrap 失败">

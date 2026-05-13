@@ -1,10 +1,14 @@
 import type { StreamEvent, StreamEventType } from "./types";
 import { STREAM_EVENT_TYPES } from "./types";
 
-const VALID_EVENT_TYPES = new Set<string>(STREAM_EVENT_TYPES);
+const VALID_EVENT_TYPES: ReadonlySet<string> = new Set(STREAM_EVENT_TYPES);
+
+function isStreamEventType(raw: string): raw is StreamEventType {
+  return VALID_EVENT_TYPES.has(raw);
+}
 
 function normalizeStreamType(raw: string): StreamEventType {
-  if (VALID_EVENT_TYPES.has(raw)) return raw as StreamEventType;
+  if (isStreamEventType(raw)) return raw;
   console.warn(`[SSE] Unknown event type: "${raw}", falling back to "text"`);
   return "text";
 }
@@ -17,9 +21,13 @@ function tryParse(value: string): unknown {
   }
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
 function extractSeq(data: unknown): number | undefined {
-  if (typeof data === "object" && data !== null) {
-    const seq = (data as Record<string, unknown>)._seq;
+  if (isRecord(data)) {
+    const seq = data._seq;
     if (typeof seq === "number") return seq;
   }
   return undefined;

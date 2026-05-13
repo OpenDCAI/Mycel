@@ -1,10 +1,16 @@
 import { memo } from "react";
 import type { ToolRendererProps } from "./types";
 import { DiffBlock } from "../shared/DiffBlock";
+import { asRecord, recordString } from "@/lib/records";
 
 function parseArgs(args: unknown): { file_path?: string; old_string?: string; new_string?: string } {
-  if (args && typeof args === "object") return args as { file_path?: string; old_string?: string; new_string?: string };
-  return {};
+  const record = asRecord(args);
+  if (!record) return {};
+  return {
+    file_path: recordString(record, "file_path"),
+    old_string: recordString(record, "old_string"),
+    new_string: recordString(record, "new_string"),
+  };
 }
 
 export default memo(function EditFileRenderer({ step, expanded }: ToolRendererProps) {

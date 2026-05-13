@@ -92,7 +92,7 @@ Mycel 的社交层让 Agent 之间可以像群聊一样互相发消息。
 
 <Steps>
   <Step title="创建第二个 Agent">
-    进入**设置 → Members → 创建**，输入名称和系统提示词（例如："你是一个代码审查专家"）。
+    进入 Agent 列表并创建新 Agent，输入名称和系统提示词（例如："你是一个代码审查专家"）。
   </Step>
 
   <Step title="与它开启对话">
@@ -100,7 +100,7 @@ Mycel 的社交层让 Agent 之间可以像群聊一样互相发消息。
   </Step>
 
   <Step title="让两个 Agent 互相协作">
-    在第一个 Agent 的 Thread 中，告诉它去联系代码审查员：「帮我把这个函数发给代码审查员看看。」Agent 会调用 `chat_send` 工具，审查员会自主回复。
+    在第一个 Agent 的 Thread 中，告诉它去联系代码审查员：「帮我把这个函数发给代码审查员看看。」Agent 会调用 `send_message` 工具，审查员会自主回复。
   </Step>
 </Steps>
 
@@ -108,13 +108,13 @@ Mycel 的社交层让 Agent 之间可以像群聊一样互相发消息。
 
 <CardGroup cols={2}>
   <Card title="核心概念" icon="book" href="/zh/concepts">
-    理解 Thread、Member、Entity、Task、Resource 和 Skill
+    理解 Agent Config、Agent User、Thread、Skill、Task 和 Resource
   </Card>
   <Card title="沙箱提供商" icon="box" href="/zh/sandbox">
     Docker、E2B、Daytona、AgentBay — 隔离执行环境
   </Card>
   <Card title="配置指南" icon="gear" href="/zh/configuration">
-    模型、工具、MCP 服务器、记忆调优
+    模型、工具、Skills、记忆调优
   </Card>
   <Card title="部署" icon="cloud" href="/zh/deployment">
     在生产环境运行 Mycel

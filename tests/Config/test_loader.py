@@ -1,0 +1,205 @@
+import inspect
+import json
+import os
+import sys
+from pathlib import Path
+
+import pytest
+
+from config.loader import AgentLoader, load_config
+from config.schema import LeonSettings
+
+
+class TestAgentLoader:
+    def test_init(self):
+        loader = AgentLoader()
+        assert "_agents" in vars(loader)
+
+    def test_init_has_no_workspace_root_input(self):
+        assert "workspace_root" not in inspect.signature(AgentLoader).parameters
+
+    def test_load_system_defaults_missing(self, tmp_path):
+        loader = AgentLoader()
+        loader._system_defaults_dir = tmp_path / "nonexistent"
+
+        result = loader._load_system_defaults()
+        assert result == {}
+
+    def test_load_does_not_read_project_runtime_json(self, tmp_path):
+        project_dir = tmp_path / "project"
+        (project_dir / ".leon").mkdir(parents=True)
+        (project_dir / ".leon" / "runtime.json").write_text("{bad json", encoding="utf-8")
+
+        loader = AgentLoader()
+
+        assert isinstance(loader.load(), LeonSettings)
+
+    def test_load_does_not_read_user_runtime_json(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("HOME", str(tmp_path))
+        (tmp_path / ".leon").mkdir(parents=True)
+        (tmp_path / ".leon" / "runtime.json").write_text("{bad json", encoding="utf-8")
+
+        loader = AgentLoader()
+
+        assert isinstance(loader.load(), LeonSettings)
+
+    def test_load_applies_nested_runtime_defaults(self, tmp_path):
+        (tmp_path / "runtime.json").write_text(
+            json.dumps(
+                {
+                    "runtime": {
+                        "context_limit": 12345,
+                        "block_network_commands": True,
+                    },
+                    "tools": {"web": {"enabled": False}},
+                }
+            ),
+            encoding="utf-8",
+        )
+        loader = AgentLoader()
+        loader._system_defaults_dir = tmp_path
+
+        settings = loader.load()
+
+        assert settings.runtime.context_limit == 12345
+        assert settings.runtime.block_network_commands is True
+        assert settings.tools.web.enabled is False
+
+    def test_load_rejects_flat_runtime_defaults(self, tmp_path):
+        (tmp_path / "runtime.json").write_text(json.dumps({"context_limit": 12345}), encoding="utf-8")
+        loader = AgentLoader()
+        loader._system_defaults_dir = tmp_path
+
+        with pytest.raises(ValueError, match="context_limit"):
+            loader.load()
+
+    def test_deep_merge_simple(self):
+        loader = AgentLoader()
+
+        dict1 = {"a": 1, "b": 2}
+        dict2 = {"b": 3, "c": 4}
+
+        result = loader._deep_merge(dict1, dict2)
+        assert result == {"a": 1, "b": 3, "c": 4}
+
+    def test_deep_merge_nested(self):
+        loader = AgentLoader()
+
+        dict1 = {"api": {"model": "gpt-3", "temperature": 0.5}}
+        dict2 = {"api": {"model": "gpt-4"}}
+
+        result = loader._deep_merge(dict1, dict2)
+        assert result["api"]["model"] == "gpt-4"
+        assert result["api"]["temperature"] == 0.5
+
+    def test_deep_merge_none_values(self):
+        loader = AgentLoader()
+
+        dict1 = {"api": {"model": "gpt-4", "temperature": 0.5}}
+        dict2 = {"api": {"temperature": None}}
+
+        result = loader._deep_merge(dict1, dict2)
+        assert result["api"]["temperature"] == 0.5
+
+    def test_deep_merge_multiple(self):
+        loader = AgentLoader()
+
+        dict1 = {"a": 1, "b": {"x": 1}}
+        dict2 = {"b": {"y": 2}, "c": 3}
+        dict3 = {"b": {"z": 3}, "d": 4}
+
+        result = loader._deep_merge(dict1, dict2, dict3)
+        assert result == {"a": 1, "b": {"x": 1, "y": 2, "z": 3}, "c": 3, "d": 4}
+
+    def test_expand_env_vars_string(self):
+        loader = AgentLoader()
+
+        os.environ["TEST_VAR"] = "test_value"
+        result = loader._expand_env_vars("${TEST_VAR}")
+        assert result == "test_value"
+
+    def test_expand_env_vars_dict(self):
+        loader = AgentLoader()
+
+        os.environ["API_KEY"] = "secret"
+        obj = {"api": {"key": "${API_KEY}"}}
+        result = loader._expand_env_vars(obj)
+        assert result["api"]["key"] == "secret"
+
+    def test_expand_env_vars_list(self):
+        loader = AgentLoader()
+
+        os.environ["PATH1"] = "/path1"
+        os.environ["PATH2"] = "/path2"
+        obj = ["${PATH1}", "${PATH2}"]
+        result = loader._expand_env_vars(obj)
+        assert result == ["/path1", "/path2"]
+
+    @pytest.mark.skipif(sys.platform == "win32", reason="HOME monkeypatch does not affect expanduser on Windows")
+    def test_expand_env_vars_tilde(self, tmp_path, monkeypatch):
+        loader = AgentLoader()
+
+        monkeypatch.setenv("HOME", str(tmp_path))
+        result = loader._expand_env_vars("~/test")
+        assert result == str(tmp_path / "test")
+
+    def test_expand_env_vars_nested(self):
+        loader = AgentLoader()
+
+        os.environ["BASE"] = "/base"
+        obj = {
+            "paths": ["${BASE}/path1", "${BASE}/path2"],
+            "config": {"root": "${BASE}"},
+        }
+        result = loader._expand_env_vars(obj)
+        assert result["paths"] == ["/base/path1", "/base/path2"]
+        assert result["config"]["root"] == "/base"
+
+
+class TestLoadConfigFunction:
+    def test_load_config(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("HOME", str(tmp_path))
+
+        project_dir = tmp_path / "project"
+        project_dir.mkdir()
+
+        settings = load_config()
+        assert isinstance(settings, LeonSettings)
+
+
+def test_project_agent_file_does_not_override_builtin_runtime_agent(tmp_path: Path):
+    agents_dir = tmp_path / ".leon" / "agents"
+    agents_dir.mkdir(parents=True)
+    (agents_dir / "explore.md").write_text(
+        "---\nname: explore\nmodel: project-model\n---\nproject prompt\n",
+        encoding="utf-8",
+    )
+
+    agent = AgentLoader().load_runtime_agents()["explore"]
+
+    assert agent.model is None
+    assert agent.system_prompt != "project prompt"
+
+
+def test_user_agent_file_does_not_enter_runtime_agent_discovery(tmp_path: Path):
+    home_root = tmp_path
+    agents_dir = home_root / "agents"
+    agents_dir.mkdir(parents=True)
+    (agents_dir / "custom.md").write_text(
+        "---\nname: custom\nmodel: user-model\n---\nuser prompt\n",
+        encoding="utf-8",
+    )
+
+    assert "custom" not in AgentLoader().load_runtime_agents()
+
+
+def test_runtime_agent_discovery_excludes_member_dirs(tmp_path: Path):
+    home_root = tmp_path
+    member_dir = home_root / "members" / "alice"
+    member_dir.mkdir(parents=True)
+    (member_dir / "agent.md").write_text(
+        '---\nname: alice\ntools:\n  - "*"\n---\nmember prompt\n',
+        encoding="utf-8",
+    )
+
+    assert "alice" not in AgentLoader().load_runtime_agents()

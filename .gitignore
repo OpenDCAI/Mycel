@@ -30,7 +30,7 @@ node_modules/
 .next/
 .langgraph_api/
 *.log
- *.bak
+*.bak
 
 # Archives
 *.zip
@@ -48,7 +48,7 @@ frontend/app/.env.development
 .claude/settings.local.json
 .claude/mcp.json
 .mcp.json
-teams
+teams/
 
 # User-level Leon config and skills
 .leon/
@@ -58,6 +58,8 @@ teams
 
 # Pytest
 .pytest_cache/
+.coverage
+.coverage.*
 
 # Ruff
 .ruff_cache/
@@ -95,17 +97,20 @@ worktrees/
 /*.yml
 /*.yaml
 !docker-compose.yml
+!.pre-commit-config.yaml
 /dogfood-output/
 /current-chat.yaml
-/.claude/skills/
 
 # Development artifacts — never commit
 docs/lessons/
 docs/plans/
+docs/superpowers/plans/
+docs/superpowers/specs/
 frontend/.vite/
 .playwright-cli/
 ops
 
 # Auto-generated
+.codex-runtime/
 .playwright-mcp/
 /supabase/

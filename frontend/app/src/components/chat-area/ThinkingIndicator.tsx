@@ -23,20 +23,20 @@ interface ThinkingIndicatorProps {
 
 export function ThinkingIndicator({ runtimeStatus }: ThinkingIndicatorProps) {
   const isBooting = !runtimeStatus;
+  const phase = isBooting ? "boot" : "thinking";
   const messages = isBooting ? BOOT_MESSAGES : THINKING_MESSAGES;
-  const [msgIdx, setMsgIdx] = useState(0);
-
-  // Reset index when switching between boot and thinking phases
-  useEffect(() => {
-    setMsgIdx(0);
-  }, [isBooting]);
+  const [messageState, setMessageState] = useState({ phase, index: 0 });
+  const msgIdx = messageState.phase === phase ? messageState.index : 0;
 
   useEffect(() => {
     const interval = setInterval(() => {
-      setMsgIdx((prev) => (prev + 1) % messages.length);
+      setMessageState((prev) => ({
+        phase,
+        index: prev.phase === phase ? (prev.index + 1) % messages.length : 1 % messages.length,
+      }));
     }, 1400);
     return () => clearInterval(interval);
-  }, [messages]);
+  }, [phase, messages.length]);
 
   const tool = runtimeStatus?.current_tool;
   const orbClass = isBooting ? "thinking-orb thinking-orb-boot" : "thinking-orb";
@@ -53,7 +53,7 @@ export function ThinkingIndicator({ runtimeStatus }: ThinkingIndicatorProps) {
           使用 {tool}
         </span>
       ) : (
-        <span key={`${isBooting ? "boot" : "think"}-${msgIdx}`} className="text-xs text-muted-foreground animate-fade-in">
+        <span key={`${phase}-${msgIdx}`} className="text-xs text-muted-foreground animate-fade-in">
           {messages[msgIdx]}
         </span>
       )}

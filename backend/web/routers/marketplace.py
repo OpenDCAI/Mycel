@@ -1,74 +1,151 @@
-"""Marketplace API router — publish, install, upgrade, check updates."""
+"""Marketplace API router — publish, apply, upgrade, check updates."""
 
 import asyncio
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 
+from backend.hub import client as marketplace_client
+from backend.identity.profile import get_profile
+from backend.threads import agent_user_service
 from backend.web.core.dependencies import get_current_user_id
 from backend.web.models.marketplace import (
+    ApplyFromMarketplaceRequest,
     CheckUpdatesRequest,
-    InstallFromMarketplaceRequest,
-    PublishToMarketplaceRequest,
+    PublishAgentUserToMarketplaceRequest,
     UpgradeFromMarketplaceRequest,
 )
-from backend.web.services import marketplace_client
 
 router = APIRouter(prefix="/api/marketplace", tags=["marketplace"])
 
 
-async def _verify_member_ownership(member_id: str, user_id: str, member_repo: Any) -> None:
-    """Raise 403 if *user_id* does not own *member_id*."""
+def _agent_config_repo(request: Request) -> Any | None:
+    runtime_storage = getattr(request.app.state, "runtime_storage_state", None)
+    storage_container = getattr(runtime_storage, "storage_container", None)
+    repo_factory = getattr(storage_container, "agent_config_repo", None)
+    return repo_factory() if callable(repo_factory) else None
+
+
+def _skill_repo(request: Request) -> Any | None:
+    runtime_storage = getattr(request.app.state, "runtime_storage_state", None)
+    storage_container = getattr(runtime_storage, "storage_container", None)
+    repo_factory = getattr(storage_container, "skill_repo", None)
+    return repo_factory() if callable(repo_factory) else None
+
+
+async def _verify_user_ownership(agent_user_id: str, user_id: str, user_repo: Any) -> None:
+    """Raise 403 if *user_id* does not own *agent_user_id*."""
 
     def _check() -> None:
-        member = member_repo.get_by_id(member_id)
-        if member is None or member.owner_user_id != user_id:
+        user = user_repo.get_by_id(agent_user_id)
+        if user is None or user.owner_user_id != user_id:
             raise HTTPException(
                 status_code=403,
-                detail="Not authorized to publish this member",
+                detail="Not authorized to publish this user",
             )
 
     await asyncio.to_thread(_check)
 
 
-@router.post("/publish")
-async def publish_to_marketplace(
-    req: PublishToMarketplaceRequest,
+@router.get("/items")
+async def list_marketplace_items(
+    type: str | None = None,
+    q: str | None = None,
+    sort: str = "downloads",
+    page: int = 1,
+    page_size: int = 20,
+) -> dict[str, Any]:
+    return await asyncio.to_thread(
+        marketplace_client.list_items,
+        type=type,
+        q=q,
+        sort=sort,
+        page=page,
+        page_size=page_size,
+    )
+
+
+@router.get("/items/{item_id}")
+async def get_marketplace_item_detail(item_id: str) -> dict[str, Any]:
+    return await asyncio.to_thread(marketplace_client.get_item_detail, item_id)
+
+
+@router.get("/items/{item_id}/lineage")
+async def get_marketplace_item_lineage(item_id: str) -> dict[str, Any]:
+    return await asyncio.to_thread(marketplace_client.get_item_lineage, item_id)
+
+
+@router.get("/items/{item_id}/versions/{version}")
+async def get_marketplace_item_version_snapshot(item_id: str, version: str) -> dict[str, Any]:
+    return await asyncio.to_thread(marketplace_client.get_item_version_snapshot, item_id, version)
+
+
+@router.post("/publish-agent-user")
+async def publish_agent_user_to_marketplace(
+    req: PublishAgentUserToMarketplaceRequest,
     user_id: Annotated[str, Depends(get_current_user_id)],
     request: Request,
 ) -> dict[str, Any]:
-    member_repo = request.app.state.member_repo
-    await _verify_member_ownership(req.member_id, user_id, member_repo)
+    user_repo = request.app.state.user_repo
+    agent_config_repo = _agent_config_repo(request)
+    skill_repo = _skill_repo(request)
+    await _verify_user_ownership(req.user_id, user_id, user_repo)
 
-    from backend.web.services.profile_service import get_profile
-
-    profile = await asyncio.to_thread(get_profile)
+    publisher_user = user_repo.get_by_id(user_id)
+    profile = await asyncio.to_thread(get_profile, publisher_user)
     username = profile.get("name", "anonymous")
 
-    result = await asyncio.to_thread(
+    return await asyncio.to_thread(
         marketplace_client.publish,
-        member_id=req.member_id,
-        type_=req.type,
+        user_id=req.user_id,
+        type_=marketplace_client.HUB_AGENT_USER_ITEM_TYPE,
         bump_type=req.bump_type,
         release_notes=req.release_notes,
         tags=req.tags,
         visibility=req.visibility,
         publisher_user_id=user_id,
         publisher_username=username,
+        user_repo=user_repo,
+        agent_config_repo=agent_config_repo,
+        skill_repo=skill_repo,
     )
-    return result
 
 
-@router.post("/download")
-async def download_from_marketplace(
-    req: InstallFromMarketplaceRequest,
+@router.post("/apply")
+async def apply_marketplace_item(
+    req: ApplyFromMarketplaceRequest,
     user_id: Annotated[str, Depends(get_current_user_id)],
+    request: Request,
 ) -> dict[str, Any]:
-    result = await asyncio.to_thread(
-        marketplace_client.download,
-        item_id=req.item_id,
-    )
-    return result
+    user_repo = request.app.state.user_repo
+    agent_config_repo = _agent_config_repo(request)
+    skill_repo = _skill_repo(request)
+    if req.agent_user_id is not None:
+        await _verify_user_ownership(req.agent_user_id, user_id, user_repo)
+    try:
+        result = await asyncio.to_thread(
+            marketplace_client.apply_item,
+            item_id=req.item_id,
+            owner_user_id=user_id,
+            user_repo=user_repo,
+            agent_config_repo=agent_config_repo,
+            skill_repo=skill_repo,
+        )
+        if req.agent_user_id is not None:
+            if result.get("type") != "skill" or not isinstance(result.get("resource_id"), str):
+                raise HTTPException(400, "agent_user_id can only select Skill items")
+            await asyncio.to_thread(
+                agent_user_service.select_agent_skill,
+                agent_user_id=req.agent_user_id,
+                skill_id=result["resource_id"],
+                user_repo=user_repo,
+                agent_config_repo=agent_config_repo,
+                skill_repo=skill_repo,
+            )
+            result = {**result, "agent_user_id": req.agent_user_id}
+        return result
+    except ValueError as error:
+        raise HTTPException(400, str(error)) from error
 
 
 @router.post("/upgrade")
@@ -77,16 +154,20 @@ async def upgrade_from_marketplace(
     user_id: Annotated[str, Depends(get_current_user_id)],
     request: Request,
 ) -> dict[str, Any]:
-    member_repo = request.app.state.member_repo
-    await _verify_member_ownership(req.member_id, user_id, member_repo)
+    user_repo = request.app.state.user_repo
+    agent_config_repo = _agent_config_repo(request)
+    skill_repo = _skill_repo(request)
+    await _verify_user_ownership(req.user_id, user_id, user_repo)
 
-    result = await asyncio.to_thread(
+    return await asyncio.to_thread(
         marketplace_client.upgrade,
-        member_id=req.member_id,
+        user_id=req.user_id,
         item_id=req.item_id,
         owner_user_id=user_id,
+        user_repo=user_repo,
+        agent_config_repo=agent_config_repo,
+        skill_repo=skill_repo,
     )
-    return result
 
 
 @router.post("/check-updates")
@@ -94,8 +175,7 @@ async def check_updates(
     req: CheckUpdatesRequest,
     user_id: Annotated[str, Depends(get_current_user_id)],
 ) -> dict[str, Any]:
-    result = await asyncio.to_thread(
+    return await asyncio.to_thread(
         marketplace_client.check_updates,
         items=[item.model_dump() for item in req.items],
     )
-    return result

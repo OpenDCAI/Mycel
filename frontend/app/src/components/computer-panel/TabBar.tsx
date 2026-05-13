@@ -1,4 +1,4 @@
-import { Bot, FileText, Terminal } from "lucide-react";
+import { Bot, FileText } from "lucide-react";
 import type { TabType } from "./types";
 
 interface TabBarProps {
@@ -8,8 +8,7 @@ interface TabBarProps {
   hasAgents: boolean;
 }
 
-const TABS: { key: TabType; label: string; icon: typeof Terminal }[] = [
-  { key: "terminal", label: "终端", icon: Terminal },
+const TABS: { key: TabType; label: string; icon: typeof FileText }[] = [
   { key: "files", label: "文件", icon: FileText },
   { key: "agents", label: "Agent", icon: Bot },
 ];

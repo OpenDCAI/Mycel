@@ -1,13 +1,14 @@
-"""PDF file reader using pymupdf (optional dependency)."""
-
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 
 from core.tools.filesystem.read.types import FileType, ReadLimits, ReadResult
 
+_pymupdf: Any | None = None
+
 try:
-    import pymupdf
+    import pymupdf as _pymupdf
 
     HAS_PYMUPDF = True
 except ImportError:
@@ -20,20 +21,10 @@ def read_pdf(
     start_page: int | None = None,
     limit_pages: int | None = None,
 ) -> ReadResult:
-    """
-    Read PDF file with page-based pagination.
-
-    Args:
-        path: Absolute path to PDF file
-        limits: ReadLimits configuration (max_chars applies to total output)
-        start_page: Start page (1-indexed, None = start from page 1)
-        limit_pages: Number of pages to read (None = default 10 pages)
-
-    Returns:
-        ReadResult with extracted text and metadata
-    """
     if not HAS_PYMUPDF:
         return _no_pymupdf_result(path)
+    if _pymupdf is None:
+        raise RuntimeError("pymupdf import unexpectedly unavailable")
 
     stat = path.stat()
     result = ReadResult(
@@ -43,7 +34,7 @@ def read_pdf(
     )
 
     try:
-        doc = pymupdf.open(path)
+        doc = _pymupdf.open(path)
     except Exception as e:
         result.error = f"Error opening PDF: {e}"
         return result
@@ -57,7 +48,7 @@ def read_pdf(
         result.error = f"Start page {start_page} exceeds total pages {total_pages}"
         return result
 
-    effective_limit = limit_pages if limit_pages else 10
+    effective_limit = limit_pages or 10
     end_idx = min(start_idx + effective_limit, total_pages)
 
     output_parts: list[str] = []
@@ -103,7 +94,6 @@ def read_pdf(
 
 
 def _no_pymupdf_result(path: Path) -> ReadResult:
-    """Return result when pymupdf is not installed."""
     stat = path.stat()
     content = (
         f"PDF file: {path.name}\n  Size: {stat.st_size:,} bytes\n\npymupdf is not installed. To read PDF files:\n  uv pip install pymupdf"

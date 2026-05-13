@@ -1,10 +1,8 @@
-"""Local filesystem backend - direct local I/O."""
-
 from __future__ import annotations
 
 from pathlib import Path
 
-from core.tools.filesystem.backend import (
+from sandbox.interfaces.filesystem import (
     DirEntry,
     DirListResult,
     FileReadResult,
@@ -14,18 +12,18 @@ from core.tools.filesystem.backend import (
 
 
 class LocalBackend(FileSystemBackend):
-    """Backend that operates directly on the local filesystem."""
-
     def read_file(self, path: str) -> FileReadResult:
         p = Path(path)
-        content = p.read_text(encoding="utf-8")
+        with p.open("r", encoding="utf-8", newline="") as f:
+            content = f.read()
         return FileReadResult(content=content, size=p.stat().st_size)
 
     def write_file(self, path: str, content: str) -> FileWriteResult:
         try:
             p = Path(path)
             p.parent.mkdir(parents=True, exist_ok=True)
-            p.write_text(content, encoding="utf-8")
+            with p.open("w", encoding="utf-8", newline="") as f:
+                f.write(content)
             return FileWriteResult(success=True)
         except Exception as e:
             return FileWriteResult(success=False, error=str(e))

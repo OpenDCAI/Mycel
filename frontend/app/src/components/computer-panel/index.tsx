@@ -1,16 +1,25 @@
 import { useEffect, useMemo, useState } from "react";
-import type { ComputerPanelProps, TabType } from "./types";
-import { extractAgentSteps, extractCommandSteps } from "./utils";
-import { useSandboxStatus } from "./use-sandbox-status";
+import type { ChatEntry } from "../../api";
+import type { TabType } from "./types";
+import { extractAgentSteps } from "./utils";
+import { useRemoteWorkspaceRoot } from "./use-remote-workspace-root";
 import { useFileExplorer } from "./use-file-explorer";
 import { useResizable } from "./use-resizable";
 import { PanelHeader } from "./PanelHeader";
 import { TabBar } from "./TabBar";
-import { TerminalView } from "./TerminalView";
 import { AgentsView } from "./AgentsView";
 import { FilesView } from "./FilesView";
 
-export type { ComputerPanelProps };
+interface ComputerPanelProps {
+  isOpen: boolean;
+  onClose: () => void;
+  threadId: string | null;
+  sandboxType: string | null;
+  chatEntries: ChatEntry[];
+  width?: number;
+  activeTab?: TabType;
+  onTabChange?: (tab: TabType) => void;
+}
 
 export default function ComputerPanel({
   isOpen,
@@ -22,34 +31,44 @@ export default function ComputerPanel({
   activeTab: controlledTab,
   onTabChange,
 }: ComputerPanelProps) {
-  const [internalTab, setInternalTab] = useState<TabType>("terminal");
+  const [internalTab, setInternalTab] = useState<TabType>("files");
   const activeTab = controlledTab ?? internalTab;
   const setActiveTab = onTabChange ?? setInternalTab;
 
   const isRemote = sandboxType !== null && sandboxType !== "local";
-  const commandSteps = useMemo(() => extractCommandSteps(chatEntries), [chatEntries]);
   const agentSteps = useMemo(() => extractAgentSteps(chatEntries), [chatEntries]);
   const { width: treeWidth, onMouseDown: onDragStart } = useResizable(288, 160, 500);
 
-  const { lease, refreshStatus } = useSandboxStatus({ threadId, isRemote });
+  const { refreshWorkspaceRoot } = useRemoteWorkspaceRoot({ threadId, isRemote });
+  const {
+    currentPath,
+    setCurrentPath,
+    workspaceRoot,
+    treeNodes,
+    selectedFilePath,
+    selectedFileContent,
+    loadingWorkspace,
+    workspaceError,
+    handleToggleFolder,
+    handleSelectFile,
+    refreshWorkspace,
+  } = useFileExplorer({ threadId });
 
-  const fileExplorer = useFileExplorer({ threadId });
-
-  // Refresh sandbox status when panel opens
+  // Resolve the remote cwd before loading files so the tree opens at the workspace root.
   useEffect(() => {
     if (!isOpen) return;
-    refreshStatus().then((cwd) => {
-      if (cwd && !fileExplorer.currentPath) {
-        fileExplorer.setCurrentPath(cwd);
+    refreshWorkspaceRoot().then((cwd) => {
+      if (cwd && !currentPath) {
+        setCurrentPath(cwd);
       }
     });
-  }, [isOpen, threadId, sandboxType]);
+  }, [isOpen, refreshWorkspaceRoot, currentPath, setCurrentPath]);
 
   // Refresh workspace when files tab is active
   useEffect(() => {
     if (!isOpen || !threadId || activeTab !== "files") return;
-    void fileExplorer.refreshWorkspace();
-  }, [isOpen, threadId, activeTab]);
+    void refreshWorkspace();
+  }, [isOpen, threadId, activeTab, refreshWorkspace]);
 
   if (!isOpen) return null;
 
@@ -60,10 +79,7 @@ export default function ComputerPanel({
     >
       <PanelHeader
         threadId={threadId}
-        isRemote={isRemote}
-        lease={lease}
         onClose={onClose}
-        onRefreshStatus={refreshStatus}
       />
 
       <TabBar
@@ -74,8 +90,6 @@ export default function ComputerPanel({
       />
 
       <div className="flex-1 overflow-hidden">
-        {activeTab === "terminal" && <TerminalView steps={commandSteps} />}
-
         {activeTab === "agents" && (
           <AgentsView
             steps={agentSteps}
@@ -84,16 +98,16 @@ export default function ComputerPanel({
 
         {activeTab === "files" && (
           <FilesView
-            workspaceRoot={fileExplorer.workspaceRoot}
-            treeNodes={fileExplorer.treeNodes}
-            loadingWorkspace={fileExplorer.loadingWorkspace}
-            workspaceError={fileExplorer.workspaceError}
-            selectedFilePath={fileExplorer.selectedFilePath}
-            selectedFileContent={fileExplorer.selectedFileContent}
+            workspaceRoot={workspaceRoot}
+            treeNodes={treeNodes}
+            loadingWorkspace={loadingWorkspace}
+            workspaceError={workspaceError}
+            selectedFilePath={selectedFilePath}
+            selectedFileContent={selectedFileContent}
             treeWidth={treeWidth}
             onDragStart={onDragStart}
-            onToggleFolder={fileExplorer.handleToggleFolder}
-            onSelectFile={fileExplorer.handleSelectFile}
+            onToggleFolder={handleToggleFolder}
+            onSelectFile={handleSelectFile}
           />
         )}
 

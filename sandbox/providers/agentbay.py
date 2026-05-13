@@ -1,13 +1,12 @@
-"""
-AgentBay sandbox provider.
-
-Implements SandboxProvider using Alibaba Cloud's AgentBay SDK.
-"""
-
 from __future__ import annotations
 
+import json
+import time
 from dataclasses import replace
+from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any
+
+import requests
 
 from sandbox.provider import (
     Metrics,
@@ -19,22 +18,12 @@ from sandbox.provider import (
 )
 
 if TYPE_CHECKING:
-    from sandbox.lease import SandboxLease
     from sandbox.runtime import PhysicalTerminalRuntime
+    from sandbox.runtime_handle import SandboxRuntimeHandle
     from sandbox.terminal import AbstractTerminal
 
 
 class AgentBayProvider(SandboxProvider):
-    """
-    AgentBay (Alibaba Cloud) sandbox provider.
-
-    Features:
-    - Cloud-based Linux/Windows/Browser environments
-    - Context sync for data persistence
-    - Pause/resume for cost optimization
-    - Rich inspection APIs (metrics, screenshot, processes)
-    """
-
     CATALOG_ENTRY = {"vendor": "Alibaba Cloud", "description": "Remote Linux sandbox", "provider_type": "cloud"}
 
     name = "agentbay"
@@ -77,10 +66,25 @@ class AgentBayProvider(SandboxProvider):
         self.default_context_path = default_context_path
         self.image_id = image_id
         self._sessions: dict[str, Any] = {}
-        # @@@agentbay-runtime-capability-override - account tier may disable pause/resume; keep provider-type defaults, override per configured instance only.  # noqa: E501
+        # @@@agentbay-runtime-capability-override - account tier may disable pause/resume;
+        # keep provider-type defaults, override per configured instance only.
         can_pause = self.CAPABILITY.can_pause if supports_pause is None else supports_pause
         can_resume = self.CAPABILITY.can_resume if supports_resume is None else supports_resume
         self._capability = replace(self.CAPABILITY, can_pause=can_pause, can_resume=can_resume)
+
+    @staticmethod
+    def _require_sdk_session(result: Any, context: str) -> Any:
+        session = getattr(result, "session", None)
+        if session is None:
+            raise RuntimeError(f"AgentBay {context} succeeded without a session payload")
+        return session
+
+    @staticmethod
+    def _require_sdk_context(result: Any, context_id: str) -> Any:
+        context = getattr(result, "context", None)
+        if context is None:
+            raise RuntimeError(f"AgentBay context lookup succeeded without a context payload: {context_id}")
+        return context
 
     def create_session(self, context_id: str | None = None, thread_id: str | None = None) -> SessionInfo:
         from agentbay import ContextSync, CreateSessionParams
@@ -94,13 +98,14 @@ class AgentBayProvider(SandboxProvider):
             ctx_result = self.client.context.get(context_id, create=True)
             if not ctx_result.success:
                 raise RuntimeError(f"Failed to get/create context '{context_id}': {ctx_result.error_message}")
-            params.context_syncs = [ContextSync.new(ctx_result.context.id, self.default_context_path)]
+            ctx = self._require_sdk_context(ctx_result, context_id)
+            params.context_syncs = [ContextSync.new(ctx.id, self.default_context_path)]
 
         result = self.client.create(params)
         if not result.success:
             raise RuntimeError(f"Failed to create session: {result.error_message}")
 
-        session = result.session
+        session = self._hydrate_direct_call_session(self._require_sdk_session(result, "create"))
         self._sessions[session.session_id] = session
 
         return SessionInfo(
@@ -111,15 +116,19 @@ class AgentBayProvider(SandboxProvider):
 
     def destroy_session(self, session_id: str, sync: bool = True) -> bool:
         session = self._get_session(session_id)
-        result = session.delete(sync_context=sync)
+        # @@@agentbay-destroy-without-pause - some AgentBay account tiers wire delete(sync_context=True)
+        # through pause/sync first; when pause is unsupported, destroy must skip sync_context entirely.
+        effective_sync = sync and self.get_capability().can_pause
+        result = session.delete(sync_context=effective_sync)
         if result.success:
             self._sessions.pop(session_id, None)
         return result.success
 
     def pause_session(self, session_id: str) -> bool:
         session = self._get_session(session_id)
-        # @@@agentbay-benefit-level - Some AgentBay accounts reject pause/resume with BenefitLevel.NotSupport; keep fail-loud and do not fallback.  # noqa: E501
-        result = self.client.pause(session)
+        # @@@agentbay-benefit-level - Some AgentBay accounts reject pause/resume with
+        # BenefitLevel.NotSupport; keep fail-loud and do not substitute behavior.
+        result = session.beta_pause()
         if result.success:
             return True
         message = str(getattr(result, "error_message", "") or getattr(result, "message", "") or "unknown error")
@@ -127,20 +136,20 @@ class AgentBayProvider(SandboxProvider):
 
     def resume_session(self, session_id: str) -> bool:
         session = self._get_session(session_id)
-        result = self.client.resume(session)
+        result = session.beta_resume()
         if not result.success:
             message = str(getattr(result, "error_message", "") or getattr(result, "message", "") or "unknown error")
             raise RuntimeError(f"AgentBay resume failed for {session_id}: {message}")
         get_result = self.client.get(session_id)
         if get_result.success:
-            self._sessions[session_id] = get_result.session
+            self._sessions[session_id] = self._require_sdk_session(get_result, "resume refresh")
         return True
 
     def get_session_status(self, session_id: str) -> str:
         try:
             result = self.client.get(session_id)
             if result.success:
-                status_result = result.session.get_status()
+                status_result = self._require_sdk_session(result, "status lookup").get_status()
                 if status_result.success:
                     return status_result.status.lower()
             else:
@@ -161,17 +170,39 @@ class AgentBayProvider(SandboxProvider):
     ) -> ProviderExecResult:
         session = self._get_session(session_id)
         timeout_ms = min(timeout_ms, 50000)
+        exec_args = {
+            "command": command,
+            "timeout_ms": timeout_ms,
+            "cwd": cwd or self.default_context_path,
+        }
+        shell_server = self._resolve_shell_server(session)
 
-        result = session.command.execute_command(
-            command=command,
-            timeout_ms=timeout_ms,
-            cwd=cwd or self.default_context_path,
-        )
+        if getattr(session, "link_url", "") and getattr(session, "token", "") and shell_server:
+            # @@@agentbay-shell-link-route - shared provider runs proved shell can degrade into the API path
+            # despite hydrated direct-call metadata; take the explicit LinkUrl route when shell server is known.
+            return self._call_link_url_tool(session, "shell", exec_args, shell_server)
+
+        try:
+            result = session.command.execute_command(**exec_args)
+        except Exception as exc:
+            print(
+                f"[AgentBay.execute] session_id={session_id} path=sdk_command_execute raised={exc.__class__.__name__}: {exc}",
+                flush=True,
+            )
+            raise
 
         if not result.success:
-            return ProviderExecResult(output="", error=result.error_message)
+            print(
+                "[AgentBay.execute] "
+                f"session_id={session_id} path=sdk_command_execute success=False "
+                f"exit_code={getattr(result, 'exit_code', None)} "
+                f"error={getattr(result, 'error_message', None)!r} "
+                f"output_len={len(getattr(result, 'output', '') or '')}",
+                flush=True,
+            )
+            return ProviderExecResult(output=result.output or "", exit_code=result.exit_code or 1, error=result.error_message)
 
-        return ProviderExecResult(output=result.output or "")
+        return ProviderExecResult(output=result.output or "", exit_code=result.exit_code or 0)
 
     def read_file(self, session_id: str, path: str) -> str:
         session = self._get_session(session_id)
@@ -231,24 +262,182 @@ class AgentBayProvider(SandboxProvider):
         session = self._get_session(session_id)
         result = session.computer.list_visible_apps()
         if result.success:
-            return [{"pid": app.pid, "name": app.name, "cmd": app.cmd} for app in (result.data or [])]
+            return [{"pid": app.pid, "name": app.pname, "cmd": app.cmdline} for app in (result.data or [])]
         return []
 
     def get_web_url(self, session_id: str) -> str | None:
-        """Get AgentBay web UI URL for the session."""
         session = self._get_session(session_id)
         return getattr(session, "resource_url", None)
 
-    def _get_session(self, session_id: str):
-        """Get session object, fetching from API if not cached."""
+    def _get_session(self, session_id: str) -> Any:
         if session_id not in self._sessions:
             result = self.client.get(session_id)
             if not result.success:
                 raise RuntimeError(f"Session not found: {session_id}")
-            self._sessions[session_id] = result.session
-        return self._sessions[session_id]
+            self._sessions[session_id] = self._require_sdk_session(result, "get")
+        cached = self._sessions[session_id]
+        hydrated = self._hydrate_direct_call_session(cached)
+        self._sessions[session_id] = hydrated
+        return hydrated
 
-    def create_runtime(self, terminal: AbstractTerminal, lease: SandboxLease) -> PhysicalTerminalRuntime:
+    def _hydrate_direct_call_session(self, session: Any) -> Any:
+        if not self._session_needs_direct_call_refresh(session):
+            return session
+        session_id = str(getattr(session, "session_id", "") or "")
+        if not session_id:
+            raise RuntimeError("AgentBay session missing session_id")
+        refreshed = self.client.get(session_id)
+        if not refreshed.success:
+            raise RuntimeError(f"Failed to hydrate AgentBay session {session_id}: {refreshed.error_message}")
+        hydrated = self._require_sdk_session(refreshed, "hydrate")
+        if self._session_needs_direct_call_refresh(hydrated):
+            metadata = self._fetch_direct_call_metadata(session_id)
+            self._apply_direct_call_metadata(hydrated, metadata)
+        return hydrated
+
+    @staticmethod
+    def _resolve_shell_server(session: Any) -> str | None:
+        for resolver_name in ("_get_mcp_server_for_tool", "_find_server_for_tool"):
+            resolver = getattr(session, resolver_name, None)
+            if callable(resolver):
+                try:
+                    server_name = resolver("shell")
+                except Exception:
+                    continue
+                if server_name:
+                    return str(server_name)
+        for tools_attr in ("mcpTools", "mcp_tools"):
+            tools = getattr(session, tools_attr, None) or []
+            for tool in tools:
+                if getattr(tool, "name", None) == "shell":
+                    server_name = getattr(tool, "server", "") or ""
+                    if server_name:
+                        return str(server_name)
+        return None
+
+    @staticmethod
+    def _provider_exec_result_from_tool_result(tool_result: Any) -> ProviderExecResult:
+        if not getattr(tool_result, "success", False):
+            error_message = getattr(tool_result, "error_message", "") or "Failed to execute command"
+            return ProviderExecResult(output="", exit_code=1, error=error_message)
+        data = getattr(tool_result, "data", "")
+        try:
+            payload = json.loads(data) if isinstance(data, str) else data
+        except json.JSONDecodeError:
+            payload = None
+        if isinstance(payload, dict):
+            stdout = str(payload.get("stdout", "") or "")
+            stderr = str(payload.get("stderr", "") or "")
+            exit_code = int(payload.get("exit_code", 0) or 0)
+            error = stderr or None
+            return ProviderExecResult(output=stdout + stderr, exit_code=exit_code, error=error)
+        return ProviderExecResult(output=str(data or ""), exit_code=0)
+
+    def _call_link_url_tool(
+        self,
+        session: Any,
+        tool_name: str,
+        args: dict[str, Any],
+        server_name: str,
+    ) -> ProviderExecResult:
+        link_url = str(getattr(session, "link_url", "") or "")
+        token = str(getattr(session, "token", "") or "")
+        if not link_url or not token:
+            return ProviderExecResult(output="", exit_code=1, error="LinkUrl/token not available")
+
+        try:
+            response = requests.post(
+                link_url.rstrip("/") + "/callTool",
+                json={
+                    "args": args,
+                    "server": server_name,
+                    "requestId": f"link-{int(time.time() * 1000)}",
+                    "tool": tool_name,
+                    "token": token,
+                },
+                headers={
+                    "Content-Type": "application/json",
+                    "X-Access-Token": token,
+                },
+                timeout=max(int(args.get("timeout_ms", 30000) or 30000) / 1000.0, 30.0),
+            )
+        except requests.RequestException as exc:
+            return ProviderExecResult(output="", exit_code=1, error=f"HTTP request failed: {exc}")
+        if response.status_code < 200 or response.status_code >= 300:
+            return ProviderExecResult(output="", exit_code=1, error=f"HTTP request failed with code: {response.status_code}")
+
+        outer = response.json()
+        data_field = outer.get("data")
+        if data_field is None:
+            return ProviderExecResult(output="", exit_code=1, error="No data field in LinkUrl response")
+        parsed_data = json.loads(data_field) if isinstance(data_field, str) else data_field
+        if not isinstance(parsed_data, dict):
+            return ProviderExecResult(output="", exit_code=1, error="Invalid data field type in LinkUrl response")
+
+        result_field = parsed_data.get("result", {})
+        if not isinstance(result_field, dict):
+            return ProviderExecResult(output="", exit_code=1, error="No result field in LinkUrl response data")
+
+        content = result_field.get("content", [])
+        text_content = ""
+        if isinstance(content, list) and content:
+            first = content[0]
+            if isinstance(first, str):
+                text_content = first
+            elif isinstance(first, dict):
+                text_content = str(first.get("text") or first.get("blob") or first.get("data") or "")
+        elif isinstance(content, str):
+            text_content = content
+
+        if result_field.get("isError", False):
+            error_message = text_content or json.dumps(result_field, ensure_ascii=False)
+            return ProviderExecResult(output="", exit_code=1, error=error_message)
+
+        return self._provider_exec_result_from_tool_result(SimpleNamespace(success=True, data=text_content, error_message=""))
+
+    @staticmethod
+    def _session_needs_direct_call_refresh(session: Any) -> bool:
+        # @@@agentbay-direct-call-hydration - shared provider runs may return a create-session object
+        # without token/link_url/mcpTools; refresh once so shell execution stays on the richer LinkUrl path.
+        if not getattr(session, "token", ""):
+            return True
+        if not getattr(session, "link_url", ""):
+            return True
+        tools = getattr(session, "mcpTools", None) or getattr(session, "mcp_tools", None)
+        return not bool(tools)
+
+    def _fetch_direct_call_metadata(self, session_id: str) -> dict[str, Any]:
+        from agentbay.api.models import GetSessionRequest
+
+        # @@@agentbay-raw-get-session - the SDK Session object drops LinkUrl/ToolList for this account tier,
+        # but the raw GetSession response still carries them. Pull that response directly and patch the session.
+        request = GetSessionRequest(authorization=f"Bearer {self.client.api_key}", session_id=session_id)
+        response = self.client.client.get_session(request)
+        body = response.to_map().get("body", {})
+        data = body.get("Data", {}) or {}
+        return {
+            "link_url": data.get("LinkUrl", "") or "",
+            "token": data.get("Token", "") or "",
+            "mcp_tools": [
+                SimpleNamespace(name=str(tool.get("Name", "") or ""), server=str(tool.get("Server", "") or ""))
+                for tool in (data.get("ToolList", []) or [])
+            ],
+        }
+
+    @staticmethod
+    def _apply_direct_call_metadata(session: Any, metadata: dict[str, Any]) -> None:
+        link_url = str(metadata.get("link_url", "") or "")
+        if link_url:
+            setattr(session, "link_url", link_url)
+        token = str(metadata.get("token", "") or "")
+        if token:
+            setattr(session, "token", token)
+        tools = metadata.get("mcp_tools", []) or []
+        if tools:
+            setattr(session, "mcp_tools", tools)
+            setattr(session, "mcpTools", tools)
+
+    def create_runtime(self, terminal: AbstractTerminal, sandbox_runtime: SandboxRuntimeHandle) -> PhysicalTerminalRuntime:
         from sandbox.runtime import RemoteWrappedRuntime
 
-        return RemoteWrappedRuntime(terminal, lease, self)
+        return RemoteWrappedRuntime(terminal, sandbox_runtime, self)

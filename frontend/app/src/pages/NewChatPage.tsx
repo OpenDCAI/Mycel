@@ -2,24 +2,49 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useOutletContext, useParams } from "react-router-dom";
 import { postRun } from "../api";
 import CenteredInputBox from "../components/CenteredInputBox";
-import WorkspaceSetupModal from "../components/WorkspaceSetupModal";
 import type { ThreadManagerState, ThreadManagerActions } from "../hooks/use-thread-manager";
 import { useWorkspaceSettings } from "../hooks/use-workspace-settings";
 import { useAuthStore } from "../store/auth-store";
 import { useAppStore } from "../store/app-store";
-import MemberAvatar from "../components/MemberAvatar";
+import ActorAvatar from "../components/ActorAvatar";
 import FilesystemBrowser from "../components/FilesystemBrowser";
-import { getDefaultThreadConfig, listMyLeases, saveDefaultThreadConfig } from "../api/client";
-import type { RecipeFeatureOption, RecipeSnapshot, ThreadLaunchConfig, UserLeaseSummary } from "../api/types";
+import { getDefaultThreadConfig, listMySandboxes } from "../api/client";
+import { fetchAccountResourceLimits } from "../api/settings";
+import type { AccountResourceLimit, RecipeFeatureOption, SandboxTemplateSnapshot, ThreadLaunchConfig, UserSandboxSummary } from "../api/types";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
 import { Checkbox } from "../components/ui/checkbox";
 import { cn } from "../lib/utils";
 
 interface OutletContext {
   tm: ThreadManagerState & ThreadManagerActions;
-  sidebarCollapsed: boolean;
-  setSidebarCollapsed: (value: boolean) => void;
-  setSessionsOpen: (value: boolean) => void;
+}
+
+function ResolveStateCard({
+  agentName,
+  agentAvatarUrl,
+  title,
+  description,
+  destructive = false,
+}: {
+  agentName: string;
+  agentAvatarUrl?: string;
+  title: string;
+  description: string;
+  destructive?: boolean;
+}) {
+  return (
+    <div className="flex-1 flex items-center justify-center relative">
+      <div className="w-full max-w-[420px] px-6 text-center">
+        <div className="flex justify-center mb-4">
+          <ActorAvatar name={agentName} avatarUrl={agentAvatarUrl} type="mycel_agent" size="lg" />
+        </div>
+        <h1 className="text-xl font-medium text-foreground mb-2">{title}</h1>
+        <p className={`text-sm ${destructive ? "text-destructive" : "text-muted-foreground"}`}>
+          {description}
+        </p>
+      </div>
+    </div>
+  );
 }
 
 const PROVIDER_TYPE_LABELS: Record<string, string> = {
@@ -39,9 +64,9 @@ const MODEL_OPTIONS = [
 
 type ConfigSnapshot = {
   createMode: "new" | "existing";
-  selectedLeaseId: string;
-  selectedRecipeId: string;
-  selectedRecipeFeatures: Record<string, boolean>;
+  selectedExistingSandboxId: string;
+  selectedSandboxTemplateId: string;
+  selectedSandboxTemplateFeatures: Record<string, boolean>;
   selectedWorkspace: string;
   selectedProviderConfig: string;
 };
@@ -62,7 +87,7 @@ function providerTypeFromName(name: string): string {
   return "local";
 }
 
-function leaseStateMeta(state?: string | null): { dot: string; label: string } {
+function sandboxStateMeta(state?: string | null): { dot: string; label: string } {
   switch (state) {
     case "running":
     case "started":
@@ -78,32 +103,36 @@ function leaseStateMeta(state?: string | null): { dot: string; label: string } {
   }
 }
 
-function enabledFeatureLabels(recipe: RecipeSnapshot | null): string[] {
-  if (!recipe?.feature_options?.length) return [];
-  return recipe.feature_options
-    .filter((item) => recipe.features?.[item.key])
+function enabledFeatureLabels(sandboxTemplate: SandboxTemplateSnapshot | null): string[] {
+  if (!sandboxTemplate?.feature_options?.length) return [];
+  return sandboxTemplate.feature_options
+    .filter((item) => sandboxTemplate.features?.[item.key])
     .map((item) => item.name);
 }
 
-export default function NewChatPage({ mode = "member" }: { mode?: "member" | "new" }) {
+function isActiveHireRoute(): boolean {
+  const path = window.location.pathname.replace(/\/+$/, "");
+  return path.startsWith("/chat/hire");
+}
+
+export default function NewChatPage({ mode = "agent" }: { mode?: "agent" | "new" }) {
   const navigate = useNavigate();
-  const { memberId } = useParams<{ memberId: string }>();
+  const { agentId } = useParams<{ agentId: string }>();
   const { tm } = useOutletContext<OutletContext>();
-  const { sandboxTypes, selectedSandbox, handleCreateThread, handleGetMainThread } = tm;
-  const { settings, loading, hasWorkspace, refreshSettings, setDefaultWorkspace } = useWorkspaceSettings();
-  const shouldResolveMain = mode === "member";
+  const { sandboxTypes, selectedSandbox, handleCreateThread, handleGetDefaultThread } = tm;
+  const { settings, loading, setDefaultWorkspace } = useWorkspaceSettings();
+  const shouldResolveDefaultThread = mode === "agent";
   const [error, setError] = useState<string | null>(null);
   const [resolveState, setResolveState] = useState<"resolving" | "ready" | "error">(
-    shouldResolveMain ? "resolving" : "ready",
+    shouldResolveDefaultThread ? "resolving" : "ready",
   );
-  const [showWorkspaceSetup, setShowWorkspaceSetup] = useState(false);
   const [createMode, setCreateMode] = useState<"new" | "existing">("new");
-  const [leaseOptions, setLeaseOptions] = useState<UserLeaseSummary[]>([]);
-  const [leaseError, setLeaseError] = useState<string | null>(null);
-  const [leaseLoading, setLeaseLoading] = useState(true);
-  const [selectedLeaseId, setSelectedLeaseId] = useState<string>("");
-  const [selectedRecipeId, setSelectedRecipeId] = useState<string>("");
-  const [selectedRecipeFeatures, setSelectedRecipeFeatures] = useState<Record<string, boolean>>({});
+  const [sandboxOptions, setSandboxOptions] = useState<UserSandboxSummary[]>([]);
+  const [sandboxError, setSandboxError] = useState<string | null>(null);
+  const [sandboxLoading, setSandboxLoading] = useState(true);
+  const [selectedExistingSandboxId, setSelectedExistingSandboxId] = useState<string>("");
+  const [selectedSandboxTemplateId, setSelectedSandboxTemplateId] = useState<string>("");
+  const [selectedSandboxTemplateFeatures, setSelectedSandboxTemplateFeatures] = useState<Record<string, boolean>>({});
   const [selectedProviderConfig, setSelectedProviderConfig] = useState<string>("");
   const [selectedWorkspace, setSelectedWorkspace] = useState<string>("");
   const [selectedModel, setSelectedModel] = useState<string>("");
@@ -111,135 +140,179 @@ export default function NewChatPage({ mode = "member" }: { mode?: "member" | "ne
   const [createModeInitialized, setCreateModeInitialized] = useState(false);
   const [configDefaultsLoading, setConfigDefaultsLoading] = useState(true);
   const [configSnapshot, setConfigSnapshot] = useState<ConfigSnapshot | null>(null);
+  const [accountResources, setAccountResources] = useState<AccountResourceLimit[]>([]);
+  const [accountResourcesLoading, setAccountResourcesLoading] = useState(true);
+  const [accountResourcesError, setAccountResourcesError] = useState<string | null>(null);
 
   const authAgent = useAuthStore(s => s.agent);
-  const memberList = useAppStore(s => s.memberList);
-  const libraryRecipes = useAppStore(s => s.libraryRecipes);
-  const decodedMemberId = memberId ? decodeURIComponent(memberId) : null;
-  const resolvedMember = decodedMemberId ? memberList.find(m => m.id === decodedMemberId) : undefined;
-  const isOwnedAgent = decodedMemberId === authAgent?.id;
-  const memberName = resolvedMember?.name ?? (isOwnedAgent ? (authAgent?.name || "Agent") : "Agent");
-  const memberAvatarUrl = resolvedMember?.avatar_url;
+  const agentList = useAppStore(s => s.agentList);
+  const librarySandboxTemplates = useAppStore(s => s.librarySandboxTemplates);
+  const decodedAgentId = agentId ? decodeURIComponent(agentId) : null;
+  const resolvedAgent = decodedAgentId ? agentList.find(agent => agent.id === decodedAgentId) : undefined;
+  const isOwnedAgent = decodedAgentId === authAgent?.id;
+  const agentName = resolvedAgent?.name ?? (isOwnedAgent ? (authAgent?.name || "Agent") : "Agent");
+  const agentAvatarUrl = resolvedAgent?.avatar_url;
 
   useEffect(() => {
-    if (!shouldResolveMain) return;
+    if (!shouldResolveDefaultThread) return;
 
     let cancelled = false;
     const ac = new AbortController();
 
-    async function resolveMainThread() {
-      if (!decodedMemberId) {
-        setError("Missing member ID");
+    async function resolveDefaultThread() {
+      if (!decodedAgentId) {
+        setError("Missing agent ID");
         setResolveState("error");
         return;
       }
 
       try {
-        const thread = await handleGetMainThread(decodedMemberId, ac.signal);
+        const thread = await handleGetDefaultThread(decodedAgentId, ac.signal);
         if (cancelled) return;
         if (thread) {
-          navigate(`/threads/${encodeURIComponent(decodedMemberId)}/${thread.thread_id}`, { replace: true });
+          navigate(`/chat/hire/thread/${thread.thread_id}`, { replace: true });
           return;
         }
         setResolveState("ready");
       } catch (err) {
         if (cancelled) return;
         if (err instanceof DOMException && err.name === "AbortError") return;
-        const message = err instanceof Error ? err.message : "无法获取主对话";
-        console.error("[NewChatPage] resolve main thread failed:", err);
+        const message = err instanceof Error ? err.message : "无法获取默认线程";
+        // @@@default-thread-route-teardown - default thread resolution can
+        // finish after navigation already left the hire flow. Only log while
+        // /chat/hire is still active; otherwise this is stale UI noise.
+        if (!isActiveHireRoute()) return;
+        console.error("[NewChatPage] resolve default thread failed:", err);
         setError(message);
         setResolveState("error");
       }
     }
 
-    void resolveMainThread();
+    void resolveDefaultThread();
     return () => {
       cancelled = true;
       ac.abort();
     };
-  }, [decodedMemberId, handleGetMainThread, navigate, shouldResolveMain]);
+  }, [decodedAgentId, handleGetDefaultThread, navigate, shouldResolveDefaultThread]);
 
   useEffect(() => {
     let cancelled = false;
     const ac = new AbortController();
 
-    async function loadLeases() {
-      setLeaseLoading(true);
-      setLeaseError(null);
+    async function loadAccountResources() {
+      setAccountResourcesLoading(true);
+      setAccountResourcesError(null);
       try {
-        const leases = await listMyLeases(ac.signal);
+        const resources = await fetchAccountResourceLimits(ac.signal);
         if (cancelled) return;
-        setLeaseOptions(leases);
-        setSelectedLeaseId((current) => current || leases[0]?.lease_id || "");
+        setAccountResources(resources);
       } catch (err) {
         if (cancelled) return;
         if (err instanceof DOMException && err.name === "AbortError") return;
-        setLeaseError(err instanceof Error ? err.message : "Failed to load leases");
+        setAccountResourcesError(err instanceof Error ? err.message : "Failed to load account resources");
       } finally {
-        if (!cancelled && !ac.signal.aborted) setLeaseLoading(false);
+        if (!cancelled && !ac.signal.aborted) setAccountResourcesLoading(false);
       }
     }
 
-    void loadLeases();
+    void loadAccountResources();
     return () => {
       cancelled = true;
       ac.abort();
     };
   }, []);
 
-  const recipeOptions = useMemo(() => (
-    libraryRecipes
+  useEffect(() => {
+    let cancelled = false;
+    const ac = new AbortController();
+
+    async function loadSandboxes() {
+      setSandboxLoading(true);
+      setSandboxError(null);
+      try {
+        const sandboxes = await listMySandboxes(ac.signal);
+        if (cancelled) return;
+        setSandboxOptions(sandboxes);
+        setSelectedExistingSandboxId((current) => current || (sandboxes[0] ? sandboxOptionId(sandboxes[0]) : ""));
+      } catch (err) {
+        if (cancelled) return;
+        if (err instanceof DOMException && err.name === "AbortError") return;
+        setSandboxError(err instanceof Error ? err.message : "Failed to load sandboxes");
+      } finally {
+        if (!cancelled && !ac.signal.aborted) setSandboxLoading(false);
+      }
+    }
+
+    void loadSandboxes();
+    return () => {
+      cancelled = true;
+      ac.abort();
+    };
+  }, []);
+
+  const sandboxTemplateOptions = useMemo(() => (
+    librarySandboxTemplates
       .filter((item) => item.available !== false && item.provider_type)
       .map((item) => ({
         value: item.id,
         label: item.name,
-        recipe: {
+        sandboxTemplate: {
           id: item.id,
           name: item.name,
           desc: item.desc,
+          provider_name: item.provider_name,
           provider_type: item.provider_type as string,
           features: (item as { features?: Record<string, boolean> }).features ?? {},
           configurable_features: (item as { configurable_features?: Record<string, boolean> }).configurable_features ?? {},
           feature_options: (item as { feature_options?: RecipeFeatureOption[] }).feature_options ?? [],
-        } satisfies RecipeSnapshot,
+        } satisfies SandboxTemplateSnapshot,
       }))
-  ), [libraryRecipes]);
-  const selectedLease = leaseOptions.find((lease) => lease.lease_id === selectedLeaseId) ?? null;
+  ), [librarySandboxTemplates]);
+  const selectedSandboxOption = sandboxOptions.find((sandbox) => sandboxOptionId(sandbox) === selectedExistingSandboxId) ?? null;
+  const sandboxResourceByProvider = useMemo(() => {
+    const map = new Map<string, AccountResourceLimit>();
+    for (const item of accountResources) {
+      if (item.resource === "sandbox") map.set(item.provider_name, item);
+    }
+    return map;
+  }, [accountResources]);
   const providerConfigOptions = useMemo(
     () =>
       sandboxTypes
-        .filter((item) => item.available)
         .map((item) => ({
           value: item.name,
-          label: providerConfigLabel(item.name),
+          label: sandboxResourceByProvider.get(item.name)?.label ?? providerConfigLabel(item.name),
           providerType: item.provider || providerTypeFromName(item.name),
+          resource: sandboxResourceByProvider.get(item.name),
+          available: item.available,
+          reason: item.reason,
         })),
-    [sandboxTypes],
+    [sandboxResourceByProvider, sandboxTypes],
   );
   useEffect(() => {
-    if (!selectedRecipeId && recipeOptions[0]?.value) {
-      setSelectedRecipeId(recipeOptions[0].value);
+    if (!selectedSandboxTemplateId && sandboxTemplateOptions[0]?.value) {
+      setSelectedSandboxTemplateId(sandboxTemplateOptions[0].value);
     }
-  }, [recipeOptions, selectedRecipeId]);
+  }, [sandboxTemplateOptions, selectedSandboxTemplateId]);
 
   useEffect(() => {
-    if (!selectedLeaseId && leaseOptions[0]?.lease_id) {
-      setSelectedLeaseId(leaseOptions[0].lease_id);
+    if (!selectedExistingSandboxId && sandboxOptions[0]) {
+      setSelectedExistingSandboxId(sandboxOptionId(sandboxOptions[0]));
     }
-  }, [leaseOptions, selectedLeaseId]);
+  }, [sandboxOptions, selectedExistingSandboxId]);
 
   useEffect(() => {
-    if (createModeInitialized || leaseLoading) return;
-    setCreateMode(leaseOptions.length > 0 ? "existing" : "new");
+    if (createModeInitialized || sandboxLoading) return;
+    setCreateMode(sandboxOptions.length > 0 ? "existing" : "new");
     setCreateModeInitialized(true);
-  }, [createModeInitialized, leaseLoading, leaseOptions.length]);
+  }, [createModeInitialized, sandboxLoading, sandboxOptions.length]);
 
   useEffect(() => {
-    if (leaseLoading || configDefaultsLoading) return;
+    if (sandboxLoading || configDefaultsLoading) return;
     if (selectedProviderConfig) return;
-    const nextConfig = leaseOptions[0]?.provider_name || providerConfigOptions[0]?.value || selectedSandbox || "local";
+    const nextConfig = sandboxOptions[0]?.provider_name || providerConfigOptions[0]?.value || selectedSandbox || "local";
     if (nextConfig) setSelectedProviderConfig(nextConfig);
-  }, [configDefaultsLoading, leaseLoading, leaseOptions, providerConfigOptions, selectedProviderConfig, selectedSandbox]);
+  }, [configDefaultsLoading, sandboxLoading, sandboxOptions, providerConfigOptions, selectedProviderConfig, selectedSandbox]);
 
   useEffect(() => {
     if (!selectedWorkspace && settings?.default_workspace) {
@@ -248,24 +321,28 @@ export default function NewChatPage({ mode = "member" }: { mode?: "member" | "ne
   }, [selectedWorkspace, settings?.default_workspace]);
 
   useEffect(() => {
-    if (!decodedMemberId) {
+    if (!decodedAgentId) {
       setConfigDefaultsLoading(false);
       return;
     }
-    const memberIdForDefaults = decodedMemberId;
+    const agentIdForDefaults = decodedAgentId;
     let cancelled = false;
     const ac = new AbortController();
 
     async function loadDefaultConfig() {
       setConfigDefaultsLoading(true);
       try {
-        const payload = await getDefaultThreadConfig(memberIdForDefaults, ac.signal);
+        const payload = await getDefaultThreadConfig(agentIdForDefaults, ac.signal);
         if (cancelled) return;
         applyResolvedConfig(payload.config);
         setCreateModeInitialized(true);
       } catch (err) {
         if (cancelled) return;
         if (err instanceof DOMException && err.name === "AbortError") return;
+        // @@@default-config-route-teardown - default thread config can resolve
+        // after navigation already left the hire flow. Only log while the
+        // /chat/hire route is still active; otherwise this is stale UI noise.
+        if (!isActiveHireRoute()) return;
         console.error("[NewChatPage] load default thread config failed:", err);
       } finally {
         if (!cancelled && !ac.signal.aborted) setConfigDefaultsLoading(false);
@@ -278,108 +355,96 @@ export default function NewChatPage({ mode = "member" }: { mode?: "member" | "ne
       ac.abort();
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [decodedMemberId]);
+  }, [decodedAgentId]);
 
-  const selectedRecipe = useMemo(
-    () => recipeOptions.find((item) => item.value === selectedRecipeId)?.recipe ?? recipeOptions[0]?.recipe ?? null,
-    [recipeOptions, selectedRecipeId],
+  const selectedSandboxTemplate = useMemo(
+    () => sandboxTemplateOptions.find((item) => item.value === selectedSandboxTemplateId)?.sandboxTemplate ?? sandboxTemplateOptions[0]?.sandboxTemplate ?? null,
+    [sandboxTemplateOptions, selectedSandboxTemplateId],
   );
   useEffect(() => {
-    if (!selectedRecipe) return;
-    setSelectedRecipeFeatures(selectedRecipe.features ?? {});
-  }, [selectedRecipeId, selectedRecipe]);
+    if (!selectedSandboxTemplate) return;
+    setSelectedSandboxTemplateFeatures(selectedSandboxTemplate.features ?? {});
+  }, [selectedSandboxTemplateId, selectedSandboxTemplate]);
 
-  const selectedRecipeSnapshot = selectedRecipe
+  const selectedSandboxTemplateSnapshot = selectedSandboxTemplate
     ? {
-      ...selectedRecipe,
-      features: { ...(selectedRecipe.features ?? {}), ...selectedRecipeFeatures },
+      ...selectedSandboxTemplate,
+      features: { ...(selectedSandboxTemplate.features ?? {}), ...selectedSandboxTemplateFeatures },
     }
     : null;
   const activeWorkspace = selectedWorkspace || settings?.default_workspace || "";
-  const localRecipeSelected = createMode === "new" && selectedRecipe?.provider_type === "local";
-  const workspaceRequired = createMode === "new"
-    && selectedRecipe?.provider_type === "local"
-    && !activeWorkspace;
+  const localSandboxTemplateSelected = createMode === "new" && selectedSandboxTemplate?.provider_type === "local";
 
   async function handleSend(message: string, model: string) {
     const workspace = selectedWorkspace || settings?.default_workspace || undefined;
-    if (createMode === "new" && selectedRecipeSnapshot?.provider_type === "local" && !workspace && !hasWorkspace) {
-      setShowWorkspaceSetup(true);
-      return;
-    }
-    if (!decodedMemberId) {
-      throw new Error("Cannot create thread without member ID");
+    if (!decodedAgentId) {
+      throw new Error("Cannot create thread without agent ID");
     }
 
     let threadId: string;
     if (createMode === "existing") {
-      if (!selectedLease) {
+      if (!selectedSandboxOption) {
         throw new Error("Choose an existing sandbox first");
       }
       threadId = await handleCreateThread(
-        selectedLease.provider_name,
+        selectedSandboxOption.provider_name,
         undefined,
-        decodedMemberId,
+        decodedAgentId,
         model,
-        selectedLease.lease_id,
+        sandboxOptionId(selectedSandboxOption),
       );
     } else {
-      if (!selectedRecipeSnapshot) {
-        throw new Error("Recipe not found");
+      if (!selectedSandboxTemplateSnapshot) {
+        throw new Error("沙盒模板不存在");
       }
       const cwd = workspace || settings?.default_workspace || undefined;
       threadId = await handleCreateThread(
         selectedProviderConfig || selectedSandbox,
         cwd,
-        decodedMemberId,
+        decodedAgentId,
         model,
         undefined,
-        selectedRecipeSnapshot,
+        selectedSandboxTemplateSnapshot.id,
       );
     }
     postRun(threadId, message, undefined, model ? { model } : undefined).catch(err => {
       console.error("[NewChatPage] postRun failed:", err);
     });
-    navigate(`/threads/${encodeURIComponent(decodedMemberId)}/${threadId}`, {
+    navigate(`/chat/hire/thread/${threadId}`, {
       state: { selectedModel: model, runStarted: true, message },
     });
-  }
-
-  async function handleWorkspaceSet() {
-    await refreshSettings();
-    setShowWorkspaceSetup(false);
   }
 
   function applyResolvedConfig(config: ThreadLaunchConfig) {
     setCreateMode(config.create_mode);
     setSelectedProviderConfig(config.provider_config || "");
-    setSelectedLeaseId(config.lease_id || "");
-    setSelectedRecipeId(config.recipe?.id || "");
-    setSelectedRecipeFeatures(config.recipe?.features ?? {});
+    setSelectedExistingSandboxId(config.existing_sandbox_id || "");
+    setSelectedSandboxTemplateId(config.sandbox_template_id || config.sandbox_template?.id || "");
+    setSelectedSandboxTemplateFeatures(config.sandbox_template?.features ?? {});
     setSelectedWorkspace(config.workspace || "");
     setSelectedModel(config.model || settings?.default_model || "leon:large");
   }
 
   function summarizeEnvironment() {
     if (createMode === "existing") {
-      if (!selectedLease) return "复用旧沙盒";
-      return `${selectedLease.provider_name} · ${selectedLease.recipe_name}`;
+      if (!selectedSandboxOption) return "复用旧沙盒";
+      return `${selectedSandboxOption.provider_name} · ${selectedSandboxOption.recipe_name}`;
     }
-    const recipe = selectedRecipeSnapshot;
-    if (!recipe) return "选择 recipe";
-    const featureSuffix = enabledFeatureLabels(recipe).join(" · ");
-    if (recipe.provider_type !== "local") return [recipe.name, featureSuffix].filter(Boolean).join(" · ");
-    if (!activeWorkspace) return [recipe.name, featureSuffix, "选择工作区"].filter(Boolean).join(" · ");
+    const sandboxTemplate = selectedSandboxTemplateSnapshot;
+    if (!sandboxTemplate) return "选择沙盒模板";
+    const featureSuffix = enabledFeatureLabels(sandboxTemplate).join(" · ");
+    if (sandboxTemplate.provider_type !== "local") return [sandboxTemplate.name, featureSuffix].filter(Boolean).join(" · ");
+    if (!activeWorkspace) return [sandboxTemplate.name, featureSuffix, "选择工作区"].filter(Boolean).join(" · ");
     const parts = activeWorkspace.split("/").filter(Boolean);
-    return [recipe.name, featureSuffix, parts.at(-1) ?? activeWorkspace].filter(Boolean).join(" · ");
+    return [sandboxTemplate.name, featureSuffix, parts.at(-1) ?? activeWorkspace].filter(Boolean).join(" · ");
   }
 
   function buildConfigSnapshot(): ConfigSnapshot {
     return {
       createMode,
-      selectedLeaseId: selectedLeaseId || leaseOptions[0]?.lease_id || "",
-      selectedRecipeId,
-      selectedRecipeFeatures: { ...selectedRecipeFeatures },
+      selectedExistingSandboxId: selectedExistingSandboxId || (sandboxOptions[0] ? sandboxOptionId(sandboxOptions[0]) : ""),
+      selectedSandboxTemplateId,
+      selectedSandboxTemplateFeatures: { ...selectedSandboxTemplateFeatures },
       selectedWorkspace: activeWorkspace,
       selectedProviderConfig: selectedProviderConfig || selectedSandbox || "local",
     };
@@ -398,24 +463,12 @@ export default function NewChatPage({ mode = "member" }: { mode?: "member" | "ne
   function cancelConfigChanges() {
     if (!configSnapshot) return resetConfigPanel();
     setCreateMode(configSnapshot.createMode);
-    setSelectedLeaseId(configSnapshot.selectedLeaseId);
-    setSelectedRecipeId(configSnapshot.selectedRecipeId);
-    setSelectedRecipeFeatures(configSnapshot.selectedRecipeFeatures);
+    setSelectedExistingSandboxId(configSnapshot.selectedExistingSandboxId);
+    setSelectedSandboxTemplateId(configSnapshot.selectedSandboxTemplateId);
+    setSelectedSandboxTemplateFeatures(configSnapshot.selectedSandboxTemplateFeatures);
     setSelectedWorkspace(configSnapshot.selectedWorkspace);
     setSelectedProviderConfig(configSnapshot.selectedProviderConfig);
     resetConfigPanel();
-  }
-
-  async function persistDefaultConfig(draftModel: string, workspace: string | null) {
-    if (!decodedMemberId) return;
-    await saveDefaultThreadConfig(decodedMemberId, {
-      create_mode: createMode,
-      provider_config: selectedProviderConfig,
-      recipe: selectedRecipeSnapshot,
-      lease_id: createMode === "existing" ? selectedLeaseId || null : null,
-      model: draftModel,
-      workspace,
-    });
   }
 
   async function applyConfigChanges(draftModel: string) {
@@ -424,21 +477,18 @@ export default function NewChatPage({ mode = "member" }: { mode?: "member" | "ne
       return false;
     }
     if (configStep === 2) {
-      if (localRecipeSelected) {
+      if (localSandboxTemplateSelected) {
         setConfigStep(3);
         return false;
       }
-      const workspace = createMode === "existing" ? selectedLease?.cwd || null : activeWorkspace || null;
-      await persistDefaultConfig(draftModel, workspace);
       setSelectedModel(draftModel);
       resetConfigPanel();
       return true;
     }
     const nextWorkspace = activeWorkspace;
-    if (createMode === "new" && selectedRecipeSnapshot?.provider_type === "local" && nextWorkspace) {
+    if (createMode === "new" && selectedSandboxTemplateSnapshot?.provider_type === "local" && nextWorkspace) {
       await setDefaultWorkspace(nextWorkspace);
     }
-    await persistDefaultConfig(draftModel, nextWorkspace || null);
     setSelectedModel(draftModel);
     resetConfigPanel();
     return true;
@@ -458,53 +508,51 @@ export default function NewChatPage({ mode = "member" }: { mode?: "member" | "ne
     || providerTypeFromName(selectedProviderConfig || "local");
   useEffect(() => {
     if (createMode !== "new") return;
-    const firstMatchingRecipe = recipeOptions.find((item) => item.recipe.provider_type === selectedProviderType);
-    if (!firstMatchingRecipe) return;
-    if (selectedRecipe?.provider_type === selectedProviderType) return;
-    setSelectedRecipeId(firstMatchingRecipe.value);
-  }, [createMode, recipeOptions, selectedProviderType, selectedRecipe?.provider_type]);
+    const firstMatchingSandboxTemplate = sandboxTemplateOptions.find((item) => item.sandboxTemplate.provider_type === selectedProviderType);
+    if (!firstMatchingSandboxTemplate) return;
+    if (selectedSandboxTemplate?.provider_type === selectedProviderType) return;
+    setSelectedSandboxTemplateId(firstMatchingSandboxTemplate.value);
+  }, [createMode, sandboxTemplateOptions, selectedProviderType, selectedSandboxTemplate?.provider_type]);
 
   const providerSummaryLabel = selectedProviderConfig
     ? providerConfigLabel(selectedProviderConfig)
     : "未选择 provider";
-  const recipeSummaryLabel = selectedRecipe?.name ?? "未选择 recipe";
+  const sandboxTemplateSummaryLabel = selectedSandboxTemplate?.name ?? "未选择沙盒模板";
+  const selectedProviderResource = selectedProviderConfig
+    ? sandboxResourceByProvider.get(selectedProviderConfig)
+    : undefined;
+  const selectedProviderOption = selectedProviderConfig
+    ? providerConfigOptions.find((item) => item.value === selectedProviderConfig)
+    : undefined;
+  const newSandboxQuotaBlocked = createMode === "new" && selectedProviderResource?.can_create === false;
+  const newSandboxProviderUnavailable = createMode === "new" && selectedProviderOption?.available === false;
   const stepSummary = createMode === "existing"
-    ? `复用 ${providerSummaryLabel} 的现有 sandbox`
-    : `新建 ${providerSummaryLabel} sandbox · ${recipeSummaryLabel}`;
+    ? `复用 ${providerSummaryLabel} 的现有沙盒`
+    : `新建 ${providerSummaryLabel} 沙盒 · ${sandboxTemplateSummaryLabel}`;
 
-  if (loading || resolveState === "resolving" || configDefaultsLoading) {
+  // @@@defer-default-config - default config should refine the create form, not block
+  // entry into the no-main-thread UI. If the config fetch stalls, users still need the
+  // create-chat surface with sane local defaults.
+  if (loading || resolveState === "resolving") {
     return (
-      <div className="flex-1 flex items-center justify-center relative">
-        <div className="w-full max-w-[420px] px-6 text-center">
-          <div className="flex justify-center mb-4">
-            <MemberAvatar name={memberName} avatarUrl={memberAvatarUrl} type="mycel_agent" size="lg" />
-          </div>
-          <h1 className="text-xl font-medium text-foreground mb-2">
-            正在检查 {memberName} 的主对话
-          </h1>
-          <p className="text-sm text-muted-foreground">
-            如果没有主对话，这里会进入创建界面。
-          </p>
-        </div>
-      </div>
+      <ResolveStateCard
+        agentName={agentName}
+        agentAvatarUrl={agentAvatarUrl ?? undefined}
+        title={`正在检查 ${agentName} 的默认线程`}
+        description="如果没有默认线程，这里会进入创建界面。"
+      />
     );
   }
 
   if (resolveState === "error") {
     return (
-      <div className="flex-1 flex items-center justify-center relative">
-        <div className="w-full max-w-[420px] px-6 text-center">
-          <div className="flex justify-center mb-4">
-            <MemberAvatar name={memberName} avatarUrl={memberAvatarUrl} type="mycel_agent" size="lg" />
-          </div>
-          <h1 className="text-xl font-medium text-foreground mb-2">
-            无法检查 {memberName} 的主对话
-          </h1>
-          <p className="text-sm text-destructive">
-            {error ?? "未知错误"}
-          </p>
-        </div>
-      </div>
+      <ResolveStateCard
+        agentName={agentName}
+        agentAvatarUrl={agentAvatarUrl ?? undefined}
+        title={`无法检查 ${agentName} 的默认线程`}
+        description={error ?? "未知错误"}
+        destructive
+      />
     );
   }
 
@@ -513,17 +561,17 @@ export default function NewChatPage({ mode = "member" }: { mode?: "member" | "ne
       <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-[600px] px-4">
         <div className="text-center mb-8">
           <div className="flex justify-center mb-4">
-            <MemberAvatar name={memberName} avatarUrl={memberAvatarUrl} type="mycel_agent" size="lg" />
+            <ActorAvatar name={agentName} avatarUrl={agentAvatarUrl} type="mycel_agent" size="lg" />
           </div>
           <h1 className="text-2xl font-medium text-foreground mb-2">
-            {mode === "new" ? `为 ${memberName} 创建新对话` : `开始与 ${memberName} 对话`}
+            {mode === "new" ? `为 ${agentName} 创建新对话` : `开始与 ${agentName} 对话`}
           </h1>
           <p className="text-sm text-muted-foreground">
             {mode === "new"
               ? "先确认这次要复用还是新建 sandbox，再发送第一条消息。"
               : isOwnedAgent
                 ? "选择好环境后，直接发送第一条消息开始主线对话。"
-                : `${memberName} 已准备好，先确认环境再开始。`}
+                : `${agentName} 已准备好，先确认环境再开始。`}
           </p>
         </div>
 
@@ -531,9 +579,9 @@ export default function NewChatPage({ mode = "member" }: { mode?: "member" | "ne
           defaultModel={selectedModel || settings?.default_model || "leon:large"}
           environmentControl={{
             panelClassName: "max-h-[calc(100vh-4rem)]",
-            applyLabel: configStep === 3 ? "确认" : (configStep === 1 ? "下一步" : (localRecipeSelected ? "下一步" : "确认")),
-            applyDisabled: (configStep === 2 && createMode === "existing" && !selectedLeaseId)
-              || (configStep === 3 && workspaceRequired),
+            applyLabel: configStep === 3 ? "确认" : (configStep === 1 ? "下一步" : (localSandboxTemplateSelected ? "下一步" : "确认")),
+            applyDisabled: (configStep === 1 && (newSandboxQuotaBlocked || newSandboxProviderUnavailable))
+              || (configStep === 2 && createMode === "existing" && !selectedSandboxOption),
             showBack: configStep > 1,
             backLabel: "返回上一步",
             onBack: stepBack,
@@ -542,17 +590,17 @@ export default function NewChatPage({ mode = "member" }: { mode?: "member" | "ne
             onCancel: cancelConfigChanges,
             onApply: applyConfigChanges,
             renderPanel: ({ draftModel, setDraftModel }) => {
-              const activeRecipe = selectedRecipe;
-              const filteredRecipeOptions = selectedProviderType
-                ? recipeOptions.filter((item) => item.recipe.provider_type === selectedProviderType)
-                : recipeOptions;
-              const filteredLeaseOptions = selectedProviderConfig
-                ? leaseOptions.filter((lease) => lease.provider_name === selectedProviderConfig)
-                : leaseOptions;
-              const configurableFeatureOptions = (activeRecipe?.feature_options ?? [])
-                .filter((item) => activeRecipe?.configurable_features?.[item.key]);
-              const existingCount = filteredLeaseOptions.length;
-              const totalSteps = localRecipeSelected ? 3 : 2;
+              const activeSandboxTemplate = selectedSandboxTemplate;
+              const filteredSandboxTemplateOptions = selectedProviderType
+                ? sandboxTemplateOptions.filter((item) => item.sandboxTemplate.provider_type === selectedProviderType)
+                : sandboxTemplateOptions;
+              const filteredSandboxOptions = selectedProviderConfig
+                ? sandboxOptions.filter((sandbox) => sandbox.provider_name === selectedProviderConfig)
+                : sandboxOptions;
+              const configurableFeatureOptions = (activeSandboxTemplate?.feature_options ?? [])
+                .filter((item) => activeSandboxTemplate?.configurable_features?.[item.key]);
+              const existingCount = filteredSandboxOptions.length;
+              const totalSteps = localSandboxTemplateSelected ? 3 : 2;
               const renderModelChoices = (compact = false) => (
                 <div className={cn("flex flex-wrap items-center", compact ? "gap-1.5" : "gap-2")}>
                   {MODEL_OPTIONS.map((entry) => (
@@ -627,7 +675,7 @@ export default function NewChatPage({ mode = "member" }: { mode?: "member" | "ne
                             <div className="text-sm font-medium text-foreground">Existing sandbox</div>
                             <span className="rounded-full bg-card px-2 py-0.5 text-[11px] text-muted-foreground">{existingCount}</span>
                           </div>
-                          <div className="mt-1 text-xs text-muted-foreground">复用你已经拥有的 sandbox lease。</div>
+                          <div className="mt-1 text-xs text-muted-foreground">复用你已经拥有的 sandbox。</div>
                         </button>
                       </div>
 
@@ -640,13 +688,13 @@ export default function NewChatPage({ mode = "member" }: { mode?: "member" | "ne
                             const nextProviderType = providerConfigOptions.find((item) => item.value === nextProviderConfig)?.providerType
                               || providerTypeFromName(nextProviderConfig);
                             setSelectedProviderConfig(nextProviderConfig);
-                            const nextRecipes = recipeOptions.filter((item) => item.recipe.provider_type === nextProviderType);
-                            if (nextRecipes.length > 0 && !nextRecipes.some((item) => item.value === selectedRecipeId)) {
-                              setSelectedRecipeId(nextRecipes[0].value);
+                            const nextSandboxTemplates = sandboxTemplateOptions.filter((item) => item.sandboxTemplate.provider_type === nextProviderType);
+                            if (nextSandboxTemplates.length > 0 && !nextSandboxTemplates.some((item) => item.value === selectedSandboxTemplateId)) {
+                              setSelectedSandboxTemplateId(nextSandboxTemplates[0].value);
                             }
-                            const nextLease = leaseOptions.find((lease) => lease.provider_name === nextProviderConfig);
+                            const nextSandbox = sandboxOptions.find((sandbox) => sandbox.provider_name === nextProviderConfig);
                             if (createMode === "existing") {
-                              setSelectedLeaseId(nextLease?.lease_id || "");
+                              setSelectedExistingSandboxId(nextSandbox ? sandboxOptionId(nextSandbox) : "");
                             }
                           }}
                         >
@@ -656,11 +704,36 @@ export default function NewChatPage({ mode = "member" }: { mode?: "member" | "ne
                           <SelectContent>
                             {providerConfigOptions.map((item) => (
                               <SelectItem key={item.value} value={item.value}>
-                                {item.label}
+                                {!item.available
+                                  ? `${item.label} · 当前不可用`
+                                  : item.resource?.can_create === false ? `${item.label} · 已达上限` : item.label}
                               </SelectItem>
                             ))}
                           </SelectContent>
                         </Select>
+                        {accountResourcesLoading && (
+                          <p className="mt-2 text-xs text-muted-foreground">正在读取账号资源...</p>
+                        )}
+                        {accountResourcesError && (
+                          <p className="mt-2 text-xs text-destructive">{accountResourcesError}</p>
+                        )}
+                        {newSandboxProviderUnavailable && selectedProviderOption && (
+                          <div className="mt-2 space-y-1 text-xs text-destructive">
+                            <p>{selectedProviderOption.label} 当前不可用</p>
+                            {selectedProviderOption.reason && <p>{selectedProviderOption.reason}</p>}
+                          </div>
+                        )}
+                        {!newSandboxProviderUnavailable && !accountResourcesLoading && selectedProviderResource && (
+                          <p className={cn(
+                            "mt-2 text-xs",
+                            selectedProviderResource.can_create ? "text-muted-foreground" : "text-destructive",
+                          )}
+                          >
+                            {selectedProviderResource.can_create
+                              ? `${selectedProviderResource.label} 已用 ${selectedProviderResource.used}/${selectedProviderResource.limit}，剩余 ${selectedProviderResource.remaining}`
+                              : `${selectedProviderResource.label} 已达上限`}
+                          </p>
+                        )}
                       </div>
                     </div>
                   ) : null}
@@ -670,7 +743,7 @@ export default function NewChatPage({ mode = "member" }: { mode?: "member" | "ne
                       <div>
                         <div>
                           <div className="text-sm font-medium text-foreground">
-                            {createMode === "new" ? "确认 Recipe 与工具" : "选择要复用的 sandbox"}
+                            {createMode === "new" ? "确认沙盒模板与工具" : "选择要复用的沙盒"}
                           </div>
                           <div className="mt-1 text-xs text-muted-foreground">{stepSummary}</div>
                         </div>
@@ -679,13 +752,13 @@ export default function NewChatPage({ mode = "member" }: { mode?: "member" | "ne
                       {createMode === "new" && (
                         <>
                           <div>
-                            <div className="mb-2 text-xs uppercase tracking-[0.18em] text-muted-foreground">Recipe</div>
-                            <Select value={selectedRecipeId} onValueChange={setSelectedRecipeId}>
+                            <div className="mb-2 text-xs uppercase tracking-[0.18em] text-muted-foreground">沙盒模板</div>
+                            <Select value={selectedSandboxTemplateId} onValueChange={setSelectedSandboxTemplateId}>
                               <SelectTrigger className="h-10 text-sm">
-                                <SelectValue placeholder="Choose a recipe" />
+                                <SelectValue placeholder="选择沙盒模板" />
                               </SelectTrigger>
                               <SelectContent>
-                                {filteredRecipeOptions.map((item) => (
+                                {filteredSandboxTemplateOptions.map((item) => (
                                   <SelectItem key={item.value} value={item.value}>
                                     {item.label}
                                   </SelectItem>
@@ -699,23 +772,23 @@ export default function NewChatPage({ mode = "member" }: { mode?: "member" | "ne
                               <div className="text-xs uppercase tracking-[0.18em] text-muted-foreground">临时修改</div>
                               <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
                                 {configurableFeatureOptions.map((option) => {
-                                  const checked = Boolean(selectedRecipeFeatures[option.key]);
+                                          const checked = Boolean(selectedSandboxTemplateFeatures[option.key]);
                                   return (
                                     <div
                                       key={option.key}
                                       onClick={() => {
-                                        setSelectedRecipeFeatures((current) => ({
-                                          ...current,
-                                          [option.key]: !checked,
-                                        }));
+                                            setSelectedSandboxTemplateFeatures((current) => ({
+                                              ...current,
+                                              [option.key]: !checked,
+                                            }));
                                       }}
                                       onKeyDown={(event) => {
                                         if (event.key === "Enter" || event.key === " ") {
                                           event.preventDefault();
-                                          setSelectedRecipeFeatures((current) => ({
-                                            ...current,
-                                            [option.key]: !checked,
-                                          }));
+                                              setSelectedSandboxTemplateFeatures((current) => ({
+                                                ...current,
+                                                [option.key]: !checked,
+                                              }));
                                         }
                                       }}
                                       role="button"
@@ -753,18 +826,19 @@ export default function NewChatPage({ mode = "member" }: { mode?: "member" | "ne
                       {createMode === "existing" && (
                         <div className="space-y-2">
                           <div className="flex items-center justify-between gap-3">
-                            <div className="text-xs uppercase tracking-[0.18em] text-muted-foreground">My Leases</div>
+                            <div className="text-xs uppercase tracking-[0.18em] text-muted-foreground">My Sandboxes</div>
                             <div className="text-xs text-muted-foreground">{existingCount} available</div>
                           </div>
                           <div className="max-h-[320px] space-y-2 overflow-y-auto pr-1">
-                            {filteredLeaseOptions.map((lease) => {
-                              const isActive = selectedLeaseId === lease.lease_id;
-                              const stateMeta = leaseStateMeta(lease.observed_state);
+                            {filteredSandboxOptions.map((sandbox) => {
+                              const sandboxKey = sandboxOptionId(sandbox);
+                              const isActive = selectedExistingSandboxId === sandboxKey;
+                              const stateMeta = sandboxStateMeta(sandbox.observed_state);
                               return (
                                 <button
-                                  key={lease.lease_id}
+                                  key={sandbox.sandbox_id}
                                   type="button"
-                                  onClick={() => setSelectedLeaseId(lease.lease_id)}
+                                  onClick={() => setSelectedExistingSandboxId(sandboxKey)}
                                   className={cn(
                                     "w-full rounded-2xl border p-3 text-left transition-colors",
                                     isActive ? "border-primary/40 bg-primary/5" : "border-border bg-background hover:bg-accent/40",
@@ -775,18 +849,18 @@ export default function NewChatPage({ mode = "member" }: { mode?: "member" | "ne
                                       <div className="flex items-center gap-2">
                                         <span className={cn("h-2 w-2 rounded-full", stateMeta.dot)} />
                                         <div className="text-sm font-medium text-foreground">
-                                          {PROVIDER_TYPE_LABELS[providerTypeFromName(lease.provider_name)] ?? lease.provider_name} · {lease.recipe_name}
+                                          {PROVIDER_TYPE_LABELS[providerTypeFromName(sandbox.provider_name)] ?? sandbox.provider_name} · {sandbox.recipe_name}
                                         </div>
                                       </div>
                                       <div className="mt-1 text-xs text-muted-foreground">
-                                        {stateMeta.label} · {lease.cwd || "No working directory"}
+                                        {stateMeta.label} · {sandbox.cwd || "No working directory"}
                                       </div>
                                     </div>
                                     <div className="flex -space-x-2">
-                                      {lease.agents.slice(0, 4).map((agent) => (
-                                        <MemberAvatar
-                                          key={agent.member_id}
-                                          name={agent.member_name}
+                                      {sandbox.agents.slice(0, 4).map((agent) => (
+                                        <ActorAvatar
+                                          key={agent.thread_id}
+                                          name={agent.agent_name}
                                           avatarUrl={agent.avatar_url ?? undefined}
                                           type="mycel_agent"
                                           size="xs"
@@ -798,23 +872,23 @@ export default function NewChatPage({ mode = "member" }: { mode?: "member" | "ne
                                 </button>
                               );
                             })}
-                            {!leaseLoading && filteredLeaseOptions.length === 0 && (
+                            {!sandboxLoading && filteredSandboxOptions.length === 0 && (
                               <div className="rounded-2xl border border-dashed border-border px-3 py-4 text-sm text-muted-foreground">
                                 你还没有可复用的 sandbox。
                               </div>
                             )}
                           </div>
-                          {leaseError && <p className="mt-2 text-xs text-destructive">{leaseError}</p>}
+                          {sandboxError && <p className="mt-2 text-xs text-destructive">{sandboxError}</p>}
                         </div>
                       )}
                     </div>
                   )}
 
-                  {configStep === 3 && localRecipeSelected && (
+                  {configStep === 3 && localSandboxTemplateSelected && (
                     <div className="space-y-3">
                       <div className="flex items-center justify-between gap-3">
                         <div className="truncate text-xs text-muted-foreground">
-                          {[recipeSummaryLabel, ...enabledFeatureLabels(selectedRecipeSnapshot)].join(" · ")}
+                          {[sandboxTemplateSummaryLabel, ...enabledFeatureLabels(selectedSandboxTemplateSnapshot)].join(" · ")}
                         </div>
                       </div>
 
@@ -832,12 +906,6 @@ export default function NewChatPage({ mode = "member" }: { mode?: "member" | "ne
                           initialPath={activeWorkspace || "~"}
                         />
                       </div>
-
-                      {workspaceRequired && (
-                        <div className="text-xs text-destructive">
-                          Local sandbox 需要先选择一个工作区，才能确认配置。
-                        </div>
-                      )}
                     </div>
                   )}
                 </div>
@@ -847,14 +915,9 @@ export default function NewChatPage({ mode = "member" }: { mode?: "member" | "ne
           onSend={handleSend}
         />
       </div>
-
-      <WorkspaceSetupModal
-        open={showWorkspaceSetup}
-        onClose={() => setShowWorkspaceSetup(false)}
-        onWorkspaceSet={() => {
-          void handleWorkspaceSet();
-        }}
-      />
     </div>
   );
 }
+  function sandboxOptionId(sandbox: UserSandboxSummary): string {
+    return sandbox.sandbox_id;
+  }

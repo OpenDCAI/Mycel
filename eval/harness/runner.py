@@ -16,23 +16,26 @@ if TYPE_CHECKING:
 
 
 class EvalRunner:
-    """Run eval scenarios against a Leon backend instance."""
+    """Run eval scenarios against a Mycel backend instance."""
 
     def __init__(
         self,
         client: EvalClient,
+        agent_user_id: str,
         store: TrajectoryStore | None = None,
         collector: MetricsCollector | None = None,
     ):
         self.client = client
+        self.agent_user_id = agent_user_id
         self.store = store
         self.collector = collector or MetricsCollector()
 
     async def run_scenario(self, scenario: EvalScenario) -> EvalResult:
         """Execute a single scenario end-to-end."""
-        thread_id = await self.client.create_thread(sandbox=scenario.sandbox)
+        thread_id = await self.client.create_thread(agent_user_id=self.agent_user_id, sandbox=scenario.sandbox)
         captures: list[TrajectoryCapture] = []
         started_at = datetime.now(UTC)
+        primary_error: BaseException | None = None
 
         try:
             for msg in scenario.messages:
@@ -43,13 +46,12 @@ class EvalRunner:
                     timeout=scenario.timeout_seconds,
                 )
                 captures.append(capture)
+                if capture.terminal_event in {"error", "cancelled"}:
+                    detail = capture.final_status.get("error") or capture.final_status.get("detail") or capture.final_status.get("message")
+                    suffix = f": {detail}" if detail else ""
+                    raise RuntimeError(f"Eval scenario {scenario.id} ended with {capture.terminal_event}{suffix}")
 
-            # Get final runtime status
-            runtime_status = None
-            try:
-                runtime_status = await self.client.get_runtime(thread_id)
-            except Exception:
-                pass
+            runtime_status = await self.client.get_runtime(thread_id)
 
             finished_at = datetime.now(UTC)
 
@@ -77,11 +79,17 @@ class EvalRunner:
                 system_metrics=sys_metrics,
                 objective_metrics=obj_metrics,
             )
+        except BaseException as exc:
+            primary_error = exc
+            raise
         finally:
             try:
                 await self.client.delete_thread(thread_id)
-            except Exception:
-                pass
+            except Exception as cleanup_exc:
+                if primary_error is not None:
+                    primary_error.add_note(f"Thread cleanup failed after primary eval error: {cleanup_exc}")
+                else:
+                    raise
 
     async def run_all(
         self,
@@ -197,10 +205,12 @@ async def _main() -> None:
 
     from eval.harness.scenario import load_scenario, load_scenarios_from_dir
 
-    parser = argparse.ArgumentParser(description="Leon Eval Runner")
+    parser = argparse.ArgumentParser(description="Mycel Eval Runner")
     parser.add_argument("--scenario", type=str, help="Path to a single scenario YAML")
     parser.add_argument("--scenario-dir", type=str, help="Path to scenario directory")
     parser.add_argument("--base-url", type=str, default="http://localhost:8001")
+    parser.add_argument("--token", type=str, default=None)
+    parser.add_argument("--agent-user-id", type=str, required=True)
     parser.add_argument("--max-concurrent", type=int, default=3)
     args = parser.parse_args()
 
@@ -221,9 +231,9 @@ async def _main() -> None:
 
     print(f"Running {len(scenarios)} scenario(s) against {args.base_url}")
 
-    client = EvalClient(base_url=args.base_url)
+    client = EvalClient(base_url=args.base_url, token=args.token)
     store = TrajectoryStore()
-    runner = EvalRunner(client=client, store=store)
+    runner = EvalRunner(client=client, agent_user_id=args.agent_user_id, store=store)
 
     try:
         results = await runner.run_all(scenarios, max_concurrent=args.max_concurrent)

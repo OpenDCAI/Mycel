@@ -1,1 +1,1 @@
-"""Leon evaluation system — trajectory tracing, metrics, and test harness."""
+"""Mycel evaluation system — trajectory tracing, metrics, and test harness."""

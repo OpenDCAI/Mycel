@@ -1,4 +1,4 @@
-# Leon Default Configurations
+# Mycel Default Configurations
 
 System default configurations for agents and model mappings.
 
@@ -96,7 +96,7 @@ LLM-based summarization when context approaches limit:
 
 Load a preset via CLI:
 ```bash
-leonai --agent coder
+mycel --agent coder
 ```
 
 Or programmatically:
@@ -108,10 +108,9 @@ config = load_config(agent="researcher")
 
 ## Customization
 
-User configs override defaults via three-tier merge:
+Runtime customization is assembled from:
 1. System defaults (this directory)
-2. User global config (`~/.leon/config.json`)
-3. Project config (`.leon/config.json`)
+2. Explicit server/CLI overrides
 
 Example override:
 ```json

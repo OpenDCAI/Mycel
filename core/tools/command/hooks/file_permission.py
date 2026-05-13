@@ -1,24 +1,18 @@
-"""File permission control hook - supports file type restrictions and path blacklists."""
-
 from pathlib import Path
 
 from .base import HookResult
 
 
 class FilePermissionHook:
-    """File permission control hook with extension whitelist and path blacklist."""
-
     def __init__(
         self,
         workspace_root: Path | str | None = None,
         allowed_extensions: list[str] | None = None,
         blocked_paths: list[str] | None = None,
-        **kwargs,
     ):
         self.workspace_root = Path(workspace_root) if workspace_root else None
         self.allowed_extensions = allowed_extensions
         self.blocked_paths = [Path(p) for p in (blocked_paths or [])]
-        self.config = kwargs
 
     def check_file_operation(self, file_path: str, operation: str) -> HookResult:
         path = Path(file_path)

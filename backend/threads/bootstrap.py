@@ -1,0 +1,125 @@
+from __future__ import annotations
+
+import asyncio
+import os
+from dataclasses import dataclass
+from typing import Any
+
+from backend.chat.runtime_inbox_stream import RuntimeInboxStreamState
+from backend.chat.runtime_inbox_wake import PostgresRuntimeInboxWakeBus
+from backend.threads.chat_adapters.bootstrap import build_agent_runtime_state
+from backend.threads.chat_adapters.external_inbox_handler import ExternalRuntimeInboxHandler
+from core.runtime.middleware.queue import MessageQueueManager
+from protocols import agent_runtime as agent_runtime_protocol
+
+
+@dataclass(frozen=True)
+class ThreadsRuntimeState:
+    queue_manager: Any
+    runtime_inbox_wake_bus: Any
+    runtime_inbox_stream: Any
+    agent_runtime_gateway: Any
+    activity_reader: Any
+    messaging_service: Any | None = None
+    relationship_service: Any | None = None
+    chat_join_request_service: Any | None = None
+    typing_tracker: Any | None = None
+    display_builder: Any | None = None
+    event_loop: Any | None = None
+    checkpoint_store: Any | None = None
+
+
+def attach_threads_runtime(
+    app: Any,
+    storage_container: Any,
+    *,
+    typing_tracker: Any,
+    messaging_service: Any,
+    relationship_service: Any,
+    chat_join_request_service: Any,
+) -> ThreadsRuntimeState:
+    app.state.queue_manager = MessageQueueManager(repo=storage_container.queue_repo())
+    app.state.runtime_inbox_wake_bus = build_runtime_inbox_wake_bus()
+    app.state.runtime_inbox_stream = RuntimeInboxStreamState()
+    app.state.agent_pool = {}
+    app.state.thread_sandbox = {}
+    app.state.thread_cwd = {}
+    app.state.thread_locks = {}
+    app.state.thread_locks_guard = asyncio.Lock()
+    app.state.thread_tasks = {}
+    app.state.thread_event_buffers = {}
+    app.state.subagent_buffers = {}
+    app.state.thread_last_active = {}
+    # @@@threads-bootstrap-borrowed-typing-tracker - threads runtime needs
+    # chat-owned typing state for agent chat delivery, but the borrow is made
+    # at bootstrap so downstream gateway setup does not reopen app.state.
+    runtime_state = build_agent_runtime_state(app, typing_tracker=typing_tracker)
+    app.state.threads_runtime_state = None
+    # @@@threads-bootstrap-borrowable-state - threads runtime now exposes its
+    # shared handles only through the returned runtime state so downstream code
+    # has one canonical read surface instead of loose app.state mirrors.
+    state = ThreadsRuntimeState(
+        queue_manager=app.state.queue_manager,
+        runtime_inbox_wake_bus=app.state.runtime_inbox_wake_bus,
+        runtime_inbox_stream=app.state.runtime_inbox_stream,
+        agent_runtime_gateway=runtime_state.gateway,
+        activity_reader=runtime_state.activity_reader,
+        messaging_service=messaging_service,
+        relationship_service=relationship_service,
+        chat_join_request_service=chat_join_request_service,
+        typing_tracker=typing_tracker,
+    )
+    app.state.threads_runtime_state = state
+    return state
+
+
+class ExternalOnlyRuntimeGateway:
+    def __init__(self, handler: ExternalRuntimeInboxHandler) -> None:
+        self._handler = handler
+
+    async def dispatch_notification(
+        self,
+        envelope: agent_runtime_protocol.AgentRuntimeNotificationEnvelope,
+    ) -> agent_runtime_protocol.AgentRuntimeNotificationResult:
+        if envelope.recipient.runtime_source != "external":
+            raise RuntimeError("Communication profile only supports external runtime notifications")
+        return await self._handler.dispatch_notification(envelope)
+
+    async def dispatch_thread_input(
+        self,
+        _envelope: agent_runtime_protocol.AgentThreadInputEnvelope,
+    ) -> agent_runtime_protocol.AgentThreadInputResult:
+        raise RuntimeError("Managed agent runtime is unavailable in communication profile")
+
+
+def attach_runtime_inbox_runtime(
+    app: Any,
+    storage_container: Any,
+    *,
+    messaging_service: Any,
+) -> ThreadsRuntimeState:
+    app.state.queue_manager = MessageQueueManager(repo=storage_container.queue_repo())
+    app.state.runtime_inbox_wake_bus = build_runtime_inbox_wake_bus()
+    app.state.runtime_inbox_stream = RuntimeInboxStreamState()
+    app.state.agent_pool = {}
+    handler = ExternalRuntimeInboxHandler(
+        queue_manager=app.state.queue_manager,
+        wake_bus=app.state.runtime_inbox_wake_bus,
+    )
+    state = ThreadsRuntimeState(
+        queue_manager=app.state.queue_manager,
+        runtime_inbox_wake_bus=app.state.runtime_inbox_wake_bus,
+        runtime_inbox_stream=app.state.runtime_inbox_stream,
+        agent_runtime_gateway=ExternalOnlyRuntimeGateway(handler),
+        activity_reader=None,
+        messaging_service=messaging_service,
+    )
+    app.state.threads_runtime_state = state
+    return state
+
+
+def build_runtime_inbox_wake_bus() -> Any:
+    pg_url = str(os.getenv("LEON_POSTGRES_URL") or "").strip()
+    if pg_url:
+        return PostgresRuntimeInboxWakeBus(pg_url)
+    raise RuntimeError("LEON_POSTGRES_URL is required for runtime inbox wake bus")

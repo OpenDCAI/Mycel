@@ -10,7 +10,7 @@ interface ToolDetailBoxProps {
   isStreaming: boolean;
   /** All segments in the turn (for Modal detail view). */
   allSegments?: TurnSegment[];
-  onFocusAgent?: (stepId: string) => void;
+  onFocusAgent?: () => void;
 }
 
 function MiniStatusIcon({ status }: { status: string }) {
@@ -147,7 +147,7 @@ export const ToolDetailBox = memo(function ToolDetailBox({
                   className={`flex items-center gap-1.5 h-6 min-w-0 animate-fade-in ${
                     isTaskStep ? "cursor-pointer hover:bg-black/[0.03] rounded -mx-0.5 px-0.5" : ""
                   }`}
-                  onClick={isTaskStep ? (e) => { e.stopPropagation(); onFocusAgent(step.id); } : undefined}
+                  onClick={isTaskStep ? (e) => { e.stopPropagation(); onFocusAgent(); } : undefined}
                 >
                   <MiniStatusIcon status={step.status} />
                   <span

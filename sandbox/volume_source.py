@@ -1,9 +1,3 @@
-"""Volume source abstraction — where files physically live.
-
-VolumeSource can be backed by host filesystem (HostVolume) or
-provider-managed storage (DaytonaVolume). Serialized as JSON to DB.
-"""
-
 from __future__ import annotations
 
 import hashlib
@@ -18,24 +12,19 @@ logger = logging.getLogger(__name__)
 
 @runtime_checkable
 class VolumeSource(Protocol):
-    """Abstract persistent storage backend."""
-
     def save_file(self, relative_path: str, content: bytes) -> dict[str, Any]: ...
     def list_files(self) -> list[dict[str, Any]]: ...
     def resolve_file(self, relative_path: str) -> Path: ...
     def delete_file(self, relative_path: str) -> None: ...
 
     @property
-    def host_path(self) -> Path | None:
-        """Host filesystem path for sync. None if no host backing."""
-        ...
+    def host_path(self) -> Path | None: ...
 
     def cleanup(self) -> None: ...
     def serialize(self) -> dict[str, Any]: ...
 
 
 def _resolve_safe_path(base: Path, relative_path: str) -> Path:
-    """Resolve relative path with traversal protection."""
     # @@@path-boundary - Reject traversal so callers cannot escape the volume root
     requested = Path(relative_path)
     if requested.is_absolute():
@@ -46,8 +35,6 @@ def _resolve_safe_path(base: Path, relative_path: str) -> Path:
 
 
 class HostVolume:
-    """Host filesystem volume. Used by Local, Docker, E2B, Daytona fallback."""
-
     def __init__(self, base_path: Path):
         self.base_path = base_path.expanduser().resolve()
         self.base_path.mkdir(parents=True, exist_ok=True)
@@ -104,54 +91,11 @@ class HostVolume:
         return {"type": "host", "path": str(self.base_path)}
 
 
-class DaytonaVolume:
-    """Daytona-managed volume with host staging buffer.
-
-    Files persist in Daytona managed volume on the server.
-    Uses host dir as staging for uploads (sync transfers to volume).
-    Future: use Daytona API for direct writes, bypassing staging.
-    """
-
-    def __init__(self, staging_path: Path, volume_name: str):
-        self._staging = HostVolume(staging_path)
-        self.volume_name = volume_name
-
-    @property
-    def host_path(self) -> Path:
-        return self._staging.base_path
-
-    def save_file(self, relative_path: str, content: bytes) -> dict[str, Any]:
-        return self._staging.save_file(relative_path, content)
-
-    def list_files(self) -> list[dict[str, Any]]:
-        return self._staging.list_files()
-
-    def resolve_file(self, relative_path: str) -> Path:
-        return self._staging.resolve_file(relative_path)
-
-    def delete_file(self, relative_path: str) -> None:
-        self._staging.delete_file(relative_path)
-
-    def cleanup(self) -> None:
-        self._staging.cleanup()
-
-    def serialize(self) -> dict[str, Any]:
-        return {
-            "type": "daytona",
-            "staging_path": str(self._staging.base_path),
-            "volume_name": self.volume_name,
-        }
-
-
 def deserialize_volume_source(data: dict[str, Any]) -> VolumeSource:
-    """Reconstruct VolumeSource from serialized JSON."""
     match data["type"]:
         case "host":
             return HostVolume(Path(data["path"]))
         case "daytona":
-            return DaytonaVolume(
-                staging_path=Path(data["staging_path"]),
-                volume_name=data["volume_name"],
-            )
+            return HostVolume(Path(data["staging_path"]))
         case _:
             raise ValueError(f"Unknown volume source type: {data['type']}")

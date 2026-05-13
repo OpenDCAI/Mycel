@@ -2,9 +2,8 @@ import { useState, useEffect, useMemo, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import {
   ArrowLeft, Bot, FileText, Wrench, Plug, Zap, Users, BookOpen,
-  Play, Tag, Save, Plus, Trash2, Search, X, Check, Lock,
+  Tag, Save, Plus, Trash2, Search, X, Check, Lock,
 } from "lucide-react";
-import TestPanel from "@/components/TestPanel";
 import PublishDialog from "@/components/PublishDialog";
 import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
@@ -12,7 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { useAppStore } from "@/store/app-store";
-import type { CrudItem, RuleItem, ResourceItem, SubAgent } from "@/store/types";
+import type { AgentConfig, CrudItem, RuleItem, ResourceItem, SubAgent } from "@/store/types";
 
 // ==================== Types ====================
 
@@ -22,115 +21,135 @@ interface ModuleDef {
   id: ModuleId;
   label: string;
   icon: typeof FileText;
-  count?: (cfg: any) => number;
+  count?: (cfg: AgentConfig) => number;
 }
 
-const modules: ModuleDef[] = [
+const primaryModules: ModuleDef[] = [
   { id: "role", label: "角色", icon: FileText },
-  { id: "mcp", label: "MCP", icon: Plug, count: c => c.mcps.length },
   { id: "skills", label: "技能", icon: Zap, count: c => c.skills.length },
-  { id: "subagents", label: "子成员", icon: Users, count: c => c.subAgents.length },
+  { id: "subagents", label: "子 Agent", icon: Users, count: c => c.subAgents.length },
 ];
+
+const advancedModules: ModuleDef[] = [
+  { id: "mcp", label: "MCP 高级", icon: Plug, count: c => c.mcpServers.length },
+];
+
+function errorText(err: unknown): string {
+  return err instanceof Error ? err.message : String(err);
+}
+
+function skillId(item: CrudItem): string {
+  if (!item.id) throw new Error(`Agent Skill is missing id: ${item.name}`);
+  return item.id;
+}
+
+function skillPatch(items: CrudItem[]): Array<{ id: string; enabled: boolean }> {
+  return items.map(item => ({ id: skillId(item), enabled: item.enabled }));
+}
 
 // ==================== Main Component ====================
 
 export default function AgentDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const [showTest, setShowTest] = useState(false);
   const [showPublish, setShowPublish] = useState(false);
   const [activeModule, setActiveModule] = useState<ModuleId>("role");
 
-  const member = useAppStore(s => s.getMemberById(id || ""));
-  const updateMember = useAppStore(s => s.updateMember);
-  const updateMemberConfig = useAppStore(s => s.updateMemberConfig);
-  const loadAll = useAppStore(s => s.loadAll);
+  const agent = useAppStore(s => s.getAgentById(id || ""));
+  const fetchAgent = useAppStore(s => s.fetchAgent);
+  const updateAgent = useAppStore(s => s.updateAgent);
+  const updateAgentConfig = useAppStore(s => s.updateAgentConfig);
+  const ensureLibrary = useAppStore(s => s.ensureLibrary);
   const librarySkills = useAppStore(s => s.librarySkills);
-  const libraryMcps = useAppStore(s => s.libraryMcps);
-  const libraryAgents = useAppStore(s => s.libraryAgents);
-  useEffect(() => { loadAll(); }, [loadAll]);
 
-  const [pickerType, setPickerType] = useState<"skill" | "mcp" | "agent" | null>(null);
+  const [pickerType, setPickerType] = useState<"skill" | null>(null);
   const [editingName, setEditingName] = useState(false);
   const [nameDraft, setNameDraft] = useState("");
+  const [loadFailure, setLoadFailure] = useState<{ id: string; message: string } | null>(null);
   const nameInputRef = useRef<HTMLInputElement>(null);
 
+  useEffect(() => {
+    if (!id || agent?.config_loaded) return;
+    let cancelled = false;
+    fetchAgent(id).catch((err) => {
+      if (!cancelled) setLoadFailure({ id, message: errorText(err) });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [agent?.config_loaded, fetchAgent, id]);
+
+  useEffect(() => {
+    if (!pickerType) return;
+    ensureLibrary(pickerType).catch((err: unknown) => {
+      toast.error(`加载 Library 失败：${errorText(err)}`);
+    });
+  }, [ensureLibrary, pickerType]);
+
   const startRename = () => {
-    if (!member) return;
-    setNameDraft(member.name);
+    if (!agent) return;
+    setNameDraft(agent.name);
     setEditingName(true);
     setTimeout(() => nameInputRef.current?.select(), 0);
   };
   const commitRename = async () => {
     setEditingName(false);
     const trimmed = nameDraft.trim();
-    if (!member || !trimmed || trimmed === member.name) return;
+    if (!agent || !trimmed || trimmed === agent.name) return;
     try {
-      await updateMember(member.id, { name: trimmed });
-    } catch { toast.error("重命名失败"); }
+      await updateAgent(agent.id, { name: trimmed });
+    } catch (err) { toast.error(`重命名失败：${errorText(err)}`); }
   };
 
   const statusLabels: Record<string, string> = { active: "在岗", draft: "草稿", inactive: "离线" };
+  const loadError = loadFailure && loadFailure.id === id ? loadFailure.message : null;
 
-  if (!member) {
+  if (!agent?.config_loaded) {
     return (
       <div className="h-full flex items-center justify-center">
-        <p className="text-sm text-muted-foreground">加载中...</p>
+        <p className={`text-sm ${loadError ? "text-destructive" : "text-muted-foreground"}`}>
+          {loadError ? `加载失败：${loadError}` : "加载中..."}
+        </p>
       </div>
     );
   }
 
   const handleToggle = async (mod: string, itemName: string, enabled: boolean) => {
-    if (!member) return;
+    if (!agent) return;
     try {
       if (mod === "tools") {
-        await updateMemberConfig(member.id, { tools: member.config.tools.map(i => i.name === itemName ? { ...i, enabled } : i) });
+        await updateAgentConfig(agent.id, { tools: agent.config.tools.map(i => i.name === itemName ? { ...i, enabled } : i) });
       } else if (mod === "mcp") {
-        await updateMemberConfig(member.id, { mcps: member.config.mcps.map(i => i.name === itemName ? { ...i, disabled: !enabled } : i) });
+        await updateAgentConfig(agent.id, { mcpServers: agent.config.mcpServers.map(i => i.name === itemName ? { ...i, enabled } : i) });
       } else if (mod === "skills") {
-        await updateMemberConfig(member.id, { skills: member.config.skills.map(i => i.name === itemName ? { ...i, enabled } : i) });
+        await updateAgentConfig(agent.id, { skills: skillPatch(agent.config.skills.map(i => i.name === itemName ? { ...i, enabled } : i)) });
       }
-    } catch { toast.error("更新失败"); }
+    } catch (err) { toast.error(`更新失败：${errorText(err)}`); }
   };
 
-  const handleAssign = async (type: "skill" | "mcp" | "agent", names: string[]) => {
-    if (!member) return;
+  const handleAssign = async (type: "skill", items: ResourceItem[]) => {
+    if (!agent) return;
     try {
       if (type === "skill") {
-        const existing = new Set(member.config.skills.map(s => s.name));
-        const newSkills = names.filter(n => !existing.has(n)).map(n => {
-          const lib = librarySkills.find(s => s.name === n);
-          return { name: n, desc: lib?.desc || "", enabled: true };
-        });
-        if (newSkills.length) await updateMemberConfig(member.id, { skills: [...member.config.skills, ...newSkills] });
-      } else if (type === "mcp") {
-        const existing = new Set(member.config.mcps.map(m => m.name));
-        const newMcps = names.filter(n => !existing.has(n)).map(n => {
-          const lib = libraryMcps.find(m => m.name === n);
-          return { name: n, command: lib?.desc || "", args: [], env: {}, disabled: false };
-        });
-        if (newMcps.length) await updateMemberConfig(member.id, { mcps: [...member.config.mcps, ...newMcps] });
-      } else {
-        const existing = new Set(member.config.subAgents.map(a => a.name));
-        const newAgents = names.filter(n => !existing.has(n)).map(n => {
-          const lib = libraryAgents.find(a => a.name === n);
-          return { name: n, desc: lib?.desc || "", tools: [] as CrudItem[], system_prompt: "" };
-        });
-        if (newAgents.length) await updateMemberConfig(member.id, { subAgents: [...member.config.subAgents, ...newAgents] });
+        const existing = new Set(agent.config.skills.map(skillId));
+        const newSkills = items
+          .filter(item => !existing.has(item.id))
+          .map(item => ({ id: item.id, enabled: true }));
+        if (newSkills.length) await updateAgentConfig(agent.id, { skills: [...skillPatch(agent.config.skills), ...newSkills] });
       }
       toast.success("已添加");
-    } catch { toast.error("添加失败"); }
+    } catch (err) { toast.error(`添加失败：${errorText(err)}`); }
   };
 
   const handleRemove = async (mod: string, itemName: string) => {
-    if (!member) return;
+    if (!agent) return;
     try {
-      if (mod === "mcp") await updateMemberConfig(member.id, { mcps: member.config.mcps.filter(i => i.name !== itemName) });
-      else if (mod === "skills") await updateMemberConfig(member.id, { skills: member.config.skills.filter(i => i.name !== itemName) });
-      else if (mod === "subagents") await updateMemberConfig(member.id, { subAgents: member.config.subAgents.filter(i => i.name !== itemName) });
-      else if (mod === "rules") await updateMemberConfig(member.id, { rules: member.config.rules.filter(i => i.name !== itemName) });
+      if (mod === "mcp") await updateAgentConfig(agent.id, { mcpServers: agent.config.mcpServers.filter(i => i.name !== itemName) });
+      else if (mod === "skills") await updateAgentConfig(agent.id, { skills: skillPatch(agent.config.skills.filter(i => i.name !== itemName)) });
+      else if (mod === "subagents") await updateAgentConfig(agent.id, { subAgents: agent.config.subAgents.filter(i => i.name !== itemName) });
+      else if (mod === "rules") await updateAgentConfig(agent.id, { rules: agent.config.rules.filter(i => i.name !== itemName) });
       toast.success("已移除");
-    } catch { toast.error("移除失败"); }
+    } catch (err) { toast.error(`移除失败：${errorText(err)}`); }
   };
 
   const renderContent = () => {
@@ -138,20 +157,25 @@ export default function AgentDetail() {
       case "role":
         return (
           <RolePanel
-            prompt={member.config.prompt || ""}
-            tools={member.config.tools}
-            rules={member.config.rules}
+            prompt={agent.config.prompt || ""}
+            tools={agent.config.tools}
+            rules={agent.config.rules}
+            compact={agent.config.compact}
             onSavePrompt={async (val) => {
-              await updateMemberConfig(member.id, { prompt: val });
+              await updateAgentConfig(agent.id, { prompt: val });
               toast.success("System Prompt 已保存");
+            }}
+            onSaveCompact={async (triggerTokens) => {
+              await updateAgentConfig(agent.id, { compact: { trigger_tokens: triggerTokens } });
+              toast.success("压缩设置已保存");
             }}
             onToggleTool={(name, en) => handleToggle("tools", name, en)}
             onSaveRule={async (name, content) => {
-              await updateMemberConfig(member.id, { rules: member.config.rules.map(r => r.name === name ? { ...r, content } : r) });
+              await updateAgentConfig(agent.id, { rules: agent.config.rules.map(r => r.name === name ? { ...r, content } : r) });
               toast.success("规则已保存");
             }}
             onAddRule={async (name) => {
-              await updateMemberConfig(member.id, { rules: [...member.config.rules, { name, content: "" }] });
+              await updateAgentConfig(agent.id, { rules: [...agent.config.rules, { name, content: "" }] });
               toast.success(`${name} 已添加`);
             }}
             onDeleteRule={(name) => handleRemove("rules", name)}
@@ -161,7 +185,7 @@ export default function AgentDetail() {
         return (
           <ResourceCards
             type="skill"
-            items={member.config.skills.map(s => ({ name: s.name, desc: s.desc, enabled: s.enabled }))}
+            items={agent.config.skills.map(s => ({ name: s.name, desc: s.desc, enabled: s.enabled }))}
             onToggle={(name, en) => handleToggle("skills", name, en)}
             onRemove={(name) => handleRemove("skills", name)}
             onAdd={() => setPickerType("skill")}
@@ -171,32 +195,52 @@ export default function AgentDetail() {
         return (
           <ResourceCards
             type="mcp"
-            items={member.config.mcps.map(m => ({ name: m.name, desc: m.command || "未配置", enabled: !m.disabled }))}
+            items={agent.config.mcpServers.map(m => ({ name: m.name, desc: m.command || "未配置", enabled: m.enabled }))}
             onToggle={(name, en) => handleToggle("mcp", name, en)}
             onRemove={(name) => handleRemove("mcp", name)}
-            onAdd={() => setPickerType("mcp")}
           />
         );
       case "subagents":
         return (
           <SubAgentsPanel
-            agents={member.config.subAgents}
+            agents={agent.config.subAgents}
             onSave={async (updated) => {
-              await updateMemberConfig(member.id, { subAgents: updated });
+              await updateAgentConfig(agent.id, { subAgents: updated });
               toast.success("Agent 配置已保存");
             }}
-            onAdd={() => setPickerType("agent")}
             onDelete={(name) => handleRemove("subagents", name)}
           />
         );
       default: return null;
     }
   };
+
+  const renderModuleButton = (m: ModuleDef) => {
+    const Icon = m.icon;
+    const count = m.count ? m.count(agent.config) : undefined;
+    const active = activeModule === m.id;
+    return (
+      <button
+        key={m.id}
+        onClick={() => setActiveModule(m.id)}
+        className={`w-full flex items-center gap-2 px-4 py-2 text-sm transition-colors duration-fast ${
+          active ? "bg-primary/10 text-primary font-medium" : "text-muted-foreground hover:bg-muted"
+        }`}
+      >
+        <Icon className="h-4 w-4 shrink-0" />
+        <span className="truncate">{m.label}</span>
+        {count !== undefined && (
+          <span className="ml-auto text-xs opacity-60">{count}</span>
+        )}
+      </button>
+    );
+  };
+
   return (
     <div className="h-full flex flex-col">
       {/* Header */}
       <div className="flex items-center gap-3 px-4 py-3 border-b shrink-0">
-        <Button variant="ghost" size="icon" onClick={() => navigate(-1)}>
+        <Button variant="ghost" size="icon" onClick={() => navigate("/contacts")}>
           <ArrowLeft className="h-4 w-4" />
         </Button>
         <Bot className="h-5 w-5 text-primary" />
@@ -210,16 +254,13 @@ export default function AgentDetail() {
             onKeyDown={e => { if (e.key === "Enter") commitRename(); if (e.key === "Escape") setEditingName(false); }}
           />
         ) : (
-          <span className="font-medium cursor-pointer hover:underline decoration-dashed underline-offset-4" onDoubleClick={startRename}>{member.name}</span>
+          <span className="font-medium cursor-pointer hover:underline decoration-dashed underline-offset-4" onDoubleClick={startRename}>{agent.name}</span>
         )}
         <span className="text-xs px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
-          {statusLabels[member.status] || member.status}
+          {statusLabels[agent.status] || agent.status}
         </span>
-        <span className="text-xs text-muted-foreground">v{member.version}</span>
+        <span className="text-xs text-muted-foreground">v{agent.version}</span>
         <div className="flex-1" />
-        <Button size="sm" variant="outline" onClick={() => setShowTest(true)}>
-          <Play className="h-3.5 w-3.5 mr-1" /> 测试
-        </Button>
         <Button size="sm" onClick={() => setShowPublish(true)}>
           <Tag className="h-3.5 w-3.5 mr-1" /> 发布
         </Button>
@@ -229,26 +270,13 @@ export default function AgentDetail() {
       <div className="flex-1 flex min-h-0">
         {/* Flat sidebar */}
         <nav className="w-48 shrink-0 border-r bg-muted/30 py-2">
-          {modules.map(m => {
-            const Icon = m.icon;
-            const count = m.count ? m.count(member.config) : undefined;
-            const active = activeModule === m.id;
-            return (
-              <button
-                key={m.id}
-                onClick={() => setActiveModule(m.id)}
-                className={`w-full flex items-center gap-2 px-4 py-2 text-sm transition-colors duration-fast ${
-                  active ? "bg-primary/10 text-primary font-medium" : "text-muted-foreground hover:bg-muted"
-                }`}
-              >
-                <Icon className="h-4 w-4 shrink-0" />
-                <span className="truncate">{m.label}</span>
-                {count !== undefined && (
-                  <span className="ml-auto text-xs opacity-60">{count}</span>
-                )}
-              </button>
-            );
-          })}
+          {primaryModules.map(renderModuleButton)}
+          <div className="mt-3 border-t pt-3">
+            <div className="px-4 pb-1 text-[11px] font-medium text-muted-foreground">
+              高级集成
+            </div>
+            {advancedModules.map(renderModuleButton)}
+          </div>
         </nav>
 
         {/* Content */}
@@ -257,21 +285,14 @@ export default function AgentDetail() {
         </div>
       </div>
 
-      {showTest && <TestPanel memberName={member.name} onClose={() => setShowTest(false)} />}
-      {showPublish && <PublishDialog open={showPublish} onOpenChange={setShowPublish} memberId={member.id} />}
+      {showPublish && <PublishDialog open={showPublish} onOpenChange={setShowPublish} agentId={agent.id} />}
       {pickerType && (() => {
-        const libraryMap = { skill: librarySkills, mcp: libraryMcps, agent: libraryAgents };
-        const assignedMap = {
-          skill: member.config.skills.map(s => s.name),
-          mcp: member.config.mcps.map(m => m.name),
-          agent: member.config.subAgents.map(a => a.name),
-        };
         return (
           <ResourcePicker
             type={pickerType}
-            library={libraryMap[pickerType]}
-            assigned={assignedMap[pickerType]}
-            onConfirm={(names) => { handleAssign(pickerType, names); setPickerType(null); }}
+            library={librarySkills}
+            assigned={agent.config.skills.map(skillId)}
+            onConfirm={(items) => { handleAssign(pickerType, items); setPickerType(null); }}
             onClose={() => setPickerType(null)}
           />
         );
@@ -282,11 +303,13 @@ export default function AgentDetail() {
 
 // ==================== RolePanel (Prompt + Tools + Rules) ====================
 
-function RolePanel({ prompt, tools, rules, onSavePrompt, onToggleTool, onSaveRule, onAddRule, onDeleteRule }: {
+function RolePanel({ prompt, tools, rules, compact, onSavePrompt, onSaveCompact, onToggleTool, onSaveRule, onAddRule, onDeleteRule }: {
   prompt: string;
   tools: CrudItem[];
   rules: RuleItem[];
+  compact?: AgentConfig["compact"];
   onSavePrompt: (v: string) => Promise<void>;
+  onSaveCompact: (triggerTokens: number | null) => Promise<void>;
   onToggleTool: (name: string, enabled: boolean) => void;
   onSaveRule: (name: string, content: string) => Promise<void>;
   onAddRule: (name: string) => Promise<void>;
@@ -297,13 +320,27 @@ function RolePanel({ prompt, tools, rules, onSavePrompt, onToggleTool, onSaveRul
   const [toolFilter, setToolFilter] = useState("");
   const [addRuleOpen, setAddRuleOpen] = useState(false);
   const [addRuleName, setAddRuleName] = useState("");
+  const triggerTokens = compact?.trigger_tokens ?? null;
+  const [triggerDraft, setTriggerDraft] = useState(triggerTokens?.toString() ?? "");
+  const [savingCompact, setSavingCompact] = useState(false);
 
   const promptDirty = promptText !== prompt;
   useEffect(() => { setPromptText(prompt); }, [prompt]);
+  useEffect(() => { setTriggerDraft(triggerTokens?.toString() ?? ""); }, [triggerTokens]);
 
   const savePrompt = async () => {
     setSavingPrompt(true);
     try { await onSavePrompt(promptText); } finally { setSavingPrompt(false); }
+  };
+
+  const parsedTrigger = triggerDraft.trim() ? Number(triggerDraft) : null;
+  const triggerValid = parsedTrigger === null || (Number.isInteger(parsedTrigger) && parsedTrigger > 0);
+  const compactDirty = (parsedTrigger ?? null) !== triggerTokens;
+
+  const saveCompact = async () => {
+    if (!triggerValid) return;
+    setSavingCompact(true);
+    try { await onSaveCompact(parsedTrigger); } finally { setSavingCompact(false); }
   };
 
   const toolGroups = useMemo(() => {
@@ -344,7 +381,38 @@ function RolePanel({ prompt, tools, rules, onSavePrompt, onToggleTool, onSaveRul
         />
       </section>
 
-      {/* Section 2: Tools */}
+      {/* Section 2: Context compaction */}
+      <section className="space-y-2">
+        <div className="flex items-center gap-2">
+          <FileText className="h-4 w-4 text-muted-foreground" />
+          <h3 className="text-sm font-medium">上下文压缩</h3>
+          <div className="flex-1" />
+          <Button size="sm" className="h-7" disabled={!compactDirty || !triggerValid || savingCompact} onClick={saveCompact}>
+            <Save className="h-3.5 w-3.5 mr-1" /> {savingCompact ? "..." : "保存压缩设置"}
+          </Button>
+        </div>
+        <div className="rounded-md border bg-card px-3 py-3">
+          <label htmlFor="compact-trigger" className="text-xs font-medium text-muted-foreground">
+            压缩触发 Token
+          </label>
+          <Input
+            id="compact-trigger"
+            className="mt-2 max-w-xs"
+            type="number"
+            min={1}
+            step={1000}
+            value={triggerDraft}
+            onChange={e => setTriggerDraft(e.target.value)}
+            placeholder="留空使用模型上下文自动阈值"
+          />
+          <p className="mt-2 text-xs text-muted-foreground">
+            达到该 Token 数后开始压缩旧上下文；留空时使用模型上下文自动阈值。
+          </p>
+          {!triggerValid && <p className="mt-2 text-xs text-destructive">请输入正整数，或留空。</p>}
+        </div>
+      </section>
+
+      {/* Section 3: Tools */}
       <section className="space-y-2">
         <div className="flex items-center gap-2">
           <Wrench className="h-4 w-4 text-muted-foreground" />
@@ -372,7 +440,7 @@ function RolePanel({ prompt, tools, rules, onSavePrompt, onToggleTool, onSaveRul
         ))}
       </section>
 
-      {/* Section 3: Rules */}
+      {/* Section 4: Rules */}
       <section className="space-y-2">
         <div className="flex items-center gap-2">
           <BookOpen className="h-4 w-4 text-muted-foreground" />
@@ -463,7 +531,7 @@ function RuleEditor({ rule, onSave, onDelete }: {
 function SubAgentsPanel({ agents, onSave, onAdd, onDelete }: {
   agents: SubAgent[];
   onSave: (updated: SubAgent[]) => Promise<void>;
-  onAdd: () => void;
+  onAdd?: () => void;
   onDelete: (name: string) => void;
 }) {
   const builtinAgents = useMemo(() => agents.filter(a => a.builtin), [agents]);
@@ -516,15 +584,17 @@ function SubAgentsPanel({ agents, onSave, onAdd, onDelete }: {
       <div className="w-52 shrink-0 border-r flex flex-col">
         <div className="flex items-center justify-between px-3 py-2 border-b">
           <span className="text-xs font-medium text-muted-foreground">子 Agent</span>
-          <Button variant="ghost" size="icon" className="h-6 w-6" onClick={onAdd} title="添加 Agent">
-            <Plus className="h-3.5 w-3.5" />
-          </Button>
+          {onAdd && (
+            <Button variant="ghost" size="icon" className="h-6 w-6" onClick={onAdd} title="添加子 Agent">
+              <Plus className="h-3.5 w-3.5" />
+            </Button>
+          )}
         </div>
         <div className="flex-1 overflow-auto">
           {/* Builtin agents section */}
           {builtinAgents.length > 0 && (
             <div className="py-1">
-              <p className="px-3 py-1 text-2xs font-medium text-muted-foreground uppercase tracking-wider">内置</p>
+              <p className="px-3 py-1 text-2xs font-medium text-muted-foreground">内置</p>
               {builtinAgents.map(a => (
                 <button
                   key={a.name}
@@ -546,10 +616,10 @@ function SubAgentsPanel({ agents, onSave, onAdd, onDelete }: {
           {(customAgents.length > 0 || builtinAgents.length > 0) && (
             <div className="py-1">
               {builtinAgents.length > 0 && (
-                <p className="px-3 py-1 text-2xs font-medium text-muted-foreground uppercase tracking-wider">自定义</p>
+                <p className="px-3 py-1 text-2xs font-medium text-muted-foreground">自定义</p>
               )}
               {customAgents.length === 0 ? (
-                <p className="px-3 py-2 text-2xs text-muted-foreground/60">点击 + 添加</p>
+                <p className="px-3 py-2 text-2xs text-muted-foreground/60">暂无自定义子 Agent</p>
               ) : (
                 customAgents.map(a => (
                   <button
@@ -605,7 +675,7 @@ function SubAgentsPanel({ agents, onSave, onAdd, onDelete }: {
                 <Input
                   value={draft.desc}
                   onChange={e => setDraft({ ...draft, desc: e.target.value })}
-                  placeholder="Agent 描述..."
+                  placeholder="子 Agent 描述..."
                   className="h-8 text-sm"
                 />
               )}
@@ -635,7 +705,7 @@ function SubAgentsPanel({ agents, onSave, onAdd, onDelete }: {
           </div>
         ) : (
           <div className="flex-1 flex items-center justify-center text-sm text-muted-foreground">
-            选择一个 Agent 查看详情
+            选择一个子 Agent 查看详情
           </div>
         )}
       </div>
@@ -707,7 +777,7 @@ function ResourceCards({ type, items, onToggle, onRemove, onAdd }: {
   onRemove?: (name: string) => void;
   onAdd?: () => void;
 }) {
-  const labels = { skill: "技能", mcp: "MCP 服务器", agent: "成员" };
+  const labels = { skill: "技能", mcp: "MCP 服务器", agent: "子 Agent" };
   const icons = { skill: Zap, mcp: Plug, agent: Users };
   const Icon = icons[type];
 
@@ -726,7 +796,7 @@ function ResourceCards({ type, items, onToggle, onRemove, onAdd }: {
         <div className="text-sm text-muted-foreground py-8 text-center">
           {onAdd ? (
             <button onClick={onAdd} className="hover:text-primary transition-colors duration-fast">
-              点击 + 从 Library 添加{labels[type]}
+              点击 + 从 Library 添加 {labels[type]}
             </button>
           ) : (
             <>暂无{labels[type]}</>
@@ -762,26 +832,26 @@ function ResourceCards({ type, items, onToggle, onRemove, onAdd }: {
 // ==================== ResourcePicker ====================
 
 function ResourcePicker({ type, library, assigned, onConfirm, onClose }: {
-  type: "skill" | "mcp" | "agent";
+  type: "skill";
   library: ResourceItem[];
   assigned: string[];
-  onConfirm: (names: string[]) => void;
+  onConfirm: (items: ResourceItem[]) => void;
   onClose: () => void;
 }) {
-  const labels = { skill: "Skill", mcp: "MCP", agent: "Agent" };
+  const labels = { skill: "Skill" };
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [filter, setFilter] = useState("");
   const assignedSet = useMemo(() => new Set(assigned), [assigned]);
 
   const available = useMemo(() =>
-    library.filter(item => !assignedSet.has(item.name) && (!filter || item.name.toLowerCase().includes(filter.toLowerCase()))),
+    library.filter(item => !assignedSet.has(item.id) && (!filter || item.name.toLowerCase().includes(filter.toLowerCase()))),
     [library, assignedSet, filter]
   );
 
-  const toggle = (name: string) => {
+  const toggle = (id: string) => {
     setSelected(prev => {
       const next = new Set(prev);
-      if (next.has(name)) next.delete(name); else next.add(name);
+      if (next.has(id)) next.delete(id); else next.add(id);
       return next;
     });
   };
@@ -791,7 +861,7 @@ function ResourcePicker({ type, library, assigned, onConfirm, onClose }: {
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>从 Library 添加 {labels[type]}</DialogTitle>
-          <DialogDescription className="sr-only">从资源库中选择要添加的{labels[type]}</DialogDescription>
+          <DialogDescription className="sr-only">从资源库中选择要添加的 {labels[type]}</DialogDescription>
         </DialogHeader>
         <div className="relative">
           <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
@@ -805,15 +875,15 @@ function ResourcePicker({ type, library, assigned, onConfirm, onClose }: {
           ) : available.map(item => (
             <button
               key={item.id}
-              onClick={() => toggle(item.name)}
+              onClick={() => toggle(item.id)}
               className={`w-full flex items-center gap-2 px-3 py-2 rounded-md text-sm text-left transition-colors duration-fast ${
-                selected.has(item.name) ? "bg-primary/10 text-primary" : "hover:bg-muted"
+                selected.has(item.id) ? "bg-primary/10 text-primary" : "hover:bg-muted"
               }`}
             >
               <div className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 ${
-                selected.has(item.name) ? "bg-primary border-primary" : "border-muted-foreground/30"
+                selected.has(item.id) ? "bg-primary border-primary" : "border-muted-foreground/30"
               }`}>
-                {selected.has(item.name) && <Check className="h-3 w-3 text-primary-foreground" />}
+                {selected.has(item.id) && <Check className="h-3 w-3 text-primary-foreground" />}
               </div>
               <div className="min-w-0 flex-1">
                 <p className="font-medium truncate">{item.name}</p>
@@ -824,7 +894,7 @@ function ResourcePicker({ type, library, assigned, onConfirm, onClose }: {
         </div>
         <DialogFooter>
           <Button variant="outline" size="sm" onClick={onClose}>取消</Button>
-          <Button size="sm" disabled={selected.size === 0} onClick={() => onConfirm([...selected])}>
+          <Button size="sm" disabled={selected.size === 0} onClick={() => onConfirm(library.filter(item => selected.has(item.id)))}>
             添加 {selected.size > 0 && `(${selected.size})`}
           </Button>
         </DialogFooter>
@@ -832,4 +902,3 @@ function ResourcePicker({ type, library, assigned, onConfirm, onClose }: {
     </Dialog>
   );
 }
-

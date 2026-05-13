@@ -1,5 +1,3 @@
-"""Abstract sandbox provider interface."""
-
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
@@ -8,8 +6,8 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from sandbox.lease import SandboxLease
     from sandbox.runtime import PhysicalTerminalRuntime
+    from sandbox.runtime_handle import SandboxRuntimeHandle
     from sandbox.terminal import AbstractTerminal
 
 RESOURCE_CAPABILITY_KEYS = (
@@ -60,8 +58,6 @@ def build_resource_capabilities(
 
 @dataclass(frozen=True)
 class MountCapability:
-    """Mount behavior capability shared across providers."""
-
     supports_mount: bool = False
     supports_copy: bool = False
     supports_read_only: bool = False
@@ -80,8 +76,6 @@ class MountCapability:
 
 @dataclass(frozen=True)
 class ProviderCapability:
-    """Declared lifecycle capability of a provider implementation."""
-
     can_pause: bool
     can_resume: bool
     can_destroy: bool
@@ -124,14 +118,11 @@ class Metrics:
 
 
 class SandboxProvider(ABC):
-    """Abstract interface for sandbox providers."""
-
     name: str  # Provider identifier: 'agentbay', 'e2b', 'docker', 'local'
     WORKSPACE_ROOT: str = "/workspace"  # Override in subclasses with non-standard workspace paths
 
     @abstractmethod
     def get_capability(self) -> ProviderCapability:
-        """Return lifecycle capability contract for this provider."""
         pass
 
     @abstractmethod
@@ -173,17 +164,9 @@ class SandboxProvider(ABC):
         pass
 
     def upload_bytes(self, session_id: str, remote_path: str, data: bytes) -> None:
-        """Upload raw bytes to remote path. Uses native SDK file API when available.
-        Default: falls back to write_file with utf-8 decode (lossy for binary).
-        Override in providers with native binary upload support.
-        """
         self.write_file(session_id, remote_path, data.decode("utf-8", errors="replace"))
 
     def download_bytes(self, session_id: str, remote_path: str) -> bytes:
-        """Download raw bytes from remote path. Uses native SDK file API when available.
-        Default: falls back to read_file with utf-8 encode.
-        Override in providers with native binary download support.
-        """
         return self.read_file(session_id, remote_path).encode("utf-8")
 
     @abstractmethod
@@ -195,12 +178,10 @@ class SandboxProvider(ABC):
         pass
 
     @abstractmethod
-    def create_runtime(self, terminal: AbstractTerminal, lease: SandboxLease) -> PhysicalTerminalRuntime:
-        """Create the appropriate PhysicalTerminalRuntime for this provider."""
+    def create_runtime(self, terminal: AbstractTerminal, sandbox_runtime: SandboxRuntimeHandle) -> PhysicalTerminalRuntime:
         pass
 
     def get_metrics_via_commands(self, session_id: str) -> Metrics | None:
-        """Get metrics by running Linux shell commands inside the sandbox."""
         try:
             cpu_result = self.execute(
                 session_id,
@@ -244,22 +225,20 @@ class SandboxProvider(ABC):
     def get_web_url(self, session_id: str) -> str | None:
         return None
 
-    def create_managed_volume(self, member_id: str, mount_path: str) -> str:
-        """Create provider-managed persistent volume. Returns backend_ref (volume name).
-        Override in providers with managed volume support (Daytona, Docker).
-        """
+    def create_managed_volume(self, managed_ref: str, mount_path: str) -> str:
         raise NotImplementedError(f"{self.name} does not support managed volumes")
 
     def set_managed_volume_mount(self, thread_id: str, backend_ref: str, mount_path: str) -> None:
-        """Configure managed volume mount for next create_session().
-        Called before create_session(). Provider stores this internally.
-        """
         raise NotImplementedError(f"{self.name} does not support managed volumes")
 
     def delete_managed_volume(self, backend_ref: str) -> None:
-        """Delete provider-managed persistent volume."""
         raise NotImplementedError(f"{self.name} does not support managed volumes")
 
-    def set_thread_bind_mounts(self, thread_id: str, mounts: list) -> None:
-        """Set per-thread bind mounts for next create_session(). No-op for providers without mount support."""
+    def wait_managed_volume_ready(self, backend_ref: str) -> None:
         pass
+
+    def set_thread_bind_mounts(self, thread_id: str, mounts: list) -> None:
+        pass
+
+    def list_provider_runtimes(self) -> list[SessionInfo]:
+        return []

@@ -1,5 +1,3 @@
-"""File readers for different file types."""
-
 from core.tools.filesystem.read.readers.binary import read_binary
 from core.tools.filesystem.read.readers.notebook import read_notebook
 from core.tools.filesystem.read.readers.pdf import read_pdf

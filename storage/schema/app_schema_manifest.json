@@ -1,0 +1,26 @@
+{
+  "schema_version": 1,
+  "baseline": "app_schema.sql",
+  "baseline_table_count": 47,
+  "baseline_function_count": 4,
+  "app_owned_schemas": [
+    "agent",
+    "chat",
+    "container",
+    "identity",
+    "library",
+    "observability"
+  ],
+  "patches": [
+    "agent_config_resolved_config_hardcut.sql",
+    "chat_join_requests.sql",
+    "chat_message_delivery_scope.sql",
+    "chat_workflow_state_and_tasks.sql",
+    "external_user_creator.sql",
+    "message_queue_metadata.sql",
+    "relationship_pair_constraint.sql",
+    "relationship_request_message.sql",
+    "sandbox_control_plane_supabase.sql",
+    "user_is_guest.sql"
+  ]
+}

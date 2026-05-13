@@ -1,5 +1,3 @@
-"""SQLite repository for chat session persistence."""
-
 from __future__ import annotations
 
 import sqlite3
@@ -9,17 +7,10 @@ from pathlib import Path
 from typing import Any
 
 from sandbox.chat_session import REQUIRED_CHAT_SESSION_COLUMNS
-from storage.providers.sqlite.connection import create_connection
-from storage.providers.sqlite.kernel import SQLiteDBRole, resolve_role_db_path
+from storage.providers.sqlite.kernel import SQLiteDBRole, connect_sqlite, resolve_explicit_role_db_path
 
 
 class SQLiteChatSessionRepo:
-    """Chat session CRUD backed by SQLite.
-
-    Thread-safe: all connection access is serialized via a lock.
-    Returns raw dicts — domain object construction is the consumer's job.
-    """
-
     def __init__(self, db_path: str | Path | None = None, conn: sqlite3.Connection | None = None) -> None:
         self._own_conn = conn is None
         self._lock = threading.Lock()
@@ -28,10 +19,10 @@ class SQLiteChatSessionRepo:
             self._db_path = Path(db_path) if db_path else Path("")
         else:
             if db_path is None:
-                db_path = resolve_role_db_path(SQLiteDBRole.SANDBOX)
+                db_path = resolve_explicit_role_db_path(SQLiteDBRole.SANDBOX)
             self._db_path = Path(db_path)
             self._db_path.parent.mkdir(parents=True, exist_ok=True)
-            self._conn = create_connection(db_path)
+            self._conn = connect_sqlite(db_path, check_same_thread=False)
         self._ensure_tables()
 
     @property
@@ -42,9 +33,8 @@ class SQLiteChatSessionRepo:
         if self._own_conn:
             self._conn.close()
 
-    # ------------------------------------------------------------------
-    # Table setup
-    # ------------------------------------------------------------------
+    def _session_row_from_db_row(self, row: sqlite3.Row) -> dict[str, Any]:
+        return dict(row)
 
     def _ensure_tables(self) -> None:
         self._conn.execute("PRAGMA journal_mode=WAL")
@@ -54,7 +44,7 @@ class SQLiteChatSessionRepo:
                 chat_session_id TEXT PRIMARY KEY,
                 thread_id TEXT NOT NULL,
                 terminal_id TEXT NOT NULL,
-                lease_id TEXT NOT NULL,
+                sandbox_runtime_id TEXT NOT NULL,
                 runtime_id TEXT,
                 status TEXT NOT NULL DEFAULT 'active',
                 idle_ttl_sec INTEGER NOT NULL,
@@ -65,7 +55,7 @@ class SQLiteChatSessionRepo:
                 ended_at TIMESTAMP,
                 close_reason TEXT,
                 FOREIGN KEY (terminal_id) REFERENCES abstract_terminals(terminal_id),
-                FOREIGN KEY (lease_id) REFERENCES sandbox_leases(lease_id)
+                FOREIGN KEY (sandbox_runtime_id) REFERENCES sandbox_runtimes(sandbox_runtime_id)
             )
             """
         )
@@ -137,17 +127,16 @@ class SQLiteChatSessionRepo:
 
         missing = REQUIRED_CHAT_SESSION_COLUMNS - cols
         if missing:
-            raise RuntimeError(f"chat_sessions schema mismatch: missing {sorted(missing)}. Purge ~/.leon/sandbox.db and retry.")
+            raise RuntimeError(
+                f"chat_sessions schema mismatch: missing {sorted(missing)}. Purge the configured sandbox sqlite db and retry."
+            )
         # @@@single-active-per-terminal - multi-terminal model allows many active sessions per thread, one per terminal.
         if any(cols == {"thread_id"} for cols in unique_index_columns.values()):
-            raise RuntimeError("chat_sessions still has UNIQUE index on thread_id from old schema. Purge ~/.leon/sandbox.db and retry.")
+            raise RuntimeError(
+                "chat_sessions still has UNIQUE index on thread_id from old schema. Purge the configured sandbox sqlite db and retry."
+            )
 
-    # Alias for protocol compliance
     ensure_tables = _ensure_tables
-
-    # ------------------------------------------------------------------
-    # Reads
-    # ------------------------------------------------------------------
 
     def get_session(self, thread_id: str, terminal_id: str | None = None) -> dict[str, Any] | None:
         with self._lock:
@@ -155,7 +144,7 @@ class SQLiteChatSessionRepo:
             if terminal_id is not None:
                 row = self._conn.execute(
                     """
-                    SELECT chat_session_id AS session_id, thread_id, terminal_id, lease_id,
+                    SELECT chat_session_id AS session_id, thread_id, terminal_id, sandbox_runtime_id,
                            runtime_id, status, idle_ttl_sec, max_duration_sec,
                            budget_json, started_at, last_active_at, ended_at, close_reason
                     FROM chat_sessions
@@ -168,7 +157,7 @@ class SQLiteChatSessionRepo:
             else:
                 row = self._conn.execute(
                     """
-                    SELECT chat_session_id AS session_id, thread_id, terminal_id, lease_id,
+                    SELECT chat_session_id AS session_id, thread_id, terminal_id, sandbox_runtime_id,
                            runtime_id, status, idle_ttl_sec, max_duration_sec,
                            budget_json, started_at, last_active_at, ended_at, close_reason
                     FROM chat_sessions
@@ -179,14 +168,14 @@ class SQLiteChatSessionRepo:
                     (thread_id,),
                 ).fetchone()
             self._conn.row_factory = None
-            return dict(row) if row else None
+            return self._session_row_from_db_row(row) if row else None
 
     def get_session_by_id(self, session_id: str) -> dict[str, Any] | None:
         with self._lock:
             self._conn.row_factory = sqlite3.Row
             row = self._conn.execute(
                 """
-                SELECT chat_session_id AS session_id, thread_id, terminal_id, lease_id,
+                SELECT chat_session_id AS session_id, thread_id, terminal_id, sandbox_runtime_id,
                        runtime_id, status, idle_ttl_sec, max_duration_sec,
                        budget_json, started_at, last_active_at, ended_at, close_reason
                 FROM chat_sessions
@@ -196,7 +185,7 @@ class SQLiteChatSessionRepo:
                 (session_id,),
             ).fetchone()
             self._conn.row_factory = None
-            return dict(row) if row else None
+            return self._session_row_from_db_row(row) if row else None
 
     def load_status(self, session_id: str) -> str | None:
         with self._lock:
@@ -230,7 +219,7 @@ class SQLiteChatSessionRepo:
             self._conn.row_factory = sqlite3.Row
             rows = self._conn.execute(
                 """
-                SELECT chat_session_id AS session_id, thread_id, terminal_id, lease_id,
+                SELECT chat_session_id AS session_id, thread_id, terminal_id, sandbox_runtime_id,
                        runtime_id, status, idle_ttl_sec, max_duration_sec,
                        budget_json, started_at, last_active_at,
                        ended_at, close_reason
@@ -240,14 +229,14 @@ class SQLiteChatSessionRepo:
                 """
             ).fetchall()
             self._conn.row_factory = None
-            return [dict(row) for row in rows]
+            return [self._session_row_from_db_row(row) for row in rows]
 
     def list_all(self) -> list[dict[str, Any]]:
         with self._lock:
             self._conn.row_factory = sqlite3.Row
             rows = self._conn.execute(
                 """
-                SELECT chat_session_id AS session_id, thread_id, terminal_id, lease_id,
+                SELECT chat_session_id AS session_id, thread_id, terminal_id, sandbox_runtime_id,
                        runtime_id, status, budget_json, started_at, last_active_at,
                        ended_at, close_reason
                 FROM chat_sessions
@@ -255,18 +244,14 @@ class SQLiteChatSessionRepo:
                 """
             ).fetchall()
             self._conn.row_factory = None
-            return [dict(row) for row in rows]
-
-    # ------------------------------------------------------------------
-    # Writes
-    # ------------------------------------------------------------------
+            return [self._session_row_from_db_row(row) for row in rows]
 
     def create_session(
         self,
         session_id: str,
         thread_id: str,
         terminal_id: str,
-        lease_id: str,
+        sandbox_runtime_id: str,
         *,
         runtime_id: str | None = None,
         status: str = "active",
@@ -291,7 +276,7 @@ class SQLiteChatSessionRepo:
             self._conn.execute(
                 """
                 INSERT INTO chat_sessions (
-                    chat_session_id, thread_id, terminal_id, lease_id,
+                    chat_session_id, thread_id, terminal_id, sandbox_runtime_id,
                     runtime_id, status, idle_ttl_sec, max_duration_sec,
                     budget_json, started_at, last_active_at, ended_at, close_reason
                 )
@@ -301,7 +286,7 @@ class SQLiteChatSessionRepo:
                     session_id,
                     thread_id,
                     terminal_id,
-                    lease_id,
+                    sandbox_runtime_id,
                     runtime_id,
                     status,
                     idle_ttl_sec,
@@ -318,7 +303,7 @@ class SQLiteChatSessionRepo:
             "session_id": session_id,
             "thread_id": thread_id,
             "terminal_id": terminal_id,
-            "lease_id": lease_id,
+            "sandbox_runtime_id": sandbox_runtime_id,
             "runtime_id": runtime_id,
             "status": status,
             "idle_ttl_sec": idle_ttl_sec,
@@ -390,6 +375,140 @@ class SQLiteChatSessionRepo:
             )
             self._conn.commit()
 
+    def upsert_command(
+        self,
+        *,
+        command_id: str,
+        terminal_id: str,
+        chat_session_id: str | None,
+        command_line: str,
+        cwd: str,
+        status: str,
+        stdout: str,
+        stderr: str,
+        exit_code: int | None,
+        updated_at: str,
+        finished_at: str | None,
+        created_at: str | None = None,
+    ) -> None:
+        with self._lock:
+            existing = self._conn.execute(
+                "SELECT command_id, created_at FROM terminal_commands WHERE command_id = ?",
+                (command_id,),
+            ).fetchone()
+            if existing:
+                self._conn.execute(
+                    """
+                    UPDATE terminal_commands
+                    SET status = ?,
+                        stdout = ?,
+                        stderr = ?,
+                        exit_code = ?,
+                        updated_at = ?,
+                        finished_at = ?
+                    WHERE command_id = ?
+                    """,
+                    (status, stdout, stderr, exit_code, updated_at, finished_at, command_id),
+                )
+            else:
+                self._conn.execute(
+                    """
+                    INSERT INTO terminal_commands (
+                        command_id, terminal_id, chat_session_id, command_line, cwd, status,
+                        stdout, stderr, exit_code, created_at, updated_at, finished_at
+                    )
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        command_id,
+                        terminal_id,
+                        chat_session_id,
+                        command_line,
+                        cwd,
+                        status,
+                        stdout,
+                        stderr,
+                        exit_code,
+                        created_at or updated_at,
+                        updated_at,
+                        finished_at,
+                    ),
+                )
+            self._conn.commit()
+
+    def append_command_chunks(
+        self,
+        *,
+        command_id: str,
+        stdout_chunks: list[str],
+        stderr_chunks: list[str],
+        created_at: str,
+    ) -> None:
+        if not stdout_chunks and not stderr_chunks:
+            return
+        with self._lock:
+            if stdout_chunks:
+                self._conn.executemany(
+                    """
+                    INSERT INTO terminal_command_chunks (command_id, stream, content, created_at)
+                    VALUES (?, 'stdout', ?, ?)
+                    """,
+                    [(command_id, chunk, created_at) for chunk in stdout_chunks],
+                )
+            if stderr_chunks:
+                self._conn.executemany(
+                    """
+                    INSERT INTO terminal_command_chunks (command_id, stream, content, created_at)
+                    VALUES (?, 'stderr', ?, ?)
+                    """,
+                    [(command_id, chunk, created_at) for chunk in stderr_chunks],
+                )
+            self._conn.commit()
+
+    def get_command(self, *, command_id: str, terminal_id: str) -> dict[str, Any] | None:
+        with self._lock:
+            self._conn.row_factory = sqlite3.Row
+            row = self._conn.execute(
+                """
+                SELECT command_id, terminal_id, chat_session_id, command_line, cwd, status, stdout, stderr, exit_code,
+                       created_at, updated_at, finished_at
+                FROM terminal_commands
+                WHERE command_id = ? AND terminal_id = ?
+                """,
+                (command_id, terminal_id),
+            ).fetchone()
+            self._conn.row_factory = None
+            return dict(row) if row else None
+
+    def list_command_chunks(self, *, command_id: str) -> list[dict[str, Any]]:
+        with self._lock:
+            self._conn.row_factory = sqlite3.Row
+            rows = self._conn.execute(
+                """
+                SELECT stream, content
+                FROM terminal_command_chunks
+                WHERE command_id = ?
+                ORDER BY chunk_id ASC
+                """,
+                (command_id,),
+            ).fetchall()
+            self._conn.row_factory = None
+            return [dict(row) for row in rows]
+
+    def find_command_terminal_id(self, *, command_id: str, thread_id: str) -> str | None:
+        with self._lock:
+            row = self._conn.execute(
+                """
+                SELECT tc.terminal_id
+                FROM terminal_commands tc
+                JOIN abstract_terminals at ON at.terminal_id = tc.terminal_id
+                WHERE tc.command_id = ? AND at.thread_id = ?
+                LIMIT 1
+                """,
+                (command_id, thread_id),
+            ).fetchone()
+            return str(row[0]) if row else None
+
     def delete_session(self, session_id: str, *, reason: str = "closed") -> None:
         with self._lock:
             self._conn.execute(
@@ -435,17 +554,17 @@ class SQLiteChatSessionRepo:
             ).fetchone()
             return row is not None
 
-    def lease_has_running_command(self, lease_id: str) -> bool:
+    def sandbox_runtime_has_running_command(self, sandbox_runtime_id: str) -> bool:
         with self._lock:
             row = self._conn.execute(
                 """
                 SELECT 1
                 FROM terminal_commands tc
                 JOIN abstract_terminals at ON at.terminal_id = tc.terminal_id
-                WHERE at.lease_id = ? AND tc.status = 'running'
+                WHERE at.sandbox_runtime_id = ? AND tc.status = 'running'
                 LIMIT 1
                 """,
-                (lease_id,),
+                (sandbox_runtime_id,),
             ).fetchone()
             return row is not None
 
@@ -463,7 +582,6 @@ class SQLiteChatSessionRepo:
             self._conn.commit()
 
     def cleanup_expired(self) -> list[str]:
-        """Return session_ids of expired active sessions (based on DB policy columns)."""
         active = self.list_active()
         now = datetime.now()
         expired_ids: list[str] = []

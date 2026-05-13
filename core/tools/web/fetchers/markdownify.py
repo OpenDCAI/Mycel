@@ -1,14 +1,15 @@
-"""Markdownify fetcher - local HTML to Markdown conversion."""
-
 from __future__ import annotations
 
 import re
+from collections.abc import Callable
+from typing import Any
 
 import httpx
 
 from core.tools.web.fetchers.base import BaseFetcher
 from core.tools.web.types import ContentChunk, FetchLimits, FetchResult
 
+md: Callable[..., str] | None = None
 try:
     from markdownify import markdownify as md
 
@@ -16,6 +17,7 @@ try:
 except ImportError:
     HAS_MARKDOWNIFY = False
 
+BeautifulSoup: Any | None = None
 try:
     from bs4 import BeautifulSoup
 
@@ -28,12 +30,6 @@ _BROWSER_UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.3
 
 
 class MarkdownifyFetcher(BaseFetcher):
-    """
-    Fetcher using markdownify for HTML to Markdown conversion.
-
-    Falls back to BeautifulSoup text extraction if markdownify unavailable.
-    """
-
     def __init__(
         self,
         limits: FetchLimits | None = None,
@@ -45,39 +41,24 @@ class MarkdownifyFetcher(BaseFetcher):
         self.has_markdownify = HAS_MARKDOWNIFY
         self.has_bs4 = HAS_BS4
 
-    async def _do_fetch(self, url: str, verify: bool = True) -> httpx.Response:
-        """Fetch URL with explicit timeout and redirect following."""
+    async def _do_fetch(self, url: str) -> httpx.Response:
         timeout = httpx.Timeout(self.timeout, connect=5.0)
         async with httpx.AsyncClient(
             timeout=timeout,
             follow_redirects=True,
-            verify=verify,
         ) as client:
             response = await client.get(url, headers={"User-Agent": self.user_agent})
             response.raise_for_status()
             return response
 
     async def fetch(self, url: str) -> FetchResult:
-        """Fetch URL content and convert to Markdown."""
         result = FetchResult(url=url)
 
         try:
-            try:
-                response = await self._do_fetch(url, verify=True)
-            except httpx.ConnectError as e:
-                # Only retry without SSL verify for certificate-related errors
-                cause = str(e.__cause__) if e.__cause__ else str(e)
-                if "ssl" in cause.lower() or "certificate" in cause.lower():
-                    response = await self._do_fetch(url, verify=False)
-                else:
-                    raise
-
+            response = await self._do_fetch(url)
             content_type = response.headers.get("Content-Type", "")
 
-            if "text/html" in content_type:
-                content = self._process_html(response.text, result)
-            else:
-                content = response.text
+            content = self._process_html(response.text, result) if "text/html" in content_type else response.text
 
             if len(content) > self.limits.max_chars:
                 content = content[: self.limits.max_chars]
@@ -102,17 +83,18 @@ class MarkdownifyFetcher(BaseFetcher):
         return result
 
     def _process_html(self, html: str, result: FetchResult) -> str:
-        """Process HTML content to Markdown or plain text."""
         if self.has_markdownify:
             return self._markdownify_html(html, result)
-        elif self.has_bs4:
+        if self.has_bs4:
             return self._bs4_extract(html, result)
-        else:
-            return self._basic_extract(html, result)
+        return self._basic_extract(html, result)
 
     def _markdownify_html(self, html: str, result: FetchResult) -> str:
-        """Convert HTML to Markdown using markdownify."""
+        if md is None:
+            raise RuntimeError("markdownify import unexpectedly unavailable")
         if self.has_bs4:
+            if BeautifulSoup is None:
+                raise RuntimeError("BeautifulSoup import unexpectedly unavailable")
             soup = BeautifulSoup(html, "html.parser")
 
             title_tag = soup.find("title")
@@ -139,12 +121,11 @@ class MarkdownifyFetcher(BaseFetcher):
         )
 
         content = re.sub(r"\n{3,}", "\n\n", content)
-        content = content.strip()
-
-        return content
+        return content.strip()
 
     def _bs4_extract(self, html: str, result: FetchResult) -> str:
-        """Extract text using BeautifulSoup."""
+        if BeautifulSoup is None:
+            raise RuntimeError("BeautifulSoup import unexpectedly unavailable")
         soup = BeautifulSoup(html, "html.parser")
 
         title_tag = soup.find("title")
@@ -159,18 +140,11 @@ class MarkdownifyFetcher(BaseFetcher):
             tag.decompose()
 
         main_content = soup.find("main") or soup.find("article") or soup.find("div", class_="content") or soup.find("body")
+        text = main_content.get_text(separator="\n\n", strip=True) if main_content else soup.get_text(separator="\n\n", strip=True)
 
-        if main_content:
-            text = main_content.get_text(separator="\n\n", strip=True)
-        else:
-            text = soup.get_text(separator="\n\n", strip=True)
-
-        text = re.sub(r"\n{3,}", "\n\n", text)
-
-        return text
+        return re.sub(r"\n{3,}", "\n\n", text)
 
     def _basic_extract(self, html: str, result: FetchResult) -> str:
-        """Basic HTML extraction without external libraries."""
         title_match = re.search(r"<title[^>]*>(.*?)</title>", html, re.IGNORECASE | re.DOTALL)
         if title_match:
             result.title = title_match.group(1).strip()
@@ -178,6 +152,4 @@ class MarkdownifyFetcher(BaseFetcher):
         text = re.sub(r"<script[^>]*>.*?</script>", "", html, flags=re.DOTALL | re.IGNORECASE)
         text = re.sub(r"<style[^>]*>.*?</style>", "", text, flags=re.DOTALL | re.IGNORECASE)
         text = re.sub(r"<[^>]+>", " ", text)
-        text = re.sub(r"\s+", " ", text).strip()
-
-        return text
+        return re.sub(r"\s+", " ", text).strip()

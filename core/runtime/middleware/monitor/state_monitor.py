@@ -1,5 +1,4 @@
-"""执行状态监控"""
-
+import logging
 import threading
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -9,10 +8,10 @@ from typing import Any
 
 from .base import BaseMonitor
 
+logger = logging.getLogger(__name__)
+
 
 class AgentState(Enum):
-    """Agent 运行时状态"""
-
     INITIALIZING = "initializing"
     READY = "ready"
     ACTIVE = "active"
@@ -25,8 +24,6 @@ class AgentState(Enum):
 
 @dataclass
 class AgentFlags:
-    """Agent 状态标志位"""
-
     is_streaming: bool = False
     is_compacting: bool = False
     is_waiting: bool = False
@@ -36,7 +33,6 @@ class AgentFlags:
     needs_recovery: bool = False
 
 
-# 状态转移规则
 VALID_TRANSITIONS = {
     AgentState.INITIALIZING: [AgentState.READY, AgentState.ERROR],
     AgentState.READY: [AgentState.ACTIVE, AgentState.TERMINATED],
@@ -50,11 +46,6 @@ VALID_TRANSITIONS = {
 
 
 class StateMonitor(BaseMonitor):
-    """追踪执行状态
-
-    管理 Agent 的状态机和标志位。
-    """
-
     def __init__(self):
         self.state = AgentState.INITIALIZING
         self.flags = AgentFlags()
@@ -67,15 +58,12 @@ class StateMonitor(BaseMonitor):
         self._transition_lock = threading.Lock()
 
     def on_request(self, request: dict[str, Any]) -> None:
-        """请求前：记录活动时间（不做状态转移，由外部控制）"""
         self.last_activity = datetime.now()
 
     def on_response(self, request: dict[str, Any], response: dict[str, Any]) -> None:
-        """响应后：记录活动时间（不做状态转移，由外部控制）"""
         self.last_activity = datetime.now()
 
     def transition(self, new_state: AgentState) -> bool:
-        """状态转移（线程安全）"""
         with self._transition_lock:
             if new_state in VALID_TRANSITIONS.get(self.state, []):
                 old_state = self.state
@@ -87,28 +75,23 @@ class StateMonitor(BaseMonitor):
         return True
 
     def set_flag(self, name: str, value: bool) -> None:
-        """设置标志位"""
         if hasattr(self.flags, name):
             setattr(self.flags, name, value)
 
     def on_state_changed(self, callback: Callable[[AgentState, AgentState], None]) -> None:
-        """注册状态变化回调"""
         self._callbacks.append(callback)
 
     def _emit_state_changed(self, old: AgentState, new: AgentState) -> None:
-        """触发状态变化回调"""
         for cb in self._callbacks:
             try:
                 cb(old, new)
             except Exception:
-                pass
+                logger.exception("State transition callback failed: %s -> %s", old.value, new.value)
 
     def mark_ready(self) -> bool:
-        """标记为就绪（初始化完成后调用）"""
         return self.transition(AgentState.READY)
 
     def mark_error(self, error: Exception | None = None) -> bool:
-        """标记为错误状态"""
         self.flags.has_error = True
         if error is not None:
             # @@@error-snapshot - Capture a small, inspectable error snapshot for debugging.
@@ -126,7 +109,6 @@ class StateMonitor(BaseMonitor):
         return self.transition(AgentState.ERROR)
 
     def mark_terminated(self) -> bool:
-        """标记为终止"""
         if self.state == AgentState.ACTIVE:
             self.transition(AgentState.IDLE)
 
@@ -136,11 +118,9 @@ class StateMonitor(BaseMonitor):
         return False
 
     def can_accept_task(self) -> bool:
-        """是否可以接受新任务"""
         return self.state in (AgentState.READY, AgentState.IDLE)
 
     def is_running(self) -> bool:
-        """是否正在运行"""
         return self.state == AgentState.ACTIVE
 
     def get_metrics(self) -> dict[str, Any]:

@@ -1,8 +1,7 @@
-"""PowerPoint file reader using python-pptx (optional dependency)."""
-
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any, cast
 
 from core.tools.filesystem.read.types import FileType, ReadLimits, ReadResult
 
@@ -20,18 +19,6 @@ def read_pptx(
     start_slide: int | None = None,
     limit_slides: int | None = None,
 ) -> ReadResult:
-    """
-    Read PowerPoint file with slide-based pagination.
-
-    Args:
-        path: Absolute path to PPTX file
-        limits: ReadLimits configuration (max_chars applies to total output)
-        start_slide: Start slide (1-indexed, None = start from slide 1)
-        limit_slides: Number of slides to read (None = default 20 slides)
-
-    Returns:
-        ReadResult with extracted text and metadata
-    """
     if not HAS_PPTX:
         return _no_pptx_result(path)
 
@@ -43,7 +30,9 @@ def read_pptx(
     )
 
     try:
-        prs = Presentation(path)
+        # @@@pptx-callable-seam - python-pptx exports Presentation as a factory function at runtime,
+        # but pyright sees a module-like surface here. Keep the third-party seam local.
+        prs = cast(Any, Presentation)(str(path))
     except Exception as e:
         result.error = f"Error opening PPTX: {e}"
         return result
@@ -57,7 +46,7 @@ def read_pptx(
         result.error = f"Start slide {start_slide} exceeds total slides {total_slides}"
         return result
 
-    effective_limit = limit_slides if limit_slides else 20
+    effective_limit = limit_slides or 20
     end_idx = min(start_idx + effective_limit, total_slides)
 
     output_parts: list[str] = []
@@ -97,7 +86,6 @@ def read_pptx(
 
 
 def _extract_slide_text(slide, slide_num: int, total_slides: int) -> str:
-    """Extract text content from a slide."""
     parts = [f"\n{'=' * 60}", f"Slide {slide_num}/{total_slides}", "=" * 60]
 
     for shape in slide.shapes:
@@ -113,7 +101,6 @@ def _extract_slide_text(slide, slide_num: int, total_slides: int) -> str:
 
 
 def _no_pptx_result(path: Path) -> ReadResult:
-    """Return result when python-pptx is not installed."""
     stat = path.stat()
     content = (
         f"PowerPoint file: {path.name}\n"

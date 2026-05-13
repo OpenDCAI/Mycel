@@ -1,22 +1,22 @@
 ---
 title: Configuration
 sidebarTitle: Configuration
-description: runtime.json, models.json, MCP, Skills, and environment variables
+description: runtime.json, models.json, advanced integrations, and environment variables
 icon: sliders
-keywords: [runtime.json, models.json, MCP, skills, configuration, environment variables, memory]
+keywords: [runtime.json, models.json, MCP, configuration, environment variables, memory]
 ---
 
-Mycel uses a split configuration system with three-tier merge: system defaults → user config (`~/.leon/`) → project config (`.leon/` in workspace root). CLI arguments override everything.
+Mycel uses split configuration files for runtime defaults, models, observation, and provider-specific infrastructure. Product runtime state is not loaded from workspace-local `runtime.json` files.
 
 ## Config file overview
 
 <Columns>
   <div>
-    **JSON config files** (three-tier merge):
+    **JSON config files:**
 
     | File | Purpose |
     |------|---------|
-    | `runtime.json` | Tools, memory, MCP, skills, security |
+    | `runtime.json` | Tools, memory, advanced integrations, security |
     | `models.json` | Providers, API keys, model mapping |
     | `observation.json` | Langfuse / LangSmith tracing |
   </div>
@@ -25,28 +25,28 @@ Mycel uses a split configuration system with three-tier merge: system defaults �
 
     | File | Purpose |
     |------|---------|
-    | `config.env` | Quick API key setup |
-    | `sandboxes/<name>.json` | Per-provider sandbox config |
-    | `.mcp.json` (member) | Per-member MCP servers |
+    | `ENV_FILE` | Optional explicit env file |
+    | `$LEON_SANDBOXES_DIR/<name>.json` | Per-provider sandbox config |
+    | `.mcp.json` | Advanced MCP servers for local runtime config |
   </div>
 </Columns>
 
-**Priority** (highest to lowest): `.leon/<file>` in workspace → `~/.leon/<file>` → built-in defaults → CLI flags win over all.
+**Runtime priority:** explicit server/CLI overrides → built-in defaults.
 
 **Merge strategy per domain:**
 
 | Domain | Strategy |
 |--------|----------|
-| `runtime`, `memory`, `tools` | Deep merge — higher-priority tiers override individual fields |
-| `mcp`, `skills` | Lookup — first tier that defines a key wins; no merging |
-| `system_prompt` | Lookup — project → user → system |
+| `runtime`, `memory`, `tools` | Deep merge — explicit overrides replace built-in defaults by field |
+| `mcp` | Explicit overrides replace built-in defaults |
+| `system_prompt` | Explicit override |
 | `providers`, `mapping` (models.json) | Deep merge per-key |
 | `pool` (models.json) | Last wins — no list merging |
 | `catalog`, `virtual_models` (models.json) | System-only — never overridden |
 
 ## First run
 
-Create `~/.leon/config.env`:
+Export variables in the shell, or set `ENV_FILE=/path/to/mycel.env` before starting the service:
 
 ```env
 OPENAI_API_KEY=sk-xxx
@@ -133,7 +133,7 @@ MODEL_NAME=claude-sonnet-4-5-20250929
   </Accordion>
 
   <Accordion title="Project-level example" icon="file-code">
-    `.leon/runtime.json` in your workspace root:
+    explicit runtime overrides:
 
     ```json
     {
@@ -166,13 +166,13 @@ MODEL_NAME=claude-sonnet-4-5-20250929
     | `leon:large` | claude-opus-4-6 | Complex reasoning |
     | `leon:max` | claude-opus-4-6 + temp=0 | Maximum precision |
 
-    Set via **Settings → Models** in the Web UI, or in `~/.leon/models.json`:
+    Set via **Settings → Models** in the Web UI:
 
     ```json
     { "active": { "model": "leon:large" } }
     ```
 
-    Override a mapping in `~/.leon/models.json`:
+    Override a mapping through Settings-backed model configuration:
 
     ```json
     {
@@ -228,7 +228,7 @@ MODEL_NAME=claude-sonnet-4-5-20250929
   </Accordion>
 </AccordionGroup>
 
-## MCP servers
+## Advanced MCP servers
 
 Connect external services via the Model Context Protocol. MCP tools appear as `mcp__{server_name}__{tool_name}`.
 
@@ -266,8 +266,8 @@ Connect external services via the Model Context Protocol. MCP tools appear as `m
     }
     ```
   </Tab>
-  <Tab title="Member-level (.mcp.json)">
-    Each Member can have its own `~/.leon/members/<id>/.mcp.json`:
+  <Tab title="Local .mcp.json">
+    Local runtime config can also carry MCP server definitions:
 
     ```json
     {
@@ -282,25 +282,6 @@ Connect external services via the Model Context Protocol. MCP tools appear as `m
     ```
   </Tab>
 </Tabs>
-
-## Skills
-
-```json
-{
-  "skills": {
-    "enabled": true,
-    "paths": ["~/.leon/skills"],
-    "skills": {
-      "code-review": true,
-      "debugging": false
-    }
-  }
-}
-```
-
-<Warning>
-  Skill paths must exist on disk — Mycel does not create them automatically. Run `mkdir -p ~/.leon/skills` if needed.
-</Warning>
 
 ## Observation (tracing)
 
@@ -347,6 +328,8 @@ All string values in JSON config files support `${VAR}` expansion and `~` for ho
 | `OPENROUTER_API_KEY` | OpenRouter API key |
 | `MODEL_NAME` | Override active model |
 | `LEON_SANDBOX` | Default sandbox name |
+| `LEON_AVATAR_ROOT` | Host-side avatar image storage root |
+| `LEON_FILE_CHANNEL_ROOT` | Host-side staging root for thread file uploads |
 | `TAVILY_API_KEY` | Tavily web search |
 | `EXA_API_KEY` | Exa search |
 | `JINA_API_KEY` | Jina AI fetch |

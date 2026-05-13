@@ -28,11 +28,12 @@ export interface ThreadSummary {
   preview?: string;
   updated_at?: string;
   running?: boolean;
-  member_id?: string;
-  member_name?: string;
-  /** Canonical thread/entity display name. Main: {member}. Child: {member} · 分身N */
-  entity_name?: string;
+  /** Actor user backing this thread. */
+  agent_user_id?: string;
+  /** Thread-facing display label when `sidebar_label` is absent. */
+  agent_name?: string;
   branch_index?: number;
+  /** Canonical actor-facing label for sidebar/header surfaces. */
   sidebar_label?: string | null;
   avatar_url?: string;
   is_main?: boolean;
@@ -43,6 +44,49 @@ export interface ThreadDetail {
   entries: ChatEntry[];
   display_seq: number;
   sandbox: SandboxInfo | null;
+}
+
+export interface PermissionRequest {
+  request_id: string;
+  thread_id: string;
+  tool_name: string;
+  args: Record<string, unknown>;
+  message?: string | null;
+}
+
+export interface AskUserQuestionOption {
+  label: string;
+  description: string;
+  preview?: string | null;
+}
+
+export interface AskUserQuestionPrompt {
+  header: string;
+  question: string;
+  options: AskUserQuestionOption[];
+  multiSelect?: boolean;
+}
+
+export interface AskUserAnswer {
+  header?: string;
+  question?: string;
+  selected_options: string[];
+  free_text?: string | null;
+}
+
+export type PermissionRuleBehavior = "allow" | "deny" | "ask";
+
+export interface ThreadPermissionRules {
+  allow: string[];
+  deny: string[];
+  ask: string[];
+}
+
+export interface ThreadPermissions {
+  thread_id: string;
+  requests: PermissionRequest[];
+  session_rules: ThreadPermissionRules;
+  managed_only: boolean;
 }
 
 export interface SandboxType {
@@ -74,10 +118,11 @@ export interface RecipeFeatureOption {
   icon?: string;
 }
 
-export interface RecipeSnapshot {
+export interface SandboxTemplateSnapshot {
   id: string;
   name: string;
   desc?: string;
+  provider_name?: string;
   provider_type: string;
   features: Record<string, boolean>;
   configurable_features?: Record<string, boolean>;
@@ -87,8 +132,9 @@ export interface RecipeSnapshot {
 export interface ThreadLaunchConfig {
   create_mode: "new" | "existing";
   provider_config: string;
-  recipe?: RecipeSnapshot | null;
-  lease_id?: string | null;
+  sandbox_template_id?: string | null;
+  sandbox_template?: SandboxTemplateSnapshot | null;
+  existing_sandbox_id?: string | null;
   model?: string | null;
   workspace?: string | null;
 }
@@ -98,41 +144,40 @@ export interface ThreadLaunchConfigResponse {
   config: ThreadLaunchConfig;
 }
 
-export interface UserLeaseSummary {
-  lease_id: string;
+export interface AccountResourceLimit {
+  resource: string;
+  provider_name: string;
+  label: string;
+  limit: number;
+  used: number;
+  remaining: number;
+  can_create: boolean;
+  period?: string;
+  unit?: string;
+}
+
+export interface UserSandboxSummary {
+  sandbox_id: string;
   provider_name: string;
   recipe_id: string;
   recipe_name: string;
-  recipe?: RecipeSnapshot;
+  recipe?: SandboxTemplateSnapshot;
   observed_state?: string | null;
   desired_state?: string | null;
   cwd?: string | null;
   thread_ids: string[];
   agents: Array<{
-    member_id: string;
-    member_name: string;
+    /** Runtime actor identity for this visible sandbox participant. */
+    thread_id: string;
+    /** Display label resolved from the actor's backing agent user. */
+    agent_name: string;
     avatar_url?: string | null;
   }>;
-}
-
-export interface SandboxSession {
-  session_id: string;
-  thread_id: string;
-  provider: string;
-  status: string;
-  created_at?: string;
-  last_active?: string;
-  lease_id?: string | null;
-  instance_id?: string | null;
-  chat_session_id?: string | null;
-  source?: string;
 }
 
 export interface SandboxInfo {
   type: string;
   status: string | null;
-  session_id: string | null;
-  terminal_id?: string | null;
 }
 
 export interface ToolStep {
@@ -163,7 +208,7 @@ export interface ToolSegment {
   step: ToolStep;
 }
 
-export type NotificationType = "steer" | "command" | "agent" | "chat";
+export type NotificationType = "steer" | "command" | "agent" | "chat" | "compact_start" | "compact" | "compact_breaker";
 
 export interface NoticeSegment {
   type: "notice";
@@ -179,6 +224,22 @@ export interface RetrySegment {
 }
 
 export type TurnSegment = TextSegment | ToolSegment | NoticeSegment | RetrySegment;
+
+export function isTextSegment(segment: TurnSegment): segment is TextSegment {
+  return segment.type === "text";
+}
+
+export function isToolSegment(segment: TurnSegment): segment is ToolSegment {
+  return segment.type === "tool";
+}
+
+export function isNoticeSegment(segment: TurnSegment): segment is NoticeSegment {
+  return segment.type === "notice";
+}
+
+export function isRetrySegment(segment: TurnSegment): segment is RetrySegment {
+  return segment.type === "retry";
+}
 
 export interface AssistantTurn {
   id: string;
@@ -200,6 +261,11 @@ export interface UserMessage {
   timestamp: number;
   /** Backend-computed: is this message visible to thread owner? */
   showing?: boolean;
+  ask_user_question_answered?: {
+    questions: AskUserQuestionPrompt[];
+    answers: AskUserAnswer[];
+    annotations?: Record<string, unknown>;
+  };
   senderName?: string;
   senderAvatarUrl?: string;
   attachments?: string[];
@@ -215,39 +281,22 @@ export interface NoticeMessage {
 
 export type ChatEntry = UserMessage | AssistantTurn | NoticeMessage;
 
+export function isAssistantTurn(entry: ChatEntry): entry is AssistantTurn {
+  return entry.role === "assistant";
+}
+
 export interface StreamStatus {
   state: { state: string; flags: Record<string, boolean> };
   tokens: { total_tokens: number; input_tokens: number; output_tokens: number; cost: number };
   context: { message_count: number; estimated_tokens: number; usage_percent: number; near_limit: boolean };
+  model?: string;
   current_tool?: string;
   last_seq?: number;
   run_start_seq?: number;
 }
 
-export interface SessionStatus {
+export interface ThreadSandboxStatus {
   thread_id: string;
-  session_id: string;
-  terminal_id: string;
-  status: string;
-  started_at: string;
-  last_active_at: string;
-  expires_at: string;
-}
-
-export interface TerminalStatus {
-  thread_id: string;
-  terminal_id: string;
-  lease_id: string;
-  cwd: string;
-  env_delta: Record<string, string>;
-  version: number;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface LeaseStatus {
-  thread_id: string;
-  lease_id: string;
   provider_name: string;
   instance: {
     instance_id: string | null;
@@ -271,6 +320,13 @@ export interface SandboxFilesListResult {
   entries: SandboxFileEntry[];
 }
 
+export interface ThreadFileChannelBinding {
+  thread_id: string;
+  files_path: string;
+  workspace_id: string;
+  workspace_path: string;
+}
+
 export interface SandboxFileResult {
   thread_id: string;
   path: string;
@@ -278,35 +334,55 @@ export interface SandboxFileResult {
   size: number;
 }
 
-// --- Entity Chat types ---
+// --- Chat types ---
 
-export interface ChatEntity {
+export interface ChatMember {
   id: string;
+  /** Current chat-facing display label for this participant. */
   name: string;
   type: string;
   avatar_url?: string;
   owner_name?: string | null;
-  member_name?: string | null;
+  /** Template-facing auxiliary label when this chat member is thread-backed. */
+  agent_name?: string | null;
+  /** Actor thread backing this participant when applicable. */
   thread_id?: string | null;
   is_main?: boolean | null;
   branch_index?: number | null;
 }
 
-export interface ChatSummary {
-  id: string;
-  title: string | null;
-  entities: ChatEntity[];
-  last_message?: { content: string; sender_name: string; created_at: number };
-  unread_count: number;
-  has_mention: boolean;
-}
-
 export interface ChatDetail {
   id: string;
+  type: string;
   title: string | null;
   status: string;
+  created_by_user_id: string;
   created_at: number;
-  entities: ChatEntity[];
+  members: ChatMember[];
+}
+
+export interface ChatJoinRequest {
+  id: string;
+  chat_id: string;
+  requester_user_id: string;
+  requester_name?: string | null;
+  requester_type?: string | null;
+  state: "pending" | "approved" | "rejected";
+  message?: string | null;
+  decided_by_user_id?: string | null;
+  decided_at?: number | null;
+  created_at: number;
+  updated_at: number;
+}
+
+export interface ChatJoinTarget {
+  id: string;
+  type: "group";
+  title: string | null;
+  status: string;
+  created_by_user_id: string;
+  is_member: boolean;
+  current_request: ChatJoinRequest | null;
 }
 
 export interface ChatMessage {
@@ -319,30 +395,7 @@ export interface ChatMessage {
   created_at: number;
 }
 
-export interface TaskAgentRequest {
-  subagent_type: string;
-  prompt: string;
-  description?: string;
-  model?: string;
-  max_turns?: number;
-}
-
-// @@@channel-kind - string union used directly as a selector, not an object
-export type SandboxChannelKind = "upload" | "download";
-
-export interface SandboxChannelFileEntry {
-  relative_path: string;
-  size_bytes: number;
-  updated_at: string;
-}
-
-export interface SandboxChannelFilesResult {
-  thread_id: string;
-  channel: SandboxChannelKind;
-  entries: SandboxChannelFileEntry[];
-}
-
-export interface SandboxUploadResult {
+export interface ThreadFileUploadResult {
   thread_id: string;
   relative_path: string;
   absolute_path: string;

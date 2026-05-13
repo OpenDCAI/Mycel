@@ -4,16 +4,14 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { useAppStore } from "@/store/app-store";
-import { useMarketplaceStore } from "@/store/marketplace-store";
 import { toast } from "sonner";
 
 interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  memberId: string;
+  agentId: string;
 }
 
 type BumpType = "patch" | "minor" | "major";
@@ -25,32 +23,24 @@ function bumpVersion(version: string, type: BumpType): string {
   return `${major}.${minor}.${patch + 1}`;
 }
 
-export default function PublishDialog({ open, onOpenChange, memberId }: Props) {
-  const member = useAppStore(s => s.getMemberById(memberId));
-  const publishMember = useAppStore(s => s.publishMember);
+export default function PublishDialog({ open, onOpenChange, agentId }: Props) {
+  const agent = useAppStore(s => s.getAgentById(agentId));
+  const publishAgent = useAppStore(s => s.publishAgent);
   const [bumpType, setBumpType] = useState<BumpType>("patch");
-  const [notes, setNotes] = useState("");
-  const [tags, setTags] = useState("");
   const [publishing, setPublishing] = useState(false);
-  const publishToMarketplace = useMarketplaceStore(s => s.publishToMarketplace);
 
-  if (!member) return null;
+  if (!agent) return null;
 
-  const newVersion = bumpVersion(member.version, bumpType);
+  const newVersion = bumpVersion(agent.version, bumpType);
 
   const handlePublish = async () => {
     try {
       setPublishing(true);
-      await publishMember(memberId, bumpType);
-      try {
-        await publishToMarketplace(memberId, "member", bumpType, notes, tags.split(",").map(t => t.trim()).filter(Boolean), "public");
-      } catch {
-        // Hub publish is optional, don't fail the whole publish
-      }
-      toast.success(`${member.name} v${newVersion} 已发布`);
+      await publishAgent(agentId, bumpType);
+      toast.success(`${agent.name} v${newVersion} 已发布`);
       onOpenChange(false);
-    } catch (e) {
-      toast.error("发布失败，请重试");
+    } catch (err) {
+      toast.error(`发布失败：${err instanceof Error ? err.message : "unknown error"}`);
     } finally {
       setPublishing(false);
     }
@@ -71,9 +61,9 @@ export default function PublishDialog({ open, onOpenChange, memberId }: Props) {
               <Tag className="w-4 h-4 text-primary" />
             </div>
             <div>
-              <DialogTitle className="text-base">发布 {member.name}</DialogTitle>
+              <DialogTitle className="text-base">发布 {agent.name}</DialogTitle>
               <DialogDescription className="text-xs mt-0.5">
-                当前版本 <span className="font-mono text-foreground">v{member.version}</span>
+                当前版本 <span className="font-mono text-foreground">v{agent.version}</span>
               </DialogDescription>
             </div>
           </div>
@@ -103,26 +93,6 @@ export default function PublishDialog({ open, onOpenChange, memberId }: Props) {
           <div className="p-3 rounded-lg bg-muted text-center">
             <p className="text-xs text-muted-foreground">新版本号</p>
             <p className="text-lg font-mono font-semibold text-primary mt-0.5">v{newVersion}</p>
-          </div>
-
-          <div className="space-y-2">
-            <Label className="text-sm">发布说明 <span className="text-muted-foreground text-xs">（可选）</span></Label>
-            <Textarea
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              placeholder="描述此版本的变更..."
-              rows={3}
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label className="text-sm">Tags <span className="text-muted-foreground text-xs">(comma separated)</span></Label>
-            <input
-              value={tags}
-              onChange={(e) => setTags(e.target.value)}
-              placeholder="e.g. coding, research, writing"
-              className="w-full px-3 py-2 rounded-lg bg-card border border-border text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-primary/40"
-            />
           </div>
         </div>
 

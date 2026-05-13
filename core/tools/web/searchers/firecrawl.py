@@ -1,5 +1,3 @@
-"""Firecrawl searcher - web crawling and search."""
-
 from __future__ import annotations
 
 import httpx
@@ -9,15 +7,6 @@ from core.tools.web.types import SearchItem, SearchResult
 
 
 class FirecrawlSearcher(BaseSearcher):
-    """
-    Searcher using Firecrawl API.
-
-    Features:
-    - Web crawling capabilities
-    - Can search and extract content
-    - Good fallback option
-    """
-
     API_URL = "https://api.firecrawl.dev/v1/search"
 
     def __init__(
@@ -36,7 +25,6 @@ class FirecrawlSearcher(BaseSearcher):
         include_domains: list[str] | None = None,
         exclude_domains: list[str] | None = None,
     ) -> SearchResult:
-        """Search using Firecrawl API."""
         result = SearchResult(query=query)
 
         try:
@@ -59,13 +47,11 @@ class FirecrawlSearcher(BaseSearcher):
             for item in data.get("data", []):
                 url = item.get("url", "")
 
-                if include_domains:
-                    if not any(domain in url for domain in include_domains):
-                        continue
+                if include_domains and not any(domain in url for domain in include_domains):
+                    continue
 
-                if exclude_domains:
-                    if any(domain in url for domain in exclude_domains):
-                        continue
+                if exclude_domains and any(domain in url for domain in exclude_domains):
+                    continue
 
                 result.results.append(
                     SearchItem(
@@ -83,7 +69,5 @@ class FirecrawlSearcher(BaseSearcher):
             result.error = f"Firecrawl API error {e.response.status_code}"
         except httpx.RequestError as e:
             result.error = f"Search error: {e}"
-        except Exception as e:
-            result.error = f"Unexpected error: {e}"
 
         return result

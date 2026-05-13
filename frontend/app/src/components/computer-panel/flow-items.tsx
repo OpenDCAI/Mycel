@@ -4,7 +4,7 @@ import type { ToolStep } from "../../api";
 import { DEFAULT_BADGE, TOOL_BADGE_STYLES } from "../chat-area/constants";
 import { getStepSummary } from "../chat-area/utils";
 import MarkdownContent from "../MarkdownContent";
-import { getToolRenderer } from "../tool-renderers";
+import { ToolRenderer } from "../tool-renderers";
 import type { FlowItem } from "./utils";
 
 function getResultPreview(step: ToolStep): string | null {
@@ -96,7 +96,6 @@ function ToolFlowLine({
   const [userExpanded, setUserExpanded] = useState(false);
   const expanded = isFocused || userExpanded;
   const badge = TOOL_BADGE_STYLES[step.name] ?? { ...DEFAULT_BADGE, label: step.name };
-  const Renderer = getToolRenderer(step);
   const preview = getResultPreview(step);
 
   return (
@@ -134,7 +133,7 @@ function ToolFlowLine({
       {expanded && (
         <div className="pl-5 mt-1">
           <div className="text-xs">
-            <Renderer step={step} expanded={true} />
+            <ToolRenderer step={step} expanded={true} />
           </div>
           {step.result && (
             <pre className="mt-1.5 whitespace-pre-wrap break-words font-mono text-xs text-foreground-secondary bg-muted rounded p-2 max-h-[300px] overflow-y-auto">

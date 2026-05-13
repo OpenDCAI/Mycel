@@ -1,14 +1,10 @@
 /**
  * Auth store — JWT token, user identity, login/register/logout.
  * Persisted to localStorage via Zustand persist middleware.
- *
- * Set VITE_DEV_SKIP_AUTH=true in .env.development to bypass login during dev.
  */
 
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-
-const DEV_SKIP_AUTH = import.meta.env.VITE_DEV_SKIP_AUTH === "true";
 
 // Allow overriding the API origin at runtime via window.__MYCEL_CONFIG__.apiBase
 // (injected by docker-entrypoint.sh), falling back to the Vite build-time variable.
@@ -18,8 +14,7 @@ const API_BASE = (
   ?? import.meta.env.VITE_API_BASE
   ?? ""
 ).replace(/\/$/, "");
-
-export interface AuthIdentity {
+interface AuthIdentity {
   id: string;
   name: string;
   type: string;
@@ -27,12 +22,14 @@ export interface AuthIdentity {
 }
 
 interface AuthState {
+  hydrated: boolean;
   token: string | null;
   user: AuthIdentity | null;
   agent: AuthIdentity | null;
-  entityId: string | null;
+  userId: string | null;
   setupInfo: { userId: string; defaultName: string } | null;
 
+  markHydrated: () => void;
   login: (identifier: string, password: string) => Promise<void>;
   sendOtp: (email: string, password: string, inviteCode: string) => Promise<void>;
   verifyOtp: (email: string, token: string) => Promise<{ tempToken: string }>;
@@ -62,26 +59,29 @@ async function apiPost(endpoint: string, body: Record<string, string>) {
   return res.json();
 }
 
-const DEV_MOCK_USER: AuthIdentity = { id: "dev-user", name: "Dev", type: "human" };
-
 export const useAuthStore = create<AuthState>()(
   persist(
     (set) => ({
-      token: DEV_SKIP_AUTH ? "dev-skip-auth" : null,
-      user: DEV_SKIP_AUTH ? DEV_MOCK_USER : null,
+      hydrated: false,
+      token: null,
+      user: null,
       agent: null,
-      entityId: DEV_SKIP_AUTH ? "dev-user" : null,
+      userId: null,
       setupInfo: null,
+
+      markHydrated: () => {
+        set({ hydrated: true });
+      },
 
       login: async (identifier, password) => {
         const data = await apiPost("login", { identifier, password });
         set({
+          hydrated: true,
           token: data.token,
           user: data.user,
           agent: data.agent,
-          entityId: data.user?.id ?? null,
+          userId: data.user?.id ?? null,
         });
-        window.location.href = "/threads";
       },
 
       sendOtp: async (email, password, inviteCode) => {
@@ -99,10 +99,11 @@ export const useAuthStore = create<AuthState>()(
           invite_code: inviteCode,
         });
         set({
+          hydrated: true,
           token: data.token,
           user: data.user,
           agent: data.agent ?? null,
-          entityId: data.user?.id ?? null,
+          userId: data.user?.id ?? null,
           setupInfo: { userId: data.user.id, defaultName: data.user.name },
         });
       },
@@ -112,15 +113,23 @@ export const useAuthStore = create<AuthState>()(
       },
 
       logout: () => {
-        set({ token: null, user: null, agent: null, entityId: null, setupInfo: null });
+        set({ hydrated: true, token: null, user: null, agent: null, userId: null, setupInfo: null });
       },
     }),
     {
       name: "leon-auth",
-      ...(DEV_SKIP_AUTH && {
-        // In skip-auth mode, never let persisted null overwrite the mock identity
-        merge: (_persisted: unknown, current: AuthState) => current,
+      partialize: (state) => ({
+        token: state.token,
+        user: state.user,
+        agent: state.agent,
+        userId: state.userId,
+        setupInfo: state.setupInfo,
       }),
+      onRehydrateStorage: () => {
+        return (state) => {
+          state?.markHydrated();
+        };
+      },
     },
   ),
 );
@@ -128,30 +137,24 @@ export const useAuthStore = create<AuthState>()(
 /**
  * Fetch with Bearer token. On 401, clears auth.
  */
+function buildAuthHeaders(init: RequestInit | undefined, token: string | null): Headers {
+  const headers = new Headers(init?.headers);
+  if (!(init?.body instanceof FormData) && !headers.has("Content-Type")) {
+    headers.set("Content-Type", "application/json");
+  }
+  if (token) headers.set("Authorization", `Bearer ${token}`);
+  return headers;
+}
+
 export async function authFetch(url: string, init?: RequestInit): Promise<Response> {
   const token = useAuthStore.getState().token;
-  const isFormData = init?.body instanceof FormData;
-  const headers: Record<string, string> = {
-    ...(isFormData ? {} : { "Content-Type": "application/json" }),
-    ...(init?.headers as Record<string, string> ?? {}),
-  };
-  if (token) headers["Authorization"] = `Bearer ${token}`;
+  const headers = buildAuthHeaders(init, token);
 
   // Prepend API_BASE for relative URLs when configured
   const resolvedUrl = API_BASE && url.startsWith("/") ? `${API_BASE}${url}` : url;
   const res = await fetch(resolvedUrl, { ...init, headers });
-  if (res.status === 401 && !DEV_SKIP_AUTH) {
+  if (res.status === 401) {
     useAuthStore.getState().logout();
   }
   return res;
-}
-
-export async function authRequest<T>(url: string, init?: RequestInit): Promise<T> {
-  const res = await authFetch(url, init);
-  if (!res.ok) {
-    const body = await res.text();
-    throw new Error(`API ${res.status}: ${body || res.statusText}`);
-  }
-  if (res.status === 204) return undefined as T;
-  return res.json();
 }
