@@ -6,6 +6,7 @@ from collections.abc import Iterable
 import pytest
 
 from backend.threads.chat_adapters.runtime_event_action_route import RuntimeEventActionRoute
+from backend.threads.chat_adapters.runtime_sync_event_hook import make_sync_runtime_event_hook
 
 
 @pytest.mark.asyncio
@@ -51,8 +52,12 @@ async def test_runtime_event_action_route_does_not_materialize_planned_actions_b
     assert events == ["dispatch-start", "planner-start", "planned:event-1"]
 
 
+def test_runtime_event_action_route_does_not_own_sync_hook_bridge() -> None:
+    assert not hasattr(RuntimeEventActionRoute, "sync_hook")
+
+
 @pytest.mark.asyncio
-async def test_runtime_event_action_route_sync_hook_runs_from_worker_thread() -> None:
+async def test_sync_runtime_event_hook_runs_from_worker_thread() -> None:
     calls: list[list[str]] = []
 
     def planner(value: str) -> list[str]:
@@ -61,7 +66,8 @@ async def test_runtime_event_action_route_sync_hook_runs_from_worker_thread() ->
     async def dispatch_actions(actions: Iterable[str]) -> None:
         calls.append(list(actions))
 
-    hook = RuntimeEventActionRoute(planner=planner, dispatch_actions=dispatch_actions).sync_hook()
+    route = RuntimeEventActionRoute(planner=planner, dispatch_actions=dispatch_actions)
+    hook = make_sync_runtime_event_hook(route.dispatch)
 
     await asyncio.to_thread(hook, "event-1")
 
@@ -69,14 +75,15 @@ async def test_runtime_event_action_route_sync_hook_runs_from_worker_thread() ->
 
 
 @pytest.mark.asyncio
-async def test_runtime_event_action_route_sync_hook_fails_loudly_on_owner_loop_thread() -> None:
+async def test_sync_runtime_event_hook_fails_loudly_on_owner_loop_thread() -> None:
     def planner(value: str) -> list[str]:
         return [value]
 
     async def dispatch_actions(_actions: Iterable[str]) -> None:
         return None
 
-    hook = RuntimeEventActionRoute(planner=planner, dispatch_actions=dispatch_actions).sync_hook()
+    route = RuntimeEventActionRoute(planner=planner, dispatch_actions=dispatch_actions)
+    hook = make_sync_runtime_event_hook(route.dispatch)
 
     with pytest.raises(RuntimeError) as exc:
         hook("event-1")
