@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import threading
 import time
+from collections.abc import Callable
 from types import SimpleNamespace
+from typing import cast
 
 import pytest
 from fastapi import FastAPI
@@ -308,7 +310,7 @@ def test_wait_runtime_inbox_items_returns_after_external_queue_wake() -> None:
             sender_name="Human",
         )
     )
-    registered["handler"](queued[0])
+    cast(Callable[[object], None], registered["handler"])(queued[0])
     worker.join(timeout=1.0)
 
     assert not worker.is_alive()
@@ -363,7 +365,7 @@ def test_wait_runtime_inbox_items_returns_derived_chat_notification_after_wake()
         )
     )
     registered["woken"] = True
-    registered["handler"](queued[0])
+    cast(Callable[[object], None], registered["handler"])(queued[0])
     worker.join(timeout=1.0)
 
     assert result_holder["items"] == [
@@ -540,6 +542,50 @@ def test_runtime_inbox_websocket_streams_metadata_frame_after_wake(tmp_path) -> 
         },
     }
     assert "content" not in str(frame).lower()
+
+
+def test_runtime_inbox_websocket_streams_existing_queue_item_on_subscribe(tmp_path) -> None:
+    app, queue_manager, _wake_bus = _runtime_ws_test_app("external-user-1", tmp_path)
+    queue_manager.enqueue(
+        '{"event_type":"relationship.requested","summary":"Human requested contact."}',
+        "external:external-user-1",
+        notification_type="relationship",
+        source="external",
+        sender_id="human-user-1",
+        sender_name="Human",
+        wake=False,
+    )
+
+    with TestClient(app) as client:
+        with client.websocket_connect(
+            "/api/runtime/inbox/subscribe",
+            headers={"authorization": "Bearer tok-1"},
+        ) as websocket:
+            frames: list[dict] = []
+
+            def _read_frame() -> None:
+                try:
+                    frames.append(websocket.receive_json())
+                except Exception:
+                    pass
+
+            reader = threading.Thread(target=_read_frame, daemon=True)
+            reader.start()
+            reader.join(timeout=0.2)
+        reader.join(timeout=0.2)
+
+    assert frames
+    frame = frames[0]
+    assert frame["type"] == "notify"
+    assert frame["seq"] == 1
+    assert frame["metadata"] == {
+        "event_type": "relationship.requested",
+        "summary": "Human requested contact.",
+        "notification_type": "relationship",
+        "source": "external",
+        "sender_id": "human-user-1",
+        "sender_name": "Human",
+    }
 
 
 def test_runtime_inbox_websocket_replays_after_resume(tmp_path) -> None:

@@ -251,6 +251,8 @@ async def subscribe_runtime_inbox(websocket: WebSocket) -> None:
 
     wake_bus.register(inbox_id, _wake)
     try:
+        if not await _send_live_notifications():
+            return
         resume_task = asyncio.create_task(websocket.receive_json())
         signal_task = asyncio.create_task(signal.get())
         done, pending = await asyncio.wait({resume_task, signal_task}, return_when=asyncio.FIRST_COMPLETED)
