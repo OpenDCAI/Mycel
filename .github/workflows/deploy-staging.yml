@@ -123,7 +123,13 @@ jobs:
             echo "openapi attempt ${attempt}: status=${status}"
             if [ "$status" = "200" ]; then
               cat /tmp/staging-openapi.json
-              jq -e '.openapi and .info.title == "Mycel Web Backend" and (.paths | has("/api/runtime/inbox/wait"))' /tmp/staging-openapi.json >/dev/null
+              jq -e '
+                .openapi
+                and .info.title == "Mycel Web Backend"
+                and (.paths | has("/api/runtime/inbox/wait"))
+                and (.components.schemas.SetChatWorkflowBody.properties | has("expected_state_version"))
+                and (.components.schemas.UpdateChatWorkflowEventBody.properties | has("expected_state_version"))
+              ' /tmp/staging-openapi.json >/dev/null
               exit 0
             fi
             cat /tmp/staging-openapi.json || true
