@@ -588,6 +588,29 @@ def test_runtime_inbox_websocket_streams_existing_queue_item_on_subscribe(tmp_pa
     }
 
 
+def test_runtime_inbox_websocket_accepts_bearer_subprotocol_token(tmp_path) -> None:
+    app, queue_manager, _wake_bus = _runtime_ws_test_app("external-user-1", tmp_path)
+    queue_manager.enqueue(
+        '{"event_type":"relationship.requested","summary":"Human requested contact."}',
+        "external:external-user-1",
+        notification_type="relationship",
+        source="external",
+        sender_id="human-user-1",
+        sender_name="Human",
+        wake=False,
+    )
+
+    with TestClient(app) as client:
+        with client.websocket_connect(
+            "/api/runtime/inbox/subscribe",
+            subprotocols=["bearer.tok-1"],
+        ) as websocket:
+            frame = websocket.receive_json()
+
+    assert frame["type"] == "notify"
+    assert frame["metadata"]["event_type"] == "relationship.requested"
+
+
 def test_runtime_inbox_websocket_replays_after_resume(tmp_path) -> None:
     app, queue_manager, wake_bus = _runtime_ws_test_app("external-user-1", tmp_path)
 

@@ -130,7 +130,8 @@ def _runtime_inbox_parts_for_websocket(websocket: WebSocket) -> tuple[Any, Any, 
 
 async def _websocket_user_id(websocket: WebSocket) -> str:
     authorization = str(websocket.headers.get("authorization") or "")
-    token = _authorization_bearer_token(authorization)
+    protocol = str(websocket.headers.get("sec-websocket-protocol") or "")
+    token = _authorization_bearer_token(authorization) or _subprotocol_bearer_token(protocol)
     if not token:
         raise RuntimeError("Missing runtime inbox websocket bearer token")
     auth_service = getattr(getattr(websocket.app.state, "auth_runtime_state", None), "auth_service", None)
@@ -152,6 +153,14 @@ def _authorization_bearer_token(authorization: str) -> str | None:
     scheme, _, token = authorization.partition(" ")
     if scheme.lower() == "bearer" and token:
         return token
+    return None
+
+
+def _subprotocol_bearer_token(protocol: str) -> str | None:
+    for value in protocol.split(","):
+        candidate = value.strip()
+        if candidate.startswith("bearer.") and len(candidate) > len("bearer."):
+            return candidate[len("bearer.") :]
     return None
 
 
