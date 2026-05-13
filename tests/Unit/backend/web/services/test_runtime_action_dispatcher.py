@@ -5,10 +5,15 @@ from typing import assert_type
 
 import pytest
 
-from backend.threads.chat_adapters.runtime_action import dispatch_runtime_action, dispatch_runtime_actions
+from backend.threads.chat_adapters.runtime_action import dispatch_runtime_action, dispatch_runtime_actions, plan_runtime_action_envelope
 from backend.threads.chat_adapters.runtime_notification_action import RuntimeNotificationAction
 from backend.threads.chat_adapters.runtime_thread_input_action import owner_runtime_thread_input_action
-from protocols.agent_runtime import AgentRuntimeNotificationResult, AgentThreadInputResult
+from protocols.agent_runtime import (
+    AgentRuntimeNotificationEnvelope,
+    AgentRuntimeNotificationResult,
+    AgentThreadInputEnvelope,
+    AgentThreadInputResult,
+)
 
 
 def _runtime_app(gateway: object) -> SimpleNamespace:
@@ -100,3 +105,36 @@ async def test_runtime_action_returns_thread_input_result() -> None:
 
     assert_type(result, AgentThreadInputResult)
     assert result == AgentThreadInputResult(status="started", routing="direct", thread_id="thread-1")
+
+
+def test_runtime_action_planner_exposes_specific_envelope_types() -> None:
+    thread_input = owner_runtime_thread_input_action(
+        thread_id="thread-1",
+        user_id="owner-1",
+        message="Direct input.",
+        attachments=None,
+        enable_trajectory=False,
+    )
+    notification = RuntimeNotificationAction(
+        context="Runtime action test",
+        recipient_user_id="agent-1",
+        sender_user_id="owner-1",
+        sender_source="workflow",
+        event_type="test.event",
+        notification_type="test",
+        content="Notify worker.",
+    )
+
+    thread_envelope = plan_runtime_action_envelope(thread_input)
+    notification_envelope = plan_runtime_action_envelope(
+        notification,
+        user_repo=_users(),
+        thread_repo=_thread_repo(),
+        activity_reader=_activity_reader(),
+    )
+
+    assert_type(thread_envelope, AgentThreadInputEnvelope)
+    assert_type(notification_envelope, AgentRuntimeNotificationEnvelope | None)
+    assert thread_envelope.thread_id == "thread-1"
+    assert notification_envelope is not None
+    assert notification_envelope.event_type == "test.event"

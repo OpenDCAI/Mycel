@@ -106,6 +106,26 @@ async def dispatch_runtime_action(
     return await dispatch_runtime_action_envelope(get_agent_runtime_gateway(app), envelope)
 
 
+@overload
+def plan_runtime_action_envelope(
+    action: RuntimeThreadInputAction,
+    *,
+    user_repo: Any = None,
+    thread_repo: Any = None,
+    activity_reader: Any = None,
+) -> AgentThreadInputEnvelope: ...
+
+
+@overload
+def plan_runtime_action_envelope(
+    action: RuntimeNotificationAction,
+    *,
+    user_repo: Any = None,
+    thread_repo: Any = None,
+    activity_reader: Any = None,
+) -> AgentRuntimeNotificationEnvelope | None: ...
+
+
 def plan_runtime_action_envelope(
     action: RuntimeAction,
     *,
