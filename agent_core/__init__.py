@@ -21,6 +21,7 @@ from agent_core.middleware import (
     ModelResponse,
     ToolCallRequest,
 )
+from agent_core.middleware.prompt_caching import PromptCachingMiddleware
 from agent_core.registry import (
     ToolEntry,
     ToolMode,
@@ -38,6 +39,7 @@ from agent_core.tool_result import (
     tool_error,
     tool_success,
 )
+from agent_core.usage import Usage, UsageMeter, token_pricer
 
 __all__ = [
     "Agent",
@@ -47,6 +49,7 @@ __all__ = [
     "ModelRequest",
     "ModelResponse",
     "PermissionPolicy",
+    "PromptCachingMiddleware",
     "QueryLoop",
     "TerminalReason",
     "TerminalState",
@@ -57,7 +60,10 @@ __all__ = [
     "ToolResultEnvelope",
     "ToolRunner",
     "ToolUseContext",
+    "Usage",
+    "UsageMeter",
     "make_tool_schema",
+    "token_pricer",
     "tool_error",
     "tool_success",
 ]

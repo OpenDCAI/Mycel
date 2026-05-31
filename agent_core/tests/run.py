@@ -20,6 +20,7 @@ MODULES = [
     "agent_core.tests.test_concurrency",
     "agent_core.tests.test_permissions",
     "agent_core.tests.test_lifecycle",
+    "agent_core.tests.test_usage",
 ]
 
 

@@ -28,6 +28,7 @@ from agent_core.ports.checkpoint import CheckpointStore
 from agent_core.registry import ToolEntry, ToolRegistry
 from agent_core.runner import ToolRunner
 from agent_core.state import AppState, BootstrapConfig
+from agent_core.usage import Usage, UsageMeter
 
 
 class Agent:
@@ -46,6 +47,9 @@ class Agent:
         can_use_tool: Callable[..., Any] | None = None,
         app_state: AppState | None = None,
         abort_controller: AbortController | None = None,
+        usage_meter: UsageMeter | None = None,
+        max_budget_usd: float | None = None,
+        max_total_tokens: int | None = None,
     ) -> None:
         if registry is None:
             registry = ToolRegistry()
@@ -79,6 +83,9 @@ class Agent:
             max_turns=max_turns,
             can_use_tool=can_use_tool,
             abort_controller=abort_controller,
+            usage_meter=usage_meter,
+            max_budget_usd=max_budget_usd,
+            max_total_tokens=max_total_tokens,
         )
 
     @staticmethod
@@ -91,6 +98,10 @@ class Agent:
 
     def abort(self) -> None:
         self.loop.abort()
+
+    @property
+    def usage(self) -> Usage:
+        return self.loop.usage
 
     async def ainvoke(self, input: Any, *, thread_id: str = "default") -> dict:
         return await self.loop.ainvoke(input, self._config(thread_id))

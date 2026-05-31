@@ -40,6 +40,7 @@ from agent_core.middleware import (
 from agent_core.ports.checkpoint import CheckpointStore, ThreadCheckpointState
 from agent_core.registry import ToolRegistry
 from agent_core.state import AppState, BootstrapConfig, ToolUseContext
+from agent_core.usage import Usage, UsageMeter
 
 logger = logging.getLogger(__name__)
 
@@ -52,6 +53,7 @@ class TerminalReason(str, Enum):
     model_error = "model_error"
     aborted = "aborted"
     aborted_tools = "aborted_tools"
+    budget_exceeded = "budget_exceeded"
 
 
 @dataclass(frozen=True)
@@ -111,10 +113,16 @@ class QueryLoop:
         max_turns: int = DEFAULT_MAX_TURNS,
         can_use_tool: Callable[..., Any] | None = None,
         abort_controller: AbortController | None = None,
+        usage_meter: UsageMeter | None = None,
+        max_budget_usd: float | None = None,
+        max_total_tokens: int | None = None,
     ) -> None:
         self.model = model
         self._registry = registry
         self._abort = abort_controller or AbortController()
+        self._meter = usage_meter or UsageMeter()
+        self._max_budget_usd = max_budget_usd
+        self._max_total_tokens = max_total_tokens
         if isinstance(system_prompt, str):
             system_prompt = SystemMessage(content=system_prompt)
         self.system_prompt = system_prompt
@@ -146,6 +154,9 @@ class QueryLoop:
                 if self._abort.is_aborted():
                     terminal = TerminalState(TerminalReason.aborted, turn, "aborted before turn")
                     break
+                if self._over_budget():
+                    terminal = TerminalState(TerminalReason.budget_exceeded, turn, self._budget_message())
+                    break
                 turn += 1
                 tool_context = self._build_tool_use_context(messages, thread_id)
                 messages_for_query, injected = await self._apply_before_model(messages, config)
@@ -164,6 +175,7 @@ class QueryLoop:
                     terminal = TerminalState(TerminalReason.model_error, turn, "model returned no AIMessage")
                     break
 
+                self._meter.record_message(ai_msg)
                 self._sync_app_state(messages=messages, turn_count=turn)
                 tool_calls = self._extract_tool_calls(ai_msg)
 
@@ -426,6 +438,22 @@ class QueryLoop:
     def is_aborted(self) -> bool:
         return self._abort.is_aborted()
 
+    @property
+    def usage(self) -> Usage:
+        return self._meter.usage
+
+    def _over_budget(self) -> bool:
+        usage = self._meter.usage
+        if self._max_budget_usd is not None and usage.cost_usd >= self._max_budget_usd:
+            return True
+        return self._max_total_tokens is not None and usage.total_tokens >= self._max_total_tokens
+
+    def _budget_message(self) -> str:
+        usage = self._meter.usage
+        if self._max_budget_usd is not None and usage.cost_usd >= self._max_budget_usd:
+            return f"budget exceeded: ${usage.cost_usd:.4f} >= ${self._max_budget_usd:.4f}"
+        return f"token budget exceeded: {usage.total_tokens} >= {self._max_total_tokens}"
+
     def _effective_bootstrap(self) -> BootstrapConfig:
         if self._bootstrap is None:
             self._bootstrap = BootstrapConfig(
@@ -453,6 +481,7 @@ class QueryLoop:
                 s.messages = list(messages)
             if turn_count is not None:
                 s.turn_count = turn_count
+            s.total_cost = self._meter.usage.cost_usd
             return s
 
         self._app_state.set_state(_upd)
