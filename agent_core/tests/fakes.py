@@ -40,6 +40,30 @@ def ai_tool_call(name: str, args: dict, *, call_id: str = "call_1", content: str
     )
 
 
+class FlakyChatModel:
+    """Raises on the first ``fail_times`` calls, then replays a script. Used to
+    exercise retry middleware."""
+
+    def __init__(self, fail_times: int, script: list[Any], exc: type[BaseException] = RuntimeError) -> None:
+        self._fail_times = fail_times
+        self._script = list(script)
+        self._exc = exc
+        self._calls = 0
+        self._i = 0
+        self.model_name = "flaky"
+
+    def bind_tools(self, tools: list) -> "FlakyChatModel":
+        return self
+
+    async def ainvoke(self, messages: list) -> AIMessage:
+        self._calls += 1
+        if self._calls <= self._fail_times:
+            raise self._exc(f"transient failure #{self._calls}")
+        item = self._script[self._i]
+        self._i += 1
+        return item() if callable(item) else item
+
+
 class RoutingFakeModel:
     """A shared model that dispatches to per-route scripts by substring match on
     the concatenated message *content*. Models the real design where parent and
