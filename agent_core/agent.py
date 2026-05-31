@@ -21,6 +21,7 @@ from typing import Any
 
 from langchain_core.messages import SystemMessage
 
+from agent_core.abort import AbortController
 from agent_core.loop import DEFAULT_MAX_TURNS, QueryLoop
 from agent_core.middleware import AgentMiddleware
 from agent_core.ports.checkpoint import CheckpointStore
@@ -44,6 +45,7 @@ class Agent:
         model_name: str | None = None,
         can_use_tool: Callable[..., Any] | None = None,
         app_state: AppState | None = None,
+        abort_controller: AbortController | None = None,
     ) -> None:
         if registry is None:
             registry = ToolRegistry()
@@ -76,11 +78,19 @@ class Agent:
             bootstrap=self.bootstrap,
             max_turns=max_turns,
             can_use_tool=can_use_tool,
+            abort_controller=abort_controller,
         )
 
     @staticmethod
     def _config(thread_id: str) -> dict:
         return {"configurable": {"thread_id": thread_id}}
+
+    @property
+    def abort_controller(self) -> AbortController:
+        return self.loop.abort_controller
+
+    def abort(self) -> None:
+        self.loop.abort()
 
     async def ainvoke(self, input: Any, *, thread_id: str = "default") -> dict:
         return await self.loop.ainvoke(input, self._config(thread_id))

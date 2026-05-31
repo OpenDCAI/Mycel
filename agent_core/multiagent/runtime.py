@@ -14,6 +14,7 @@ from typing import Any
 
 from langchain_core.messages import AIMessage, SystemMessage
 
+from agent_core.abort import AbortController, create_child_abort_controller
 from agent_core.agent import Agent
 from agent_core.loop import DEFAULT_MAX_TURNS
 from agent_core.multiagent.bus import BusMessage, MessageBus
@@ -53,13 +54,20 @@ class MultiAgentRuntime:
         self.checkpoint_store = checkpoint_store
         self.bus = MessageBus()
         self.registry = AgentRegistry()
+        self.abort = AbortController()  # root: cascades to every child
         self._counter = itertools.count(1)
         self._tasks: dict[str, asyncio.Task] = {}
 
     def _next_task_id(self) -> str:
         return f"task_{next(self._counter)}"
 
-    def build_agent(self, *, name: str, subagent_type: str = "general") -> Agent:
+    def build_agent(
+        self,
+        *,
+        name: str,
+        subagent_type: str = "general",
+        abort_controller: AbortController | None = None,
+    ) -> Agent:
         """Build a child agent: shared model + filtered tools + handoff tools + steering."""
         # local import avoids a cycle (tools import the runtime type for hints)
         from agent_core.multiagent.tools import multiagent_tools
@@ -78,6 +86,7 @@ class MultiAgentRuntime:
             middleware=[steering],
             max_turns=self.max_turns,
             checkpoint_store=self.checkpoint_store,
+            abort_controller=abort_controller or create_child_abort_controller(self.abort),
         )
 
     async def spawn(
@@ -87,18 +96,29 @@ class MultiAgentRuntime:
         prompt: str,
         subagent_type: str = "general",
         background: bool = False,
+        timeout: float | None = None,
     ) -> dict[str, Any]:
         task_id = self._next_task_id()
-        entry = AgentEntry(name=name, task_id=task_id, status="running")
+        child_abort = create_child_abort_controller(self.abort)
+        entry = AgentEntry(name=name, task_id=task_id, status="running", abort_controller=child_abort)
         self.registry.register(entry)
-        child = self.build_agent(name=name, subagent_type=subagent_type)
+        child = self.build_agent(name=name, subagent_type=subagent_type, abort_controller=child_abort)
 
         async def _run() -> dict:
             try:
-                result = await child.ainvoke(prompt, thread_id=name)
+                coro = child.ainvoke(prompt, thread_id=name)
+                result = await (asyncio.wait_for(coro, timeout) if timeout else coro)
                 entry.status = "done"
                 entry.result = result
                 return result
+            except TimeoutError:
+                child_abort.abort()
+                entry.status = "timeout"
+                entry.result = {"error": f"timed out after {timeout}s"}
+                raise
+            except asyncio.CancelledError:
+                entry.status = "stopped"
+                raise
             except Exception as exc:  # noqa: BLE001 - record failure on the entry
                 entry.status = "error"
                 entry.result = {"error": str(exc)}
@@ -110,6 +130,27 @@ class MultiAgentRuntime:
 
         result = await _run()
         return {"task_id": task_id, "name": name, "status": entry.status, "text": _last_ai_text(result)}
+
+    def stop(self, task_id: str) -> dict[str, Any]:
+        """Stop a spawned agent: abort its loop (cooperative) and cancel its task (hard)."""
+        entry = self.registry.by_id(task_id)
+        if entry is None:
+            return {"error": f"unknown task {task_id}"}
+        if entry.abort_controller is not None:
+            entry.abort_controller.abort()
+        task = self._tasks.get(task_id)
+        if task is not None and not task.done():
+            task.cancel()
+        if entry.status == "running":
+            entry.status = "stopped"
+        return {"task_id": task_id, "status": entry.status}
+
+    def stop_all(self) -> None:
+        """Abort every agent (cascades from the root) and cancel all background tasks."""
+        self.abort.abort()
+        for task in self._tasks.values():
+            if not task.done():
+                task.cancel()
 
     def send_message(self, *, to: str, content: str, sender: str = "user") -> dict[str, Any]:
         self.bus.enqueue(to, BusMessage(sender=sender, content=content))

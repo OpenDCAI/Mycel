@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from typing import Any
 
 from langchain_core.messages import AIMessage
@@ -38,6 +39,21 @@ def ai_tool_call(name: str, args: dict, *, call_id: str = "call_1", content: str
         content=content,
         tool_calls=[{"name": name, "args": args, "id": call_id, "type": "tool_call"}],
     )
+
+
+class HangingChatModel:
+    """``ainvoke`` blocks ~forever — used to exercise timeout/stop."""
+
+    def __init__(self, delay: float = 5.0) -> None:
+        self.delay = delay
+        self.model_name = "hanging"
+
+    def bind_tools(self, tools: list) -> "HangingChatModel":
+        return self
+
+    async def ainvoke(self, messages: list) -> AIMessage:
+        await asyncio.sleep(self.delay)
+        return AIMessage(content="(never)")
 
 
 class FlakyChatModel:

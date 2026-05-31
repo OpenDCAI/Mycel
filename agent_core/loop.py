@@ -30,6 +30,7 @@ from langchain_core.messages import (
     ToolMessage,
 )
 
+from agent_core.abort import AbortController
 from agent_core.middleware import (
     AgentMiddleware,
     ModelRequest,
@@ -49,6 +50,7 @@ class TerminalReason(str, Enum):
     completed = "completed"
     max_turns = "max_turns"
     model_error = "model_error"
+    aborted = "aborted"
     aborted_tools = "aborted_tools"
 
 
@@ -108,9 +110,11 @@ class QueryLoop:
         runtime: Any = None,
         max_turns: int = DEFAULT_MAX_TURNS,
         can_use_tool: Callable[..., Any] | None = None,
+        abort_controller: AbortController | None = None,
     ) -> None:
         self.model = model
         self._registry = registry
+        self._abort = abort_controller or AbortController()
         if isinstance(system_prompt, str):
             system_prompt = SystemMessage(content=system_prompt)
         self.system_prompt = system_prompt
@@ -139,6 +143,9 @@ class QueryLoop:
         turn = 0
         try:
             while turn < self.max_turns:
+                if self._abort.is_aborted():
+                    terminal = TerminalState(TerminalReason.aborted, turn, "aborted before turn")
+                    break
                 turn += 1
                 tool_context = self._build_tool_use_context(messages, thread_id)
                 messages_for_query, injected = await self._apply_before_model(messages, config)
@@ -166,6 +173,11 @@ class QueryLoop:
                     if self._ai_has_visible_content(ai_msg):
                         messages.append(ai_msg)
                     terminal = TerminalState(TerminalReason.completed, turn)
+                    break
+
+                if self._abort.is_aborted():
+                    messages.append(ai_msg)
+                    terminal = TerminalState(TerminalReason.aborted, turn, "aborted before tool execution")
                     break
 
                 try:
@@ -397,9 +409,22 @@ class QueryLoop:
             get_app_state=self._get_app_state,
             set_app_state=self._set_app_state,
             can_use_tool=self._can_use_tool,
+            abort_controller=self._abort,
             messages=messages,
             thread_id=thread_id,
         )
+
+    @property
+    def abort_controller(self) -> AbortController:
+        return self._abort
+
+    def abort(self) -> None:
+        """Request cancellation. The loop terminates (reason=aborted) at the next
+        turn/tool checkpoint; tools can observe it via ``ctx.abort_controller``."""
+        self._abort.abort()
+
+    def is_aborted(self) -> bool:
+        return self._abort.is_aborted()
 
     def _effective_bootstrap(self) -> BootstrapConfig:
         if self._bootstrap is None:

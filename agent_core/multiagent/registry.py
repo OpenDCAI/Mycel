@@ -5,13 +5,16 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
+from agent_core.abort import AbortController
+
 
 @dataclass
 class AgentEntry:
     name: str
     task_id: str
-    status: str = "running"  # running | done | error
+    status: str = "running"  # running | done | error | stopped | timeout
     result: dict[str, Any] | None = None
+    abort_controller: AbortController | None = None
 
 
 class AgentRegistry:
