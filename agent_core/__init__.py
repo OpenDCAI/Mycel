@@ -14,6 +14,7 @@ from __future__ import annotations
 
 from agent_core.agent import Agent
 from agent_core.loop import QueryLoop, TerminalReason, TerminalState
+from agent_core.policy import PermissionPolicy
 from agent_core.middleware import (
     AgentMiddleware,
     ModelRequest,
@@ -45,6 +46,7 @@ __all__ = [
     "BootstrapConfig",
     "ModelRequest",
     "ModelResponse",
+    "PermissionPolicy",
     "QueryLoop",
     "TerminalReason",
     "TerminalState",

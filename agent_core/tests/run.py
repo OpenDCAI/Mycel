@@ -18,6 +18,7 @@ MODULES = [
     "agent_core.tests.test_multiagent",
     "agent_core.tests.test_recovery",
     "agent_core.tests.test_concurrency",
+    "agent_core.tests.test_permissions",
 ]
 
 
