@@ -38,3 +38,33 @@ def ai_tool_call(name: str, args: dict, *, call_id: str = "call_1", content: str
         content=content,
         tool_calls=[{"name": name, "args": args, "id": call_id, "type": "tool_call"}],
     )
+
+
+class RoutingFakeModel:
+    """A shared model that dispatches to per-route scripts by substring match on
+    the concatenated message *content*. Models the real design where parent and
+    child share one (stateless) model client.
+
+    ``routes`` is a list of ``(substring, [AIMessage, ...])``; the first route
+    whose substring appears in the call's message content is used, advancing that
+    route's own cursor.
+    """
+
+    def __init__(self, routes: list[tuple[str, list[Any]]], model_name: str = "router") -> None:
+        self._routes = [[sub, list(msgs), 0] for sub, msgs in routes]
+        self.model_name = model_name
+        self.calls: list[list] = []
+
+    def bind_tools(self, tools: list) -> "RoutingFakeModel":
+        return self
+
+    async def ainvoke(self, messages: list) -> AIMessage:
+        self.calls.append(list(messages))
+        text = " ".join(str(getattr(m, "content", "")) for m in messages)
+        for route in self._routes:
+            sub, msgs, cursor = route
+            if sub in text and cursor < len(msgs):
+                route[2] = cursor + 1
+                item = msgs[cursor]
+                return item() if callable(item) else item
+        return AIMessage(content="(no route matched)")
