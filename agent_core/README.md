@@ -6,11 +6,11 @@ chosen model SDK). No DB, web server, or message bus required to run.
 
 ## Why
 
-Mycel's agent worked but the runtime had grown into God-objects (a 92K-line loop,
-a 72K-line agent factory). `agent_core` keeps the proven pieces — the tool
-registry, the middleware contract, the turn loop — and re-homes the cross-cutting
-machinery (streaming, error recovery, memory, notifications) into **optional
-layers** behind ports. The result runs standalone and reads top-to-bottom.
+Mycel's agent worked but the runtime had grown into God-objects (a 2181-line loop,
+a 1687-line agent factory). `agent_core` keeps the proven pieces — tool registry,
+middleware contract, turn loop — and re-homes cross-cutting machinery (streaming,
+error recovery, memory) into **optional layers** behind ports. Runs standalone,
+reads top-to-bottom.
 
 ## Single agent
 
@@ -92,16 +92,7 @@ parallel automatically; unsafe tools form ordering boundaries.
 - **Ports** — swap `CheckpointStore` / `EventBusPort` for your infra (e.g. a
   Postgres checkpoint store, an SSE event bus) without touching the core.
 
-## Layout & status
+## Layout, status & tests
 
-See `ARCHITECTURE.md`. Phases 0–4 (foundation, loop, facade, multi-agent,
-optional layers) are implemented and tested; token-level streaming and the
-Mycel-backend cutover are noted there as follow-ons.
-
-## Tests
-
-Pure, fast, no API calls (scripted fake models):
-
-```bash
-python agent_core/tests/run.py        # or import agent_core.tests.test_* and call test_*()
-```
+See `ARCHITECTURE.md` for the module map (token-level streaming is the one noted
+follow-on). Run the pure, no-API test suite: `python agent_core/tests/run.py`.
