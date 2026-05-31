@@ -12,6 +12,8 @@ See ARCHITECTURE.md for the module map and the extraction roadmap.
 
 from __future__ import annotations
 
+from agent_core.agent import Agent
+from agent_core.loop import QueryLoop, TerminalReason, TerminalState
 from agent_core.middleware import (
     AgentMiddleware,
     ModelRequest,
@@ -37,11 +39,15 @@ from agent_core.tool_result import (
 )
 
 __all__ = [
+    "Agent",
     "AgentMiddleware",
     "AppState",
     "BootstrapConfig",
     "ModelRequest",
     "ModelResponse",
+    "QueryLoop",
+    "TerminalReason",
+    "TerminalState",
     "ToolCallRequest",
     "ToolEntry",
     "ToolMode",
