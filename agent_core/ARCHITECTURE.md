@@ -26,7 +26,7 @@ agent_core/
   abort.py errors.py visibility.py                                [lifted, clean]
   middleware/       AgentMiddleware contract (wrap_model/tool_call)[lifted, clean]
   ports/            checkpoint · event_bus  (+ executor/fs/storage follow-on)
-  loop.py           QueryLoop — core turn loop ONLY (~330L)        [done]
+  loop.py           QueryLoop — core turn loop ONLY (~455L)        [done]
   agent.py          thin assembly facade (replaces LeonAgent 1700L, ~90L) [done]
   builtins/         workspace-contained fs + bash tools            [done]
   adapters/         InMemoryCheckpointStore · NullEventBus         [done]
