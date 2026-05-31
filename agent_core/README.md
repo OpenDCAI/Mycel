@@ -61,6 +61,28 @@ sub-agent is a fresh loop sharing the same model client (not a rebuilt agent);
 `send_message` routes through an in-memory bus that `SteeringMiddleware` drains
 before each turn.
 
+## Guardrails (opt-in)
+
+```python
+from agent_core import Agent, PermissionPolicy, UsageMeter, token_pricer
+from agent_core.middleware.prompt_caching import PromptCachingMiddleware
+
+agent = Agent(
+    model=model, tools=...,
+    can_use_tool=PermissionPolicy(default="deny", allow=["read_file", "list_dir"]),
+    middleware=[PromptCachingMiddleware()],          # Anthropic cache_control
+    usage_meter=UsageMeter(token_pricer(3.0, 15.0)), # $/1K in,out
+    max_budget_usd=0.50,                             # stops at budget_exceeded
+)
+result = await agent.ainvoke("...")
+print(agent.usage.cost_usd, agent.usage.total_tokens, result["reason"])
+
+agent.abort()   # cooperative stop at the next turn/tool checkpoint
+```
+
+Concurrency-safe tools (`is_concurrency_safe=True`) in one assistant turn run in
+parallel automatically; unsafe tools form ordering boundaries.
+
 ## Extending
 
 - **Tools** — register `ToolEntry`s in a `ToolRegistry`. Same shape as Mycel's.

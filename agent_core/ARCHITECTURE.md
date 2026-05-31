@@ -33,8 +33,24 @@ agent_core/
   models.py         optional langchain init_chat_model helper      [done]
   multiagent/       bus · steering · registry · runtime · tools    [done]
   recovery/         RetryMiddleware (canonical optional layer)     [done]
+  policy.py         PermissionPolicy (allow/deny/ask gate)         [done]
+  usage.py          UsageMeter + token_pricer (cost/budget)        [done]
+  middleware/prompt_caching.py  Anthropic cache_control breakpoint [done]
   streaming.py      token-level tool-overlap engine                [follow-on]
 ```
+
+## Optimizations (post-Phase 4)
+
+- **O1 concurrency** — `_execute_tools` batches contiguous `is_concurrency_safe`
+  tool calls via `asyncio.gather`; unsafe calls are ordering boundaries.
+- **O2 permissions** — `PermissionPolicy` glob allow/deny/ask via the
+  `can_use_tool` seam (read by `ToolRunner`); `ask` fails closed without a surface.
+- **O3 abort/lifecycle** — `AbortController` in the loop hot path
+  (`TerminalReason.aborted`); `MultiAgentRuntime.stop`/`stop_all`/spawn-timeout
+  with parent→child cascade.
+- **O4 cost/caching** — `UsageMeter` token/cost accounting + `max_budget_usd` /
+  `max_total_tokens` caps (`TerminalReason.budget_exceeded`); opt-in Anthropic
+  prompt caching.
 
 ## God-object decomposition (the "代码极简" work)
 
