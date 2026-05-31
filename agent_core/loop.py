@@ -255,14 +255,62 @@ class QueryLoop:
     # -- tool execution --
 
     async def _execute_tools(self, tool_calls: list[dict], tool_context: Any) -> list[ToolMessage]:
-        results: list[ToolMessage] = []
-        for tool_call in tool_calls:
-            results.append(await self._execute_single_tool(tool_call, tool_context))
-        return results
+        """Run tool calls preserving order, batching contiguous concurrency-safe
+        calls to run in parallel. An unsafe call flushes the pending safe batch
+        first, then runs alone (a tool-ordering boundary)."""
+        results: list[ToolMessage | None] = [None] * len(tool_calls)
+        pending: list[tuple[int, dict]] = []
 
-    async def _execute_single_tool(self, tool_call: dict, tool_context: Any) -> ToolMessage:
+        async def flush() -> None:
+            if not pending:
+                return
+            if len(pending) == 1:
+                idx, call = pending[0]
+                results[idx] = await self._safe_execute_single(call, tool_context)
+            else:
+                done = await asyncio.gather(
+                    *(self._safe_execute_single(call, tool_context) for _, call in pending)
+                )
+                for (idx, _), message in zip(pending, done):
+                    results[idx] = message
+            pending.clear()
+
+        for i, tool_call in enumerate(tool_calls):
+            name, args = self._call_name_args(tool_call)
+            if self._tool_is_concurrency_safe(name, args):
+                pending.append((i, tool_call))
+            else:
+                await flush()
+                results[i] = await self._safe_execute_single(tool_call, tool_context)
+        await flush()
+        return [m for m in results if m is not None]
+
+    def _tool_is_concurrency_safe(self, name: str, args: dict) -> bool:
+        entry = self._registry.get(name)
+        if entry is None:
+            return False  # unknown tool -> serialize (fail-closed)
+        flag = entry.is_concurrency_safe
+        if callable(flag):
+            try:
+                return bool(flag(args))
+            except Exception:  # noqa: BLE001
+                return False
+        return bool(flag)
+
+    async def _safe_execute_single(self, tool_call: dict, tool_context: Any) -> ToolMessage:
+        try:
+            return await self._execute_single_tool(tool_call, tool_context)
+        except Exception as exc:  # noqa: BLE001 - middleware chain failure -> error result
+            name, _ = self._call_name_args(tool_call)
+            return ToolMessage(
+                content=f"<tool_use_error>{exc}</tool_use_error>",
+                tool_call_id=tool_call.get("id", "") or "",
+                name=name,
+            )
+
+    @staticmethod
+    def _call_name_args(tool_call: dict) -> tuple[str, dict]:
         name = tool_call.get("name") or tool_call.get("function", {}).get("name", "")
-        call_id = tool_call.get("id", "") or ""
         args = tool_call.get("args")
         if args is None:
             args = tool_call.get("function", {}).get("arguments", {})
@@ -271,6 +319,11 @@ class QueryLoop:
                 args = json.loads(args)
             except Exception:  # noqa: BLE001
                 args = {}
+        return name, args
+
+    async def _execute_single_tool(self, tool_call: dict, tool_context: Any) -> ToolMessage:
+        name, args = self._call_name_args(tool_call)
+        call_id = tool_call.get("id", "") or ""
 
         normalized = {"name": name, "args": args, "id": call_id}
         request = ToolCallRequest(tool_call=normalized, tool=None, state=tool_context, runtime=self._runtime)
