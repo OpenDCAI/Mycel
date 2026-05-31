@@ -17,9 +17,10 @@ reads top-to-bottom.
 ```python
 from agent_core import Agent
 from agent_core.builtins import default_toolset
-from agent_core.models import build_chat_model   # optional langchain helper
+from agent_core.models import OpenAIChatModel    # native openai-compatible adapter
+# or: build_chat_model(...) for a LangChain model (Anthropic/OpenAI/…)
 
-model = build_chat_model("claude-opus-4-8", model_provider="anthropic")
+model = OpenAIChatModel("gpt-5.5", api_key=KEY, base_url="http://host:port")
 agent = Agent(
     model=model,                                 # any obj with .bind_tools + .ainvoke
     tools=default_toolset("/path/to/workspace"),
@@ -95,4 +96,5 @@ parallel automatically; unsafe tools form ordering boundaries.
 ## Layout, status & tests
 
 See `ARCHITECTURE.md` for the module map (token-level streaming is the one noted
-follow-on). Run the pure, no-API test suite: `python agent_core/tests/run.py`.
+follow-on). Pure, no-API suite: `python agent_core/tests/run.py`. Opt-in live test
+(set `LLM_API_KEY`/`LLM_BASE_URL`/`LLM_MODEL`): `python agent_core/tests/test_real_llm.py`.

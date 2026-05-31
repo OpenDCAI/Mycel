@@ -22,6 +22,7 @@ from agent_core.middleware import (
     ToolCallRequest,
 )
 from agent_core.middleware.prompt_caching import PromptCachingMiddleware
+from agent_core.models import OpenAIChatModel, build_chat_model
 from agent_core.registry import (
     ToolEntry,
     ToolMode,
@@ -48,9 +49,11 @@ __all__ = [
     "BootstrapConfig",
     "ModelRequest",
     "ModelResponse",
+    "OpenAIChatModel",
     "PermissionPolicy",
     "PromptCachingMiddleware",
     "QueryLoop",
+    "build_chat_model",
     "TerminalReason",
     "TerminalState",
     "ToolCallRequest",
